@@ -1,0 +1,13 @@
+KD Coffee Official Website v7.0
+
+1. 在此資料夾空白處按 Shift + 滑鼠右鍵，選擇「在終端機中開啟」。
+2. 第一次執行：npm install
+3. 啟動網站：npm run dev
+4. 瀏覽器開啟：http://localhost:3000
+
+門市更新：
+- 建議直接雙擊 update-711-stores.cmd
+- 或在終端機執行 npm run update:711
+
+注意：
+門市更新來源若拒絕連線，更新器會保留原正式資料，不會覆蓋。

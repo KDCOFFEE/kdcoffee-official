@@ -1,0 +1,28 @@
+KD Coffee Studio v13.0 Stable Commerce
+
+建議使用完整版本建立新的乾淨資料夾，不要再把舊的 Homepage／Member／Commerce PATCH 全部重複疊加。
+
+本機測試：
+1. 複製原專案的 .env.local 到 v13 專案。
+2. npm install（新資料夾第一次才需要）。
+3. npm run dev。
+4. ngrok http 3000。
+5. 用 ngrok HTTPS 網址進網站。
+6. LINE Developers Callback URL 登記：
+   https://目前-ngrok網址/api/auth/line/callback
+
+重要：
+- 本機電腦可用 localhost 查看版面。
+- LINE 登入與手機測試必須從 ngrok HTTPS 網址開啟。
+- .env.local 可保留 NEXT_PUBLIC_SITE_URL=http://localhost:3000；v13 的登入連結會把目前瀏覽器的公開 origin 傳給 LINE 登入流程。
+
+必測流程：
+1. 首頁 Hero。
+2. LINE 登入。
+3. 商品頁切換半磅／耳掛。
+4. 半磅切換咖啡豆／咖啡粉。
+5. 加入購物車。
+6. 立即購買。
+7. 購物車加減數量與刪除。
+8. 結帳與取貨方式。
+9. 後台 Commerce 修改價格、啟用狀態與庫存後，前台是否同步。

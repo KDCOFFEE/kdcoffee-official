@@ -1,0 +1,27 @@
+KD Coffee Studio v15.1.0｜CMS & Asset Foundation
+
+一、這版新增什麼
+1. 後台新增「品牌資產與 Logo」：/admin/assets
+2. Logo 與照片都有固定 Asset ID、用途、尺寸、ALT 與 SEO 檔名。
+3. 上傳後自動命名並保留版本，例如：
+   kd-coffee-brand-story-fluid-bed-roaster-v01.webp
+   再次上傳會產生 v02，不覆蓋舊檔。
+4. LOGO001 會出現在 Header；LOGO002 會出現在 Footer。
+5. IMG0002、IMG0003、IMG0004 會出現在首頁品牌故事區。
+
+二、Logo 要準備哪些
+LOGO001：Header 主 Logo，SVG 優先；PNG 建議 640×160 px。
+LOGO002：Footer 白色 Logo，SVG 優先；PNG 建議 800×200 px。
+LOGO003：方形品牌標誌，1024×1024 px。
+LOGO004：Apple Touch Icon，180×180 px。
+LOGO005：LINE／Facebook 分享圖，1200×630 px。
+
+三、使用方式
+1. 登入 /admin
+2. 點選「品牌資產與 Logo」
+3. 找到指定 Asset ID
+4. 直接上傳照片
+5. 系統會依該位置自動命名，並立即更新資產資料
+
+四、重要說明
+本版不會自行猜照片內容。請從固定用途上傳，系統才會產生準確、可長期管理的 SEO 名稱。

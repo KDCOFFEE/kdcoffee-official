@@ -1,0 +1,2720 @@
+{
+  "version": 105,
+  "updatedAt": "2026-08-10T13:40:41.015Z",
+  "campaign": {
+    "enabled": true,
+    "eyebrow": "THIS MONTH AT KD COFFEE",
+    "title": "耳掛咖啡試喝組",
+    "description": "把本月精選作品，一次帶回家慢慢品嚐。從花香、果香到柔和甜感，用最輕鬆的方式找到自己喜歡的那一杯。",
+    "details": [
+      "每包獨立充氮保鮮",
+      "當月作品依實際供應調整"
+    ],
+    "ctaLabel": "查看本月組合",
+    "ctaHref": "#contact",
+    "secondaryLabel": "瀏覽本月豆單",
+    "secondaryHref": "#products",
+    "note": "MONTHLY FEATURE · LIMITED SELECTION",
+    "image": ""
+  },
+  "menu": {
+    "monthLabel": "2026 AUGUST SELECTION",
+    "title": "本月咖啡作品",
+    "intro": "首頁只留下本月最想分享的作品。點進去看完整風味與購買方式，或前往全部作品慢慢挑選。",
+    "products": [
+      {
+        "active": true,
+        "slug": "giotto-awakening",
+        "name": "喬托・初醒",
+        "artist": "GIOTTO",
+        "subtitle": "蜂蜜・柑橘・可可・野莓",
+        "mood": "像清晨第一束光，溫暖、明亮，尾韻帶著可可般的安定感。",
+        "origin": "衣索比亞",
+        "process": "日曬",
+        "roast": "中焙",
+        "flavors": [
+          "蜂蜜",
+          "柑橘",
+          "可可",
+          "野莓"
+        ],
+        "tag": "新品上市",
+        "featured": false,
+        "cover": "",
+        "poster": "",
+        "visualTone": "dawn",
+        "purchase": [
+          {
+            "label": "半磅咖啡豆",
+            "detail": "227g",
+            "price": 700,
+            "id": "giotto-awakening-01",
+            "kind": "beans"
+          },
+          {
+            "label": "耳掛咖啡",
+            "detail": "10入／每包12g",
+            "price": 500,
+            "id": "giotto-awakening-02",
+            "kind": "drip"
+          }
+        ],
+        "status": "active",
+        "inMonthlyMenu": true,
+        "showOnHomepage": false,
+        "showWhenSoldOut": true,
+        "purchasable": true,
+        "sort": 1,
+        "stock": 19,
+        "shortCopy": "蜂蜜與柑橘明亮開場，可可與野莓溫柔收尾。",
+        "variety": "待確認",
+        "altitude": "待確認",
+        "displayFields": {
+          "origin": true,
+          "process": true,
+          "roast": true,
+          "variety": false,
+          "altitude": false,
+          "flavors": true,
+          "shortCopy": true,
+          "mood": true
+        },
+        "skus": [
+          {
+            "label": "半磅咖啡豆",
+            "detail": "227g",
+            "price": 700,
+            "id": "giotto-awakening-01",
+            "stock": 9,
+            "enabled": true,
+            "kind": "beans"
+          },
+          {
+            "label": "耳掛咖啡",
+            "detail": "10入／每包12g",
+            "price": 500,
+            "id": "giotto-awakening-02",
+            "stock": 10,
+            "enabled": true,
+            "kind": "drip"
+          }
+        ],
+        "schemaVersion": "12.0",
+        "assets": {
+          "artworkCover": {
+            "path": "/uploads/artworks/giotto-awakening/kdcoffee-giotto-awakening-artwork-cover-v01.webp",
+            "fileName": "kdcoffee-giotto-awakening-artwork-cover-v01.webp",
+            "originalFileName": "artwork-cover-giotto-awakening-approved-master.png",
+            "alt": "KD Coffee 喬托・初醒 Artwork Cover",
+            "title": "喬托・初醒 | KD Coffee Artwork Cover",
+            "caption": "GIOTTO | KD Coffee Artwork Collection",
+            "updatedAt": "2026-08-10T13:40:41.015Z",
+            "status": "uploaded",
+            "version": 1
+          }
+        },
+        "pageLayout": {
+          "heroAsset": "hero",
+          "productAsset": "productPhoto",
+          "listAsset": "artworkCover",
+          "galleryAssets": [
+            "label"
+          ],
+          "showGallery": true,
+          "showRelatedWorks": true
+        },
+        "history": [
+          {
+            "id": "H-1786290400069-P00001",
+            "version": 1,
+            "summary": "更新發布狀態、更新作品資料",
+            "createdAt": "2026-08-09T15:46:40.069Z"
+          }
+        ],
+        "publish": {
+          "website": false,
+          "facebook": false,
+          "google": false,
+          "line": false
+        },
+        "nameEn": "",
+        "id": "P00001",
+        "sku": "KD0001"
+      },
+      {
+        "active": true,
+        "slug": "davinci-feast",
+        "name": "達文西盛宴",
+        "artist": "LEONARDO DA VINCI",
+        "subtitle": "水蜜桃・香氣豐富・尾韻香甜",
+        "mood": "層次逐一展開，像一場細緻而完整的味覺盛宴。",
+        "origin": "衣索比亞",
+        "process": "白蜜",
+        "roast": "淺焙",
+        "flavors": [
+          "水蜜桃",
+          "花香",
+          "甜感",
+          "長尾韻"
+        ],
+        "tag": "本月推薦",
+        "featured": true,
+        "cover": "/uploads/artworks/davinci-feast/kdcoffee-davinci-feast-main-visual-v02.webp",
+        "poster": "",
+        "visualTone": "renaissance",
+        "purchase": [
+          {
+            "label": "半磅咖啡豆",
+            "detail": "227g",
+            "price": 700,
+            "id": "davinci-feast-01",
+            "kind": "beans"
+          },
+          {
+            "label": "耳掛咖啡",
+            "detail": "10入／每包12g",
+            "price": 500,
+            "id": "davinci-feast-02",
+            "kind": "drip"
+          }
+        ],
+        "status": "active",
+        "inMonthlyMenu": true,
+        "showOnHomepage": true,
+        "showWhenSoldOut": true,
+        "purchasable": true,
+        "sort": 2,
+        "stock": 19,
+        "shortCopy": "蜜桃花香層層展開，甜感飽滿而尾韻悠長。",
+        "variety": "待確認",
+        "altitude": "待確認",
+        "displayFields": {
+          "origin": true,
+          "process": true,
+          "roast": true,
+          "variety": false,
+          "altitude": false,
+          "flavors": true,
+          "shortCopy": true,
+          "mood": true
+        },
+        "skus": [
+          {
+            "label": "半磅咖啡豆",
+            "detail": "227g",
+            "price": 700,
+            "id": "davinci-feast-01",
+            "stock": 9,
+            "enabled": true,
+            "kind": "beans"
+          },
+          {
+            "label": "耳掛咖啡",
+            "detail": "10入／每包12g",
+            "price": 500,
+            "id": "davinci-feast-02",
+            "stock": 10,
+            "enabled": true,
+            "kind": "drip"
+          }
+        ],
+        "schemaVersion": "12.0",
+        "assets": {
+          "mainVisual": {
+            "path": "/uploads/artworks/davinci-feast/kdcoffee-davinci-feast-main-visual-v02.webp",
+            "fileName": "kdcoffee-davinci-feast-main-visual-v02.webp",
+            "originalFileName": "davinci-feast-main-visual.webp",
+            "alt": "KD Coffee 達文西盛宴主視覺",
+            "title": "達文西盛宴｜KD Coffee 主視覺",
+            "caption": "衣索比亞・白蜜・淺焙・水蜜桃、花香、甜感、長尾韻",
+            "updatedAt": "2026-08-10T01:54:52.990Z",
+            "status": "uploaded",
+            "version": 2
+          },
+          "artworkCover": {
+            "path": "/uploads/artworks/davinci-feast/kdcoffee-davinci-feast-artwork-cover-v01.webp",
+            "fileName": "kdcoffee-davinci-feast-artwork-cover-v01.webp",
+            "originalFileName": "artwork-cover-davinci-feast-approved-master.png",
+            "alt": "KD Coffee 達文西盛宴 Artwork Cover",
+            "title": "達文西盛宴 | KD Coffee Artwork Cover",
+            "caption": "LEONARDO DA VINCI | KD Coffee Artwork Collection",
+            "updatedAt": "2026-08-10T13:40:41.015Z",
+            "status": "uploaded",
+            "version": 1
+          }
+        },
+        "pageLayout": {
+          "heroAsset": "hero",
+          "productAsset": "productPhoto",
+          "listAsset": "artworkCover",
+          "galleryAssets": [
+            "label"
+          ],
+          "showGallery": true,
+          "showRelatedWorks": true
+        },
+        "history": [
+          {
+            "id": "H-1786290400069-P00002",
+            "version": 1,
+            "summary": "更新發布狀態、更新作品資料",
+            "createdAt": "2026-08-09T15:46:40.069Z"
+          }
+        ],
+        "publish": {
+          "website": true,
+          "facebook": false,
+          "google": false,
+          "line": false
+        },
+        "nameEn": "",
+        "id": "P00002",
+        "sku": "KD0002"
+      },
+      {
+        "active": true,
+        "slug": "monet-floral",
+        "name": "莫內花語",
+        "artist": "CLAUDE MONET",
+        "subtitle": "花果香・葡萄酒・清香回甘",
+        "mood": "像花園晨光般柔和，香氣乾淨，回甘自然延伸。",
+        "origin": "瓜地馬拉",
+        "process": "水洗",
+        "roast": "淺中焙",
+        "flavors": [
+          "花果香",
+          "葡萄酒",
+          "清香",
+          "回甘"
+        ],
+        "tag": "入門首選",
+        "featured": true,
+        "cover": "/uploads/artworks/monet-floral/kdcoffee-monet-floral-main-visual-v02.webp",
+        "poster": "",
+        "visualTone": "garden",
+        "purchase": [
+          {
+            "label": "半磅咖啡豆",
+            "detail": "227g",
+            "price": 500,
+            "id": "monet-floral-01",
+            "kind": "beans"
+          },
+          {
+            "label": "耳掛咖啡",
+            "detail": "10入／每包12g",
+            "price": 500,
+            "id": "monet-floral-02",
+            "kind": "drip"
+          }
+        ],
+        "status": "active",
+        "inMonthlyMenu": true,
+        "showOnHomepage": true,
+        "showWhenSoldOut": true,
+        "purchasable": true,
+        "sort": 3,
+        "stock": 18,
+        "shortCopy": "花果香輕盈綻放，伴隨葡萄酒調與乾淨回甘。",
+        "variety": "待確認",
+        "altitude": "待確認",
+        "displayFields": {
+          "origin": true,
+          "process": true,
+          "roast": true,
+          "variety": false,
+          "altitude": false,
+          "flavors": true,
+          "shortCopy": true,
+          "mood": true
+        },
+        "skus": [
+          {
+            "label": "半磅咖啡豆",
+            "detail": "227g",
+            "price": 500,
+            "id": "monet-floral-01",
+            "stock": 8,
+            "enabled": true,
+            "kind": "beans"
+          },
+          {
+            "label": "耳掛咖啡",
+            "detail": "10入／每包12g",
+            "price": 500,
+            "id": "monet-floral-02",
+            "stock": 10,
+            "enabled": true,
+            "kind": "drip"
+          }
+        ],
+        "schemaVersion": "12.0",
+        "assets": {
+          "mainVisual": {
+            "path": "/uploads/artworks/monet-floral/kdcoffee-monet-floral-main-visual-v02.webp",
+            "fileName": "kdcoffee-monet-floral-main-visual-v02.webp",
+            "originalFileName": "monet-floral-main-visual.webp",
+            "alt": "KD Coffee 莫內花語主視覺",
+            "title": "莫內花語｜KD Coffee 主視覺",
+            "caption": "瓜地馬拉・水洗・淺中焙・花果香、葡萄酒、清香、回甘",
+            "updatedAt": "2026-08-10T01:54:52.966Z",
+            "status": "uploaded",
+            "version": 2
+          },
+          "artworkCover": {
+            "path": "/uploads/artworks/monet-floral/kdcoffee-monet-floral-artwork-cover-v01.webp",
+            "fileName": "kdcoffee-monet-floral-artwork-cover-v01.webp",
+            "originalFileName": "artwork-cover-monet-floral-approved-master.png",
+            "alt": "KD Coffee 莫內花語 Artwork Cover",
+            "title": "莫內花語 | KD Coffee Artwork Cover",
+            "caption": "CLAUDE MONET | KD Coffee Artwork Collection",
+            "updatedAt": "2026-08-10T13:40:41.015Z",
+            "status": "uploaded",
+            "version": 1
+          }
+        },
+        "pageLayout": {
+          "heroAsset": "hero",
+          "productAsset": "productPhoto",
+          "listAsset": "artworkCover",
+          "galleryAssets": [
+            "label"
+          ],
+          "showGallery": true,
+          "showRelatedWorks": true
+        },
+        "history": [
+          {
+            "id": "H-1786290400069-P00003",
+            "version": 1,
+            "summary": "更新發布狀態、更新作品資料",
+            "createdAt": "2026-08-09T15:46:40.069Z"
+          }
+        ],
+        "publish": {
+          "website": true,
+          "facebook": false,
+          "google": false,
+          "line": false
+        },
+        "nameEn": "",
+        "id": "P00003",
+        "sku": "KD0003"
+      },
+      {
+        "active": true,
+        "slug": "turner-sunset",
+        "name": "特納夕日",
+        "artist": "J. M. W. TURNER",
+        "subtitle": "紅酒・蔗香・萊姆",
+        "mood": "紅酒般的深度與萊姆明亮感交會，留下夕陽般溫柔的甜。",
+        "origin": "衣索比亞",
+        "process": "水洗",
+        "roast": "淺中焙",
+        "flavors": [
+          "紅酒",
+          "蔗香",
+          "萊姆"
+        ],
+        "tag": "",
+        "featured": false,
+        "cover": "",
+        "poster": "",
+        "visualTone": "sunset",
+        "purchase": [
+          {
+            "label": "半磅咖啡豆",
+            "detail": "227g",
+            "price": 700,
+            "id": "turner-sunset-01",
+            "kind": "beans"
+          },
+          {
+            "label": "耳掛咖啡",
+            "detail": "10入／每包12g",
+            "price": 500,
+            "id": "turner-sunset-02",
+            "kind": "drip"
+          }
+        ],
+        "status": "active",
+        "inMonthlyMenu": true,
+        "showOnHomepage": false,
+        "showWhenSoldOut": true,
+        "purchasable": true,
+        "sort": 4,
+        "stock": 20,
+        "shortCopy": "紅酒深度交會蔗糖甜與萊姆清亮，柔和而有層次。",
+        "variety": "待確認",
+        "altitude": "待確認",
+        "displayFields": {
+          "origin": true,
+          "process": true,
+          "roast": true,
+          "variety": false,
+          "altitude": false,
+          "flavors": true,
+          "shortCopy": true,
+          "mood": true
+        },
+        "skus": [
+          {
+            "label": "半磅咖啡豆",
+            "detail": "227g",
+            "price": 700,
+            "id": "turner-sunset-01",
+            "stock": 10,
+            "enabled": true,
+            "kind": "beans"
+          },
+          {
+            "label": "耳掛咖啡",
+            "detail": "10入／每包12g",
+            "price": 500,
+            "id": "turner-sunset-02",
+            "stock": 10,
+            "enabled": true,
+            "kind": "drip"
+          }
+        ],
+        "schemaVersion": "12.0",
+        "assets": {
+          "artworkCover": {
+            "path": "/uploads/artworks/turner-sunset/kdcoffee-turner-sunset-artwork-cover-v01.webp",
+            "fileName": "kdcoffee-turner-sunset-artwork-cover-v01.webp",
+            "originalFileName": "artwork-cover-turner-sunset-approved-master.png",
+            "alt": "KD Coffee 特納夕日 Artwork Cover",
+            "title": "特納夕日 | KD Coffee Artwork Cover",
+            "caption": "J. M. W. TURNER | KD Coffee Artwork Collection",
+            "updatedAt": "2026-08-10T13:40:41.015Z",
+            "status": "uploaded",
+            "version": 1
+          }
+        },
+        "pageLayout": {
+          "heroAsset": "hero",
+          "productAsset": "productPhoto",
+          "listAsset": "artworkCover",
+          "galleryAssets": [
+            "label"
+          ],
+          "showGallery": true,
+          "showRelatedWorks": true
+        },
+        "history": [
+          {
+            "id": "H-1786290400069-P00004",
+            "version": 1,
+            "summary": "更新發布狀態、更新作品資料",
+            "createdAt": "2026-08-09T15:46:40.069Z"
+          }
+        ],
+        "publish": {
+          "website": false,
+          "facebook": false,
+          "google": false,
+          "line": false
+        },
+        "nameEn": "",
+        "id": "P00004",
+        "sku": "KD0004"
+      },
+      {
+        "active": true,
+        "slug": "vandyck-knight",
+        "name": "范戴克・騎士",
+        "artist": "ANTHONY VAN DYCK",
+        "subtitle": "蘋果・紅葡萄柚・黃檸檬",
+        "mood": "清爽俐落，明亮果香中帶著優雅而從容的輪廓。",
+        "origin": "巴拿馬",
+        "process": "日曬",
+        "roast": "淺焙",
+        "flavors": [
+          "蘋果",
+          "紅葡萄柚",
+          "黃檸檬"
+        ],
+        "tag": "",
+        "featured": true,
+        "cover": "",
+        "poster": "",
+        "visualTone": "knight",
+        "purchase": [
+          {
+            "label": "半磅咖啡豆",
+            "detail": "227g",
+            "price": 700,
+            "id": "vandyck-knight-01",
+            "kind": "beans"
+          },
+          {
+            "label": "耳掛咖啡",
+            "detail": "10入／每包12g",
+            "price": 500,
+            "id": "vandyck-knight-02",
+            "kind": "drip"
+          }
+        ],
+        "status": "active",
+        "inMonthlyMenu": true,
+        "showOnHomepage": true,
+        "showWhenSoldOut": true,
+        "purchasable": true,
+        "sort": 5,
+        "stock": 20,
+        "shortCopy": "蘋果與柑橘系酸甜俐落，展現優雅明快的輪廓。",
+        "variety": "待確認",
+        "altitude": "待確認",
+        "displayFields": {
+          "origin": true,
+          "process": true,
+          "roast": true,
+          "variety": false,
+          "altitude": false,
+          "flavors": true,
+          "shortCopy": true,
+          "mood": true
+        },
+        "skus": [
+          {
+            "label": "半磅咖啡豆",
+            "detail": "227g",
+            "price": 700,
+            "id": "vandyck-knight-01",
+            "stock": 10,
+            "enabled": true,
+            "kind": "beans"
+          },
+          {
+            "label": "耳掛咖啡",
+            "detail": "10入／每包12g",
+            "price": 500,
+            "id": "vandyck-knight-02",
+            "stock": 10,
+            "enabled": true,
+            "kind": "drip"
+          }
+        ],
+        "schemaVersion": "12.0",
+        "assets": {
+          "artworkCover": {
+            "path": "/uploads/artworks/vandyck-knight/kdcoffee-vandyck-knight-artwork-cover-v01.webp",
+            "fileName": "kdcoffee-vandyck-knight-artwork-cover-v01.webp",
+            "originalFileName": "artwork-cover-vandyck-knight-approved-master.png",
+            "alt": "KD Coffee 范戴克・騎士 Artwork Cover",
+            "title": "范戴克・騎士 | KD Coffee Artwork Cover",
+            "caption": "ANTHONY VAN DYCK | KD Coffee Artwork Collection",
+            "updatedAt": "2026-08-10T13:40:41.015Z",
+            "status": "uploaded",
+            "version": 1
+          }
+        },
+        "pageLayout": {
+          "heroAsset": "hero",
+          "productAsset": "productPhoto",
+          "listAsset": "artworkCover",
+          "galleryAssets": [
+            "label"
+          ],
+          "showGallery": true,
+          "showRelatedWorks": true
+        },
+        "history": [
+          {
+            "id": "H-1786290400070-P00005",
+            "version": 1,
+            "summary": "更新發布狀態、更新作品資料",
+            "createdAt": "2026-08-09T15:46:40.070Z"
+          }
+        ],
+        "publish": {
+          "website": true,
+          "facebook": false,
+          "google": false,
+          "line": false
+        },
+        "nameEn": "",
+        "id": "P00005",
+        "sku": "KD0005"
+      },
+      {
+        "active": true,
+        "slug": "degas-melody",
+        "name": "竇加・旋律",
+        "artist": "EDGAR DEGAS",
+        "subtitle": "水果酒・花香・莓果",
+        "mood": "莓果與花香輕盈流動，像一段節奏細緻、餘韻悠長的旋律。",
+        "origin": "哥斯大黎加",
+        "process": "日曬",
+        "roast": "淺焙",
+        "flavors": [
+          "水果酒",
+          "花香",
+          "莓果"
+        ],
+        "tag": "新品上市",
+        "featured": false,
+        "cover": "",
+        "poster": "",
+        "visualTone": "melody",
+        "purchase": [
+          {
+            "label": "半磅咖啡豆",
+            "detail": "227g",
+            "price": 700,
+            "id": "degas-melody-01",
+            "kind": "beans"
+          },
+          {
+            "label": "耳掛咖啡",
+            "detail": "10入／每包12g",
+            "price": 500,
+            "id": "degas-melody-02",
+            "kind": "drip"
+          }
+        ],
+        "status": "active",
+        "inMonthlyMenu": true,
+        "showOnHomepage": false,
+        "showWhenSoldOut": true,
+        "purchasable": true,
+        "sort": 6,
+        "stock": 20,
+        "shortCopy": "水果酒、花香與莓果流動交織，節奏輕盈細緻。",
+        "variety": "待確認",
+        "altitude": "待確認",
+        "displayFields": {
+          "origin": true,
+          "process": true,
+          "roast": true,
+          "variety": false,
+          "altitude": false,
+          "flavors": true,
+          "shortCopy": true,
+          "mood": true
+        },
+        "skus": [
+          {
+            "label": "半磅咖啡豆",
+            "detail": "227g",
+            "price": 700,
+            "id": "degas-melody-01",
+            "stock": 10,
+            "enabled": true,
+            "kind": "beans"
+          },
+          {
+            "label": "耳掛咖啡",
+            "detail": "10入／每包12g",
+            "price": 500,
+            "id": "degas-melody-02",
+            "stock": 10,
+            "enabled": true,
+            "kind": "drip"
+          }
+        ],
+        "schemaVersion": "12.0",
+        "assets": {
+          "artworkCover": {
+            "path": "/uploads/artworks/degas-melody/kdcoffee-degas-melody-artwork-cover-v01.webp",
+            "fileName": "kdcoffee-degas-melody-artwork-cover-v01.webp",
+            "originalFileName": "artwork-cover-degas-melody-approved-master.png",
+            "alt": "KD Coffee 竇加・旋律 Artwork Cover",
+            "title": "竇加・旋律 | KD Coffee Artwork Cover",
+            "caption": "EDGAR DEGAS | KD Coffee Artwork Collection",
+            "updatedAt": "2026-08-10T13:40:41.015Z",
+            "status": "uploaded",
+            "version": 1
+          }
+        },
+        "pageLayout": {
+          "heroAsset": "hero",
+          "productAsset": "productPhoto",
+          "listAsset": "artworkCover",
+          "galleryAssets": [
+            "label"
+          ],
+          "showGallery": true,
+          "showRelatedWorks": true
+        },
+        "history": [
+          {
+            "id": "H-1786290400070-P00006",
+            "version": 1,
+            "summary": "更新發布狀態、更新作品資料",
+            "createdAt": "2026-08-09T15:46:40.070Z"
+          }
+        ],
+        "publish": {
+          "website": false,
+          "facebook": false,
+          "google": false,
+          "line": false
+        },
+        "nameEn": "",
+        "id": "P00006",
+        "sku": "KD0006"
+      },
+      {
+        "active": true,
+        "slug": "raphael-kiss",
+        "name": "拉斐爾之吻",
+        "artist": "RAPHAEL",
+        "subtitle": "花香・蜜桃・尾韻香甜",
+        "mood": "柔和花香與蜜桃甜感相互靠近，細緻得像一個安靜的吻。",
+        "origin": "衣索比亞",
+        "process": "熱衝擊",
+        "roast": "淺焙",
+        "flavors": [
+          "花香",
+          "蜜桃",
+          "甜感",
+          "長尾韻"
+        ],
+        "tag": "本月推薦",
+        "featured": false,
+        "cover": "/uploads/artworks/raphael-kiss/kdcoffee-raphael-kiss-main-visual-v02.webp",
+        "poster": "",
+        "visualTone": "kiss",
+        "purchase": [
+          {
+            "label": "半磅咖啡豆",
+            "detail": "227g",
+            "price": 700,
+            "id": "raphael-kiss-01",
+            "kind": "beans"
+          },
+          {
+            "label": "耳掛咖啡",
+            "detail": "10入／每包12g",
+            "price": 500,
+            "id": "raphael-kiss-02",
+            "kind": "drip"
+          }
+        ],
+        "status": "active",
+        "inMonthlyMenu": true,
+        "showOnHomepage": false,
+        "showWhenSoldOut": true,
+        "purchasable": true,
+        "sort": 7,
+        "stock": 20,
+        "shortCopy": "柔和花香與蜜桃甜感相遇，細膩、優雅而綿長。",
+        "variety": "待確認",
+        "altitude": "待確認",
+        "displayFields": {
+          "origin": true,
+          "process": true,
+          "roast": true,
+          "variety": false,
+          "altitude": false,
+          "flavors": true,
+          "shortCopy": true,
+          "mood": true
+        },
+        "skus": [
+          {
+            "label": "半磅咖啡豆",
+            "detail": "227g",
+            "price": 700,
+            "id": "raphael-kiss-01",
+            "stock": 10,
+            "enabled": true,
+            "kind": "beans"
+          },
+          {
+            "label": "耳掛咖啡",
+            "detail": "10入／每包12g",
+            "price": 500,
+            "id": "raphael-kiss-02",
+            "stock": 10,
+            "enabled": true,
+            "kind": "drip"
+          }
+        ],
+        "schemaVersion": "12.0",
+        "assets": {
+          "mainVisual": {
+            "path": "/uploads/artworks/raphael-kiss/kdcoffee-raphael-kiss-main-visual-v02.webp",
+            "fileName": "kdcoffee-raphael-kiss-main-visual-v02.webp",
+            "originalFileName": "raphael-kiss-main-visual.webp",
+            "alt": "KD Coffee 拉斐爾之吻主視覺",
+            "title": "拉斐爾之吻｜KD Coffee 主視覺",
+            "caption": "衣索比亞・熱衝擊・淺焙・花香、蜜桃、甜感、長尾韻",
+            "updatedAt": "2026-08-10T01:54:53.019Z",
+            "status": "uploaded",
+            "version": 2
+          },
+          "artworkCover": {
+            "path": "/uploads/artworks/raphael-kiss/kdcoffee-raphael-kiss-artwork-cover-v01.webp",
+            "fileName": "kdcoffee-raphael-kiss-artwork-cover-v01.webp",
+            "originalFileName": "artwork-cover-raphael-kiss-approved-master.png",
+            "alt": "KD Coffee 拉斐爾之吻 Artwork Cover",
+            "title": "拉斐爾之吻 | KD Coffee Artwork Cover",
+            "caption": "RAPHAEL | KD Coffee Artwork Collection",
+            "updatedAt": "2026-08-10T13:40:41.015Z",
+            "status": "uploaded",
+            "version": 1
+          }
+        },
+        "pageLayout": {
+          "heroAsset": "hero",
+          "productAsset": "productPhoto",
+          "listAsset": "artworkCover",
+          "galleryAssets": [
+            "label"
+          ],
+          "showGallery": true,
+          "showRelatedWorks": true
+        },
+        "history": [
+          {
+            "id": "H-1786290400070-P00007",
+            "version": 1,
+            "summary": "更新發布狀態、更新作品資料",
+            "createdAt": "2026-08-09T15:46:40.070Z"
+          }
+        ],
+        "publish": {
+          "website": false,
+          "facebook": false,
+          "google": false,
+          "line": false
+        },
+        "nameEn": "",
+        "id": "P00007",
+        "sku": "KD0007"
+      },
+      {
+        "active": true,
+        "slug": "vangogh-enchantment",
+        "name": "梵谷風靡",
+        "artist": "VINCENT VAN GOGH",
+        "subtitle": "花果香・葡萄酒・黑糖",
+        "mood": "奔放花果香與葡萄酒調性，在黑糖甜感中留下鮮明生命力。",
+        "origin": "衣索比亞",
+        "process": "水洗",
+        "roast": "淺中焙",
+        "flavors": [
+          "花果香",
+          "葡萄酒",
+          "黑糖"
+        ],
+        "tag": "",
+        "featured": true,
+        "cover": "",
+        "poster": "",
+        "visualTone": "starry",
+        "purchase": [
+          {
+            "label": "半磅咖啡豆",
+            "detail": "227g",
+            "price": 700,
+            "id": "vangogh-enchantment-01",
+            "kind": "beans"
+          },
+          {
+            "label": "耳掛咖啡",
+            "detail": "10入／每包12g",
+            "price": 500,
+            "id": "vangogh-enchantment-02",
+            "kind": "drip"
+          }
+        ],
+        "status": "active",
+        "inMonthlyMenu": true,
+        "showOnHomepage": true,
+        "showWhenSoldOut": true,
+        "purchasable": true,
+        "sort": 8,
+        "stock": 20,
+        "shortCopy": "奔放花果與葡萄酒香，在黑糖甜感中留下鮮明個性。",
+        "variety": "待確認",
+        "altitude": "待確認",
+        "displayFields": {
+          "origin": true,
+          "process": true,
+          "roast": true,
+          "variety": false,
+          "altitude": false,
+          "flavors": true,
+          "shortCopy": true,
+          "mood": true
+        },
+        "skus": [
+          {
+            "label": "半磅咖啡豆",
+            "detail": "227g",
+            "price": 700,
+            "id": "vangogh-enchantment-01",
+            "stock": 10,
+            "enabled": true,
+            "kind": "beans"
+          },
+          {
+            "label": "耳掛咖啡",
+            "detail": "10入／每包12g",
+            "price": 500,
+            "id": "vangogh-enchantment-02",
+            "stock": 10,
+            "enabled": true,
+            "kind": "drip"
+          }
+        ],
+        "schemaVersion": "12.0",
+        "assets": {
+          "artworkCover": {
+            "path": "/uploads/artworks/vangogh-enchantment/kdcoffee-vangogh-enchantment-artwork-cover-v01.webp",
+            "fileName": "kdcoffee-vangogh-enchantment-artwork-cover-v01.webp",
+            "originalFileName": "artwork-cover-vangogh-enchantment-approved-master.png",
+            "alt": "KD Coffee 梵谷風靡 Artwork Cover",
+            "title": "梵谷風靡 | KD Coffee Artwork Cover",
+            "caption": "VINCENT VAN GOGH | KD Coffee Artwork Collection",
+            "updatedAt": "2026-08-10T13:40:41.015Z",
+            "status": "uploaded",
+            "version": 1
+          }
+        },
+        "pageLayout": {
+          "heroAsset": "hero",
+          "productAsset": "productPhoto",
+          "listAsset": "artworkCover",
+          "galleryAssets": [
+            "label"
+          ],
+          "showGallery": true,
+          "showRelatedWorks": true
+        },
+        "history": [
+          {
+            "id": "H-1786290400070-P00008",
+            "version": 1,
+            "summary": "更新發布狀態、更新作品資料",
+            "createdAt": "2026-08-09T15:46:40.070Z"
+          }
+        ],
+        "publish": {
+          "website": true,
+          "facebook": false,
+          "google": false,
+          "line": false
+        },
+        "nameEn": "",
+        "id": "P00008",
+        "sku": "KD0008"
+      },
+      {
+        "active": false,
+        "status": "hidden",
+        "inMonthlyMenu": false,
+        "showOnHomepage": false,
+        "showWhenSoldOut": true,
+        "purchasable": false,
+        "stock": 20,
+        "sort": 9,
+        "slug": "rembrandt-miracle",
+        "name": "林布蘭・奇蹟",
+        "artist": "REMBRANDT",
+        "subtitle": "請於後台補充本作品風味",
+        "mood": "像幽暗畫面中慢慢浮現的一束光，沉穩香氣包裹溫暖甜感，在安靜裡留下意外驚喜。",
+        "origin": "待補充",
+        "process": "待補充",
+        "roast": "待補充",
+        "flavors": [],
+        "tag": "",
+        "featured": false,
+        "cover": "",
+        "poster": "",
+        "visualTone": "archive",
+        "purchase": [
+          {
+            "label": "半磅咖啡豆",
+            "detail": "227g",
+            "price": 700,
+            "id": "rembrandt-miracle-01",
+            "kind": "beans"
+          },
+          {
+            "label": "耳掛咖啡",
+            "detail": "10入／每包12g",
+            "price": 500,
+            "id": "rembrandt-miracle-02",
+            "kind": "drip"
+          }
+        ],
+        "shortCopy": "深邃香氣與溫暖甜感緩緩浮現，沉穩中藏著驚喜。",
+        "variety": "待確認",
+        "altitude": "待確認",
+        "displayFields": {
+          "origin": true,
+          "process": true,
+          "roast": true,
+          "variety": false,
+          "altitude": false,
+          "flavors": true,
+          "shortCopy": true,
+          "mood": true
+        },
+        "skus": [
+          {
+            "label": "半磅咖啡豆",
+            "detail": "227g",
+            "price": 700,
+            "id": "rembrandt-miracle-01",
+            "stock": 10,
+            "enabled": true,
+            "kind": "beans"
+          },
+          {
+            "label": "耳掛咖啡",
+            "detail": "10入／每包12g",
+            "price": 500,
+            "id": "rembrandt-miracle-02",
+            "stock": 10,
+            "enabled": true,
+            "kind": "drip"
+          }
+        ],
+        "schemaVersion": "12.0",
+        "assets": {
+          "artworkCover": {
+            "path": "/uploads/artworks/rembrandt-miracle/kdcoffee-rembrandt-miracle-artwork-cover-v01.webp",
+            "fileName": "kdcoffee-rembrandt-miracle-artwork-cover-v01.webp",
+            "originalFileName": "artwork-cover-rembrandt-miracle-approved-master.png",
+            "alt": "KD Coffee 林布蘭・奇蹟 Artwork Cover",
+            "title": "林布蘭・奇蹟 | KD Coffee Artwork Cover",
+            "caption": "REMBRANDT | KD Coffee Artwork Collection",
+            "updatedAt": "2026-08-10T13:40:41.015Z",
+            "status": "uploaded",
+            "version": 1
+          }
+        },
+        "pageLayout": {
+          "heroAsset": "hero",
+          "productAsset": "productPhoto",
+          "listAsset": "artworkCover",
+          "galleryAssets": [
+            "label"
+          ],
+          "showGallery": true,
+          "showRelatedWorks": true
+        },
+        "history": [
+          {
+            "id": "H-1786290400070-P00009",
+            "version": 1,
+            "summary": "更新發布狀態、更新作品資料",
+            "createdAt": "2026-08-09T15:46:40.070Z"
+          }
+        ],
+        "publish": {
+          "website": false,
+          "facebook": false,
+          "google": false,
+          "line": false
+        },
+        "nameEn": "",
+        "id": "P00009",
+        "sku": "KD0009"
+      },
+      {
+        "active": false,
+        "status": "hidden",
+        "inMonthlyMenu": false,
+        "showOnHomepage": false,
+        "showWhenSoldOut": true,
+        "purchasable": false,
+        "stock": 20,
+        "sort": 10,
+        "slug": "daumier-craft",
+        "name": "杜米埃・匠心",
+        "artist": "HONORÉ DAUMIER",
+        "subtitle": "請於後台補充本作品風味",
+        "mood": "不追求浮誇，而以乾淨結構、紮實口感與耐喝尾韻，呈現職人反覆琢磨後的風味。",
+        "origin": "待補充",
+        "process": "待補充",
+        "roast": "待補充",
+        "flavors": [],
+        "tag": "",
+        "featured": false,
+        "cover": "",
+        "poster": "",
+        "visualTone": "archive",
+        "purchase": [
+          {
+            "label": "半磅咖啡豆",
+            "detail": "227g",
+            "price": 700,
+            "id": "daumier-craft-01",
+            "kind": "beans"
+          },
+          {
+            "label": "耳掛咖啡",
+            "detail": "10入／每包12g",
+            "price": 500,
+            "id": "daumier-craft-02",
+            "kind": "drip"
+          }
+        ],
+        "shortCopy": "紮實、乾淨、耐喝，呈現職人反覆琢磨的風味輪廓。",
+        "variety": "待確認",
+        "altitude": "待確認",
+        "displayFields": {
+          "origin": true,
+          "process": true,
+          "roast": true,
+          "variety": false,
+          "altitude": false,
+          "flavors": true,
+          "shortCopy": true,
+          "mood": true
+        },
+        "skus": [
+          {
+            "label": "半磅咖啡豆",
+            "detail": "227g",
+            "price": 700,
+            "id": "daumier-craft-01",
+            "stock": 10,
+            "enabled": true,
+            "kind": "beans"
+          },
+          {
+            "label": "耳掛咖啡",
+            "detail": "10入／每包12g",
+            "price": 500,
+            "id": "daumier-craft-02",
+            "stock": 10,
+            "enabled": true,
+            "kind": "drip"
+          }
+        ],
+        "schemaVersion": "12.0",
+        "assets": {
+          "artworkCover": {
+            "path": "/uploads/artworks/daumier-craft/kdcoffee-daumier-craft-artwork-cover-v01.webp",
+            "fileName": "kdcoffee-daumier-craft-artwork-cover-v01.webp",
+            "originalFileName": "artwork-cover-daumier-craft-approved-master.png",
+            "alt": "KD Coffee 杜米埃・匠心 Artwork Cover",
+            "title": "杜米埃・匠心 | KD Coffee Artwork Cover",
+            "caption": "HONORÉ DAUMIER | KD Coffee Artwork Collection",
+            "updatedAt": "2026-08-10T13:40:41.015Z",
+            "status": "uploaded",
+            "version": 1
+          }
+        },
+        "pageLayout": {
+          "heroAsset": "hero",
+          "productAsset": "productPhoto",
+          "listAsset": "artworkCover",
+          "galleryAssets": [
+            "label"
+          ],
+          "showGallery": true,
+          "showRelatedWorks": true
+        },
+        "history": [
+          {
+            "id": "H-1786290400070-P00010",
+            "version": 1,
+            "summary": "更新發布狀態、更新作品資料",
+            "createdAt": "2026-08-09T15:46:40.070Z"
+          }
+        ],
+        "publish": {
+          "website": false,
+          "facebook": false,
+          "google": false,
+          "line": false
+        },
+        "nameEn": "",
+        "id": "P00010",
+        "sku": "KD0010"
+      },
+      {
+        "active": false,
+        "status": "hidden",
+        "inMonthlyMenu": false,
+        "showOnHomepage": false,
+        "showWhenSoldOut": true,
+        "purchasable": false,
+        "stock": 20,
+        "sort": 11,
+        "slug": "michelangelo-color",
+        "name": "米開朗基羅・繽紛",
+        "artist": "MICHELANGELO",
+        "subtitle": "請於後台補充本作品風味",
+        "mood": "果香如色彩般一層層展開，酸甜明亮、輪廓飽滿，帶著充滿生命力的張力。",
+        "origin": "待補充",
+        "process": "待補充",
+        "roast": "待補充",
+        "flavors": [],
+        "tag": "",
+        "featured": false,
+        "cover": "",
+        "poster": "",
+        "visualTone": "archive",
+        "purchase": [
+          {
+            "label": "半磅咖啡豆",
+            "detail": "227g",
+            "price": 700,
+            "id": "michelangelo-color-01",
+            "kind": "beans"
+          },
+          {
+            "label": "耳掛咖啡",
+            "detail": "10入／每包12g",
+            "price": 500,
+            "id": "michelangelo-color-02",
+            "kind": "drip"
+          }
+        ],
+        "shortCopy": "多層次果香鮮明展開，酸甜平衡而富有生命力。",
+        "variety": "待確認",
+        "altitude": "待確認",
+        "displayFields": {
+          "origin": true,
+          "process": true,
+          "roast": true,
+          "variety": false,
+          "altitude": false,
+          "flavors": true,
+          "shortCopy": true,
+          "mood": true
+        },
+        "skus": [
+          {
+            "label": "半磅咖啡豆",
+            "detail": "227g",
+            "price": 700,
+            "id": "michelangelo-color-01",
+            "stock": 10,
+            "enabled": true,
+            "kind": "beans"
+          },
+          {
+            "label": "耳掛咖啡",
+            "detail": "10入／每包12g",
+            "price": 500,
+            "id": "michelangelo-color-02",
+            "stock": 10,
+            "enabled": true,
+            "kind": "drip"
+          }
+        ],
+        "schemaVersion": "12.0",
+        "assets": {
+          "artworkCover": {
+            "path": "/uploads/artworks/michelangelo-color/kdcoffee-michelangelo-color-artwork-cover-v01.webp",
+            "fileName": "kdcoffee-michelangelo-color-artwork-cover-v01.webp",
+            "originalFileName": "artwork-cover-michelangelo-color-approved-master.png",
+            "alt": "KD Coffee 米開朗基羅・繽紛 Artwork Cover",
+            "title": "米開朗基羅・繽紛 | KD Coffee Artwork Cover",
+            "caption": "MICHELANGELO | KD Coffee Artwork Collection",
+            "updatedAt": "2026-08-10T13:40:41.015Z",
+            "status": "uploaded",
+            "version": 1
+          }
+        },
+        "pageLayout": {
+          "heroAsset": "hero",
+          "productAsset": "productPhoto",
+          "listAsset": "artworkCover",
+          "galleryAssets": [
+            "label"
+          ],
+          "showGallery": true,
+          "showRelatedWorks": true
+        },
+        "history": [
+          {
+            "id": "H-1786290400070-P00011",
+            "version": 1,
+            "summary": "更新發布狀態、更新作品資料",
+            "createdAt": "2026-08-09T15:46:40.070Z"
+          }
+        ],
+        "publish": {
+          "website": false,
+          "facebook": false,
+          "google": false,
+          "line": false
+        },
+        "nameEn": "",
+        "id": "P00011",
+        "sku": "KD0011"
+      },
+      {
+        "active": false,
+        "status": "hidden",
+        "inMonthlyMenu": false,
+        "showOnHomepage": false,
+        "showWhenSoldOut": true,
+        "purchasable": false,
+        "stock": 20,
+        "sort": 12,
+        "slug": "manet-honey",
+        "name": "馬內・蜜糖",
+        "artist": "ÉDOUARD MANET",
+        "subtitle": "請於後台補充本作品風味",
+        "mood": "像午後光線落在桌面，柔和蜜甜緩緩延伸，圓潤、舒服，是容易親近的一杯。",
+        "origin": "待補充",
+        "process": "待補充",
+        "roast": "待補充",
+        "flavors": [],
+        "tag": "",
+        "featured": false,
+        "cover": "",
+        "poster": "",
+        "visualTone": "archive",
+        "purchase": [
+          {
+            "label": "半磅咖啡豆",
+            "detail": "227g",
+            "price": 700,
+            "id": "manet-honey-01",
+            "kind": "beans"
+          },
+          {
+            "label": "耳掛咖啡",
+            "detail": "10入／每包12g",
+            "price": 500,
+            "id": "manet-honey-02",
+            "kind": "drip"
+          }
+        ],
+        "shortCopy": "柔順甜感如蜜般延伸，口感圓潤且容易親近。",
+        "variety": "待確認",
+        "altitude": "待確認",
+        "displayFields": {
+          "origin": true,
+          "process": true,
+          "roast": true,
+          "variety": false,
+          "altitude": false,
+          "flavors": true,
+          "shortCopy": true,
+          "mood": true
+        },
+        "skus": [
+          {
+            "label": "半磅咖啡豆",
+            "detail": "227g",
+            "price": 700,
+            "id": "manet-honey-01",
+            "stock": 10,
+            "enabled": true,
+            "kind": "beans"
+          },
+          {
+            "label": "耳掛咖啡",
+            "detail": "10入／每包12g",
+            "price": 500,
+            "id": "manet-honey-02",
+            "stock": 10,
+            "enabled": true,
+            "kind": "drip"
+          }
+        ],
+        "schemaVersion": "12.0",
+        "assets": {
+          "artworkCover": {
+            "path": "/uploads/artworks/manet-honey/kdcoffee-manet-honey-artwork-cover-v01.webp",
+            "fileName": "kdcoffee-manet-honey-artwork-cover-v01.webp",
+            "originalFileName": "artwork-cover-manet-honey-approved-master.png",
+            "alt": "KD Coffee 馬內・蜜糖 Artwork Cover",
+            "title": "馬內・蜜糖 | KD Coffee Artwork Cover",
+            "caption": "ÉDOUARD MANET | KD Coffee Artwork Collection",
+            "updatedAt": "2026-08-10T13:40:41.015Z",
+            "status": "uploaded",
+            "version": 1
+          }
+        },
+        "pageLayout": {
+          "heroAsset": "hero",
+          "productAsset": "productPhoto",
+          "listAsset": "artworkCover",
+          "galleryAssets": [
+            "label"
+          ],
+          "showGallery": true,
+          "showRelatedWorks": true
+        },
+        "history": [
+          {
+            "id": "H-1786290400070-P00012",
+            "version": 1,
+            "summary": "更新發布狀態、更新作品資料",
+            "createdAt": "2026-08-09T15:46:40.070Z"
+          }
+        ],
+        "publish": {
+          "website": false,
+          "facebook": false,
+          "google": false,
+          "line": false
+        },
+        "nameEn": "",
+        "id": "P00012",
+        "sku": "KD0012"
+      },
+      {
+        "active": false,
+        "status": "hidden",
+        "inMonthlyMenu": false,
+        "showOnHomepage": false,
+        "showWhenSoldOut": true,
+        "purchasable": false,
+        "stock": 20,
+        "sort": 13,
+        "slug": "picasso-classic",
+        "name": "畢卡索・經典",
+        "artist": "PABLO PICASSO",
+        "subtitle": "請於後台補充本作品風味",
+        "mood": "熟悉的風味被重新拆解與組合，線條俐落、個性鮮明，每一口都有不同觀看角度。",
+        "origin": "待補充",
+        "process": "待補充",
+        "roast": "待補充",
+        "flavors": [],
+        "tag": "",
+        "featured": false,
+        "cover": "",
+        "poster": "",
+        "visualTone": "archive",
+        "purchase": [
+          {
+            "label": "半磅咖啡豆",
+            "detail": "227g",
+            "price": 700,
+            "id": "picasso-classic-01",
+            "kind": "beans"
+          },
+          {
+            "label": "耳掛咖啡",
+            "detail": "10入／每包12g",
+            "price": 500,
+            "id": "picasso-classic-02",
+            "kind": "drip"
+          }
+        ],
+        "shortCopy": "鮮明風味以俐落結構重新組合，個性突出而耐人尋味。",
+        "variety": "待確認",
+        "altitude": "待確認",
+        "displayFields": {
+          "origin": true,
+          "process": true,
+          "roast": true,
+          "variety": false,
+          "altitude": false,
+          "flavors": true,
+          "shortCopy": true,
+          "mood": true
+        },
+        "skus": [
+          {
+            "label": "半磅咖啡豆",
+            "detail": "227g",
+            "price": 700,
+            "id": "picasso-classic-01",
+            "stock": 10,
+            "enabled": true,
+            "kind": "beans"
+          },
+          {
+            "label": "耳掛咖啡",
+            "detail": "10入／每包12g",
+            "price": 500,
+            "id": "picasso-classic-02",
+            "stock": 10,
+            "enabled": true,
+            "kind": "drip"
+          }
+        ],
+        "schemaVersion": "12.0",
+        "assets": {
+          "artworkCover": {
+            "path": "/uploads/artworks/picasso-classic/kdcoffee-picasso-classic-artwork-cover-v01.webp",
+            "fileName": "kdcoffee-picasso-classic-artwork-cover-v01.webp",
+            "originalFileName": "artwork-cover-picasso-classic-approved-master.png",
+            "alt": "KD Coffee 畢卡索・經典 Artwork Cover",
+            "title": "畢卡索・經典 | KD Coffee Artwork Cover",
+            "caption": "PABLO PICASSO | KD Coffee Artwork Collection",
+            "updatedAt": "2026-08-10T13:40:41.015Z",
+            "status": "uploaded",
+            "version": 1
+          }
+        },
+        "pageLayout": {
+          "heroAsset": "hero",
+          "productAsset": "productPhoto",
+          "listAsset": "artworkCover",
+          "galleryAssets": [
+            "label"
+          ],
+          "showGallery": true,
+          "showRelatedWorks": true
+        },
+        "history": [
+          {
+            "id": "H-1786290400070-P00013",
+            "version": 1,
+            "summary": "更新發布狀態、更新作品資料",
+            "createdAt": "2026-08-09T15:46:40.070Z"
+          }
+        ],
+        "publish": {
+          "website": false,
+          "facebook": false,
+          "google": false,
+          "line": false
+        },
+        "nameEn": "",
+        "id": "P00013",
+        "sku": "KD0013"
+      },
+      {
+        "active": false,
+        "status": "hidden",
+        "inMonthlyMenu": false,
+        "showOnHomepage": false,
+        "showWhenSoldOut": true,
+        "purchasable": false,
+        "stock": 20,
+        "sort": 14,
+        "slug": "vermeer-light",
+        "name": "維梅爾・光影",
+        "artist": "JOHANNES VERMEER",
+        "subtitle": "請於後台補充本作品風味",
+        "mood": "香氣乾淨而克制，甜感在明暗之間輕柔移動，留下安靜、細膩且優雅的餘韻。",
+        "origin": "待補充",
+        "process": "待補充",
+        "roast": "待補充",
+        "flavors": [],
+        "tag": "",
+        "featured": false,
+        "cover": "",
+        "poster": "",
+        "visualTone": "archive",
+        "purchase": [
+          {
+            "label": "半磅咖啡豆",
+            "detail": "227g",
+            "price": 700,
+            "id": "vermeer-light-01",
+            "kind": "beans"
+          },
+          {
+            "label": "耳掛咖啡",
+            "detail": "10入／每包12g",
+            "price": 500,
+            "id": "vermeer-light-02",
+            "kind": "drip"
+          }
+        ],
+        "shortCopy": "乾淨香氣與細緻甜感明暗交錯，安靜而優雅。",
+        "variety": "待確認",
+        "altitude": "待確認",
+        "displayFields": {
+          "origin": true,
+          "process": true,
+          "roast": true,
+          "variety": false,
+          "altitude": false,
+          "flavors": true,
+          "shortCopy": true,
+          "mood": true
+        },
+        "skus": [
+          {
+            "label": "半磅咖啡豆",
+            "detail": "227g",
+            "price": 700,
+            "id": "vermeer-light-01",
+            "stock": 10,
+            "enabled": true,
+            "kind": "beans"
+          },
+          {
+            "label": "耳掛咖啡",
+            "detail": "10入／每包12g",
+            "price": 500,
+            "id": "vermeer-light-02",
+            "stock": 10,
+            "enabled": true,
+            "kind": "drip"
+          }
+        ],
+        "schemaVersion": "12.0",
+        "assets": {
+          "artworkCover": {
+            "path": "/uploads/artworks/vermeer-light/kdcoffee-vermeer-light-artwork-cover-v01.webp",
+            "fileName": "kdcoffee-vermeer-light-artwork-cover-v01.webp",
+            "originalFileName": "artwork-cover-vermeer-light-approved-master.png",
+            "alt": "KD Coffee 維梅爾・光影 Artwork Cover",
+            "title": "維梅爾・光影 | KD Coffee Artwork Cover",
+            "caption": "JOHANNES VERMEER | KD Coffee Artwork Collection",
+            "updatedAt": "2026-08-10T13:40:41.015Z",
+            "status": "uploaded",
+            "version": 1
+          }
+        },
+        "pageLayout": {
+          "heroAsset": "hero",
+          "productAsset": "productPhoto",
+          "listAsset": "artworkCover",
+          "galleryAssets": [
+            "label"
+          ],
+          "showGallery": true,
+          "showRelatedWorks": true
+        },
+        "history": [
+          {
+            "id": "H-1786290400070-P00014",
+            "version": 1,
+            "summary": "更新發布狀態、更新作品資料",
+            "createdAt": "2026-08-09T15:46:40.070Z"
+          }
+        ],
+        "publish": {
+          "website": false,
+          "facebook": false,
+          "google": false,
+          "line": false
+        },
+        "nameEn": "",
+        "id": "P00014",
+        "sku": "KD0014"
+      },
+      {
+        "active": false,
+        "status": "hidden",
+        "inMonthlyMenu": false,
+        "showOnHomepage": false,
+        "showWhenSoldOut": true,
+        "purchasable": false,
+        "stock": 20,
+        "sort": 15,
+        "slug": "renoir-garden",
+        "name": "雷諾瓦・花園",
+        "artist": "PIERRE-AUGUSTE RENOIR",
+        "subtitle": "請於後台補充本作品風味",
+        "mood": "花香與果甜像陽光下的花園自然綻放，氣氛明亮、柔和，讓人想慢慢享受。",
+        "origin": "待補充",
+        "process": "待補充",
+        "roast": "待補充",
+        "flavors": [],
+        "tag": "",
+        "featured": false,
+        "cover": "",
+        "poster": "",
+        "visualTone": "archive",
+        "purchase": [
+          {
+            "label": "半磅咖啡豆",
+            "detail": "227g",
+            "price": 700,
+            "id": "renoir-garden-01",
+            "kind": "beans"
+          },
+          {
+            "label": "耳掛咖啡",
+            "detail": "10入／每包12g",
+            "price": 500,
+            "id": "renoir-garden-02",
+            "kind": "drip"
+          }
+        ],
+        "shortCopy": "花香與果甜柔和綻放，像陽光灑落花園般愉悅。",
+        "variety": "待確認",
+        "altitude": "待確認",
+        "displayFields": {
+          "origin": true,
+          "process": true,
+          "roast": true,
+          "variety": false,
+          "altitude": false,
+          "flavors": true,
+          "shortCopy": true,
+          "mood": true
+        },
+        "skus": [
+          {
+            "label": "半磅咖啡豆",
+            "detail": "227g",
+            "price": 700,
+            "id": "renoir-garden-01",
+            "stock": 10,
+            "enabled": true,
+            "kind": "beans"
+          },
+          {
+            "label": "耳掛咖啡",
+            "detail": "10入／每包12g",
+            "price": 500,
+            "id": "renoir-garden-02",
+            "stock": 10,
+            "enabled": true,
+            "kind": "drip"
+          }
+        ],
+        "schemaVersion": "12.0",
+        "assets": {
+          "artworkCover": {
+            "path": "/uploads/artworks/renoir-garden/kdcoffee-renoir-garden-artwork-cover-v01.webp",
+            "fileName": "kdcoffee-renoir-garden-artwork-cover-v01.webp",
+            "originalFileName": "artwork-cover-renoir-garden-approved-master.png",
+            "alt": "KD Coffee 雷諾瓦・花園 Artwork Cover",
+            "title": "雷諾瓦・花園 | KD Coffee Artwork Cover",
+            "caption": "PIERRE-AUGUSTE RENOIR | KD Coffee Artwork Collection",
+            "updatedAt": "2026-08-10T13:40:41.015Z",
+            "status": "uploaded",
+            "version": 1
+          }
+        },
+        "pageLayout": {
+          "heroAsset": "hero",
+          "productAsset": "productPhoto",
+          "listAsset": "artworkCover",
+          "galleryAssets": [
+            "label"
+          ],
+          "showGallery": true,
+          "showRelatedWorks": true
+        },
+        "history": [
+          {
+            "id": "H-1786290400070-P00015",
+            "version": 1,
+            "summary": "更新發布狀態、更新作品資料",
+            "createdAt": "2026-08-09T15:46:40.070Z"
+          }
+        ],
+        "publish": {
+          "website": false,
+          "facebook": false,
+          "google": false,
+          "line": false
+        },
+        "nameEn": "",
+        "id": "P00015",
+        "sku": "KD0015"
+      },
+      {
+        "active": false,
+        "status": "hidden",
+        "inMonthlyMenu": false,
+        "showOnHomepage": false,
+        "showWhenSoldOut": true,
+        "purchasable": false,
+        "stock": 20,
+        "sort": 16,
+        "slug": "seurat-dance",
+        "name": "秀拉・舞動",
+        "artist": "GEORGES SEURAT",
+        "subtitle": "請於後台補充本作品風味",
+        "mood": "細小而清楚的香氣點彼此連結，形成活潑節奏，入口輕盈，尾韻持續舞動。",
+        "origin": "待補充",
+        "process": "待補充",
+        "roast": "待補充",
+        "flavors": [],
+        "tag": "",
+        "featured": false,
+        "cover": "",
+        "poster": "",
+        "visualTone": "archive",
+        "purchase": [
+          {
+            "label": "半磅咖啡豆",
+            "detail": "227g",
+            "price": 700,
+            "id": "seurat-dance-01",
+            "kind": "beans"
+          },
+          {
+            "label": "耳掛咖啡",
+            "detail": "10入／每包12g",
+            "price": 500,
+            "id": "seurat-dance-02",
+            "kind": "drip"
+          }
+        ],
+        "shortCopy": "細小香氣層次彼此連結，形成活潑而有節奏的口感。",
+        "variety": "待確認",
+        "altitude": "待確認",
+        "displayFields": {
+          "origin": true,
+          "process": true,
+          "roast": true,
+          "variety": false,
+          "altitude": false,
+          "flavors": true,
+          "shortCopy": true,
+          "mood": true
+        },
+        "skus": [
+          {
+            "label": "半磅咖啡豆",
+            "detail": "227g",
+            "price": 700,
+            "id": "seurat-dance-01",
+            "stock": 10,
+            "enabled": true,
+            "kind": "beans"
+          },
+          {
+            "label": "耳掛咖啡",
+            "detail": "10入／每包12g",
+            "price": 500,
+            "id": "seurat-dance-02",
+            "stock": 10,
+            "enabled": true,
+            "kind": "drip"
+          }
+        ],
+        "schemaVersion": "12.0",
+        "assets": {
+          "artworkCover": {
+            "path": "/uploads/artworks/seurat-dance/kdcoffee-seurat-dance-artwork-cover-v01.webp",
+            "fileName": "kdcoffee-seurat-dance-artwork-cover-v01.webp",
+            "originalFileName": "artwork-cover-seurat-dance-approved-master.png",
+            "alt": "KD Coffee 秀拉・舞動 Artwork Cover",
+            "title": "秀拉・舞動 | KD Coffee Artwork Cover",
+            "caption": "GEORGES SEURAT | KD Coffee Artwork Collection",
+            "updatedAt": "2026-08-10T13:40:41.015Z",
+            "status": "uploaded",
+            "version": 1
+          }
+        },
+        "pageLayout": {
+          "heroAsset": "hero",
+          "productAsset": "productPhoto",
+          "listAsset": "artworkCover",
+          "galleryAssets": [
+            "label"
+          ],
+          "showGallery": true,
+          "showRelatedWorks": true
+        },
+        "history": [
+          {
+            "id": "H-1786290400070-P00016",
+            "version": 1,
+            "summary": "更新發布狀態、更新作品資料",
+            "createdAt": "2026-08-09T15:46:40.070Z"
+          }
+        ],
+        "publish": {
+          "website": false,
+          "facebook": false,
+          "google": false,
+          "line": false
+        },
+        "nameEn": "",
+        "id": "P00016",
+        "sku": "KD0016"
+      },
+      {
+        "active": false,
+        "status": "hidden",
+        "inMonthlyMenu": false,
+        "showOnHomepage": false,
+        "showWhenSoldOut": true,
+        "purchasable": false,
+        "stock": 20,
+        "sort": 17,
+        "slug": "millet-harvest",
+        "name": "米勒・穗香",
+        "artist": "JEAN-FRANÇOIS MILLET",
+        "subtitle": "請於後台補充本作品風味",
+        "mood": "帶著樸實溫暖的甜香與穩定口感，如成熟穗田般安心，適合每日細細品飲。",
+        "origin": "待補充",
+        "process": "待補充",
+        "roast": "待補充",
+        "flavors": [],
+        "tag": "",
+        "featured": false,
+        "cover": "",
+        "poster": "",
+        "visualTone": "archive",
+        "purchase": [
+          {
+            "label": "半磅咖啡豆",
+            "detail": "227g",
+            "price": 700,
+            "id": "millet-harvest-01",
+            "kind": "beans"
+          },
+          {
+            "label": "耳掛咖啡",
+            "detail": "10入／每包12g",
+            "price": 500,
+            "id": "millet-harvest-02",
+            "kind": "drip"
+          }
+        ],
+        "shortCopy": "穀物甜香與溫暖口感自然延伸，樸實、舒服且耐喝。",
+        "variety": "待確認",
+        "altitude": "待確認",
+        "displayFields": {
+          "origin": true,
+          "process": true,
+          "roast": true,
+          "variety": false,
+          "altitude": false,
+          "flavors": true,
+          "shortCopy": true,
+          "mood": true
+        },
+        "skus": [
+          {
+            "label": "半磅咖啡豆",
+            "detail": "227g",
+            "price": 700,
+            "id": "millet-harvest-01",
+            "stock": 10,
+            "enabled": true,
+            "kind": "beans"
+          },
+          {
+            "label": "耳掛咖啡",
+            "detail": "10入／每包12g",
+            "price": 500,
+            "id": "millet-harvest-02",
+            "stock": 10,
+            "enabled": true,
+            "kind": "drip"
+          }
+        ],
+        "schemaVersion": "12.0",
+        "assets": {
+          "artworkCover": {
+            "path": "/uploads/artworks/millet-harvest/kdcoffee-millet-harvest-artwork-cover-v01.webp",
+            "fileName": "kdcoffee-millet-harvest-artwork-cover-v01.webp",
+            "originalFileName": "artwork-cover-millet-harvest-approved-master.png",
+            "alt": "KD Coffee 米勒・穗香 Artwork Cover",
+            "title": "米勒・穗香 | KD Coffee Artwork Cover",
+            "caption": "JEAN-FRANÇOIS MILLET | KD Coffee Artwork Collection",
+            "updatedAt": "2026-08-10T13:40:41.015Z",
+            "status": "uploaded",
+            "version": 1
+          }
+        },
+        "pageLayout": {
+          "heroAsset": "hero",
+          "productAsset": "productPhoto",
+          "listAsset": "artworkCover",
+          "galleryAssets": [
+            "label"
+          ],
+          "showGallery": true,
+          "showRelatedWorks": true
+        },
+        "history": [
+          {
+            "id": "H-1786290400070-P00017",
+            "version": 1,
+            "summary": "更新發布狀態、更新作品資料",
+            "createdAt": "2026-08-09T15:46:40.070Z"
+          }
+        ],
+        "publish": {
+          "website": false,
+          "facebook": false,
+          "google": false,
+          "line": false
+        },
+        "nameEn": "",
+        "id": "P00017",
+        "sku": "KD0017"
+      },
+      {
+        "active": false,
+        "status": "hidden",
+        "inMonthlyMenu": false,
+        "showOnHomepage": false,
+        "showWhenSoldOut": true,
+        "purchasable": false,
+        "stock": 20,
+        "sort": 18,
+        "slug": "eakins-reflection",
+        "name": "伊肯斯・靜思",
+        "artist": "THOMAS EAKINS",
+        "subtitle": "請於後台補充本作品風味",
+        "mood": "乾淨、沉著、沒有多餘裝飾，風味在口中緩慢展開，適合留一段時間安靜感受。",
+        "origin": "待補充",
+        "process": "待補充",
+        "roast": "待補充",
+        "flavors": [],
+        "tag": "",
+        "featured": false,
+        "cover": "",
+        "poster": "",
+        "visualTone": "archive",
+        "purchase": [
+          {
+            "label": "半磅咖啡豆",
+            "detail": "227g",
+            "price": 700,
+            "id": "eakins-reflection-01",
+            "kind": "beans"
+          },
+          {
+            "label": "耳掛咖啡",
+            "detail": "10入／每包12g",
+            "price": 500,
+            "id": "eakins-reflection-02",
+            "kind": "drip"
+          }
+        ],
+        "shortCopy": "乾淨平衡、沉著細膩，適合慢慢感受每一段尾韻。",
+        "variety": "待確認",
+        "altitude": "待確認",
+        "displayFields": {
+          "origin": true,
+          "process": true,
+          "roast": true,
+          "variety": false,
+          "altitude": false,
+          "flavors": true,
+          "shortCopy": true,
+          "mood": true
+        },
+        "skus": [
+          {
+            "label": "半磅咖啡豆",
+            "detail": "227g",
+            "price": 700,
+            "id": "eakins-reflection-01",
+            "stock": 10,
+            "enabled": true,
+            "kind": "beans"
+          },
+          {
+            "label": "耳掛咖啡",
+            "detail": "10入／每包12g",
+            "price": 500,
+            "id": "eakins-reflection-02",
+            "stock": 10,
+            "enabled": true,
+            "kind": "drip"
+          }
+        ],
+        "schemaVersion": "12.0",
+        "assets": {
+          "artworkCover": {
+            "path": "/uploads/artworks/eakins-reflection/kdcoffee-eakins-reflection-artwork-cover-v01.webp",
+            "fileName": "kdcoffee-eakins-reflection-artwork-cover-v01.webp",
+            "originalFileName": "artwork-cover-eakins-reflection-approved-master.png",
+            "alt": "KD Coffee 伊肯斯・靜思 Artwork Cover",
+            "title": "伊肯斯・靜思 | KD Coffee Artwork Cover",
+            "caption": "THOMAS EAKINS | KD Coffee Artwork Collection",
+            "updatedAt": "2026-08-10T13:40:41.015Z",
+            "status": "uploaded",
+            "version": 1
+          }
+        },
+        "pageLayout": {
+          "heroAsset": "hero",
+          "productAsset": "productPhoto",
+          "listAsset": "artworkCover",
+          "galleryAssets": [
+            "label"
+          ],
+          "showGallery": true,
+          "showRelatedWorks": true
+        },
+        "history": [
+          {
+            "id": "H-1786290400070-P00018",
+            "version": 1,
+            "summary": "更新發布狀態、更新作品資料",
+            "createdAt": "2026-08-09T15:46:40.070Z"
+          }
+        ],
+        "publish": {
+          "website": false,
+          "facebook": false,
+          "google": false,
+          "line": false
+        },
+        "nameEn": "",
+        "id": "P00018",
+        "sku": "KD0018"
+      },
+      {
+        "active": false,
+        "status": "hidden",
+        "inMonthlyMenu": false,
+        "showOnHomepage": false,
+        "showWhenSoldOut": true,
+        "purchasable": false,
+        "stock": 20,
+        "sort": 19,
+        "slug": "geisha-estate",
+        "name": "莊園藝妓",
+        "artist": "GEISHA ESTATE",
+        "subtitle": "請於後台補充本作品風味",
+        "mood": "高雅花香、精緻果酸與清透甜感層層綻放，呈現藝妓品種細膩而迷人的輪廓。",
+        "origin": "待補充",
+        "process": "待補充",
+        "roast": "待補充",
+        "flavors": [],
+        "tag": "",
+        "featured": false,
+        "cover": "",
+        "poster": "",
+        "visualTone": "archive",
+        "purchase": [
+          {
+            "label": "半磅咖啡豆",
+            "detail": "227g",
+            "price": 700,
+            "id": "geisha-estate-01",
+            "kind": "beans"
+          },
+          {
+            "label": "耳掛咖啡",
+            "detail": "10入／每包12g",
+            "price": 500,
+            "id": "geisha-estate-02",
+            "kind": "drip"
+          }
+        ],
+        "shortCopy": "高雅花香與精緻果酸清晰綻放，展現藝妓咖啡的細膩感。",
+        "variety": "待確認",
+        "altitude": "待確認",
+        "displayFields": {
+          "origin": true,
+          "process": true,
+          "roast": true,
+          "variety": false,
+          "altitude": false,
+          "flavors": true,
+          "shortCopy": true,
+          "mood": true
+        },
+        "skus": [
+          {
+            "label": "半磅咖啡豆",
+            "detail": "227g",
+            "price": 700,
+            "id": "geisha-estate-01",
+            "stock": 10,
+            "enabled": true,
+            "kind": "beans"
+          },
+          {
+            "label": "耳掛咖啡",
+            "detail": "10入／每包12g",
+            "price": 500,
+            "id": "geisha-estate-02",
+            "stock": 10,
+            "enabled": true,
+            "kind": "drip"
+          }
+        ],
+        "schemaVersion": "12.0",
+        "assets": {
+          "artworkCover": {
+            "path": "/uploads/artworks/geisha-estate/kdcoffee-geisha-estate-artwork-cover-v01.webp",
+            "fileName": "kdcoffee-geisha-estate-artwork-cover-v01.webp",
+            "originalFileName": "artwork-cover-geisha-estate-approved-master.png",
+            "alt": "KD Coffee 莊園藝妓 Artwork Cover",
+            "title": "莊園藝妓 | KD Coffee Artwork Cover",
+            "caption": "GEISHA ESTATE | KD Coffee Artwork Collection",
+            "updatedAt": "2026-08-10T13:40:41.015Z",
+            "status": "uploaded",
+            "version": 1
+          }
+        },
+        "pageLayout": {
+          "heroAsset": "hero",
+          "productAsset": "productPhoto",
+          "listAsset": "artworkCover",
+          "galleryAssets": [
+            "label"
+          ],
+          "showGallery": true,
+          "showRelatedWorks": true
+        },
+        "history": [
+          {
+            "id": "H-1786290400071-P00019",
+            "version": 1,
+            "summary": "更新發布狀態、更新作品資料",
+            "createdAt": "2026-08-09T15:46:40.071Z"
+          }
+        ],
+        "publish": {
+          "website": false,
+          "facebook": false,
+          "google": false,
+          "line": false
+        },
+        "nameEn": "",
+        "id": "P00019",
+        "sku": "KD0019"
+      },
+      {
+        "active": false,
+        "status": "hidden",
+        "inMonthlyMenu": false,
+        "showOnHomepage": false,
+        "showWhenSoldOut": true,
+        "purchasable": false,
+        "stock": 20,
+        "sort": 20,
+        "slug": "japanese-geisha",
+        "name": "日本藝妓",
+        "artist": "JAPANESE GEISHA",
+        "subtitle": "請於後台補充本作品風味",
+        "mood": "清雅花香與柔和甜感如和風般輕輕交會，細緻克制，留下安定而悠長的印象。",
+        "origin": "待補充",
+        "process": "待補充",
+        "roast": "待補充",
+        "flavors": [],
+        "tag": "",
+        "featured": false,
+        "cover": "",
+        "poster": "",
+        "visualTone": "archive",
+        "purchase": [
+          {
+            "label": "半磅咖啡豆",
+            "detail": "227g",
+            "price": 700,
+            "id": "japanese-geisha-01",
+            "kind": "beans"
+          },
+          {
+            "label": "耳掛咖啡",
+            "detail": "10入／每包12g",
+            "price": 500,
+            "id": "japanese-geisha-02",
+            "kind": "drip"
+          }
+        ],
+        "shortCopy": "清雅花香與柔和甜感相互映襯，細緻如和風般安定。",
+        "variety": "待確認",
+        "altitude": "待確認",
+        "displayFields": {
+          "origin": true,
+          "process": true,
+          "roast": true,
+          "variety": false,
+          "altitude": false,
+          "flavors": true,
+          "shortCopy": true,
+          "mood": true
+        },
+        "skus": [
+          {
+            "label": "半磅咖啡豆",
+            "detail": "227g",
+            "price": 700,
+            "id": "japanese-geisha-01",
+            "stock": 10,
+            "enabled": true,
+            "kind": "beans"
+          },
+          {
+            "label": "耳掛咖啡",
+            "detail": "10入／每包12g",
+            "price": 500,
+            "id": "japanese-geisha-02",
+            "stock": 10,
+            "enabled": true,
+            "kind": "drip"
+          }
+        ],
+        "schemaVersion": "12.0",
+        "assets": {
+          "artworkCover": {
+            "path": "/uploads/artworks/japanese-geisha/kdcoffee-japanese-geisha-artwork-cover-v01.webp",
+            "fileName": "kdcoffee-japanese-geisha-artwork-cover-v01.webp",
+            "originalFileName": "artwork-cover-japanese-geisha-approved-master.png",
+            "alt": "KD Coffee 日本藝妓 Artwork Cover",
+            "title": "日本藝妓 | KD Coffee Artwork Cover",
+            "caption": "JAPANESE GEISHA | KD Coffee Artwork Collection",
+            "updatedAt": "2026-08-10T13:40:41.015Z",
+            "status": "uploaded",
+            "version": 1
+          }
+        },
+        "pageLayout": {
+          "heroAsset": "hero",
+          "productAsset": "productPhoto",
+          "listAsset": "artworkCover",
+          "galleryAssets": [
+            "label"
+          ],
+          "showGallery": true,
+          "showRelatedWorks": true
+        },
+        "history": [
+          {
+            "id": "H-1786290400071-P00020",
+            "version": 1,
+            "summary": "更新發布狀態、更新作品資料",
+            "createdAt": "2026-08-09T15:46:40.071Z"
+          }
+        ],
+        "publish": {
+          "website": false,
+          "facebook": false,
+          "google": false,
+          "line": false
+        },
+        "nameEn": "",
+        "id": "P00020",
+        "sku": "KD0020"
+      },
+      {
+        "active": false,
+        "status": "hidden",
+        "inMonthlyMenu": false,
+        "showOnHomepage": false,
+        "showWhenSoldOut": true,
+        "purchasable": false,
+        "stock": 20,
+        "sort": 21,
+        "slug": "cezanne-balance",
+        "name": "塞尚・平衡",
+        "artist": "PAUL CÉZANNE",
+        "subtitle": "請於後台補充本作品風味",
+        "mood": "酸質、甜感與口感結構彼此支撐，不偏不倚，呈現一杯完整、穩定而耐喝的咖啡。",
+        "origin": "待補充",
+        "process": "待補充",
+        "roast": "待補充",
+        "flavors": [],
+        "tag": "",
+        "featured": false,
+        "cover": "",
+        "poster": "",
+        "visualTone": "archive",
+        "purchase": [
+          {
+            "label": "半磅咖啡豆",
+            "detail": "227g",
+            "price": 700,
+            "id": "cezanne-balance-01",
+            "kind": "beans"
+          },
+          {
+            "label": "耳掛咖啡",
+            "detail": "10入／每包12g",
+            "price": 500,
+            "id": "cezanne-balance-02",
+            "kind": "drip"
+          }
+        ],
+        "shortCopy": "酸、甜與口感結構彼此支撐，呈現穩定而完整的平衡。",
+        "variety": "待確認",
+        "altitude": "待確認",
+        "displayFields": {
+          "origin": true,
+          "process": true,
+          "roast": true,
+          "variety": false,
+          "altitude": false,
+          "flavors": true,
+          "shortCopy": true,
+          "mood": true
+        },
+        "skus": [
+          {
+            "label": "半磅咖啡豆",
+            "detail": "227g",
+            "price": 700,
+            "id": "cezanne-balance-01",
+            "stock": 10,
+            "enabled": true,
+            "kind": "beans"
+          },
+          {
+            "label": "耳掛咖啡",
+            "detail": "10入／每包12g",
+            "price": 500,
+            "id": "cezanne-balance-02",
+            "stock": 10,
+            "enabled": true,
+            "kind": "drip"
+          }
+        ],
+        "schemaVersion": "12.0",
+        "assets": {
+          "artworkCover": {
+            "path": "/uploads/artworks/cezanne-balance/kdcoffee-cezanne-balance-artwork-cover-v01.webp",
+            "fileName": "kdcoffee-cezanne-balance-artwork-cover-v01.webp",
+            "originalFileName": "artwork-cover-cezanne-balance-approved-master.png",
+            "alt": "KD Coffee 塞尚・平衡 Artwork Cover",
+            "title": "塞尚・平衡 | KD Coffee Artwork Cover",
+            "caption": "PAUL CÉZANNE | KD Coffee Artwork Collection",
+            "updatedAt": "2026-08-10T13:40:41.015Z",
+            "status": "uploaded",
+            "version": 1
+          }
+        },
+        "pageLayout": {
+          "heroAsset": "hero",
+          "productAsset": "productPhoto",
+          "listAsset": "artworkCover",
+          "galleryAssets": [
+            "label"
+          ],
+          "showGallery": true,
+          "showRelatedWorks": true
+        },
+        "history": [
+          {
+            "id": "H-1786290400071-P00021",
+            "version": 1,
+            "summary": "更新發布狀態、更新作品資料",
+            "createdAt": "2026-08-09T15:46:40.071Z"
+          }
+        ],
+        "publish": {
+          "website": false,
+          "facebook": false,
+          "google": false,
+          "line": false
+        },
+        "nameEn": "",
+        "id": "P00021",
+        "sku": "KD0021"
+      },
+      {
+        "active": false,
+        "status": "hidden",
+        "inMonthlyMenu": false,
+        "showOnHomepage": false,
+        "showWhenSoldOut": true,
+        "purchasable": false,
+        "stock": 20,
+        "sort": 22,
+        "slug": "klimt-golden",
+        "name": "克林姆・金色",
+        "artist": "GUSTAV KLIMT",
+        "subtitle": "請於後台補充本作品風味",
+        "mood": "甜香華麗卻不厚重，如金色紋理在口中緩慢展開，溫暖、精緻且具有層次。",
+        "origin": "待補充",
+        "process": "待補充",
+        "roast": "待補充",
+        "flavors": [],
+        "tag": "",
+        "featured": false,
+        "cover": "",
+        "poster": "",
+        "visualTone": "archive",
+        "purchase": [
+          {
+            "label": "半磅咖啡豆",
+            "detail": "227g",
+            "price": 700,
+            "id": "klimt-golden-01",
+            "kind": "beans"
+          },
+          {
+            "label": "耳掛咖啡",
+            "detail": "10入／每包12g",
+            "price": 500,
+            "id": "klimt-golden-02",
+            "kind": "drip"
+          }
+        ],
+        "shortCopy": "甜香華麗而溫暖，層次如金色光澤般緩緩延伸。",
+        "variety": "待確認",
+        "altitude": "待確認",
+        "displayFields": {
+          "origin": true,
+          "process": true,
+          "roast": true,
+          "variety": false,
+          "altitude": false,
+          "flavors": true,
+          "shortCopy": true,
+          "mood": true
+        },
+        "skus": [
+          {
+            "label": "半磅咖啡豆",
+            "detail": "227g",
+            "price": 700,
+            "id": "klimt-golden-01",
+            "stock": 10,
+            "enabled": true,
+            "kind": "beans"
+          },
+          {
+            "label": "耳掛咖啡",
+            "detail": "10入／每包12g",
+            "price": 500,
+            "id": "klimt-golden-02",
+            "stock": 10,
+            "enabled": true,
+            "kind": "drip"
+          }
+        ],
+        "schemaVersion": "12.0",
+        "assets": {
+          "artworkCover": {
+            "path": "/uploads/artworks/klimt-golden/kdcoffee-klimt-golden-artwork-cover-v01.webp",
+            "fileName": "kdcoffee-klimt-golden-artwork-cover-v01.webp",
+            "originalFileName": "artwork-cover-klimt-golden-approved-master.png",
+            "alt": "KD Coffee 克林姆・金色 Artwork Cover",
+            "title": "克林姆・金色 | KD Coffee Artwork Cover",
+            "caption": "GUSTAV KLIMT | KD Coffee Artwork Collection",
+            "updatedAt": "2026-08-10T13:40:41.015Z",
+            "status": "uploaded",
+            "version": 1
+          }
+        },
+        "pageLayout": {
+          "heroAsset": "hero",
+          "productAsset": "productPhoto",
+          "listAsset": "artworkCover",
+          "galleryAssets": [
+            "label"
+          ],
+          "showGallery": true,
+          "showRelatedWorks": true
+        },
+        "history": [
+          {
+            "id": "H-1786290400071-P00022",
+            "version": 1,
+            "summary": "更新發布狀態、更新作品資料",
+            "createdAt": "2026-08-09T15:46:40.071Z"
+          }
+        ],
+        "publish": {
+          "website": false,
+          "facebook": false,
+          "google": false,
+          "line": false
+        },
+        "nameEn": "",
+        "id": "P00022",
+        "sku": "KD0022"
+      },
+      {
+        "active": false,
+        "status": "hidden",
+        "inMonthlyMenu": false,
+        "showOnHomepage": false,
+        "showWhenSoldOut": true,
+        "purchasable": false,
+        "stock": 20,
+        "sort": 23,
+        "slug": "matisse-rhythm",
+        "name": "馬諦斯・韻律",
+        "artist": "HENRI MATISSE",
+        "subtitle": "請於後台補充本作品風味",
+        "mood": "明快果香與柔順甜感自在流動，輪廓簡潔、節奏輕盈，帶來愉悅而鮮活的感受。",
+        "origin": "待補充",
+        "process": "待補充",
+        "roast": "待補充",
+        "flavors": [],
+        "tag": "",
+        "featured": false,
+        "cover": "",
+        "poster": "",
+        "visualTone": "archive",
+        "purchase": [
+          {
+            "label": "半磅咖啡豆",
+            "detail": "227g",
+            "price": 700,
+            "id": "matisse-rhythm-01",
+            "kind": "beans"
+          },
+          {
+            "label": "耳掛咖啡",
+            "detail": "10入／每包12g",
+            "price": 500,
+            "id": "matisse-rhythm-02",
+            "kind": "drip"
+          }
+        ],
+        "shortCopy": "明快果香與柔順甜感自在流動，輕盈而富有節奏。",
+        "variety": "待確認",
+        "altitude": "待確認",
+        "displayFields": {
+          "origin": true,
+          "process": true,
+          "roast": true,
+          "variety": false,
+          "altitude": false,
+          "flavors": true,
+          "shortCopy": true,
+          "mood": true
+        },
+        "skus": [
+          {
+            "label": "半磅咖啡豆",
+            "detail": "227g",
+            "price": 700,
+            "id": "matisse-rhythm-01",
+            "stock": 10,
+            "enabled": true,
+            "kind": "beans"
+          },
+          {
+            "label": "耳掛咖啡",
+            "detail": "10入／每包12g",
+            "price": 500,
+            "id": "matisse-rhythm-02",
+            "stock": 10,
+            "enabled": true,
+            "kind": "drip"
+          }
+        ],
+        "schemaVersion": "12.0",
+        "assets": {
+          "artworkCover": {
+            "path": "/uploads/artworks/matisse-rhythm/kdcoffee-matisse-rhythm-artwork-cover-v01.webp",
+            "fileName": "kdcoffee-matisse-rhythm-artwork-cover-v01.webp",
+            "originalFileName": "artwork-cover-matisse-rhythm-approved-master.png",
+            "alt": "KD Coffee 馬諦斯・韻律 Artwork Cover",
+            "title": "馬諦斯・韻律 | KD Coffee Artwork Cover",
+            "caption": "HENRI MATISSE | KD Coffee Artwork Collection",
+            "updatedAt": "2026-08-10T13:40:41.015Z",
+            "status": "uploaded",
+            "version": 1
+          }
+        },
+        "pageLayout": {
+          "heroAsset": "hero",
+          "productAsset": "productPhoto",
+          "listAsset": "artworkCover",
+          "galleryAssets": [
+            "label"
+          ],
+          "showGallery": true,
+          "showRelatedWorks": true
+        },
+        "history": [
+          {
+            "id": "H-1786290400071-P00023",
+            "version": 1,
+            "summary": "更新發布狀態、更新作品資料",
+            "createdAt": "2026-08-09T15:46:40.071Z"
+          }
+        ],
+        "publish": {
+          "website": false,
+          "facebook": false,
+          "google": false,
+          "line": false
+        },
+        "nameEn": "",
+        "id": "P00023",
+        "sku": "KD0023"
+      }
+    ],
+    "monthKey": "2026-08"
+  },
+  "schemaVersion": "12.0"
+}

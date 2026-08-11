@@ -1,0 +1,87 @@
+{
+  "release": "KD Coffee Studio v15.4.0",
+  "releaseDate": "2026-08-10",
+  "sourcePath": "F:\\AI網站\\KD_Coffee_Studio_v15.4.0_HOME003_Coffee_Moments_DEV",
+  "stablePath": "F:\\AI網站\\KD_Coffee_Studio_v15.4.0_HOME003_Coffee_Moments_STABLE",
+  "manifestScope": {
+    "algorithm": "SHA-256 over sorted path|fileSha256|bytes entries",
+    "selfExcluded": true,
+    "excluded": [
+      ".next",
+      "node_modules",
+      ".tmp-*",
+      "*.log",
+      "*.lock",
+      "*.tmp"
+    ]
+  },
+  "releaseSource": {
+    "fileCount": 212,
+    "sha256": "792938815036BAD1488C0EEF02D3FCC523F4BBB7BE641DBFF41E2C526C5AAA2A"
+  },
+  "stablePayload": {
+    "fileCount": 212,
+    "sha256": "A30711033EC24B75F6EC60B6D9AEAA38053BA69955796A4121AA07E7ECDF6EF2"
+  },
+  "authorizedPackagingDifferences": [
+    {
+      "file": "next-env.d.ts",
+      "sourceSha256": "7AD303E40D4FDDF44F156129E397511953A71481C5CFD86B1862649AAAF240CC",
+      "stableSha256": "7B550DDA9686C16F36A17BF9051D5DBF31E98555B30D114AC49FC49A1E712651",
+      "sourceImport": "./.next/dev/types/routes.d.ts",
+      "stableImport": "./.next/types/routes.d.ts",
+      "reason": "Next.js 16.2.10 production build generated type route reference"
+    }
+  ],
+  "formalData": {
+    "websiteDataSha256": "DB2500A9E9006217FA4E416A070337CFB9054D3E07D61FDA8EE80DD1705F3161",
+    "homepageSha256": "AC137BABE6741251A8B570D5F265D6A35AE106A2CF7BBDC6202992232D14E0B9",
+    "stores711Sha256": "EEF03805B488846557801B4BF22BF91E6349E72D7620F4E7D43511353C6D389A",
+    "orders": {
+      "fileCount": 5,
+      "manifestSha256": "CF7E1C38FE07ECB0B37DBF171D96CD60CE1982AA24656EFE176F1123B4373649"
+    },
+    "members": {
+      "fileCount": 1,
+      "manifestSha256": "1B747C6F3E17AE391C3076E930958606176D0BC6B9198FBB5A2B7EB3F7384440"
+    }
+  },
+  "home004ProductSlugs": [
+    "monet-floral",
+    "davinci-feast",
+    "raphael-kiss"
+  ],
+  "productImages": [
+    {
+      "slug": "monet-floral",
+      "file": "public/uploads/artworks/monet-floral/kdcoffee-monet-floral-main-visual-v02.webp",
+      "sha256": "440B7B0623908C464E80E7D76A75CE30CF53D853660FB94F1284D85BEF2F3158",
+      "bytes": 358676
+    },
+    {
+      "slug": "davinci-feast",
+      "file": "public/uploads/artworks/davinci-feast/kdcoffee-davinci-feast-main-visual-v02.webp",
+      "sha256": "079744CA86F6717681DDACCAD6BD7EFF43BD8069725707957624B53C3E311688",
+      "bytes": 250190
+    },
+    {
+      "slug": "raphael-kiss",
+      "file": "public/uploads/artworks/raphael-kiss/kdcoffee-raphael-kiss-main-visual-v02.webp",
+      "sha256": "A74398253A3111926A80E59A8DF0BFDB63AA76C1659E2A3458CA441685A066F1",
+      "bytes": 324222
+    }
+  ],
+  "previousStable": {
+    "path": "F:\\AI網站\\KD_Coffee_Studio_v15.3.0_HOME003_Coffee_Moments_STABLE",
+    "fileCount": 188,
+    "manifestSha256": "AB7B88DEC80831465753C7B78BAFCE94BDF4E62D6F577ABAEF42A94D9F61B230"
+  },
+  "authorizedReleaseChanges": [
+    "package.json version",
+    "package-lock.json root version fields",
+    "VERSION.txt",
+    "RELEASE_NOTES_v15.4.0.md",
+    "RELEASE_MANIFEST_v15.4.0.json",
+    "next-env.d.ts production build reference"
+  ]
+}

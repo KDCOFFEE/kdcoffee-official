@@ -1,0 +1,7 @@
+﻿KD Coffee Studio v15.0.1 修正內容
+
+1. 修正 BAT 使用 UTF-8 BOM 導致「ï»¿@echo off 不是內部或外部命令」。
+2. Launcher BAT 改為純 ASCII + Windows CRLF，不再出現 BOM 錯誤。
+3. Launcher v5.2.1 會自動偵測上一層網站專案，不再每次要求選擇 package.json 資料夾。
+4. 只有 Launcher 被單獨移到其他位置、找不到上一層 package.json 時，才會開啟資料夾選擇器。
+5. 更新仍不會自動建立完整專案備份。

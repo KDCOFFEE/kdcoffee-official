@@ -1,0 +1,123 @@
+{
+  "version": 1,
+  "updatedAt": "2026-08-05T00:00:00.000Z",
+  "assets": [
+    {
+      "id": "LOGO001",
+      "category": "logo",
+      "name": "Header 主 Logo",
+      "usage": "全站 Header｜淺色背景",
+      "path": "",
+      "recommendedSize": "SVG 優先；若 PNG，建議 640×160 px",
+      "displaySize": "桌面高度 40 px；手機高度 32 px",
+      "format": "SVG／透明 PNG",
+      "alt": "KD Coffee 咖啡藝術工坊",
+      "seoStem": "kd-coffee-logo-primary",
+      "status": "missing"
+    },
+    {
+      "id": "LOGO002",
+      "category": "logo",
+      "name": "Footer Logo",
+      "usage": "全站 Footer｜深色背景",
+      "path": "",
+      "recommendedSize": "SVG 優先；若 PNG，建議 800×200 px",
+      "displaySize": "高度 48–56 px",
+      "format": "白色 SVG／透明 PNG",
+      "alt": "KD Coffee 咖啡藝術工坊 Logo",
+      "seoStem": "kd-coffee-logo-footer-white",
+      "status": "missing"
+    },
+    {
+      "id": "LOGO003",
+      "category": "logo",
+      "name": "品牌圖章／方形標誌",
+      "usage": "手機捷徑、社群頭像、網站小尺寸識別",
+      "path": "",
+      "recommendedSize": "1024×1024 px",
+      "displaySize": "依平台自動縮放",
+      "format": "PNG／WebP",
+      "alt": "KD Coffee 品牌標誌",
+      "seoStem": "kd-coffee-logo-mark-square",
+      "status": "missing"
+    },
+    {
+      "id": "LOGO004",
+      "category": "logo",
+      "name": "Apple Touch Icon",
+      "usage": "iPhone／iPad 加入主畫面",
+      "path": "",
+      "recommendedSize": "180×180 px",
+      "displaySize": "系統自動",
+      "format": "PNG，不透明背景",
+      "alt": "KD Coffee",
+      "seoStem": "kd-coffee-apple-touch-icon",
+      "status": "missing"
+    },
+    {
+      "id": "LOGO005",
+      "category": "logo",
+      "name": "分享預覽圖",
+      "usage": "LINE、Facebook、Google 分享預覽",
+      "path": "",
+      "recommendedSize": "1200×630 px",
+      "displaySize": "社群平台自動",
+      "format": "JPG／WebP",
+      "alt": "KD Coffee 咖啡藝術工坊",
+      "seoStem": "kd-coffee-social-share-cover",
+      "status": "missing"
+    },
+    {
+      "id": "IMG0001",
+      "category": "homepage",
+      "name": "首頁 Hero 封面",
+      "usage": "首頁第一屏影片載入前封面",
+      "path": "/images/kd-fluid-bed-poster.webp",
+      "recommendedSize": "1920×1080 px｜16:9",
+      "displaySize": "滿版裁切",
+      "format": "WebP，建議 500 KB 以下",
+      "alt": "KD Coffee 自製流床式熱風烘豆機",
+      "seoStem": "kd-coffee-home-hero-fluid-bed-roaster",
+      "status": "active"
+    },
+    {
+      "id": "IMG0002",
+      "category": "brand",
+      "name": "品牌故事主圖",
+      "usage": "首頁｜為什麼自己打造烘豆機",
+      "path": "",
+      "recommendedSize": "1600×1200 px｜4:3",
+      "displaySize": "桌面雙欄、手機滿寬",
+      "format": "WebP／JPG，建議 1 MB 以下",
+      "alt": "KD Coffee 自製流床式熱風烘豆機與烘焙工作室",
+      "seoStem": "kd-coffee-brand-story-fluid-bed-roaster",
+      "status": "missing"
+    },
+    {
+      "id": "IMG0003",
+      "category": "brand",
+      "name": "紅外線熱顯像照片",
+      "usage": "首頁品牌故事｜烘焙控制",
+      "path": "",
+      "recommendedSize": "1200×900 px｜4:3",
+      "displaySize": "內容卡片",
+      "format": "WebP／JPG",
+      "alt": "KD Coffee 使用紅外線熱顯像觀察咖啡烘焙",
+      "seoStem": "kd-coffee-infrared-roasting-control",
+      "status": "missing"
+    },
+    {
+      "id": "IMG0004",
+      "category": "brand",
+      "name": "杯測與風味驗證照片",
+      "usage": "首頁品牌故事｜杯測流程",
+      "path": "",
+      "recommendedSize": "1200×900 px｜4:3",
+      "displaySize": "內容卡片",
+      "format": "WebP／JPG",
+      "alt": "KD Coffee 精品咖啡杯測與風味驗證",
+      "seoStem": "kd-coffee-cupping-flavor-quality-control",
+      "status": "missing"
+    }
+  ]
+}

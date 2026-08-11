@@ -1,0 +1,27 @@
+{
+  "product": "KD Coffee Studio",
+  "version": "15.2.3",
+  "packageType": "FULL",
+  "minimumBaseVersion": "14.0.0",
+  "channel": "LTS",
+  "includes": [
+    "homepage",
+    "commerce",
+    "cart",
+    "checkout",
+    "line-login",
+    "member",
+    "admin",
+    "health-check"
+  ],
+  "protectedPaths": [
+    ".env.local",
+    "node_modules",
+    ".next",
+    "data",
+    "public/uploads"
+  ],
+  "edition": "Developer Edition",
+  "launcherVersion": "5.2.0",
+  "name": "KD Coffee Studio v15.2.3 Custom Roast Pickup Lead Time"
+}
