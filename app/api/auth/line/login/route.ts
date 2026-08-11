@@ -50,6 +50,7 @@ export async function GET(request: Request) {
   );
   url.searchParams.set("nonce", nonce);
   url.searchParams.set("bot_prompt", "aggressive");
+  url.searchParams.set("disable_auto_login", "true");
 
   const response = NextResponse.redirect(url);
   const options = {
