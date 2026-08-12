@@ -1,10 +1,15 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import { useRouter } from "next/navigation";
+
+import { useCart } from "@/components/commerce/CartProvider";
 
 type Mode = "login" | "register" | "forgot";
 
 export default function EmailAuthForms() {
+  const router = useRouter();
+  const { items, ready } = useCart();
   const [mode, setMode] = useState<Mode>("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -175,6 +180,21 @@ export default function EmailAuthForms() {
             ? "已經是 Email 會員？Email 登入"
             : "返回 Email 登入"}
       </button>
+      </section>
+
+      <section className="guest-checkout-entry">
+        <div className="guest-checkout-divider" aria-hidden="true">
+          <span>或</span>
+        </div>
+        <button
+          className="guest-checkout-button"
+          type="button"
+          disabled={!ready}
+          onClick={() => router.push(items.length ? "/checkout" : "/works")}
+        >
+          直接使用訪客下單
+        </button>
+        <small>無需註冊會員，也可以直接購買</small>
       </section>
     </>
   );

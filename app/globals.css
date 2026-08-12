@@ -371,6 +371,7 @@
 .email-auth-help{margin-top:14px;padding:0;border:0;background:transparent;color:#5e4938;text-decoration:underline;cursor:pointer}
 .email-auth-switch{margin-top:14px;padding:0;border:0;background:transparent;color:#5e4938;text-decoration:underline;cursor:pointer}
 .email-reset-success{display:grid;gap:18px;margin-top:24px}.email-reset-success strong{color:#267a45;line-height:1.7}.email-reset-success .email-auth-submit{display:flex;justify-content:center;text-decoration:none}
+.guest-checkout-entry{display:grid;gap:10px;margin:8px 0 26px;text-align:center}.guest-checkout-divider{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:12px;color:#8c7a6b;font-size:12px}.guest-checkout-divider::before,.guest-checkout-divider::after{content:"";height:1px;background:#e2d6c8}.guest-checkout-button{width:100%;padding:15px 24px;border:1px solid #8c6745;border-radius:12px;background:#fff;color:#3a2b21;font:inherit;font-weight:800;cursor:pointer}.guest-checkout-button:disabled{opacity:.55;cursor:wait}.guest-checkout-entry small{color:#74675d;line-height:1.6}
 .member-profile{padding-bottom:28px;border-bottom:1px solid #e2d6c8}
 .member-profile img,.member-avatar-fallback{width:96px;height:96px;box-shadow:0 8px 26px rgba(64,42,25,.16)}
 .member-profile-copy h1{color:#241a15;font-family:Georgia,"Noto Serif TC",serif;font-weight:500;letter-spacing:-.02em}
