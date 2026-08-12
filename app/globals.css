@@ -368,7 +368,9 @@
 .email-auth-form input:focus{border-color:#8c6745;outline:2px solid rgba(140,103,69,.13)}
 .email-auth-submit{width:100%;padding:14px 18px;border:0;border-radius:12px;background:#2b2019;color:#fff;font-weight:800;cursor:pointer}
 .email-auth-submit:disabled{opacity:.6;cursor:wait}
+.email-auth-help{margin-top:14px;padding:0;border:0;background:transparent;color:#5e4938;text-decoration:underline;cursor:pointer}
 .email-auth-switch{margin-top:14px;padding:0;border:0;background:transparent;color:#5e4938;text-decoration:underline;cursor:pointer}
+.email-reset-success{display:grid;gap:18px;margin-top:24px}.email-reset-success strong{color:#267a45;line-height:1.7}.email-reset-success .email-auth-submit{display:flex;justify-content:center;text-decoration:none}
 .member-profile{padding-bottom:28px;border-bottom:1px solid #e2d6c8}
 .member-profile img,.member-avatar-fallback{width:96px;height:96px;box-shadow:0 8px 26px rgba(64,42,25,.16)}
 .member-profile-copy h1{color:#241a15;font-family:Georgia,"Noto Serif TC",serif;font-weight:500;letter-spacing:-.02em}

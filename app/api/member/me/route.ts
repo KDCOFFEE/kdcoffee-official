@@ -2,11 +2,20 @@ import { NextResponse } from "next/server";
 import { getCurrentMember, updateMemberProfile } from "@/lib/memberAuth";
 
 function clean(value: unknown, max: number) { return String(value ?? "").trim().slice(0, max); }
-function publicMember<T extends { passwordHash?: string; passwordSalt?: string } | null>(member: T) {
+function publicMember<T extends {
+  passwordHash?: string;
+  passwordSalt?: string;
+  passwordResetTokenHash?: string;
+  passwordResetExpiresAt?: string;
+  passwordResetRequestedAt?: string;
+} | null>(member: T) {
   if (!member) return null;
   const safe = { ...member };
   delete safe.passwordHash;
   delete safe.passwordSalt;
+  delete safe.passwordResetTokenHash;
+  delete safe.passwordResetExpiresAt;
+  delete safe.passwordResetRequestedAt;
   return safe;
 }
 export async function GET() {

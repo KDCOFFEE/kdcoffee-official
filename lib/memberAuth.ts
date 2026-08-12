@@ -1,4 +1,5 @@
 import {
+  createHash,
   createHmac,
   randomBytes,
   scrypt as scryptCallback,
@@ -10,6 +11,7 @@ import path from "path";
 import { promisify } from "util";
 
 import { getMembersDir } from "@/lib/storagePaths";
+import { atomicWriteJson, withFileLock } from "@/lib/jsonFileStore";
 
 export type FavoriteStore = {
   id: string;
@@ -28,6 +30,9 @@ export type Member = {
   authProvider?: "line" | "email";
   passwordHash?: string;
   passwordSalt?: string;
+  passwordResetTokenHash?: string;
+  passwordResetExpiresAt?: string;
+  passwordResetRequestedAt?: string;
   phone?: string;
   pickupName?: string;
   favoriteStore?: FavoriteStore;
@@ -42,6 +47,9 @@ const membersDir = () => getMembersDir();
 const scrypt = promisify(scryptCallback);
 const PASSWORD_KEY_LENGTH = 64;
 const DUMMY_PASSWORD_SALT = "kd-coffee-email-login";
+const PASSWORD_RESET_TOKEN_BYTES = 32;
+const PASSWORD_RESET_TTL_MS = 30 * 60 * 1000;
+const PASSWORD_RESET_COOLDOWN_MS = 60 * 1000;
 
 export function normalizeEmail(value: string) {
   return value.trim().toLowerCase();
@@ -191,6 +199,10 @@ export async function saveMember(member: Member) {
   return member;
 }
 
+function memberFilePath(memberId: string) {
+  return path.join(membersDir(), `${memberId}.json`);
+}
+
 async function readAllMembers() {
   try {
     const files = (await fs.readdir(membersDir())).filter((file) =>
@@ -209,6 +221,120 @@ async function readAllMembers() {
 
 async function derivePassword(password: string, salt: string) {
   return (await scrypt(password, salt, PASSWORD_KEY_LENGTH)) as Buffer;
+}
+
+function hashPasswordResetToken(token: string) {
+  return createHash("sha256").update(token).digest("base64url");
+}
+
+function resetTokenMatches(storedHash: string | undefined, tokenHash: string) {
+  if (!storedHash) return false;
+
+  try {
+    const stored = Buffer.from(storedHash, "base64url");
+    const candidate = Buffer.from(tokenHash, "base64url");
+
+    return stored.length === candidate.length && timingSafeEqual(stored, candidate);
+  } catch {
+    return false;
+  }
+}
+
+export async function createEmailPasswordReset(emailInput: string) {
+  const email = normalizeEmail(emailInput);
+  const member = (await readAllMembers()).find(
+    (candidate) =>
+      candidate.authProvider === "email" &&
+      candidate.email &&
+      normalizeEmail(candidate.email) === email,
+  );
+
+  if (!member) return null;
+
+  const filePath = memberFilePath(member.id);
+
+  return withFileLock(filePath, async () => {
+    const current = await readMember(member.id);
+    if (
+      !current ||
+      current.authProvider !== "email" ||
+      !current.email ||
+      normalizeEmail(current.email) !== email
+    ) {
+      return null;
+    }
+
+    const lastRequestedAt = Date.parse(current.passwordResetRequestedAt || "");
+    if (
+      Number.isFinite(lastRequestedAt) &&
+      Date.now() - lastRequestedAt < PASSWORD_RESET_COOLDOWN_MS
+    ) {
+      return null;
+    }
+
+    const token = randomBytes(PASSWORD_RESET_TOKEN_BYTES).toString("base64url");
+    const requestedAt = new Date();
+    const expiresAt = new Date(requestedAt.getTime() + PASSWORD_RESET_TTL_MS);
+    const updated: Member = {
+      ...current,
+      passwordResetTokenHash: hashPasswordResetToken(token),
+      passwordResetExpiresAt: expiresAt.toISOString(),
+      passwordResetRequestedAt: requestedAt.toISOString(),
+      updatedAt: requestedAt.toISOString(),
+    };
+
+    await atomicWriteJson(filePath, updated);
+
+    return {
+      email: normalizeEmail(current.email),
+      token,
+      expiresAt: expiresAt.toISOString(),
+    };
+  });
+}
+
+export async function resetEmailMemberPassword(token: string, password: string) {
+  const tokenHash = hashPasswordResetToken(token);
+  const member = (await readAllMembers()).find(
+    (candidate) => resetTokenMatches(candidate.passwordResetTokenHash, tokenHash),
+  );
+
+  if (!member) return false;
+
+  const filePath = memberFilePath(member.id);
+
+  return withFileLock(filePath, async () => {
+    const current = await readMember(member.id);
+    const expiresAt = Date.parse(current?.passwordResetExpiresAt || "");
+
+    if (
+      !current ||
+      current.authProvider !== "email" ||
+      !resetTokenMatches(current.passwordResetTokenHash, tokenHash) ||
+      !Number.isFinite(expiresAt) ||
+      expiresAt <= Date.now()
+    ) {
+      return false;
+    }
+
+    const passwordSalt = randomBytes(16).toString("base64url");
+    const passwordHash = (await derivePassword(password, passwordSalt)).toString(
+      "base64url",
+    );
+    const updated: Member = {
+      ...current,
+      passwordSalt,
+      passwordHash,
+      updatedAt: new Date().toISOString(),
+    };
+
+    delete updated.passwordResetTokenHash;
+    delete updated.passwordResetExpiresAt;
+    delete updated.passwordResetRequestedAt;
+
+    await atomicWriteJson(filePath, updated);
+    return true;
+  });
 }
 
 export async function registerEmailMember(emailInput: string, password: string) {

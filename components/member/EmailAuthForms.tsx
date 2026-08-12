@@ -2,7 +2,7 @@
 
 import { FormEvent, useState } from "react";
 
-type Mode = "login" | "register";
+type Mode = "login" | "register" | "forgot";
 
 export default function EmailAuthForms() {
   const [mode, setMode] = useState<Mode>("login");
@@ -11,27 +11,36 @@ export default function EmailAuthForms() {
   const [passwordConfirmation, setPasswordConfirmation] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
 
   function switchMode(nextMode: Mode) {
     setMode(nextMode);
     setPassword("");
     setPasswordConfirmation("");
     setError("");
+    setMessage("");
   }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSubmitting(true);
     setError("");
+    setMessage("");
 
     try {
-      const response = await fetch(`/api/auth/email/${mode}`, {
+      const endpoint =
+        mode === "forgot" ? "forgot-password" : mode;
+      const response = await fetch(`/api/auth/email/${endpoint}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           email: email.trim().toLowerCase(),
-          password,
-          ...(mode === "register" ? { passwordConfirmation } : {}),
+          ...(mode === "forgot"
+            ? {}
+            : {
+                password,
+                ...(mode === "register" ? { passwordConfirmation } : {}),
+              }),
         }),
       });
       const result = await response.json();
@@ -47,6 +56,15 @@ export default function EmailAuthForms() {
 
       if (!response.ok) {
         throw new Error(result.error || "操作失敗，請稍後再試");
+      }
+
+      if (mode === "forgot") {
+        setMessage(
+          result.message ||
+            "如果此 Email 已註冊，我們會將密碼重設方式寄到您的信箱。",
+        );
+        setSubmitting(false);
+        return;
       }
 
       window.location.assign("/member");
@@ -72,7 +90,13 @@ export default function EmailAuthForms() {
       <section className="email-auth-section" id="email-auth-form">
       <div className="email-auth-heading">
         <p className="eyebrow dark">EMAIL MEMBER</p>
-        <h2>{mode === "login" ? "Email 登入" : "建立 Email 會員"}</h2>
+        <h2>
+          {mode === "login"
+            ? "Email 登入"
+            : mode === "register"
+              ? "建立 Email 會員"
+              : "忘記密碼"}
+        </h2>
       </div>
 
       <form className="email-auth-form" onSubmit={submit}>
@@ -88,17 +112,19 @@ export default function EmailAuthForms() {
           />
         </label>
 
-        <label>
-          密碼
-          <input
-            type="password"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            autoComplete={mode === "login" ? "current-password" : "new-password"}
-            minLength={8}
-            required
-          />
-        </label>
+        {mode !== "forgot" && (
+          <label>
+            密碼
+            <input
+              type="password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              autoComplete={mode === "login" ? "current-password" : "new-password"}
+              minLength={8}
+              required
+            />
+          </label>
+        )}
 
         {mode === "register" && (
           <label>
@@ -115,15 +141,28 @@ export default function EmailAuthForms() {
         )}
 
         {error && <p className="form-error" role="alert">{error}</p>}
+        {message && <p className="member-success" role="status">{message}</p>}
 
         <button className="email-auth-submit" type="submit" disabled={submitting}>
           {submitting
             ? "處理中…"
             : mode === "login"
               ? "登入"
-              : "建立會員"}
+              : mode === "register"
+                ? "建立會員"
+                : "寄送密碼重設方式"}
         </button>
       </form>
+
+      {mode === "login" && (
+        <button
+          className="email-auth-help"
+          type="button"
+          onClick={() => switchMode("forgot")}
+        >
+          忘記密碼？
+        </button>
+      )}
 
       <button
         className="email-auth-switch"
@@ -132,7 +171,9 @@ export default function EmailAuthForms() {
       >
         {mode === "login"
           ? "還不是會員？使用 Email 快速註冊"
-          : "已經是 Email 會員？Email 登入"}
+          : mode === "register"
+            ? "已經是 Email 會員？Email 登入"
+            : "返回 Email 登入"}
       </button>
       </section>
     </>
