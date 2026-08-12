@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { promises as fs } from "fs";
 import path from "path";
+import sharp from "sharp";
 
 import { isAdminAuthenticated } from "@/lib/adminAuth";
 import {
@@ -12,10 +13,43 @@ import {
 export const runtime = "nodejs";
 
 /**
- * 將使用者輸入、slug、asset type 等文字
- * 整理成安全的檔案名稱格式。
+ * ============================================================
+ * KD Coffee Homepage / Campaign / Artwork Upload
+ * ============================================================
  *
- * 原本邏輯保留不變。
+ * 這支 API 同時負責：
+ *
+ * 1. HOME003 圖片
+ * 2. Campaign 圖片
+ * 3. Artwork 圖片
+ * 4. 影片
+ *
+ *
+ * 圖片現在會自動最佳化：
+ *
+ * PNG / JPG / JPEG / WebP / AVIF
+ * ↓
+ * Sharp
+ * ↓
+ * 自動修正 EXIF 方向
+ * ↓
+ * 最大尺寸限制
+ * ↓
+ * WebP
+ * ↓
+ * 品質壓縮
+ * ↓
+ * Persistent Storage
+ *
+ *
+ * 影片：
+ *
+ * 完全維持原始檔案，
+ * 不經 Sharp 處理。
+ */
+
+/**
+ * 將名稱整理成安全的網址 / 檔案名稱。
  */
 const cleanPart = (value: string) =>
   value
@@ -27,69 +61,96 @@ const cleanPart = (value: string) =>
     .replace(/^-+|-+$/g, "");
 
 /**
- * 取得安全副檔名。
- *
- * 原本邏輯保留：
- * - 優先使用原始檔案副檔名
- * - 如果沒有副檔名：
- *   video → .mp4
- *   其他 → .jpg
+ * 影片使用原始副檔名。
  */
-const safeExt = (file: File) =>
+const safeVideoExt = (file: File) =>
   path
     .extname(file.name)
     .toLowerCase()
     .replace(/[^.a-z0-9]/g, "") ||
-  (file.type.startsWith("video/")
-    ? ".mp4"
-    : ".jpg");
+  ".mp4";
 
 /**
  * ============================================================
- * HOME003 / Campaign / Artwork 上傳
+ * 圖片最佳化設定
  * ============================================================
  *
- * 這支 API 同時負責三種素材：
+ * HOME003 / Campaign：
+ * 最大寬度 1600 px
  *
- * 1. HOME003
- * 2. Campaign
- * 3. Artwork
+ * Artwork：
+ * 最大寬度 1800 px
  *
+ * 不會把原本較小的圖片放大。
  *
- * Windows 本機沒有 KD_DATA_DIR 時：
- *
- * HOME003
- * → public/images/home003
- *
- * Campaign
- * → public/images/campaigns
- *
- * Artwork
- * → public/uploads/artworks/{artworkSlug}
- *
- *
- * Railway 未來設定：
- *
- * KD_DATA_DIR=/data
- *
- * HOME003
- * → /data/uploads/home003
- *
- * Campaign
- * → /data/uploads/campaigns
- *
- * Artwork
- * → /data/uploads/artworks/{artworkSlug}
- *
- *
- * 前台 public URL 完全維持原本格式，
- * 由我們已建立的 serving routes 負責讀取。
+ * WebP quality 84：
+ * 保留良好視覺品質，
+ * 同時大幅降低檔案大小。
  */
-export async function POST(request: Request) {
-  if (!(await isAdminAuthenticated())) {
+async function optimizeImage(
+  input: Buffer,
+  maxWidth: number,
+) {
+  return sharp(input)
+    /**
+     * 依 EXIF 自動修正手機照片方向。
+     */
+    .rotate()
+
+    /**
+     * 只在圖片比限制尺寸大時縮小。
+     *
+     * fit: inside
+     * 保持原始比例。
+     *
+     * withoutEnlargement: true
+     * 小圖不會被硬放大。
+     */
+    .resize({
+      width: maxWidth,
+      height: maxWidth,
+      fit: "inside",
+      withoutEnlargement: true,
+    })
+
+    /**
+     * 統一輸出 WebP。
+     */
+    .webp({
+      quality: 84,
+
+      /**
+       * effort 4：
+       * 在壓縮率與伺服器處理速度之間
+       * 取得較好的平衡。
+       */
+      effort: 4,
+    })
+
+    .toBuffer();
+}
+
+/**
+ * ============================================================
+ * POST Upload
+ * ============================================================
+ */
+export async function POST(
+  request: Request,
+) {
+  /**
+   * 後台驗證。
+   */
+  if (
+    !(await isAdminAuthenticated())
+  ) {
     return NextResponse.json(
-      { error: "Unauthorized" },
-      { status: 401 },
+      {
+        error: "Unauthorized",
+      },
+      {
+        status: 401,
+      },
     );
   }
 
@@ -99,35 +160,47 @@ export async function POST(request: Request) {
   const file =
     formData.get("file");
 
+  /**
+   * 必須有檔案。
+   */
   if (!(file instanceof File)) {
     return NextResponse.json(
       {
-        error:
-          "沒有選擇檔案",
+        error: "沒有選擇檔案",
       },
-      { status: 400 },
+      {
+        status: 400,
+      },
     );
   }
 
+  const isImage =
+    file.type.startsWith(
+      "image/",
+    );
+
+  const isVideo =
+    file.type.startsWith(
+      "video/",
+    );
+
   /**
-   * 保留原本規則：
    * 只接受圖片或影片。
    */
-  if (
-    !file.type.startsWith("image/") &&
-    !file.type.startsWith("video/")
-  ) {
+  if (!isImage && !isVideo) {
     return NextResponse.json(
       {
         error:
           "只接受圖片或影片",
       },
-      { status: 400 },
+      {
+        status: 400,
+      },
     );
   }
 
   /**
-   * 保留原本 40 MB 限制。
+   * 保留原本 40 MB 上限。
    */
   if (
     file.size >
@@ -138,12 +211,11 @@ export async function POST(request: Request) {
         error:
           "檔案不可超過 40MB",
       },
-      { status: 400 },
+      {
+        status: 400,
+      },
     );
   }
-
-  const ext =
-    safeExt(file);
 
   const requested =
     String(
@@ -186,20 +258,28 @@ export async function POST(request: Request) {
     assetGroup === "campaign";
 
   /**
-   * 使用者如果指定 desiredName，
-   * 先取得不含副檔名的 stem。
+   * 使用者指定 desiredName 時，
+   * 先取得不含副檔名的檔名。
    */
   const requestedStem =
     cleanPart(
       path.basename(
         requested,
-        path.extname(requested),
+        path.extname(
+          requested,
+        ),
       ),
     );
 
   /**
-   * 移除既有 -v01 / -v02 ...
-   * 避免版本號一直重複疊加。
+   * 移除既有版本號。
+   *
+   * 例如：
+   * image-v02
+   *
+   * ↓
+   *
+   * image
    */
   const baseStem =
     requestedStem.replace(
@@ -211,8 +291,8 @@ export async function POST(request: Request) {
   /**
    * HOME003 保留原本命名方式。
    *
-   * 其他素材如果還沒有 kdcoffee-
-   * 前綴，就自動補上。
+   * 其他素材如果沒有 kdcoffee-
+   * 就自動補上。
    */
   const seoStem =
     isHome003 ||
@@ -224,12 +304,8 @@ export async function POST(request: Request) {
 
   /**
    * ==========================================================
-   * Persistent Storage 路徑
+   * Persistent Storage
    * ==========================================================
-   *
-   * 原本這裡直接使用 process.cwd() + public。
-   *
-   * 現在統一交給 storagePaths.ts。
    */
   const uploadDir =
     isHome003
@@ -242,11 +318,13 @@ export async function POST(request: Request) {
 
   await fs.mkdir(
     uploadDir,
-    { recursive: true },
+    {
+      recursive: true,
+    },
   );
 
   /**
-   * 找目前已有的版本號。
+   * 找目前已有的版本。
    */
   const existing =
     await fs
@@ -266,21 +344,27 @@ export async function POST(request: Request) {
 
   const versions =
     existing
-      .map((name) =>
-        name.match(
-          versionPattern,
-        ),
+      .map(
+        (name) =>
+          name.match(
+            versionPattern,
+          ),
       )
       .filter(Boolean)
-      .map((match) =>
-        Number(
-          match?.[1] || 0,
-        ),
+      .map(
+        (match) =>
+          Number(
+            match?.[1] || 0,
+          ),
       );
 
   /**
    * 下一版：
-   * v01 / v02 / v03 ...
+   *
+   * v01
+   * v02
+   * v03
+   * ...
    */
   const version =
     Math.max(
@@ -288,28 +372,78 @@ export async function POST(request: Request) {
       ...versions,
     ) + 1;
 
+  /**
+   * ==========================================================
+   * 檔案處理
+   * ==========================================================
+   */
+  const originalBuffer =
+    Buffer.from(
+      await file.arrayBuffer(),
+    );
+
+  let outputBuffer:
+    Buffer;
+
+  let outputExt:
+    string;
+
+  if (isImage) {
+    /**
+     * HOME003 / Campaign：
+     * 1600 px
+     *
+     * Artwork：
+     * 1800 px
+     */
+    const maxWidth =
+      isHome003 ||
+      isCampaign
+        ? 1600
+        : 1800;
+
+    /**
+     * 圖片統一轉 WebP。
+     */
+    outputBuffer =
+      await optimizeImage(
+        originalBuffer,
+        maxWidth,
+      );
+
+    outputExt =
+      ".webp";
+  } else {
+    /**
+     * 影片完全保留原始內容。
+     */
+    outputBuffer =
+      originalBuffer;
+
+    outputExt =
+      safeVideoExt(file);
+  }
+
+  /**
+   * 最終檔名。
+   */
   const fileName =
     `${seoStem}-v${String(
       version,
     ).padStart(
       2,
       "0",
-    )}${ext}`;
+    )}${outputExt}`;
 
   /**
-   * 實際寫入檔案。
-   *
-   * Railway 未來會寫入 /data，
-   * Windows 本機仍維持原 public 位置。
+   * 寫入實際 Storage。
    */
   await fs.writeFile(
     path.join(
       uploadDir,
       fileName,
     ),
-    Buffer.from(
-      await file.arrayBuffer(),
-    ),
+    outputBuffer,
   );
 
   /**
@@ -317,11 +451,7 @@ export async function POST(request: Request) {
    * Public URL
    * ==========================================================
    *
-   * 這裡刻意維持原本網址，
-   * 不修改前台資料結構。
-   *
-   * Serving Route 會負責把 URL
-   * 對應到真正 Persistent Storage。
+   * URL 結構完全維持原本。
    */
   const publicPath =
     isHome003
@@ -330,12 +460,40 @@ export async function POST(request: Request) {
         ? `/images/campaigns/${fileName}`
         : `/uploads/artworks/${artworkSlug}/${fileName}`;
 
+  /**
+   * 回傳原本既有欄位，
+   * 另外增加檔案大小資訊，
+   * 方便後台之後顯示壓縮結果。
+   */
   return NextResponse.json({
     ok: true,
-    path: publicPath,
+
+    path:
+      publicPath,
+
     fileName,
+
     originalFileName:
       file.name,
+
     version,
+
+    /**
+     * 原始上傳大小。
+     */
+    originalSize:
+      file.size,
+
+    /**
+     * 實際存檔大小。
+     */
+    optimizedSize:
+      outputBuffer.length,
+
+    /**
+     * 圖片才會是 true。
+     */
+    optimized:
+      isImage,
   });
 }
