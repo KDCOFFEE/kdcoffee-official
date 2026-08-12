@@ -150,6 +150,11 @@ function cleanNumber(value: unknown) {
   return Number.isFinite(number) && number >= 0 ? number : 0;
 }
 
+function cleanOptionalDuration(value: unknown) {
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0 ? number : undefined;
+}
+
 function errorRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
     ? value as Record<string, unknown>
@@ -210,7 +215,7 @@ function safeResourceDetails(resource: CloudinaryVideoResource): CloudinarySafeR
     resourceType: safeCode(resource.resource_type),
     format: safeCode(resource.format),
     bytes: cleanNumber(resource.bytes),
-    duration: cleanNumber(resource.duration),
+    duration: cleanOptionalDuration(resource.duration),
   };
 }
 
@@ -253,7 +258,7 @@ export async function verifyCloudinaryVideo(
   const format = String(resource.format || "").toLowerCase();
   const url = String(resource.secure_url || "");
   const bytes = cleanNumber(resource.bytes);
-  const duration = cleanNumber(resource.duration);
+  const duration = cleanOptionalDuration(resource.duration);
   const width = cleanNumber(resource.width);
   const height = cleanNumber(resource.height);
   const limits = VIDEO_UPLOAD_LIMITS[usage];
@@ -268,8 +273,7 @@ export async function verifyCloudinaryVideo(
     ) &&
     bytes > 0 &&
     bytes <= limits.maxBytes &&
-    duration > 0 &&
-    duration <= limits.maxDurationSeconds &&
+    (duration === undefined || duration <= limits.maxDurationSeconds) &&
     isExpectedSecureVideoUrl(url, cloudName);
 
   if (!valid) {
@@ -281,8 +285,7 @@ export async function verifyCloudinaryVideo(
               : !ALLOWED_VIDEO_EXTENSIONS.includes(format as (typeof ALLOWED_VIDEO_EXTENSIONS)[number]) ? "FORMAT_INVALID"
                 : bytes <= 0 ? "BYTES_MISSING"
                   : bytes > limits.maxBytes ? "BYTES_LIMIT_EXCEEDED"
-                    : duration <= 0 ? "DURATION_MISSING"
-                      : duration > limits.maxDurationSeconds ? "DURATION_LIMIT_EXCEEDED"
+                    : duration !== undefined && duration > limits.maxDurationSeconds ? "DURATION_LIMIT_EXCEEDED"
                         : "SECURE_URL_INVALID";
     throw new CloudinaryFinalizeError({
       stage: "resource_validation",
@@ -292,6 +295,15 @@ export async function verifyCloudinaryVideo(
       cloudinaryErrorCode: validationCode,
       resource: safeResourceDetails(resource),
     });
+  }
+
+  if (duration === undefined) {
+    console.warn(JSON.stringify({
+      event: "cloudinary_duration_missing",
+      resourceType: safeCode(resource.resource_type),
+      format: safeCode(resource.format),
+      bytes,
+    }));
   }
 
   const resourceDetails = safeResourceDetails(resource);
@@ -355,7 +367,7 @@ export async function verifyCloudinaryVideo(
     posterUrl,
     width,
     height,
-    duration,
+    ...(duration !== undefined ? { duration } : {}),
     format,
     bytes,
   };
