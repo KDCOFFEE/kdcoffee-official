@@ -57,7 +57,19 @@ export default function EmailAuthForms() {
   }
 
   return (
-    <section className="email-auth-section">
+    <>
+      {mode === "login" && (
+        <button
+          className="email-register-entry"
+          type="button"
+          onClick={() => switchMode("register")}
+          aria-controls="email-auth-form"
+        >
+          使用 Email 快速註冊
+        </button>
+      )}
+
+      <section className="email-auth-section" id="email-auth-form">
       <div className="email-auth-heading">
         <p className="eyebrow dark">EMAIL MEMBER</p>
         <h2>{mode === "login" ? "Email 登入" : "建立 Email 會員"}</h2>
@@ -118,8 +130,11 @@ export default function EmailAuthForms() {
         type="button"
         onClick={() => switchMode(mode === "login" ? "register" : "login")}
       >
-        {mode === "login" ? "建立 Email 會員" : "返回 Email 登入"}
+        {mode === "login"
+          ? "還不是會員？使用 Email 快速註冊"
+          : "已經是 Email 會員？Email 登入"}
       </button>
-    </section>
+      </section>
+    </>
   );
 }

@@ -358,6 +358,8 @@
 .member-card{width:min(880px,100%);padding:48px;border:1px solid rgba(100,74,53,.1);box-shadow:0 26px 80px rgba(65,43,27,.14)}
 .member-login-card{color:#2b211b}
 .member-login-card>p:not(.eyebrow){color:#6f6259;line-height:1.85}
+.member-login-card>.line-login-button{display:flex;width:100%;justify-content:center;margin:24px 0 10px}
+.email-register-entry{display:flex;width:100%;justify-content:center;margin:10px 0 0;padding:15px 24px;border:1px solid #2b2019;border-radius:12px;background:#2b2019;color:#fff;font:inherit;font-weight:800;cursor:pointer}
 .email-auth-section{margin:28px 0 22px;padding-top:28px;border-top:1px solid #e2d6c8}
 .email-auth-heading h2{margin:6px 0 18px;font-family:Georgia,"Noto Serif TC",serif;font-size:26px;font-weight:500;color:#2b211b}
 .email-auth-form{display:grid;gap:14px}
