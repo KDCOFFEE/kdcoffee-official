@@ -1,7 +1,13 @@
-import { createHmac, randomBytes, timingSafeEqual } from "crypto";
+import {
+  createHmac,
+  randomBytes,
+  scrypt as scryptCallback,
+  timingSafeEqual,
+} from "crypto";
 import { cookies } from "next/headers";
 import fs from "fs/promises";
 import path from "path";
+import { promisify } from "util";
 
 import { getMembersDir } from "@/lib/storagePaths";
 
@@ -15,10 +21,13 @@ export type FavoriteStore = {
 
 export type Member = {
   id: string;
-  lineUserId: string;
-  displayName: string;
+  lineUserId?: string;
+  displayName?: string;
   pictureUrl?: string;
   email?: string;
+  authProvider?: "line" | "email";
+  passwordHash?: string;
+  passwordSalt?: string;
   phone?: string;
   pickupName?: string;
   favoriteStore?: FavoriteStore;
@@ -30,6 +39,17 @@ export type Member = {
 export const MEMBER_SESSION_COOKIE = "kd_member_session";
 
 const membersDir = () => getMembersDir();
+const scrypt = promisify(scryptCallback);
+const PASSWORD_KEY_LENGTH = 64;
+const DUMMY_PASSWORD_SALT = "kd-coffee-email-login";
+
+export function normalizeEmail(value: string) {
+  return value.trim().toLowerCase();
+}
+
+export function isValidEmail(value: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
 
 function secret() {
   const value = process.env.AUTH_SESSION_SECRET;
@@ -171,6 +191,111 @@ export async function saveMember(member: Member) {
   return member;
 }
 
+async function readAllMembers() {
+  try {
+    const files = (await fs.readdir(membersDir())).filter((file) =>
+      file.endsWith(".json"),
+    );
+    const members = await Promise.all(
+      files.map((file) => readMember(file.slice(0, -5))),
+    );
+
+    return members.filter((member): member is Member => Boolean(member));
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
+    throw error;
+  }
+}
+
+async function derivePassword(password: string, salt: string) {
+  return (await scrypt(password, salt, PASSWORD_KEY_LENGTH)) as Buffer;
+}
+
+export async function registerEmailMember(emailInput: string, password: string) {
+  const email = normalizeEmail(emailInput);
+  const existing = (await readAllMembers()).some(
+    (member) => member.email && normalizeEmail(member.email) === email,
+  );
+
+  if (existing) return null;
+
+  await fs.mkdir(membersDir(), { recursive: true });
+
+  const id = createHmac("sha256", secret())
+    .update(`email:${email}`)
+    .digest("hex")
+    .slice(0, 24);
+  const passwordSalt = randomBytes(16).toString("base64url");
+  const passwordHash = (await derivePassword(password, passwordSalt)).toString(
+    "base64url",
+  );
+  const now = new Date().toISOString();
+  const member: Member = {
+    id,
+    displayName: "KD Coffee 會員",
+    email,
+    authProvider: "email",
+    passwordHash,
+    passwordSalt,
+    createdAt: now,
+    lastLoginAt: now,
+    updatedAt: now,
+  };
+
+  try {
+    await fs.writeFile(
+      path.join(membersDir(), `${id}.json`),
+      JSON.stringify(member, null, 2),
+      { encoding: "utf8", flag: "wx" },
+    );
+    return member;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "EEXIST") return null;
+    throw error;
+  }
+}
+
+export async function authenticateEmailMember(
+  emailInput: string,
+  password: string,
+) {
+  const email = normalizeEmail(emailInput);
+  const member = (await readAllMembers()).find(
+    (candidate) =>
+      candidate.authProvider === "email" &&
+      candidate.email &&
+      normalizeEmail(candidate.email) === email,
+  );
+
+  const salt = member?.passwordSalt || DUMMY_PASSWORD_SALT;
+  const candidateHash = await derivePassword(password, salt);
+  let valid = false;
+
+  if (member?.passwordHash && member.passwordSalt) {
+    try {
+      const storedHash = Buffer.from(member.passwordHash, "base64url");
+      valid =
+        storedHash.length === candidateHash.length &&
+        timingSafeEqual(storedHash, candidateHash);
+    } catch {
+      valid = false;
+    }
+  }
+
+  if (!member || !valid) return null;
+
+  const now = new Date().toISOString();
+  const updated: Member = {
+    ...member,
+    email,
+    displayName: member.displayName?.trim() || "KD Coffee 會員",
+    lastLoginAt: now,
+    updatedAt: now,
+  };
+
+  return saveMember(updated);
+}
+
 export async function upsertLineMember(profile: {
   sub: string;
   name?: string;
@@ -188,8 +313,10 @@ export async function upsertLineMember(profile: {
   const now = new Date().toISOString();
 
   return saveMember({
+    ...existing,
     id,
     lineUserId: profile.sub,
+    authProvider: "line",
     displayName:
       profile.name ||
       existing?.displayName ||

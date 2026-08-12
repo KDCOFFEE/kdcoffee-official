@@ -12,6 +12,6 @@ export default async function Header() {
       {logo?.path ? <img src={logo.path} alt={logo.alt || "KD Coffee 咖啡藝術工坊"}/> : <><span>KD</span><b>COFFEE</b></>}
     </Link>
     <HeaderNavigation />
-    <div className="header-actions"><MemberLink initialName={member?.displayName || ""}/><CartLink compact/></div>
+    <div className="header-actions"><MemberLink initialName={member ? member.displayName?.trim() || "KD Coffee 會員" : ""}/><CartLink compact/></div>
   </header>;
 }

@@ -2,16 +2,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
 export default function MemberLink({ initialName = "" }: { initialName?: string }) {
   const pathname = usePathname();
   const [name, setName] = useState(initialName);
-  const [origin, setOrigin] = useState("");
-
-  useEffect(() => {
-    setOrigin(window.location.origin);
-  }, []);
 
   useEffect(() => {
     let active = true;
@@ -22,7 +17,11 @@ export default function MemberLink({ initialName = "" }: { initialName?: string 
       .then((response) => (response.ok ? response.json() : { member: null }))
       .then((data) => {
         if (active) {
-          setName(data.member?.displayName?.trim() || "");
+          setName(
+            data.member
+              ? data.member.displayName?.trim() || "KD Coffee 會員"
+              : "",
+          );
         }
       })
       .catch(() => {
@@ -34,13 +33,6 @@ export default function MemberLink({ initialName = "" }: { initialName?: string 
     };
   }, [pathname]);
 
-  const loginHref = useMemo(() => {
-    const params = new URLSearchParams();
-    if (origin) params.set("origin", origin);
-    if (pathname && pathname.startsWith("/")) params.set("returnTo", pathname);
-    return `/api/auth/line/login?${params.toString()}`;
-  }, [origin, pathname]);
-
   if (name) {
     return (
       <Link className="member-link" href="/member">
@@ -50,8 +42,8 @@ export default function MemberLink({ initialName = "" }: { initialName?: string 
   }
 
   return (
-    <a className="member-link line-login-mini" href={loginHref}>
-      LINE 登入
-    </a>
+    <Link className="member-link line-login-mini" href="/member">
+      會員登入
+    </Link>
   );
 }

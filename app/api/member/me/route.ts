@@ -2,13 +2,20 @@ import { NextResponse } from "next/server";
 import { getCurrentMember, updateMemberProfile } from "@/lib/memberAuth";
 
 function clean(value: unknown, max: number) { return String(value ?? "").trim().slice(0, max); }
+function publicMember<T extends { passwordHash?: string; passwordSalt?: string } | null>(member: T) {
+  if (!member) return null;
+  const safe = { ...member };
+  delete safe.passwordHash;
+  delete safe.passwordSalt;
+  return safe;
+}
 export async function GET() {
   const member = await getCurrentMember();
-  return NextResponse.json({ member }, { headers: { "Cache-Control": "no-store" } });
+  return NextResponse.json({ member: publicMember(member) }, { headers: { "Cache-Control": "no-store" } });
 }
 export async function PATCH(request: Request) {
   const member = await getCurrentMember();
-  if (!member) return NextResponse.json({ error: "請先使用 LINE 登入" }, { status: 401 });
+  if (!member) return NextResponse.json({ error: "請先登入會員" }, { status: 401 });
   const body = await request.json();
   const phone = clean(body.phone, 10);
   const email = clean(body.email, 120);
@@ -19,5 +26,5 @@ export async function PATCH(request: Request) {
     city: clean(body.favoriteStore.city, 20), district: clean(body.favoriteStore.district, 20),
   } : undefined;
   const updated = await updateMemberProfile(member.id, { pickupName: clean(body.pickupName, 20), phone, email, favoriteStore });
-  return NextResponse.json({ member: updated });
+  return NextResponse.json({ member: publicMember(updated) });
 }

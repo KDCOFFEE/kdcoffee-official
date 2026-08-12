@@ -6,6 +6,7 @@ import { getCurrentMember } from "@/lib/memberAuth";
 import { getOrdersDir } from "@/lib/storagePaths";
 
 import MemberProfileForm from "@/components/member/MemberProfileForm";
+import EmailAuthForms from "@/components/member/EmailAuthForms";
 
 export const dynamic = "force-dynamic";
 
@@ -231,11 +232,11 @@ export default async function MemberPage({
           </p>
 
           <h1>
-            用 LINE 輕鬆成為會員
+            快速會員登入
           </h1>
 
           <p>
-            第一次登入會自動建立會員，不必設定密碼。之後可快速帶入姓名、手機與常用門市，並查看自己的訂單。
+            可使用 LINE 快速登入，或以 Email 建立會員。登入後可查看自己的訂單與常用資料。
           </p>
 
           {params.error && (
@@ -250,6 +251,8 @@ export default async function MemberPage({
           >
             使用 LINE 登入／註冊
           </a>
+
+          <EmailAuthForms />
 
           <Link
             className="text-link"
@@ -270,6 +273,7 @@ export default async function MemberPage({
     await getMemberOrders(
       member.id,
     );
+  const displayName = member.displayName?.trim() || "KD Coffee 會員";
 
   return (
     <main className="member-page">
@@ -278,7 +282,7 @@ export default async function MemberPage({
           {member.pictureUrl ? (
             <img
               src={member.pictureUrl}
-              alt="LINE 會員頭像"
+              alt="會員頭像"
             />
           ) : (
             <div className="member-avatar-fallback">
@@ -292,7 +296,7 @@ export default async function MemberPage({
             </p>
 
             <h1>
-              {member.displayName}
+              {displayName}
             </h1>
 
             <p>
@@ -514,7 +518,7 @@ export default async function MemberPage({
           method="post"
         >
           <button className="logout-button">
-            登出 LINE 會員
+            登出會員
           </button>
         </form>
       </section>
