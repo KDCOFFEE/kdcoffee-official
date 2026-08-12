@@ -1,16 +1,13 @@
 import { promises as fs } from "fs";
 import path from "path";
 
-import { getCampaignUploadDir } from "@/lib/storagePaths";
+import { getAssetsUploadDir } from "@/lib/storagePaths";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 /**
- * Campaign 圖片所支援的 Content-Type。
- *
- * 瀏覽器讀取圖片時，
- * 必須回傳正確的 MIME Type。
+ * Assets 圖片支援的 Content-Type。
  */
 const contentTypes: Record<string, string> = {
   ".avif": "image/avif",
@@ -18,25 +15,24 @@ const contentTypes: Record<string, string> = {
   ".jpeg": "image/jpeg",
   ".jpg": "image/jpeg",
   ".png": "image/png",
+  ".svg": "image/svg+xml",
   ".webp": "image/webp",
 };
 
 /**
  * ============================================================
- * Campaign 圖片讀取
+ * Asset Library 圖片讀取 Route
  * ============================================================
  *
- * 前台網址維持原本：
+ * 前台網址維持：
  *
- * /images/campaigns/檔名
- *
- * 不修改網站既有圖片 URL。
+ * /uploads/assets/{category}/{fileName}
  *
  *
  * Windows 本機沒有 KD_DATA_DIR：
  *
  * 實際讀取：
- * public/images/campaigns
+ * public/uploads/assets/{category}
  *
  *
  * Railway 未來設定：
@@ -44,30 +40,42 @@ const contentTypes: Record<string, string> = {
  * KD_DATA_DIR=/data
  *
  * 實際讀取：
- * /data/uploads/campaigns
+ * /data/uploads/assets/{category}
  *
  *
- * 如此 Campaign 圖片可以存放在 Persistent Volume，
- * 但前台網址完全不用改。
+ * 因此前台圖片 URL 不需要修改，
+ * 但 Railway 可以改由 Persistent Volume 提供實體圖片。
  */
 export async function GET(
   _request: Request,
   context: {
     params: Promise<{
+      category: string;
       fileName: string;
     }>;
   },
 ) {
-  const { fileName } = await context.params;
+  const {
+    category,
+    fileName,
+  } = await context.params;
 
   const extension =
     path.extname(fileName).toLowerCase();
 
   /**
-   * 安全檢查。
+   * category 安全檢查。
    *
-   * 禁止使用 ../ 等方式存取其他檔案，
-   * 並只允許安全的檔名字元。
+   * category 是由後台 clean() 產生，
+   * 正常只會包含英數字與 -。
+   */
+  const isSafeCategory =
+    category === path.basename(category) &&
+    /^[a-z0-9][a-z0-9-]*$/i.test(category);
+
+  /**
+   * fileName 安全檢查。
+   * 防止 ../ 等路徑穿越。
    */
   const isSafeFileName =
     fileName === path.basename(fileName) &&
@@ -76,7 +84,11 @@ export async function GET(
   const contentType =
     contentTypes[extension];
 
-  if (!isSafeFileName || !contentType) {
+  if (
+    !isSafeCategory ||
+    !isSafeFileName ||
+    !contentType
+  ) {
     return new Response(
       "Not found",
       { status: 404 },
@@ -85,14 +97,19 @@ export async function GET(
 
   try {
     /**
-     * 圖片實際存放目錄
+     * Assets 實際圖片目錄
      * 統一交給 storagePaths.ts 管理。
      */
     const uploadDir =
-      getCampaignUploadDir();
+      getAssetsUploadDir(
+        category,
+      );
 
     const file = await fs.readFile(
-      path.join(uploadDir, fileName),
+      path.join(
+        uploadDir,
+        fileName,
+      ),
     );
 
     return new Response(file, {
@@ -105,9 +122,6 @@ export async function GET(
       },
     });
   } catch (error) {
-    /**
-     * 找不到檔案時正常回傳 404。
-     */
     if (
       (error as NodeJS.ErrnoException)
         .code === "ENOENT"

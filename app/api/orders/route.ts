@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import path from "path";
+import { getOrdersDir, getWebsiteDataFile } from "@/lib/storagePaths";
 import { makeOrderNumber } from "@/lib/orders";
 import { createOrderFile, OrderFileCreationError, updateOrderFile } from "@/lib/orderFiles";
 import { FileLockTimeoutError } from "@/lib/jsonFileStore";
@@ -45,8 +45,8 @@ async function sendLineNotification(text: string) {
   return { sent: false, reason: lastError };
 }
 
-const orderDir = () => path.join(process.cwd(), "data", "orders");
-const websiteFile = () => path.join(process.cwd(), "public", "data", "website-data.json");
+const orderDir = () => getOrdersDir();
+const websiteFile = () => getWebsiteDataFile();
 
 export async function POST(request: Request) {
   try {
