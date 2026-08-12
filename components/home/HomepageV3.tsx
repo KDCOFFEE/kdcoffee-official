@@ -7,6 +7,8 @@ import type {
 import HomepageSceneMedia from "@/components/home/HomepageSceneMedia";
 import MonthlyCampaign from "@/components/home/MonthlyCampaign";
 import Home004ProductMedia from "@/components/home/Home004ProductMedia";
+import KdMedia from "@/components/media/KdMedia";
+import { resolveMediaAsset, type MediaAsset } from "@/lib/media";
 
 import {
   hasAvailableHome004Sku,
@@ -62,28 +64,22 @@ type Product = {
  */
 function Media({
   src,
+  media,
   alt,
   id,
 }: {
   src?: string;
+  media?: MediaAsset;
   alt: string;
   id: string;
 }) {
+  const resolvedMedia = resolveMediaAsset(media, src);
   return (
     <div className="v3-media">
-      {src ? (
-        <img
-          src={src}
-          alt={alt}
-
-          /**
-           * 使用者接近這個區塊時
-           * 才開始下載。
-           */
-          loading="lazy"
-          decoding="async"
-        />
-      ) : (
+      <KdMedia
+        media={resolvedMedia}
+        alt={alt}
+        fallback={(
         <div className="v3-media-placeholder">
           <b>{id}</b>
 
@@ -91,7 +87,8 @@ function Media({
             請至後台上傳圖片
           </span>
         </div>
-      )}
+        )}
+      />
     </div>
   );
 }
@@ -168,33 +165,23 @@ export default function HomepageV3({
         id="top"
         className="v3-hero"
       >
-        <video
-          className="v3-hero-video"
-          autoPlay
-          muted
-          loop
-          playsInline
-          poster={hero.poster}
-          aria-label="KD Coffee 真實烘豆影片"
-        >
-          {hero.videoWebm ? (
-            <source
-              src={
-                hero.videoWebm
-              }
-              type="video/webm"
-            />
-          ) : null}
-
-          {hero.videoMp4 ? (
-            <source
-              src={
-                hero.videoMp4
-              }
-              type="video/mp4"
-            />
-          ) : null}
-        </video>
+        {resolveMediaAsset(hero.media) ? (
+          <KdMedia
+            media={resolveMediaAsset(hero.media)}
+            alt="KD Coffee 首頁主視覺"
+            className="v3-hero-video"
+            fallbackImageUrl={hero.poster}
+            backgroundVideo
+            eager
+          />
+        ) : hero.videoWebm || hero.videoMp4 ? (
+          <video className="v3-hero-video" autoPlay muted loop playsInline poster={hero.poster} aria-label="KD Coffee 真實烘豆影片">
+            {hero.videoWebm ? <source src={hero.videoWebm} type="video/webm" /> : null}
+            {hero.videoMp4 ? <source src={hero.videoMp4} type="video/mp4" /> : null}
+          </video>
+        ) : hero.poster ? (
+          <img className="v3-hero-video" src={hero.poster} alt="KD Coffee 首頁主視覺" />
+        ) : null}
 
         <div className="v3-hero-shade" />
 
@@ -305,21 +292,10 @@ export default function HomepageV3({
                 className="v3-value-card"
               >
                 <div className="v3-value-media">
-                  {c.image ? (
-                    <img
-                      src={
-                        c.image
-                      }
-
-                      alt={
-                        c.alt ||
-                        c.title
-                      }
-
-                      loading="lazy"
-                      decoding="async"
-                    />
-                  ) : (
+                  <KdMedia
+                    media={resolveMediaAsset(c.media, c.image)}
+                    alt={c.alt || c.title}
+                    fallback={(
                     <div className="v3-value-placeholder">
                       <span>
                         {
@@ -343,7 +319,8 @@ export default function HomepageV3({
                         請至後台 HOME002 上傳真實照片
                       </small>
                     </div>
-                  )}
+                    )}
+                  />
                 </div>
 
                 <div className="v3-card-copy">
@@ -413,22 +390,20 @@ export default function HomepageV3({
               c: any,
               index: number,
             ) => (
-              <Link
+              <article
                 key={c.id}
                 className={`v3-scene-card ${
                   index === 0
                     ? "featured"
                     : ""
                 }`}
-                href={
-                  c.href ||
-                  "/works"
-                }
               >
                 <HomepageSceneMedia
                   src={
                     c.image
                   }
+
+                  media={c.media}
 
                   alt={
                     c.alt ||
@@ -449,7 +424,9 @@ export default function HomepageV3({
                   }
                 />
 
-                <div className="v3-scene-copy">
+                <Link className="v3-scene-navigation" href={c.href || "/works"}>
+                  {c.media?.type === "video" ? null : <span className="v3-scene-hitarea" aria-hidden="true" />}
+                  <div className="v3-scene-copy">
                   <small>
                     {c.eyebrow ||
                       c.id}
@@ -471,8 +448,9 @@ export default function HomepageV3({
                       →
                     </span>
                   </b>
-                </div>
-              </Link>
+                  </div>
+                </Link>
+              </article>
             ),
           )}
         </div>
@@ -654,6 +632,7 @@ export default function HomepageV3({
                   src={
                     s.image
                   }
+                  media={s.media}
                   alt={
                     s.alt ||
                     s.title
@@ -732,6 +711,7 @@ export default function HomepageV3({
 
         <Media
           src={roast.image}
+          media={roast.media}
           alt={
             roast.alt ||
             roast.title
@@ -774,6 +754,7 @@ export default function HomepageV3({
               >
                 <Media
                   src={c.image}
+                  media={c.media}
                   alt={
                     c.alt ||
                     c.title
@@ -828,6 +809,7 @@ export default function HomepageV3({
                 src={
                   x.image
                 }
+                media={x.media}
                 alt={
                   x.alt ||
                   studio.title

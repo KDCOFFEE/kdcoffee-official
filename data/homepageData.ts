@@ -1,6 +1,18 @@
 import { promises as fs } from "fs";
 
 import { getHomepageDataFile } from "@/lib/storagePaths";
+import type { MediaAsset } from "@/lib/media";
+
+export type HomepageMediaItem = {
+  id?: string;
+  imageId?: string;
+  image?: string;
+  alt?: string;
+  title?: string;
+  text?: string;
+  media?: MediaAsset;
+  [key: string]: unknown;
+};
 
 /**
  * ============================================================
@@ -24,6 +36,7 @@ export type HeroSettings = {
   method: string;
   monthNumber: string;
   monthLabel: string;
+  media?: MediaAsset;
 };
 
 /**
@@ -45,6 +58,7 @@ export type HomepageCampaign = {
   secondaryHref?: string;
   note?: string;
   image?: string;
+  media?: MediaAsset;
   startDate?: string;
   endDate?: string;
 };
@@ -75,6 +89,16 @@ export type HomepageData = {
     contactImage?: string;
     footerBackground?: string;
   };
+
+  home002?: { cards?: HomepageMediaItem[]; [key: string]: unknown };
+  home003?: { cards?: HomepageMediaItem[]; [key: string]: unknown };
+  home004?: Record<string, unknown>;
+  home005?: { steps?: HomepageMediaItem[]; [key: string]: unknown };
+  home006?: HomepageMediaItem;
+  home007?: { cards?: HomepageMediaItem[]; [key: string]: unknown };
+  home008?: { images?: HomepageMediaItem[]; [key: string]: unknown };
+  home009?: Record<string, unknown>;
+  home010?: Record<string, unknown>;
 };
 
 /**

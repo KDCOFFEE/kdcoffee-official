@@ -20,7 +20,7 @@ export default function MonthlyCampaign({ homepageData }: { homepageData: Homepa
           <article className="campaign-multi-card" key={campaign.id}>
             <div className="campaign-multi-visual">
               <span className="campaign-number">{String(index + 1).padStart(2, "0")}</span>
-              <CampaignMedia src={campaign.image} alt={campaign.title} />
+              <CampaignMedia src={campaign.image} media={campaign.media} alt={campaign.title} />
               {campaign.note ? <small className="campaign-card-note">{campaign.note}</small> : null}
             </div>
             <div className="campaign-multi-copy">

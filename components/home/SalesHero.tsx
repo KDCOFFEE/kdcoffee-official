@@ -1,5 +1,7 @@
 import Link from "next/link";
 import type { HomepageData } from "@/data/homepageData";
+import KdMedia from "@/components/media/KdMedia";
+import { resolveMediaAsset } from "@/lib/media";
 
 export default function SalesHero({ homepageData }: { homepageData: HomepageData }) {
   const hero = homepageData.hero;
@@ -9,10 +11,14 @@ export default function SalesHero({ homepageData }: { homepageData: HomepageData
 
   return (
     <section id="top" className="sales-hero">
-      <video className="sales-hero-video" autoPlay muted loop playsInline poster={hero.poster} aria-label="KD Coffee 熱風烘焙畫面">
-        {hero.videoWebm ? <source src={hero.videoWebm} type="video/webm" /> : null}
-        {hero.videoMp4 ? <source src={hero.videoMp4} type="video/mp4" /> : null}
-      </video>
+      {resolveMediaAsset(hero.media) ? (
+        <KdMedia media={resolveMediaAsset(hero.media)} alt="KD Coffee 首頁主視覺" className="sales-hero-video" fallbackImageUrl={hero.poster} backgroundVideo eager />
+      ) : hero.videoWebm || hero.videoMp4 ? (
+        <video className="sales-hero-video" autoPlay muted loop playsInline poster={hero.poster} aria-label="KD Coffee 熱風烘焙畫面">
+          {hero.videoWebm ? <source src={hero.videoWebm} type="video/webm" /> : null}
+          {hero.videoMp4 ? <source src={hero.videoMp4} type="video/mp4" /> : null}
+        </video>
+      ) : hero.poster ? <img className="sales-hero-video" src={hero.poster} alt="KD Coffee 首頁主視覺" /> : null}
       <div className="sales-hero-overlay" />
       <div className="sales-hero-shell">
         <div className="sales-hero-copy">
