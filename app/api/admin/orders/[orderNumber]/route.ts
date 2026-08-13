@@ -2,14 +2,16 @@ import { NextResponse } from "next/server";
 
 import { isAdminAuthenticated } from "@/lib/adminAuth";
 import {
-  orderFilePath,
+  assertOrderStatusTransition,
   orderStatuses,
   orderStatusLabel,
-  readOrder,
-  writeOrder,
+  OrderStatusTransitionError,
+  withStoredOrderUpdateLock,
+  type OrderStatus,
   type StoredOrder,
 } from "@/lib/adminOrders";
 import { withFileLock } from "@/lib/jsonFileStore";
+import { OrderFileNotFoundError } from "@/lib/orderFiles";
 import {
   returnCommittedInventoryForCancellation,
   type InventoryReturnMetadata,
@@ -243,64 +245,38 @@ export async function PATCH(
   }
 
   try {
-    /**
-     * 對這張訂單加 File Lock，
-     * 避免同一時間重複修改訂單。
-     */
-    const result =
-      await withFileLock(
-        orderFilePath(
-          orderNumber,
-        ),
+    const updateLockedOrder = () =>
+      withStoredOrderUpdateLock(
+        orderNumber,
+        async (latestOrder, persistOrder) => {
+          const requestedStatus = status as OrderStatus;
+          assertOrderStatusTransition(
+            latestOrder,
+            requestedStatus,
+          );
 
-        async () => {
-          let order =
-            await readOrder(
-              orderNumber,
-            );
-
-          if (!order) {
-            return {
-              notFound:
-                true as const,
-            };
-          }
-
-          const previous =
-            order.status;
-
-          order.status =
-            status;
-
-          order.trackingNumber =
-            String(
-              body.trackingNumber ||
-                "",
+          const previous = latestOrder.status;
+          const updatedAt = new Date().toISOString();
+          let order: StoredOrder = {
+            ...latestOrder,
+            status: requestedStatus,
+            trackingNumber: String(
+              body.trackingNumber || "",
             )
               .trim()
-              .slice(
-                0,
-                80,
-              );
-
-          order.updatedAt =
-            new Date()
-              .toISOString();
-
-          order.statusHistory =
-            Array.isArray(
-              order.statusHistory,
-            )
-              ? order.statusHistory
-              : [];
-
-          order.statusHistory.push(
-            {
-              from: previous,
-              to: status,
-              at: order.updatedAt,
-            },
-          );
+              .slice(0, 80),
+            updatedAt,
+            statusHistory: [
+              ...(Array.isArray(latestOrder.statusHistory)
+                ? latestOrder.statusHistory
+                : []),
+              {
+                from: previous,
+                to: requestedStatus,
+                at: updatedAt,
+              },
+            ],
+          };
 
           /**
            * ====================================================
@@ -309,10 +285,7 @@ export async function PATCH(
            *
            * websiteFile 現在使用 Persistent Storage 路徑。
            */
-          if (
-            status ===
-            "cancelled"
-          ) {
+          if (requestedStatus === "cancelled") {
             try {
               const inventoryReturn =
                 await returnCommittedInventoryForCancellation(
@@ -322,8 +295,11 @@ export async function PATCH(
                     websiteFile:
                       WEBSITE_FILE,
 
-                    persistOrder:
-                      writeOrder,
+                    persistOrder: async (nextOrder) => {
+                      await persistOrder(nextOrder);
+                    },
+
+                    websiteLockHeld: true,
                   },
                 );
 
@@ -357,40 +333,22 @@ export async function PATCH(
                   ? `取消狀態已儲存，但庫存回補失敗：${error.message}`
                   : "取消狀態已儲存，但庫存回補失敗。";
 
-              const latestOrder =
-                (await readOrder(
-                  orderNumber,
-                )) ||
-                order;
+              order = {
+                ...order,
+                inventoryReturn:
+                  returnFailureMetadata(
+                    order,
+                    warning,
+                  ),
+              };
 
-              latestOrder.status =
-                status;
-
-              latestOrder.trackingNumber =
-                order.trackingNumber;
-
-              latestOrder.updatedAt =
-                order.updatedAt;
-
-              latestOrder.statusHistory =
-                order.statusHistory;
-
-              latestOrder.inventoryReturn =
-                returnFailureMetadata(
-                  latestOrder,
-                  warning,
-                );
-
-              await writeOrder(
-                latestOrder,
-              );
+              await persistOrder(order);
 
               return {
                 ok:
                   false as const,
 
-                order:
-                  latestOrder,
+                order,
 
                 warning,
               };
@@ -400,9 +358,7 @@ export async function PATCH(
              * 非取消狀態，
              * 正常儲存訂單狀態更新。
              */
-            await writeOrder(
-              order,
-            );
+            await persistOrder(order);
           }
 
           /**
@@ -421,18 +377,18 @@ export async function PATCH(
                 `【KD Coffee 訂單狀態更新】\n\n訂單編號：${order.orderNumber}\n客戶：${order.customer?.name || "未填"}\n狀態：${orderStatusLabel(status)}\n物流編號：${order.trackingNumber || "尚未填寫"}`,
               );
 
-            order.adminLineNotification =
-              {
+            order = {
+              ...order,
+              adminLineNotification: {
                 sent,
 
                 checkedAt:
                   new Date()
                     .toISOString(),
-              };
+              },
+            };
 
-            await writeOrder(
-              order,
-            );
+            await persistOrder(order);
           }
 
           return {
@@ -442,29 +398,20 @@ export async function PATCH(
             order,
           };
         },
-
-        {
-          timeoutMs:
-            15_000,
-        },
       );
 
     /**
-     * 訂單不存在。
+     * 取消流程固定先取得 website-data lock，再取得 order lock。
+     * 其他狀態更新只需要 order lock。
      */
-    if (
-      result.notFound
-    ) {
-      return NextResponse.json(
-        {
-          error:
-            "找不到訂單",
-        },
-        {
-          status: 404,
-        },
-      );
-    }
+    const result =
+      status === "cancelled"
+        ? await withFileLock(
+            WEBSITE_FILE,
+            updateLockedOrder,
+            { timeoutMs: 15_000 },
+          )
+        : await updateLockedOrder();
 
     /**
      * 訂單取消狀態已寫入，
@@ -503,12 +450,19 @@ export async function PATCH(
         ? error.message
         : "訂單狀態更新失敗";
 
+    const responseStatus =
+      error instanceof OrderFileNotFoundError
+        ? 404
+        : error instanceof OrderStatusTransitionError
+          ? error.status
+          : 500;
+
     return NextResponse.json(
       {
         error: message,
       },
       {
-        status: 500,
+        status: responseStatus,
       },
     );
   }

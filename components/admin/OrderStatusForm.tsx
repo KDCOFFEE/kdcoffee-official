@@ -48,10 +48,14 @@ export default function OrderStatusForm({
   orderNumber,
   initialStatus,
   initialTracking,
+  reactivationBlocked = false,
+  inventoryReturned = false,
 }: {
   orderNumber: string;
   initialStatus: string;
   initialTracking?: string;
+  reactivationBlocked?: boolean;
+  inventoryReturned?: boolean;
 }) {
   const router = useRouter();
   const [status, setStatus] = useState(initialStatus);
@@ -75,17 +79,24 @@ export default function OrderStatusForm({
       <label>
         訂單狀態
         <select value={status} onChange={(event) => setStatus(event.target.value)}>
-          <option value="new_order">新訂單</option>
-          <option value="confirmed">已確認</option>
-          <option value="waiting_merchant_create_cod_shipment">待建立 7-ELEVEN 寄件單</option>
-          <option value="waiting_studio_pickup_confirmation">待確認自取時間</option>
-          <option value="shipment_created">寄件單已建立</option>
-          <option value="shipped">已寄件</option>
-          <option value="ready_for_pickup">等待取貨</option>
-          <option value="completed">已完成</option>
+          <option value="new_order" disabled={reactivationBlocked}>新訂單</option>
+          <option value="confirmed" disabled={reactivationBlocked}>已確認</option>
+          <option value="waiting_merchant_create_cod_shipment" disabled={reactivationBlocked}>待建立 7-ELEVEN 寄件單</option>
+          <option value="waiting_studio_pickup_confirmation" disabled={reactivationBlocked}>待確認自取時間</option>
+          <option value="shipment_created" disabled={reactivationBlocked}>寄件單已建立</option>
+          <option value="shipped" disabled={reactivationBlocked}>已寄件</option>
+          <option value="ready_for_pickup" disabled={reactivationBlocked}>等待取貨</option>
+          <option value="completed" disabled={reactivationBlocked}>已完成</option>
           <option value="cancelled">已取消</option>
         </select>
       </label>
+      {reactivationBlocked ? (
+        <p className="admin-save-message">
+          {inventoryReturned
+            ? "此訂單已取消且庫存已返還，無法直接恢復。"
+            : "此訂單已取消，庫存狀態無法安全確認，無法直接恢復。"}
+        </p>
+      ) : null}
       <label>
         寄件／物流編號
         <input

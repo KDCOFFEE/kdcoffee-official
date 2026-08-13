@@ -163,17 +163,20 @@ export async function resolveExistingIdempotentOrder(
       };
     }
 
-    const recoveredOrder: IdempotentOrder = {
-      ...order,
-      status: metadata.finalStatus,
-      inventoryTransaction: {
-        ...metadata,
-        state: "inventory_committed",
-        committedAt: metadata.committedAt || new Date().toISOString(),
-      },
-    };
     try {
-      await updateOrderFile(orderDir, order.orderNumber, recoveredOrder);
+      const recoveredOrder = (await updateOrderFile(
+        orderDir,
+        order.orderNumber,
+        (latestOrder) => ({
+          ...latestOrder,
+          status: metadata.finalStatus,
+          inventoryTransaction: {
+            ...metadata,
+            state: "inventory_committed",
+            committedAt: metadata.committedAt || new Date().toISOString(),
+          },
+        }),
+      )) as IdempotentOrder;
       return {
         action: "replay" as const,
         order: recoveredOrder,

@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
 import { getOrdersDir, getWebsiteDataFile } from "@/lib/storagePaths";
 import { makeOrderNumber } from "@/lib/orders";
-import { createOrderFile, OrderFileCreationError, updateOrderFile } from "@/lib/orderFiles";
+import {
+  createOrderFile,
+  OrderFileCreationError,
+  OrderFileNotFoundError,
+  OrderFileValidationError,
+} from "@/lib/orderFiles";
 import { FileLockTimeoutError } from "@/lib/jsonFileStore";
 import { InventoryTransactionError, runInventoryOrderTransaction } from "@/lib/orderInventoryTransaction";
 import { OrderPriceConflictError } from "@/lib/orderPricing";
@@ -13,6 +18,7 @@ import {
   withOrderIdempotencyLock,
 } from "@/lib/orderIdempotency";
 import { getCurrentMember, updateMemberProfile } from "@/lib/memberAuth";
+import { updateStoredOrderSafely } from "@/lib/adminOrders";
 
 function clean(value: unknown, max = 200) { return String(value ?? "").trim().slice(0, max); }
 function validPhone(value: string) { return /^09\d{8}$/.test(value); }
@@ -158,7 +164,7 @@ export async function POST(request: Request) {
       }, { status: 202 });
     }
 
-    const { orderNumber, order, lineText, favoriteStore } = core;
+    const { orderNumber, lineText, favoriteStore } = core;
 
     const warnings: string[] = [];
     if (member) {
@@ -172,9 +178,17 @@ export async function POST(request: Request) {
 
     const lineResult = await sendLineNotification(lineText);
     if (!lineResult.sent) warnings.push("訂單已保存，但 LINE 群組通知暫時失敗，工作室可從訂單資料補查。");
-    order.lineNotification = { ...lineResult, checkedAt: new Date().toISOString() };
     try {
-      await updateOrderFile(orderDir(), orderNumber, order);
+      await updateStoredOrderSafely(
+        orderNumber,
+        (latestOrder) => ({
+          ...latestOrder,
+          lineNotification: {
+            ...lineResult,
+            checkedAt: new Date().toISOString(),
+          },
+        }),
+      );
     } catch (error) {
       warnings.push("訂單已成立，但通知結果暫時無法寫回訂單檔案。");
       console.error(`Order ${orderNumber} saved but notification result update failed:`, error);
@@ -183,7 +197,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ orderNumber, orderMode, saved: true, lineNotification: lineResult, warning: warnings.length ? warnings.join(" ") : undefined });
   } catch (error) {
-    const serverError = error instanceof OrderFileCreationError || error instanceof InventoryTransactionError || error instanceof FileLockTimeoutError || error instanceof OrderIdempotencyError;
+    const serverError = error instanceof OrderFileCreationError || error instanceof OrderFileNotFoundError || error instanceof OrderFileValidationError || error instanceof InventoryTransactionError || error instanceof FileLockTimeoutError || error instanceof OrderIdempotencyError;
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "訂單送出失敗" },
       { status: error instanceof OrderPriceConflictError ? 409 : serverError ? 500 : 400 },

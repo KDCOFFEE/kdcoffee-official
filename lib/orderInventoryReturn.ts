@@ -73,6 +73,7 @@ type ReturnCommittedInventoryInput = {
   persistOrder: (order: StoredOrder) => Promise<void>;
   now?: () => Date;
   lockOptions?: FileLockOptions;
+  websiteLockHeld?: boolean;
   dependencies?: Partial<InventoryReturnDependencies>;
 };
 
@@ -216,6 +217,7 @@ export async function returnCommittedInventoryForCancellation({
   persistOrder,
   now = () => new Date(),
   lockOptions,
+  websiteLockHeld = false,
   dependencies,
 }: ReturnCommittedInventoryInput): Promise<InventoryReturnResult> {
   const deps = { ...DEFAULT_DEPENDENCIES, ...dependencies };
@@ -246,9 +248,7 @@ export async function returnCommittedInventoryForCancellation({
     return { order, state: "not_applicable" };
   }
 
-  return deps.withFileLock(
-    websiteFile,
-    async () => {
+  const performReturn = async (): Promise<InventoryReturnResult> => {
       const beforeJson = await deps.readFile(websiteFile, "utf8");
       const beforeSha256 = sha256(beforeJson);
 
@@ -338,7 +338,11 @@ export async function returnCommittedInventoryForCancellation({
       }
 
       return { order: returnedOrder, state: "returned" };
-    },
-    lockOptions,
-  );
+  };
+
+  if (websiteLockHeld) {
+    return performReturn();
+  }
+
+  return deps.withFileLock(websiteFile, performReturn, lockOptions);
 }

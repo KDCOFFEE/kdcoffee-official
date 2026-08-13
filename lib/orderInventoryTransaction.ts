@@ -179,7 +179,7 @@ export async function runInventoryOrderTransaction(input: InventoryOrderTransact
       status: "inventory_pending",
       inventoryTransaction: transaction,
     };
-    const created = input.reuseOrderNumber
+    let created = input.reuseOrderNumber
       ? {
           orderNumber: input.reuseOrderNumber,
           order: { ...pendingOrder, orderNumber: input.reuseOrderNumber },
@@ -191,7 +191,21 @@ export async function runInventoryOrderTransaction(input: InventoryOrderTransact
           input.generateOrderNumber,
         );
     if (input.reuseOrderNumber) {
-      await dependencies.updateOrderFile(input.orderDir, created.orderNumber, created.order);
+      const persistedOrder = await dependencies.updateOrderFile(
+        input.orderDir,
+        created.orderNumber,
+        (latestOrder) => ({
+          ...latestOrder,
+          ...created.order,
+        }),
+      );
+      created = {
+        ...created,
+        order: {
+          ...persistedOrder,
+          orderNumber: created.orderNumber,
+        },
+      };
     }
     const orderNumber = created.orderNumber;
     const lineText = orderNumber === input.initialOrderNumber
@@ -210,21 +224,32 @@ export async function runInventoryOrderTransaction(input: InventoryOrderTransact
           failedAt: now().toISOString(),
         },
       };
-      await dependencies.updateOrderFile(input.orderDir, orderNumber, failedOrder).catch(() => undefined);
+      await dependencies.updateOrderFile(
+        input.orderDir,
+        orderNumber,
+        (latestOrder) => ({
+          ...latestOrder,
+          status: failedOrder.status,
+          inventoryTransaction: failedOrder.inventoryTransaction,
+        }),
+      ).catch(() => undefined);
       throw new InventoryTransactionError("庫存寫入失敗，訂單未成立，請稍後再試。");
     }
 
-    const finalOrder = {
-      ...created.order,
-      status: finalStatus,
-      inventoryTransaction: {
-        ...transaction,
-        state: "inventory_committed" as const,
-        committedAt: now().toISOString(),
-      },
-    };
     try {
-      await dependencies.updateOrderFile(input.orderDir, orderNumber, finalOrder);
+      const finalOrder = await dependencies.updateOrderFile(
+        input.orderDir,
+        orderNumber,
+        (latestOrder) => ({
+          ...latestOrder,
+          status: finalStatus,
+          inventoryTransaction: {
+            ...transaction,
+            state: "inventory_committed" as const,
+            committedAt: now().toISOString(),
+          },
+        }),
+      );
       completedResult = {
         finalized: true as const,
         inventoryCommitted: true as const,
