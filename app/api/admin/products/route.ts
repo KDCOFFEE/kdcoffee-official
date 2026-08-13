@@ -12,6 +12,10 @@ import {
   mergeProductAssetUpdates,
   ProductAssetUpdateError,
 } from "@/lib/productAssetUpdates";
+import {
+  ProductMediaValidationError,
+  verifyProductAssetUpdates,
+} from "@/lib/productMedia";
 
 import {
   getWebsiteDataFile,
@@ -329,13 +333,18 @@ export async function PUT(request: Request) {
           ).filter(isRecord);
 
           /**
-           * 原本商品素材合併邏輯。
-           * 不修改。
+           * 沿用原本商品素材合併入口；Cloudinary 媒體先由
+           * server-side 查詢並以可信資料覆蓋 client metadata。
            */
+          const verifiedUpdates =
+            await verifyProductAssetUpdates(
+              body.products,
+            );
+
           const products =
             mergeProductAssetUpdates(
               current,
-              body.products,
+              verifiedUpdates,
             );
 
           // 寫入新資料以前先建立備份。
@@ -484,7 +493,8 @@ export async function PUT(request: Request) {
     const status =
       error instanceof ProductCommerceUpdateError
         ? error.status
-        : error instanceof ProductAssetUpdateError
+        : error instanceof ProductAssetUpdateError ||
+            error instanceof ProductMediaValidationError
           ? 400
           : 500;
 

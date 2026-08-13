@@ -1,6 +1,7 @@
 import websiteDataJson from "@/public/data/website-data.json";
 import { promises as fs } from "fs";
 import { getWebsiteDataFile } from "@/lib/storagePaths";
+import type { MediaAsset } from "@/lib/media";
 
 /**
  * 商品購買規格
@@ -52,6 +53,7 @@ export type CoffeeArtwork = {
     string,
     {
       path?: string;
+      media?: MediaAsset;
       alt?: string;
       title?: string;
       caption?: string;

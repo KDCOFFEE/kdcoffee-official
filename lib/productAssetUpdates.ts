@@ -30,6 +30,25 @@ function normalizeAssets(value: unknown) {
   return assets;
 }
 
+function mergeAssets(currentValue: unknown, updateValue: unknown) {
+  const current = isRecord(currentValue) ? currentValue : {};
+  const updates = normalizeAssets(updateValue);
+  const assets: Record<string, Record<string, unknown>> = {};
+
+  for (const [key, item] of Object.entries(current)) {
+    if (isRecord(item)) assets[key] = { ...item };
+  }
+  for (const [key, item] of Object.entries(updates)) {
+    const merged = {
+      ...(isRecord(assets[key]) ? assets[key] : {}),
+      ...item,
+    };
+    if ("media" in item && item.media === null) delete merged.media;
+    assets[key] = merged;
+  }
+  return assets;
+}
+
 function normalizePageLayout(value: unknown) {
   if (!isRecord(value)) throw new ProductAssetUpdateError("商品素材版面資料格式錯誤。");
   const layout: Record<string, unknown> = {};
@@ -87,7 +106,7 @@ export function mergeProductAssetUpdates(
     const current = products[index];
     const next: ProductRecord = { ...current };
     if ("cover" in update) next["cover"] = String(update.cover ?? "").trim();
-    if ("assets" in update) next["assets"] = normalizeAssets(update.assets);
+    if ("assets" in update) next["assets"] = mergeAssets(current["assets"], update.assets);
     if ("pageLayout" in update) next["pageLayout"] = normalizePageLayout(update.pageLayout);
     products[index] = next;
   }

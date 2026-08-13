@@ -13,7 +13,10 @@ type MediaUploaderProps = {
   value?: MediaAsset | null;
   usage?: CloudinaryMediaUsage;
   disabled?: boolean;
+  showPreview?: boolean;
+  imageActionLabel?: string;
   onChange: (media: MediaAsset) => void;
+  onImageSelect?: (file: File) => void;
   onImageUpload?: (file: File) => Promise<MediaAsset>;
   onRemove?: () => void;
 };
@@ -145,7 +148,10 @@ export default function MediaUploader({
   value,
   usage = "content",
   disabled = false,
+  showPreview = true,
+  imageActionLabel = "選擇圖片",
   onChange,
+  onImageSelect,
   onImageUpload,
   onRemove,
 }: MediaUploaderProps) {
@@ -219,6 +225,10 @@ export default function MediaUploader({
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file) return;
+    if (onImageSelect) {
+      onImageSelect(file);
+      return;
+    }
     if (!onImageUpload) {
       setMessage("此位置尚未連接既有圖片上傳流程。");
       return;
@@ -255,7 +265,7 @@ export default function MediaUploader({
         ) : null}
       </header>
 
-      {value ? (
+      {value && showPreview ? (
         <div className="kd-media-upload-preview">
           {value.type === "video" ? (
             <video src={value.url} poster={value.posterUrl} controls playsInline preload="metadata" />
@@ -266,7 +276,7 @@ export default function MediaUploader({
       ) : null}
 
       <div className="kd-media-upload-actions">
-        <label>選擇圖片<input type="file" accept="image/*" onChange={chooseImage} disabled={uploading || disabled} /></label>
+        <label>{imageActionLabel}<input type="file" accept="image/*" onChange={chooseImage} disabled={uploading || disabled} /></label>
         <label>{value?.type === "video" ? "更換影片" : "選擇影片"}<input type="file" accept="video/mp4,video/quicktime,video/webm,.mp4,.mov,.webm" onChange={chooseVideo} disabled={uploading || disabled} /></label>
         {uploading ? (
           <button type="button" onClick={cancelUpload}>取消上傳</button>

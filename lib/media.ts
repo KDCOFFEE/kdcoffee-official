@@ -11,7 +11,7 @@ export type MediaAsset = {
   bytes?: number;
 };
 
-export type CloudinaryMediaUsage = "hero" | "content";
+export type CloudinaryMediaUsage = "hero" | "content" | "product";
 
 export const CLOUDINARY_VIDEO_FOLDER = "kd-coffee/videos";
 
@@ -35,12 +35,16 @@ export const VIDEO_UPLOAD_LIMITS: Record<
     maxBytes: 500 * 1024 * 1024,
     maxDurationSeconds: 3 * 60,
   },
+  product: {
+    maxBytes: 95 * 1024 * 1024,
+    maxDurationSeconds: 3 * 60,
+  },
 };
 
 export function isCloudinaryMediaUsage(
   value: unknown,
 ): value is CloudinaryMediaUsage {
-  return value === "hero" || value === "content";
+  return value === "hero" || value === "content" || value === "product";
 }
 
 export function videoExtension(fileName: string) {
