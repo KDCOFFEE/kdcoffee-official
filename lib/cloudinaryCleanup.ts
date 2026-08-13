@@ -6,7 +6,11 @@ import {
   lookupCloudinaryCleanupVideo,
   type CloudinaryCleanupVideoResource,
 } from "@/lib/cloudinary";
-import { getReferencedCloudinaryVideoPublicIds } from "@/lib/cloudinaryMediaUsage";
+import {
+  getCloudinaryVideoUsage,
+  getReferencedCloudinaryVideoPublicIds,
+  type CloudinaryMediaReference,
+} from "@/lib/cloudinaryMediaUsage";
 import { withFileLock } from "@/lib/jsonFileStore";
 import { CLOUDINARY_VIDEO_FOLDER } from "@/lib/media";
 import { getHomepageDataFile, getWebsiteDataFile } from "@/lib/storagePaths";
@@ -24,6 +28,7 @@ export type CloudinaryCleanupAsset = CloudinaryCleanupVideoResource & {
   status: "used" | "orphan";
   canDelete: boolean;
   displayName: string;
+  references: CloudinaryMediaReference[];
 };
 
 export type CloudinaryCleanupScan = {
@@ -57,7 +62,8 @@ function oldEnoughToDelete(createdAt: string | undefined, now: number) {
 export async function scanCloudinaryCleanupVideos(
   now = Date.now(),
 ): Promise<CloudinaryCleanupScan> {
-  const referenced = await getReferencedCloudinaryVideoPublicIds();
+  const usage = await getCloudinaryVideoUsage();
+  const referenced = usage.referencedPublicIds;
   const resources: CloudinaryCleanupVideoResource[] = [];
   const cursors = new Set<string>();
   let cursor: string | undefined;
@@ -90,6 +96,7 @@ export async function scanCloudinaryCleanupVideos(
       status,
       canDelete,
       displayName: safeDisplayName(resource.publicId),
+      references: usage.referencesByPublicId.get(resource.publicId) || [],
     };
   });
   const used = assets.filter((asset) => asset.status === "used").length;

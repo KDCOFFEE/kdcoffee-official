@@ -14,6 +14,13 @@ type CleanupAsset = {
   posterUrl?: string;
   status: "used" | "orphan";
   canDelete: boolean;
+  references: Array<{
+    sourceType: "homepage" | "product";
+    sourceLabel: string;
+    section?: string;
+    field: string;
+    slug?: string;
+  }>;
 };
 
 type CleanupScan = {
@@ -137,6 +144,35 @@ export default function CloudinaryVideoManager() {
                   <div><dt>尺寸</dt><dd>{asset.width && asset.height ? `${asset.width} × ${asset.height}` : "—"}</dd></div>
                   <div><dt>長度</dt><dd>{asset.duration ? `${asset.duration.toFixed(1)} 秒` : "—"}</dd></div>
                 </dl>
+                <div className={`cloudinary-cleanup-usage ${asset.status}`}>
+                  <b>使用位置</b>
+                  {asset.status === "used" ? (
+                    asset.references.length ? (
+                      <ul>
+                        {asset.references.map((reference, index) => (
+                          <li key={`${reference.sourceType}-${reference.section || reference.slug || reference.sourceLabel}-${reference.field}-${index}`}>
+                            {reference.sourceType === "homepage" ? (
+                              <span>首頁 · {reference.section || reference.field}</span>
+                            ) : (
+                              <>
+                                <span>商品 · {reference.sourceLabel}</span>
+                                <small>欄位 · {reference.field}{reference.slug ? ` · ${reference.slug}` : ""}</small>
+                              </>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p>正式資料已標記使用中，但位置名稱目前不可用。</p>
+                    )
+                  ) : (
+                    <p>
+                      {asset.canDelete
+                        ? "目前正式 Homepage / Product 資料沒有引用此影片。"
+                        : "目前沒有正式資料引用，但仍在安全等待期間，暫不可刪除。"}
+                    </p>
+                  )}
+                </div>
                 <label className="cloudinary-cleanup-select">
                   <input
                     type="checkbox"
