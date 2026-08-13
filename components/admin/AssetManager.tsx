@@ -47,7 +47,7 @@ export default function AssetManager() {
   const missing = library.assets.filter((asset) => asset.status === "missing" || !asset.path).length;
 
   return <div className="asset-manager">
-    <div className="cms-toolbar"><div><p className="eyebrow dark">KD ASSET LIBRARY</p><h1>品牌資產與 Logo 管理</h1><p>每張圖片都有固定編號、用途、尺寸與 SEO 名稱。上傳後由系統自動命名，不再使用 IMG_1234。</p></div><div className="cms-toolbar-actions"><button onClick={save}>儲存文字設定</button></div></div>
+    <div className="cms-toolbar"><div><p className="eyebrow dark">KD ASSET LIBRARY</p><h2>品牌資產</h2><p>每張圖片都有固定編號、用途、尺寸與 SEO 名稱。上傳後由系統自動命名，不再使用 IMG_1234。</p></div><div className="cms-toolbar-actions"><button onClick={save}>儲存文字設定</button></div></div>
     {message ? <div className="cms-message">{message}</div> : null}
     <section className="asset-summary"><article><small>全部資產</small><strong>{library.assets.length}</strong></article><article><small>待補照片</small><strong>{missing}</strong></article><article><small>目前版本</small><strong>v{library.version}</strong></article></section>
     <div className="asset-filter"><button className={filter === "all" ? "active" : ""} onClick={() => setFilter("all")}>全部</button>{categories.map((category) => <button className={filter === category ? "active" : ""} onClick={() => setFilter(category)} key={category}>{categoryLabels[category] || category}</button>)}</div>

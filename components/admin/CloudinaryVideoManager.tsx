@@ -105,7 +105,7 @@ export default function CloudinaryVideoManager() {
         <div>
           <p className="eyebrow dark">CLOUDINARY VIDEO CLEANUP</p>
           <h2 id="cloudinary-cleanup-title">Cloudinary 影片管理</h2>
-          <p>只掃描 KD Coffee 影片資料夾。系統不會自動刪除任何影片。</p>
+          <p>管理網站上傳的影片，確認哪些影片正在使用，以及哪些未使用影片可以安全清理。</p>
         </div>
         <button type="button" onClick={scanVideos} disabled={scanning || deleting}>
           {scanning ? "掃描中…" : "掃描 Cloudinary 影片"}
