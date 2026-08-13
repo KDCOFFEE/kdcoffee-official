@@ -40,6 +40,7 @@ type SkuDescriptor = {
 export type SkuQuantityLine = SkuDescriptor & {
   slug?: unknown;
   optionId?: unknown;
+  preparationLabel?: unknown;
   quantity?: unknown;
 };
 
@@ -74,25 +75,21 @@ export function isCustomRoastSku(value: SkuDescriptor) {
   );
 }
 
-export function skuIdentity(value: SkuQuantityLine) {
+export function productionBatchIdentity(value: SkuQuantityLine) {
   const slug = String(value.slug ?? "").trim();
   const optionId = String(value.optionId ?? "").trim();
-  if (slug && optionId) return `${slug}::id:${optionId}`;
-
-  const optionLabel = String(
-    value.optionLabel ?? value.label ?? "",
-  ).trim();
-  return slug && optionLabel
-    ? `${slug}::label:${optionLabel}`
+  const preparationLabel = String(value.preparationLabel ?? "").trim();
+  return slug && optionId && preparationLabel
+    ? `${slug}::id:${optionId}::preparation:${preparationLabel}`
     : "";
 }
 
-export function aggregateSkuQuantities(
+export function aggregateProductionBatchQuantities(
   lines: readonly SkuQuantityLine[],
 ) {
   const quantities = new Map<string, number>();
   for (const line of lines) {
-    const identity = skuIdentity(line);
+    const identity = productionBatchIdentity(line);
     const quantity = Number(line.quantity);
     if (!identity || !Number.isInteger(quantity) || quantity < 1) continue;
     quantities.set(identity, (quantities.get(identity) ?? 0) + quantity);
@@ -100,13 +97,13 @@ export function aggregateSkuQuantities(
   return quantities;
 }
 
-export function getSkuAggregateQuantity(
+export function getProductionBatchQuantity(
   lines: readonly SkuQuantityLine[],
   target: SkuQuantityLine,
 ) {
-  const identity = skuIdentity(target);
+  const identity = productionBatchIdentity(target);
   return identity
-    ? aggregateSkuQuantities(lines).get(identity) ?? 0
+    ? aggregateProductionBatchQuantities(lines).get(identity) ?? 0
     : 0;
 }
 
@@ -116,7 +113,7 @@ export function isCustomRoastLineEligible(
 ) {
   return (
     isCustomRoastSku(target) &&
-    getSkuAggregateQuantity(lines, target) >= CUSTOM_ROAST_MIN_QUANTITY
+    getProductionBatchQuantity(lines, target) >= CUSTOM_ROAST_MIN_QUANTITY
   );
 }
 

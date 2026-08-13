@@ -1,10 +1,10 @@
 import type { WebsiteData } from "../data/websiteData";
 import {
-  aggregateSkuQuantities,
+  aggregateProductionBatchQuantities,
   isAllowedRoastLevel,
   isCustomRoastSku,
   resolvePreparationLabel,
-  skuIdentity,
+  productionBatchIdentity,
 } from "./checkoutRules";
 import { resolveSkuOption, validateSkuDemand } from "./orderStockValidation";
 
@@ -58,10 +58,10 @@ export function priceOrderFromWebsiteData(live: WebsiteData, items: RequestedIte
     subtotal += unitPrice * quantity;
     return {
       sourceItem: item,
-      skuIdentity: skuIdentity({
+      productionBatchIdentity: productionBatchIdentity({
         slug: product.slug,
         optionId: option.id,
-        optionLabel: option.label,
+        preparationLabel,
       }),
       customRoastSku: isCustomRoastSku(option),
       pricedItem: {
@@ -87,20 +87,20 @@ export function priceOrderFromWebsiteData(live: WebsiteData, items: RequestedIte
       },
     };
   });
-  const aggregateQuantities = aggregateSkuQuantities(
+  const batchQuantities = aggregateProductionBatchQuantities(
     resolved.map((item) => ({
       slug: item.pricedItem.slug,
       optionId: item.pricedItem.optionId,
-      optionLabel: item.pricedItem.optionLabel,
+      preparationLabel: item.pricedItem.preparationLabel,
       quantity: item.pricedItem.quantity,
     })),
   );
 
   for (const item of resolved) {
     if (!item.pricedItem.customRoast) continue;
-    const aggregateQuantity = aggregateQuantities.get(item.skuIdentity) ?? 0;
+    const aggregateQuantity = batchQuantities.get(item.productionBatchIdentity) ?? 0;
     if (!item.customRoastSku || aggregateQuantity < 4) {
-      throw new Error(`${item.pricedItem.name} 的專屬烘焙需同一款半磅商品達 4 包（2 磅）`);
+      throw new Error(`${item.pricedItem.name} 的專屬烘焙需同一商品、同一規格及同一處理方式達 4 包（2 磅）`);
     }
 
     const roastLevel = String(item.sourceItem.roastLevel || "").trim();

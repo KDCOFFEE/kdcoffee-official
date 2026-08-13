@@ -7,7 +7,7 @@ import {
   ALLOWED_BEAN_PREPARATIONS,
   ALLOWED_ROAST_LEVELS,
   CUSTOM_ROAST_MIN_QUANTITY,
-  getSkuAggregateQuantity,
+  getProductionBatchQuantity,
   isCustomRoastLineEligible,
   isCustomRoastSku,
   isDripSku,
@@ -51,11 +51,12 @@ export default function AddToCart({ product }: { product: CoffeeArtwork }) {
         optionLabel: option.label,
         optionDetail: option.detail,
         kind: option.kind,
+        preparationLabel: needsPreparation ? preparation : undefined,
         quantity,
       }
     : null;
   const aggregateQuantity = selectedLine
-    ? getSkuAggregateQuantity([...items, selectedLine], selectedLine)
+    ? getProductionBatchQuantity([...items, selectedLine], selectedLine)
     : 0;
   const customRoastEligible =
     !!selectedLine &&
@@ -87,6 +88,7 @@ export default function AddToCart({ product }: { product: CoffeeArtwork }) {
       optionLabel: option.label,
       optionDetail: option.detail,
       kind: option.kind,
+      preparationLabel: needsPreparation ? preparation : undefined,
       quantity: safe,
     };
     if (!isCustomRoastLineEligible([...items, nextLine], nextLine)) {
