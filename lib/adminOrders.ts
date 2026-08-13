@@ -6,7 +6,24 @@ import {
   withOrderFileUpdateLock,
   type PersistLockedOrder,
 } from "@/lib/orderFiles";
+import {
+  assessOrderInventoryTransaction,
+  isFulfillmentOrderStatus,
+  orderStatuses,
+  type OrderStatus,
+} from "@/lib/orderInventoryPolicy";
 import { getOrdersDir } from "@/lib/storagePaths";
+
+export {
+  assessOrderInventoryTransaction,
+  fulfillmentOrderStatuses,
+  isFulfillmentOrderStatus,
+  orderStatuses,
+  orderStatusLabel,
+  type OrderInventoryAssessment,
+  type OrderInventoryAssessmentKind,
+  type OrderStatus,
+} from "@/lib/orderInventoryPolicy";
 
 // Orders include legacy and evolving persisted fields that are read dynamically by the admin UI.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -103,20 +120,6 @@ export async function updateStoredOrderSafely(
   )) as StoredOrder;
 }
 
-export const orderStatuses = [
-  "new_order",
-  "confirmed",
-  "waiting_merchant_create_cod_shipment",
-  "waiting_studio_pickup_confirmation",
-  "shipment_created",
-  "shipped",
-  "ready_for_pickup",
-  "completed",
-  "cancelled",
-] as const;
-
-export type OrderStatus = (typeof orderStatuses)[number];
-
 export class OrderStatusTransitionError extends Error {
   readonly status = 409;
 
@@ -138,33 +141,27 @@ export function assertOrderStatusTransition(
   order: StoredOrder,
   nextStatus: OrderStatus,
 ) {
-  if (!isCancelledOrderTerminal(order) || nextStatus === "cancelled") {
-    return;
-  }
+  if (isCancelledOrderTerminal(order) && nextStatus !== "cancelled") {
+    if (hasReturnedOrderInventory(order)) {
+      throw new OrderStatusTransitionError(
+        "此訂單已取消且庫存已返還，不能直接恢復為有效訂單。",
+      );
+    }
 
-  if (hasReturnedOrderInventory(order)) {
     throw new OrderStatusTransitionError(
-      "此訂單已取消且庫存已返還，不能直接恢復為有效訂單。",
+      "此訂單已取消，庫存狀態無法安全確認，不能直接恢復為有效訂單。",
     );
   }
 
-  throw new OrderStatusTransitionError(
-    "此訂單已取消，庫存狀態無法安全確認，不能直接恢復為有效訂單。",
-  );
-}
+  if (!isFulfillmentOrderStatus(nextStatus)) {
+    return;
+  }
 
-export function orderStatusLabel(status: string) {
-  return (
-    {
-      new_order: "新訂單",
-      confirmed: "已確認",
-      waiting_merchant_create_cod_shipment: "待建立 7-ELEVEN 寄件單",
-      waiting_studio_pickup_confirmation: "待確認自取時間",
-      shipment_created: "寄件單已建立",
-      shipped: "已寄件",
-      ready_for_pickup: "等待取貨",
-      completed: "已完成",
-      cancelled: "已取消",
-    } as Record<string, string>
-  )[status] || "訂單已成立";
+  const inventoryAssessment = assessOrderInventoryTransaction(order);
+  if (inventoryAssessment.fulfillmentBlocked) {
+    throw new OrderStatusTransitionError(
+      inventoryAssessment.apiMessage ||
+        "此訂單的庫存交易狀態無法確認，不能進入正常履約狀態。",
+    );
+  }
 }

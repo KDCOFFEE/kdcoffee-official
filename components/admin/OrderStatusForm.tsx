@@ -2,6 +2,11 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import {
+  fulfillmentOrderStatuses,
+  orderStatuses,
+  orderStatusLabel,
+} from "@/lib/orderInventoryPolicy";
 
 type SaveOrderStatusInput = {
   orderNumber: string;
@@ -50,18 +55,26 @@ export default function OrderStatusForm({
   initialTracking,
   reactivationBlocked = false,
   inventoryReturned = false,
+  inventoryFulfillmentBlocked = false,
+  inventoryGuardMessage = "",
 }: {
   orderNumber: string;
   initialStatus: string;
   initialTracking?: string;
   reactivationBlocked?: boolean;
   inventoryReturned?: boolean;
+  inventoryFulfillmentBlocked?: boolean;
+  inventoryGuardMessage?: string;
 }) {
   const router = useRouter();
   const [status, setStatus] = useState(initialStatus);
   const [trackingNumber, setTrackingNumber] = useState(initialTracking || "");
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
+  const statusIsKnown = (orderStatuses as readonly string[]).includes(status);
+  const statusCanBeSaved =
+    statusIsKnown &&
+    (!inventoryFulfillmentBlocked || status === "cancelled");
 
   function save() {
     return runOrderStatusSave({
@@ -79,14 +92,18 @@ export default function OrderStatusForm({
       <label>
         訂單狀態
         <select value={status} onChange={(event) => setStatus(event.target.value)}>
-          <option value="new_order" disabled={reactivationBlocked}>新訂單</option>
-          <option value="confirmed" disabled={reactivationBlocked}>已確認</option>
-          <option value="waiting_merchant_create_cod_shipment" disabled={reactivationBlocked}>待建立 7-ELEVEN 寄件單</option>
-          <option value="waiting_studio_pickup_confirmation" disabled={reactivationBlocked}>待確認自取時間</option>
-          <option value="shipment_created" disabled={reactivationBlocked}>寄件單已建立</option>
-          <option value="shipped" disabled={reactivationBlocked}>已寄件</option>
-          <option value="ready_for_pickup" disabled={reactivationBlocked}>等待取貨</option>
-          <option value="completed" disabled={reactivationBlocked}>已完成</option>
+          {!statusIsKnown ? (
+            <option value={status} disabled>{orderStatusLabel(status)}</option>
+          ) : null}
+          {fulfillmentOrderStatuses.map((optionStatus) => (
+            <option
+              value={optionStatus}
+              disabled={reactivationBlocked || inventoryFulfillmentBlocked}
+              key={optionStatus}
+            >
+              {orderStatusLabel(optionStatus)}
+            </option>
+          ))}
           <option value="cancelled">已取消</option>
         </select>
       </label>
@@ -97,6 +114,11 @@ export default function OrderStatusForm({
             : "此訂單已取消，庫存狀態無法安全確認，無法直接恢復。"}
         </p>
       ) : null}
+      {inventoryFulfillmentBlocked ? (
+        <p className="admin-save-message admin-inventory-block-message">
+          {inventoryGuardMessage || "庫存交易狀態尚未確認，一般履約狀態已停用。"}
+        </p>
+      ) : null}
       <label>
         寄件／物流編號
         <input
@@ -105,7 +127,7 @@ export default function OrderStatusForm({
           placeholder="尚未建立時可留空"
         />
       </label>
-      <button type="button" className="admin-primary-button" disabled={saving} onClick={save}>
+      <button type="button" className="admin-primary-button" disabled={saving || !statusCanBeSaved} onClick={save}>
         {saving ? "儲存中…" : "儲存變更"}
       </button>
       {message && <p className="admin-save-message">{message}</p>}
