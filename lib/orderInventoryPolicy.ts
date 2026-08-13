@@ -32,11 +32,27 @@ export type OrderInventoryAssessment = {
   adminWarning?: string;
 };
 
+export type OrderCancellationAssessment = {
+  allowed: boolean;
+  errorMessage?: string;
+};
+
 type InventoryPolicyOrder = {
   status?: unknown;
   orderMode?: unknown;
   inventoryTransaction?: unknown;
 };
+
+export const MAX_CANCELLATION_REASON_LENGTH = 200;
+
+export class OrderCancellationReasonError extends Error {
+  readonly status = 400;
+
+  constructor(message: string) {
+    super(message);
+    this.name = "OrderCancellationReasonError";
+  }
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -130,6 +146,91 @@ export function isFulfillmentOrderStatus(
   status: OrderStatus,
 ): status is (typeof fulfillmentOrderStatuses)[number] {
   return status !== "cancelled";
+}
+
+export function assessOrderCancellation(
+  order: InventoryPolicyOrder,
+): OrderCancellationAssessment {
+  const status = String(order.status || "");
+
+  if (
+    status === "new_order" ||
+    status === "confirmed" ||
+    status === "waiting_merchant_create_cod_shipment" ||
+    status === "waiting_studio_pickup_confirmation" ||
+    status === "inventory_pending" ||
+    status === "inventory_failed" ||
+    status === "corporate_gift_inquiry"
+  ) {
+    return { allowed: true };
+  }
+
+  if (status === "ready_for_pickup") {
+    if (order.orderMode === "711_cod") {
+      return {
+        allowed: false,
+        errorMessage:
+          "此 7-ELEVEN 訂單已進入到店取貨階段，不能使用一般取消操作。",
+      };
+    }
+    if (order.orderMode === "studio_pickup") {
+      return {
+        allowed: false,
+        errorMessage:
+          "此工作室自取訂單已備妥待取，不能使用一般取消直接回補庫存。",
+      };
+    }
+
+    return {
+      allowed: false,
+      errorMessage:
+        "此訂單的取貨方式無法確認，不能使用一般取消操作。",
+    };
+  }
+
+  if (status === "shipment_created") {
+    return {
+      allowed: false,
+      errorMessage: "此訂單已進入寄件流程，不能使用一般取消操作。",
+    };
+  }
+  if (status === "shipped") {
+    return {
+      allowed: false,
+      errorMessage: "此訂單已出貨，不能取消並回補庫存。",
+    };
+  }
+  if (status === "completed") {
+    return {
+      allowed: false,
+      errorMessage: "此訂單已完成，不能再取消。",
+    };
+  }
+  if (status === "cancelled") {
+    return {
+      allowed: false,
+      errorMessage: "此訂單已取消，不能再次取消。",
+    };
+  }
+
+  return {
+    allowed: false,
+    errorMessage:
+      "此訂單的目前狀態無法確認，不能使用一般取消操作。",
+  };
+}
+
+export function normalizeCancellationReason(value: unknown) {
+  const reason = String(value ?? "").trim();
+  if (!reason) {
+    throw new OrderCancellationReasonError("請填寫取消原因。");
+  }
+  if (reason.length > MAX_CANCELLATION_REASON_LENGTH) {
+    throw new OrderCancellationReasonError(
+      `取消原因最多 ${MAX_CANCELLATION_REASON_LENGTH} 個字。`,
+    );
+  }
+  return reason;
 }
 
 export function orderStatusLabel(status: string) {

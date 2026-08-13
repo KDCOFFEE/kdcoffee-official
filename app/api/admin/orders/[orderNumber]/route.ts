@@ -3,8 +3,10 @@ import { NextResponse } from "next/server";
 import { isAdminAuthenticated } from "@/lib/adminAuth";
 import {
   assertOrderStatusTransition,
+  normalizeCancellationReason,
   orderStatuses,
   orderStatusLabel,
+  OrderCancellationReasonError,
   OrderStatusTransitionError,
   withStoredOrderUpdateLock,
   type OrderStatus,
@@ -245,15 +247,19 @@ export async function PATCH(
   }
 
   try {
+    const requestedStatus = status as OrderStatus;
     const updateLockedOrder = () =>
       withStoredOrderUpdateLock(
         orderNumber,
         async (latestOrder, persistOrder) => {
-          const requestedStatus = status as OrderStatus;
           assertOrderStatusTransition(
             latestOrder,
             requestedStatus,
           );
+          const cancellationReason =
+            requestedStatus === "cancelled"
+              ? normalizeCancellationReason(body.cancellationReason)
+              : undefined;
 
           const previous = latestOrder.status;
           const updatedAt = new Date().toISOString();
@@ -266,6 +272,13 @@ export async function PATCH(
               .trim()
               .slice(0, 80),
             updatedAt,
+            ...(requestedStatus === "cancelled"
+              ? {
+                  cancelledAt: updatedAt,
+                  cancelledBy: "admin",
+                  cancellationReason,
+                }
+              : {}),
             statusHistory: [
               ...(Array.isArray(latestOrder.statusHistory)
                 ? latestOrder.statusHistory
@@ -453,6 +466,8 @@ export async function PATCH(
     const responseStatus =
       error instanceof OrderFileNotFoundError
         ? 404
+        : error instanceof OrderCancellationReasonError
+          ? error.status
         : error instanceof OrderStatusTransitionError
           ? error.status
           : 500;

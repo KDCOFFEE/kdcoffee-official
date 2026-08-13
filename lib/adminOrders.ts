@@ -7,6 +7,7 @@ import {
   type PersistLockedOrder,
 } from "@/lib/orderFiles";
 import {
+  assessOrderCancellation,
   assessOrderInventoryTransaction,
   isFulfillmentOrderStatus,
   orderStatuses,
@@ -15,11 +16,16 @@ import {
 import { getOrdersDir } from "@/lib/storagePaths";
 
 export {
+  assessOrderCancellation,
   assessOrderInventoryTransaction,
   fulfillmentOrderStatuses,
   isFulfillmentOrderStatus,
   orderStatuses,
   orderStatusLabel,
+  normalizeCancellationReason,
+  MAX_CANCELLATION_REASON_LENGTH,
+  OrderCancellationReasonError,
+  type OrderCancellationAssessment,
   type OrderInventoryAssessment,
   type OrderInventoryAssessmentKind,
   type OrderStatus,
@@ -151,6 +157,17 @@ export function assertOrderStatusTransition(
     throw new OrderStatusTransitionError(
       "此訂單已取消，庫存狀態無法安全確認，不能直接恢復為有效訂單。",
     );
+  }
+
+  if (nextStatus === "cancelled") {
+    const cancellationAssessment = assessOrderCancellation(order);
+    if (!cancellationAssessment.allowed) {
+      throw new OrderStatusTransitionError(
+        cancellationAssessment.errorMessage ||
+          "此訂單目前不能使用一般取消操作。",
+      );
+    }
+    return;
   }
 
   if (!isFulfillmentOrderStatus(nextStatus)) {
