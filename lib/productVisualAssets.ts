@@ -39,31 +39,33 @@ function cleanStaticImageUrl(value: unknown) {
   }
 }
 
-function getLayout(product: ProductVisualInput): ProductVisualLayout {
-  return isRecord(product.pageLayout) ? product.pageLayout : {};
+function getLayout(product: unknown): ProductVisualLayout {
+  return isRecord(product) && isRecord(product.pageLayout)
+    ? product.pageLayout
+    : {};
 }
 
-function getRawAsset(product: ProductVisualInput, key: string) {
-  if (!key) return null;
+function getRawAsset(product: unknown, key: string) {
+  if (!isRecord(product) || !key) return null;
   const assets = isRecord(product.assets) ? product.assets : {};
   const raw = assets[key];
   return isRecord(raw) ? raw : null;
 }
 
 export function getProductMediaAsset(
-  product: ProductVisualInput,
+  product: unknown,
   key: string,
 ): MediaAsset | undefined {
   const raw = getRawAsset(product, key);
   return raw && isMediaAsset(raw.media) ? raw.media : undefined;
 }
 
-export function hasProductMediaAsset(product: ProductVisualInput, key: string) {
+export function hasProductMediaAsset(product: unknown, key: string) {
   return Boolean(getProductMediaAsset(product, key));
 }
 
 export function resolveStaticProductAssetImage(
-  product: ProductVisualInput,
+  product: unknown,
   key: string,
 ) {
   const raw = getRawAsset(product, key);
@@ -72,7 +74,7 @@ export function resolveStaticProductAssetImage(
   return cleanStaticImageUrl(media?.posterUrl) || cleanStaticImageUrl(raw.path);
 }
 
-function getAsset(product: ProductVisualInput, key: string): ProductVisualSource | null {
+function getAsset(product: unknown, key: string): ProductVisualSource | null {
   const raw = getRawAsset(product, key);
   if (!raw) return null;
   const path = resolveStaticProductAssetImage(product, key);
@@ -85,7 +87,7 @@ function getAsset(product: ProductVisualInput, key: string): ProductVisualSource
   return source;
 }
 
-export function resolveStaticProductImage(product: ProductVisualInput) {
+export function resolveStaticProductImage(product: unknown) {
   return firstAsset([
     getAsset(product, "artworkCover"),
     getAsset(product, "mainVisual"),
@@ -94,7 +96,8 @@ export function resolveStaticProductImage(product: ProductVisualInput) {
   ])?.path;
 }
 
-function getLegacyAsset(product: ProductVisualInput, key: "cover" | "poster") {
+function getLegacyAsset(product: unknown, key: "cover" | "poster") {
+  if (!isRecord(product)) return null;
   const path = cleanStaticImageUrl(product[key]);
   return path ? { key, path } satisfies ProductVisualSource : null;
 }
@@ -109,7 +112,7 @@ function firstAsset(candidates: Array<ProductVisualSource | null>) {
   return null;
 }
 
-export function resolveListAsset(product: ProductVisualInput) {
+export function resolveListAsset(product: unknown) {
   const layout = getLayout(product);
   return firstAsset([
     getAsset(product, cleanString(layout.listAsset)),
@@ -120,7 +123,7 @@ export function resolveListAsset(product: ProductVisualInput) {
   ]);
 }
 
-export function resolveProductAsset(product: ProductVisualInput) {
+export function resolveProductAsset(product: unknown) {
   const layout = getLayout(product);
   return firstAsset([
     getAsset(product, cleanString(layout.productAsset)),
@@ -131,7 +134,7 @@ export function resolveProductAsset(product: ProductVisualInput) {
   ]);
 }
 
-export function resolveHeroAsset(product: ProductVisualInput) {
+export function resolveHeroAsset(product: unknown) {
   const layout = getLayout(product);
   return firstAsset([
     getAsset(product, cleanString(layout.heroAsset)),
@@ -139,7 +142,7 @@ export function resolveHeroAsset(product: ProductVisualInput) {
   ]);
 }
 
-export function resolveGalleryAssets(product: ProductVisualInput) {
+export function resolveGalleryAssets(product: unknown) {
   const layout = getLayout(product);
   const keys = Array.isArray(layout.galleryAssets)
     ? layout.galleryAssets.map(cleanString).filter(Boolean)

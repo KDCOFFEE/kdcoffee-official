@@ -40,6 +40,7 @@ export default function ProductManager(){
  useEffect(()=>{const open=showWizard||!!promptAsset||!!seoPreview;if(!open)return;const previous=document.body.style.overflow;document.body.style.overflow='hidden';const onKey=(e:KeyboardEvent)=>{if(e.key==='Escape'){setShowWizard(false);setPromptAsset(null);setSeoPreview(null);setPendingFile(null)}};window.addEventListener('keydown',onKey);return()=>{document.body.style.overflow=previous;window.removeEventListener('keydown',onKey)}},[showWizard,promptAsset,seoPreview]);
  const selected=artworks.find(a=>(a.id||a.slug)===selectedId)||artworks[0];
  const filtered=useMemo(()=>artworks.filter(Boolean).filter(a=>`${a?.name||""} ${a?.nameEn||""} ${a?.artist||""} ${a?.origin||""}`.toLowerCase().includes(q.toLowerCase())).sort((a,b)=>Number(a?.sort||0)-Number(b?.sort||0)),[artworks,q]);
+ if(!selected)return <div className="cms-message">目前沒有作品資料。</div>;
  const staticAssetPath=(a:any,key:string)=>resolveStaticProductAssetImage(a,key)||(key==='mainVisual'?String(a?.cover||''):'');
  const hasStaticAsset=(a:any,key:string)=>Boolean(staticAssetPath(a,key));
  const hasAsset=(a:any,key:string)=>hasStaticAsset(a,key)||hasProductMediaAsset(a,key);
@@ -89,7 +90,6 @@ export default function ProductManager(){
  const usagesFor=(key:string)=>{const uses:string[]=[];if(layout.heroAsset===key)uses.push('作品頁 Hero');if(layout.productAsset===key)uses.push('作品頁購買區');if(layout.listAsset===key)uses.push('作品列表／首頁卡片');if((layout.galleryAssets||[]).includes(key)&&layout.showGallery!==false)uses.push('作品頁 Gallery');if(key==='facebook'&&selected.publish?.facebook)uses.push('Facebook');if(key==='google'&&selected.publish?.google)uses.push('Google 商家');if(key==='line'&&selected.publish?.line)uses.push('LINE');return uses};
  const uploadedAssets=assetTypes.filter(t=>hasAsset(selected,t.key));
  const galleryChoices=uploadedAssets.filter(t=>t.key!==layout.heroAsset && t.key!==layout.productAsset);
- if(!selected)return <div className="cms-message">目前沒有作品資料。</div>;
  return <div className="homepage-manager artwork-studio v103">
   <div className="cms-toolbar"><div><p className="eyebrow dark">KD COFFEE STUDIO · v12.0 COMMERCE</p><h1>Artwork Workspace</h1><p>作品資料、素材與前台頁面配置已正式串接。</p></div><div className="cms-toolbar-actions"><button className="cms-secondary-button" onClick={()=>setShowWizard(true)}>＋ 建立作品</button><a href="/works" target="_blank">查看前台 ↗</a><button onClick={save} disabled={saving||!dirty}>{saving?'儲存中…':dirty?'儲存變更':'已儲存'}</button></div></div>
   {message&&<div className="cms-message">{message}{dirty?<b>　目前有尚未儲存的修改。</b>:null}</div>}
