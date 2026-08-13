@@ -14,6 +14,7 @@ import {
   type OrderStatus,
 } from "@/lib/orderInventoryPolicy";
 import { getOrdersDir } from "@/lib/storagePaths";
+import { assessOrderStatusProgression } from "@/lib/orderStatusPolicy";
 
 export {
   assessOrderCancellation,
@@ -179,6 +180,13 @@ export function assertOrderStatusTransition(
     throw new OrderStatusTransitionError(
       inventoryAssessment.apiMessage ||
         "此訂單的庫存交易狀態無法確認，不能進入正常履約狀態。",
+    );
+  }
+
+  const statusAssessment = assessOrderStatusProgression(order, nextStatus);
+  if (!statusAssessment.allowed) {
+    throw new OrderStatusTransitionError(
+      statusAssessment.errorMessage || "此訂單不能變更至目標狀態。",
     );
   }
 }

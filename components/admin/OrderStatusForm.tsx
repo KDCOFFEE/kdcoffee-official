@@ -7,7 +7,12 @@ import {
   MAX_CANCELLATION_REASON_LENGTH,
   orderStatuses,
   orderStatusLabel,
+  type OrderStatus,
 } from "@/lib/orderInventoryPolicy";
+import {
+  assessOrderStatusProgression,
+  orderFlowDescription,
+} from "@/lib/orderStatusPolicy";
 
 type SaveOrderStatusInput = {
   orderNumber: string;
@@ -56,6 +61,7 @@ export default function OrderStatusForm({
   orderNumber,
   initialStatus,
   initialTracking,
+  orderMode,
   reactivationBlocked = false,
   inventoryReturned = false,
   inventoryFulfillmentBlocked = false,
@@ -66,6 +72,7 @@ export default function OrderStatusForm({
   orderNumber: string;
   initialStatus: string;
   initialTracking?: string;
+  orderMode: string;
   reactivationBlocked?: boolean;
   inventoryReturned?: boolean;
   inventoryFulfillmentBlocked?: boolean;
@@ -80,8 +87,16 @@ export default function OrderStatusForm({
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
   const statusIsKnown = (orderStatuses as readonly string[]).includes(status);
-  const statusCanBeSaved =
+  const statusTransitionAllowed =
     statusIsKnown &&
+    (status === "cancelled"
+      ? cancellationAllowed
+      : assessOrderStatusProgression(
+          { status: initialStatus, orderMode },
+          status as OrderStatus,
+        ).allowed);
+  const statusCanBeSaved =
+    statusTransitionAllowed &&
     (!inventoryFulfillmentBlocked || status === "cancelled") &&
     (status !== "cancelled" ||
       (cancellationAllowed && cancellationReason.trim().length > 0));
@@ -119,6 +134,10 @@ export default function OrderStatusForm({
 
   return (
     <div className="admin-status-form">
+      <p className="admin-order-flow-hint">
+        <strong>本訂單流程</strong>
+        <span>{orderFlowDescription(orderMode)}</span>
+      </p>
       <label>
         訂單狀態
         <select value={status} onChange={(event) => setStatus(event.target.value)}>
@@ -128,7 +147,14 @@ export default function OrderStatusForm({
           {fulfillmentOrderStatuses.map((optionStatus) => (
             <option
               value={optionStatus}
-              disabled={reactivationBlocked || inventoryFulfillmentBlocked}
+              disabled={
+                reactivationBlocked ||
+                inventoryFulfillmentBlocked ||
+                !assessOrderStatusProgression(
+                  { status: initialStatus, orderMode },
+                  optionStatus,
+                ).allowed
+              }
               key={optionStatus}
             >
               {orderStatusLabel(optionStatus)}
@@ -168,14 +194,16 @@ export default function OrderStatusForm({
           <small>{cancellationReason.trim().length} / {MAX_CANCELLATION_REASON_LENGTH} 字</small>
         </label>
       ) : null}
-      <label>
-        寄件／物流編號
-        <input
-          value={trackingNumber}
-          onChange={(event) => setTrackingNumber(event.target.value)}
-          placeholder="尚未建立時可留空"
-        />
-      </label>
+      {orderMode === "711_cod" ? (
+        <label>
+          寄件／物流編號
+          <input
+            value={trackingNumber}
+            onChange={(event) => setTrackingNumber(event.target.value)}
+            placeholder="尚未建立時可留空"
+          />
+        </label>
+      ) : null}
       <button type="button" className="admin-primary-button" disabled={saving || !statusCanBeSaved} onClick={save}>
         {saving ? "儲存中…" : "儲存變更"}
       </button>
