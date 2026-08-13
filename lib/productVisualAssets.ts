@@ -74,6 +74,11 @@ export function resolveStaticProductAssetImage(
   return cleanStaticImageUrl(media?.posterUrl) || cleanStaticImageUrl(raw.path);
 }
 
+export function resolveProductAssetPath(product: unknown, key: string) {
+  const raw = getRawAsset(product, key);
+  return raw ? cleanStaticImageUrl(raw.path) : "";
+}
+
 function getAsset(product: unknown, key: string): ProductVisualSource | null {
   const raw = getRawAsset(product, key);
   if (!raw) return null;

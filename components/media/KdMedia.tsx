@@ -68,7 +68,7 @@ export default function KdMedia({
   return (
     <div ref={container} className={`kd-media-video-shell${className ? ` ${className}` : ""}`}>
       {nearViewport ? (
-        <video src={media.url} poster={media.posterUrl || fallbackImageUrl} controls={!backgroundVideo} autoPlay={backgroundVideo} muted={backgroundVideo} loop={backgroundVideo} playsInline preload="metadata" aria-label={alt} onError={() => setFailed(true)} />
+        <video src={media.url} poster={media.posterUrl || fallbackImageUrl} controls={!backgroundVideo} autoPlay={backgroundVideo} muted={backgroundVideo} loop={backgroundVideo} playsInline preload="metadata" aria-hidden={backgroundVideo ? true : undefined} aria-label={backgroundVideo ? undefined : alt} onError={() => setFailed(true)} />
       ) : media.posterUrl && !posterFailed ? (
         <img src={media.posterUrl} alt={alt} loading="lazy" onError={() => setPosterFailed(true)} />
       ) : fallbackImageUrl && fallbackImageUrl !== media.posterUrl && !fallbackImageFailed ? (

@@ -4,7 +4,16 @@ import { getLiveWebsiteData } from "@/data/websiteData";
 import AddToCart from "@/components/commerce/AddToCart";
 import CartLink from "@/components/commerce/CartLink";
 import ProductVisualMedia from "@/components/commerce/ProductVisualMedia";
-import { resolveGalleryAssets, resolveHeroAsset, resolveListAsset, resolveProductAsset } from "@/lib/productVisualAssets";
+import KdMedia from "@/components/media/KdMedia";
+import {
+  getProductMediaAsset,
+  resolveGalleryAssets,
+  resolveHeroAsset,
+  resolveListAsset,
+  resolveProductAsset,
+  resolveProductAssetPath,
+  resolveStaticProductImage,
+} from "@/lib/productVisualAssets";
 
 export const dynamic = "force-dynamic";
 
@@ -58,6 +67,10 @@ export default async function WorkPage({ params }: { params: Promise<{ slug: str
   };
   const heroAsset = resolveHeroAsset(product);
   const productAsset = resolveProductAsset(product);
+  const heroMedia = getProductMediaAsset(product, "hero");
+  const heroVideo = heroMedia?.type === "video" ? heroMedia : undefined;
+  const legacyHeroPath = resolveProductAssetPath(product, "hero");
+  const staticProductFallback = resolveStaticProductImage(product);
   const heroPath = heroAsset?.path || "";
   const productPath = productAsset?.path || "";
   const gallery = resolveGalleryAssets(product);
@@ -84,10 +97,40 @@ export default async function WorkPage({ params }: { params: Promise<{ slug: str
         <CartLink compact />
       </header>
 
-      <section className={`revenue-hero ${heroPath ? "has-wide-hero" : ""}`} id="top-purchase">
+      <section className={`revenue-hero ${heroVideo || heroPath ? "has-wide-hero" : ""}`} id="top-purchase">
         <div className="revenue-media">
-          <div className={`revenue-image-stage ${heroPath ? "wide-hero-stage" : "product-stage"}`}>
-            {heroPath ? (
+          <div className={`revenue-image-stage ${heroVideo || heroPath ? "wide-hero-stage" : "product-stage"}`}>
+            {heroVideo ? (
+              <>
+                <KdMedia
+                  media={heroVideo}
+                  alt={heroAsset?.alt || `${product.name} 商品形象主視覺`}
+                  className="wide-hero-image"
+                  backgroundVideo
+                  eager
+                  fallbackImageUrl={legacyHeroPath}
+                  fallback={
+                    staticProductFallback ? (
+                      <ProductVisualMedia
+                        src={staticProductFallback}
+                        alt={`${product.name} 商品形象主視覺`}
+                        className="wide-hero-image"
+                        loading="eager"
+                        fallback={<ProductBagFallback product={product} />}
+                      />
+                    ) : (
+                      <ProductBagFallback product={product} />
+                    )
+                  }
+                />
+                <div className="wide-hero-shade" />
+                <div className="wide-hero-copy">
+                  <small>KD COFFEE ARTWORK</small>
+                  <strong>{product.name}</strong>
+                  <span>{product.flavors?.slice(0, 3).join("・")}</span>
+                </div>
+              </>
+            ) : heroPath ? (
               <>
                 <img className="wide-hero-image" src={heroPath} alt={heroAsset?.alt || `${product.name} 商品形象主視覺`} />
                 <div className="wide-hero-shade" />
@@ -103,7 +146,7 @@ export default async function WorkPage({ params }: { params: Promise<{ slug: str
               <ProductBagFallback product={product} />
             )}
           </div>
-          <div className="revenue-media-caption"><span>{heroPath ? "商品情境主視覺" : "實際商品包裝"}</span><b>實際出貨內容以所選規格為準</b></div>
+          <div className="revenue-media-caption"><span>{heroVideo || heroPath ? "商品情境主視覺" : "實際商品包裝"}</span><b>實際出貨內容以所選規格為準</b></div>
         </div>
 
         <div className="revenue-buybox">
