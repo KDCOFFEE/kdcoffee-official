@@ -26,6 +26,25 @@ type CloudinaryVideoResource = {
   width?: unknown;
   height?: unknown;
   duration?: unknown;
+  created_at?: unknown;
+};
+
+export type CloudinaryCleanupVideoResource = {
+  publicId: string;
+  resourceType: string;
+  deliveryType: string;
+  createdAt?: string;
+  bytes?: number;
+  format?: string;
+  width?: number;
+  height?: number;
+  duration?: number;
+  posterUrl?: string;
+};
+
+export type CloudinaryCleanupVideoPage = {
+  resources: CloudinaryCleanupVideoResource[];
+  nextCursor?: string;
 };
 
 export type CloudinaryFinalizeStage =
@@ -237,6 +256,86 @@ function isExpectedSecureVideoUrl(value: string, cloudName: string) {
   } catch {
     return false;
   }
+}
+
+function cleanupVideoResource(
+  resource: CloudinaryVideoResource,
+  cloudName: string,
+): CloudinaryCleanupVideoResource {
+  const publicId = String(resource.public_id || "").trim();
+  let posterUrl: string | undefined;
+  if (publicId) {
+    const candidate = cloudinary.url(publicId, {
+      resource_type: "video",
+      type: "upload",
+      secure: true,
+      format: "jpg",
+      transformation: [
+        { width: 720, crop: "limit", quality: "auto", fetch_format: "auto" },
+      ],
+    });
+    if (isExpectedSecureVideoUrl(candidate, cloudName)) posterUrl = candidate;
+  }
+  const createdAt = typeof resource.created_at === "string"
+    ? resource.created_at.trim()
+    : "";
+  const duration = cleanOptionalDuration(resource.duration);
+  return {
+    publicId,
+    resourceType: String(resource.resource_type || ""),
+    deliveryType: String(resource.type || ""),
+    ...(createdAt ? { createdAt } : {}),
+    ...(cleanNumber(resource.bytes) > 0 ? { bytes: cleanNumber(resource.bytes) } : {}),
+    ...(String(resource.format || "").trim() ? { format: String(resource.format).toLowerCase() } : {}),
+    ...(cleanNumber(resource.width) > 0 ? { width: cleanNumber(resource.width) } : {}),
+    ...(cleanNumber(resource.height) > 0 ? { height: cleanNumber(resource.height) } : {}),
+    ...(duration !== undefined ? { duration } : {}),
+    ...(posterUrl ? { posterUrl } : {}),
+  };
+}
+
+export async function listCloudinaryCleanupVideoPage(
+  nextCursor?: string,
+): Promise<CloudinaryCleanupVideoPage> {
+  const { cloudName } = configureCloudinary();
+  const result = await cloudinary.api.resources({
+    resource_type: "video",
+    type: "upload",
+    prefix: `${CLOUDINARY_VIDEO_FOLDER}/`,
+    max_results: 100,
+    ...(nextCursor ? { next_cursor: nextCursor } : {}),
+  }) as Record<string, unknown>;
+  const resources = Array.isArray(result.resources)
+    ? result.resources
+        .filter((resource): resource is CloudinaryVideoResource => Boolean(resource) && typeof resource === "object")
+        .map((resource) => cleanupVideoResource(resource, cloudName))
+        .filter((resource) => resource.publicId.startsWith(`${CLOUDINARY_VIDEO_FOLDER}/`))
+    : [];
+  const cursor = typeof result.next_cursor === "string"
+    ? result.next_cursor.trim()
+    : "";
+  return { resources, ...(cursor ? { nextCursor: cursor } : {}) };
+}
+
+export async function lookupCloudinaryCleanupVideo(
+  publicId: string,
+): Promise<CloudinaryCleanupVideoResource> {
+  const { cloudName } = configureCloudinary();
+  const resource = await cloudinary.api.resource(publicId, {
+    resource_type: "video",
+    type: "upload",
+  }) as CloudinaryVideoResource;
+  return cleanupVideoResource(resource, cloudName);
+}
+
+export async function destroyCloudinaryCleanupVideo(publicId: string) {
+  configureCloudinary();
+  const result = await cloudinary.uploader.destroy(publicId, {
+    resource_type: "video",
+    type: "upload",
+    invalidate: true,
+  }) as Record<string, unknown>;
+  return result.result === "ok";
 }
 
 export async function verifyCloudinaryVideo(
