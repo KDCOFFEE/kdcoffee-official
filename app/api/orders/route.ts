@@ -19,15 +19,17 @@ import {
 } from "@/lib/orderIdempotency";
 import { getCurrentMember, updateMemberProfile } from "@/lib/memberAuth";
 import { updateStoredOrderSafely } from "@/lib/adminOrders";
+import {
+  addDateOnlyDays,
+  getDateOnlyInTimeZone,
+  isDateOnlyOnOrAfter,
+  PICKUP_TIMES,
+} from "@/lib/checkoutRules";
 
 function clean(value: unknown, max = 200) { return String(value ?? "").trim().slice(0, max); }
 function validPhone(value: string) { return /^09\d{8}$/.test(value); }
 function validEmail(value: string) { return !value || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value); }
 function validStoreId(value: string) { return /^[0-9A-Za-z]{4,10}$/.test(value); }
-function addCalendarDays(dateText: string, days: number) {
-  const [year, month, day] = dateText.split("-").map(Number);
-  return new Date(Date.UTC(year, month - 1, day + days)).toISOString().slice(0, 10);
-}
 
 async function sendLineNotification(text: string) {
   const token = process.env.LINE_CHANNEL_ACCESS_TOKEN;
@@ -118,11 +120,11 @@ export async function POST(request: Request) {
               };
             }
             const pickup = { preferredDate: clean(body.studioPickup?.preferredDate, 20), preferredTime: clean(body.studioPickup?.preferredTime, 20) };
-            const taipeiToday = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Taipei", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+            const taipeiToday = getDateOnlyInTimeZone(new Date());
             const hasCustomRoast = priced.items.some(item => item.customRoast);
-            const earliestPickupDate = addCalendarDays(taipeiToday, hasCustomRoast ? 3 : 0);
-            const allowedPickupTimes = new Set(["14:00", "14:30", "15:00", "15:30", "16:00", "16:30", "17:00", "17:30", "18:00", "18:30", "19:00", "19:30", "20:00"]);
-            if (!/^\d{4}-\d{2}-\d{2}$/.test(pickup.preferredDate) || pickup.preferredDate < earliestPickupDate) throw new Error(hasCustomRoast ? `訂單含專屬烘焙，工作室自取最早為 ${earliestPickupDate}` : "工作室自取日期不可早於今天");
+            const earliestPickupDate = addDateOnlyDays(taipeiToday, hasCustomRoast ? 3 : 0);
+            const allowedPickupTimes = new Set<string>(PICKUP_TIMES);
+            if (!isDateOnlyOnOrAfter(pickup.preferredDate, earliestPickupDate)) throw new Error(hasCustomRoast ? `訂單含專屬烘焙，工作室自取最早為 ${earliestPickupDate}` : "工作室自取日期不正確或早於今天");
             if (!allowedPickupTimes.has(pickup.preferredTime)) throw new Error("工作室自取時間僅開放下午 2:00 至晚上 8:00");
             return {
               order: { orderNumber: candidateOrderNumber, createdAt, status: "waiting_studio_pickup_confirmation", orderMode, customer, member: memberInfo, studioPickup: pickup, payment: "pickup_confirmation", delivery: "KD Coffee 工作室自取", lineNotification: { sent: false, status: "pending" }, idempotencyKey, idempotencyRequestHash: requestHash, ...priced, shipping: 0, total: priced.subtotal },

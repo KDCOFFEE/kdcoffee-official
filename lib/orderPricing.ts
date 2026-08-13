@@ -1,4 +1,11 @@
 import type { WebsiteData } from "../data/websiteData";
+import {
+  aggregateSkuQuantities,
+  isAllowedRoastLevel,
+  isCustomRoastSku,
+  resolvePreparationLabel,
+  skuIdentity,
+} from "./checkoutRules";
 import { resolveSkuOption, validateSkuDemand } from "./orderStockValidation";
 
 export type RequestedItem = {
@@ -20,8 +27,6 @@ export class OrderPriceConflictError extends Error {
   }
 }
 
-const ALLOWED_ROAST_LEVELS = ["淺焙", "淺中焙", "中焙", "中深焙"];
-
 export function priceOrderFromWebsiteData(live: WebsiteData, items: RequestedItem[]) {
   if (!Array.isArray(items) || !items.length) throw new Error("購物車沒有商品");
   let subtotal = 0;
@@ -42,21 +47,23 @@ export function priceOrderFromWebsiteData(live: WebsiteData, items: RequestedIte
     }
     const quantity = Number(item.quantity);
     if (!Number.isInteger(quantity) || quantity < 1 || quantity > 99) throw new Error("商品數量不正確");
-    const descriptor = `${option.label || ""} ${option.detail || ""} ${option.kind || ""}`;
-    const isDrip = /耳掛|drip/i.test(descriptor);
-    const isHalfPound = !isDrip && /半磅|咖啡豆|227g|beans/i.test(descriptor);
-    const preparationLabel = String(item.preparationLabel || "").trim().slice(0, 30);
+    const preparation = resolvePreparationLabel(option, item.preparationLabel);
+    if (!preparation.valid) {
+      throw new Error(`${product.name} 的咖啡豆／咖啡粉選項不正確`);
+    }
+    const preparationLabel = preparation.label;
     const customRoast = item.customRoast === true;
     let roastLevel = "";
     let roastNote = "";
-    if (customRoast) {
-      if (!isHalfPound || quantity < 4) throw new Error(`${product.name} 的專屬烘焙需同一款半磅商品達 4 包（2 磅）`);
-      roastLevel = String(item.roastLevel || "").trim();
-      if (!ALLOWED_ROAST_LEVELS.includes(roastLevel)) throw new Error(`${product.name} 請選擇正確的專屬烘焙度`);
-      roastNote = String(item.roastNote || "").trim().slice(0, 160);
-    }
     subtotal += unitPrice * quantity;
     return {
+      sourceItem: item,
+      skuIdentity: skuIdentity({
+        slug: product.slug,
+        optionId: option.id,
+        optionLabel: option.label,
+      }),
+      customRoastSku: isCustomRoastSku(option),
       pricedItem: {
         slug: product.slug,
         name: product.name,
@@ -80,6 +87,31 @@ export function priceOrderFromWebsiteData(live: WebsiteData, items: RequestedIte
       },
     };
   });
+  const aggregateQuantities = aggregateSkuQuantities(
+    resolved.map((item) => ({
+      slug: item.pricedItem.slug,
+      optionId: item.pricedItem.optionId,
+      optionLabel: item.pricedItem.optionLabel,
+      quantity: item.pricedItem.quantity,
+    })),
+  );
+
+  for (const item of resolved) {
+    if (!item.pricedItem.customRoast) continue;
+    const aggregateQuantity = aggregateQuantities.get(item.skuIdentity) ?? 0;
+    if (!item.customRoastSku || aggregateQuantity < 4) {
+      throw new Error(`${item.pricedItem.name} 的專屬烘焙需同一款半磅商品達 4 包（2 磅）`);
+    }
+
+    const roastLevel = String(item.sourceItem.roastLevel || "").trim();
+    if (!isAllowedRoastLevel(roastLevel)) {
+      throw new Error(`${item.pricedItem.name} 請選擇正確的專屬烘焙度`);
+    }
+    item.pricedItem.roastLevel = roastLevel;
+    item.pricedItem.roastNote = String(item.sourceItem.roastNote || "")
+      .trim()
+      .slice(0, 160);
+  }
   const skuDemand = validateSkuDemand(resolved.map((item) => item.skuDemand));
   const priced = resolved.map((item) => item.pricedItem);
   const shipping = subtotal >= 1500 ? 0 : 60;

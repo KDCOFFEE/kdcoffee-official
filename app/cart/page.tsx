@@ -2,13 +2,11 @@
 import Link from "next/link";
 import { useState } from "react";
 import { cartItemKey, useCart } from "@/components/commerce/CartProvider";
+import {
+  ALLOWED_ROAST_LEVELS,
+  isCustomRoastLineEligible,
+} from "@/lib/checkoutRules";
 
-const ROAST_LEVELS = ["淺焙", "淺中焙", "中焙", "中深焙"];
-
-function isCustomRoastEligible(item: { optionLabel:string; optionDetail:string; optionId?:string; quantity:number }) {
-  const descriptor = `${item.optionLabel} ${item.optionDetail} ${item.optionId || ""}`;
-  return item.quantity >= 4 && !/耳掛|drip/i.test(descriptor) && /半磅|咖啡豆|咖啡粉|227g|beans|ground/i.test(descriptor);
-}
 
 export default function CartPage() {
   const { items, subtotal, updateQuantity, removeItem, updateCustomRoast } = useCart();
@@ -20,7 +18,7 @@ export default function CartPage() {
       {items.length === 0 ? <div className="empty-cart"><h2>購物車目前是空的</h2><p>從本月作品中，選一杯想帶回家的風味。</p><Link href="/works">探索咖啡作品 →</Link></div> : <div className="cart-layout">
         <div className="cart-list">{items.map((item) => {
           const key = cartItemKey(item);
-          const eligible = isCustomRoastEligible(item);
+          const eligible = isCustomRoastLineEligible(items, item);
           const note = draftNotes[key] ?? item.roastNote ?? "";
           return <article className="cart-row" key={key}>
             <div className="cart-row-copy">
@@ -30,7 +28,7 @@ export default function CartPage() {
                 <div className="cart-roast-editor-head"><strong>已達 2 磅，可選專屬烘焙</strong><span>選填</span></div>
                 <label className="cart-roast-switch"><input type="checkbox" checked={item.customRoast === true} onChange={(e)=>updateCustomRoast(key,{enabled:e.target.checked, roastLevel:e.target.checked ? (item.roastLevel || "淺中焙") : undefined, roastNote:note})}/><span>我要使用專屬烘焙服務</span></label>
                 {item.customRoast ? <div className="cart-roast-options">
-                  <div className="cart-roast-levels">{ROAST_LEVELS.map(level=><button type="button" className={item.roastLevel===level?"active":""} key={level} onClick={()=>updateCustomRoast(key,{enabled:true,roastLevel:level,roastNote:note})}>{level}</button>)}</div>
+                  <div className="cart-roast-levels">{ALLOWED_ROAST_LEVELS.map(level=><button type="button" className={item.roastLevel===level?"active":""} key={level} onClick={()=>updateCustomRoast(key,{enabled:true,roastLevel:level,roastNote:note})}>{level}</button>)}</div>
                   <label>風味需求或備註<textarea value={note} maxLength={160} rows={2} placeholder="例如：希望甜感明顯、酸感柔和" onChange={e=>setDraftNotes(v=>({...v,[key]:e.target.value}))} onBlur={()=>updateCustomRoast(key,{enabled:true,roastLevel:item.roastLevel || "淺中焙",roastNote:note})}/></label>
                 </div> : null}
               </section> : item.customRoast ? <div className="cart-custom-roast"><b>專屬烘焙：{item.roastLevel || "待確認"}</b>{item.roastNote ? <span>{item.roastNote}</span> : null}</div> : null}

@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { isCustomRoastLineEligible } from "@/lib/checkoutRules";
 
 export type CartItem = {
   slug: string;
@@ -35,9 +36,22 @@ const LEGACY_KEYS = ["kdcoffee-cart-v13", "kdcoffee-cart-v3", "kdcoffee-cart-v2"
 export const cartItemKey = (item: Pick<CartItem, "slug" | "optionId" | "optionLabel" | "preparationLabel" | "customRoast" | "roastLevel">) =>
   `${item.slug}::${item.optionId || item.optionLabel}::${item.preparationLabel || "default"}::${item.customRoast ? item.roastLevel || "custom" : "standard"}`;
 
+function normalizeCartCustomRoast(items: CartItem[]) {
+  return items.map((item) => {
+    const eligible = isCustomRoastLineEligible(items, item);
+    if (item.customRoast === true && eligible) return item;
+    return {
+      ...item,
+      customRoast: false,
+      roastLevel: undefined,
+      roastNote: undefined,
+    };
+  });
+}
+
 function sanitizeCart(value: unknown): CartItem[] {
   if (!Array.isArray(value)) return [];
-  return value.flatMap((raw: any) => {
+  const items = value.flatMap((raw: any) => {
     if (!raw || typeof raw !== "object") return [];
     const slug = String(raw.slug || "").trim();
     const name = String(raw.name || "").trim();
@@ -46,7 +60,7 @@ function sanitizeCart(value: unknown): CartItem[] {
     const unitPrice = Number(raw.unitPrice);
     const quantity = Math.max(1, Math.min(99, Number(raw.quantity) || 1));
     if (!slug || !name || !optionLabel || !Number.isFinite(unitPrice) || unitPrice < 0) return [];
-    const customRoast = raw.customRoast === true && quantity >= 4;
+    const customRoast = raw.customRoast === true;
     return [{
       slug,
       name,
@@ -61,6 +75,7 @@ function sanitizeCart(value: unknown): CartItem[] {
       quantity,
     }];
   });
+  return normalizeCartCustomRoast(items);
 }
 
 function persist(items: CartItem[]) {
@@ -97,19 +112,27 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     addItem: (item, quantity = 1) => {
       setItems((current) => {
         const safeQuantity = Math.max(1, Math.min(99, Number(quantity) || 1));
+        const candidate = {
+          ...item,
+          quantity: safeQuantity,
+        };
+        const customRoast =
+          item.customRoast === true &&
+          isCustomRoastLineEligible([...current, candidate], candidate);
         const normalized = {
           ...item,
-          customRoast: item.customRoast === true && safeQuantity >= 4,
-          roastLevel: item.customRoast === true && safeQuantity >= 4 ? item.roastLevel : undefined,
-          roastNote: item.customRoast === true && safeQuantity >= 4 ? item.roastNote : undefined,
+          customRoast,
+          roastLevel: customRoast ? item.roastLevel : undefined,
+          roastNote: customRoast ? item.roastNote : undefined,
         };
         const key = cartItemKey(normalized);
         const found = current.find((entry) => cartItemKey(entry) === key);
-        const next = found
+        const merged = found
           ? current.map((entry) => cartItemKey(entry) === key
             ? { ...entry, quantity: Math.min(99, entry.quantity + safeQuantity) }
             : entry)
           : [...current, { ...normalized, quantity: safeQuantity }];
+        const next = normalizeCartCustomRoast(merged);
         persist(next);
         return next;
       });
@@ -117,20 +140,22 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     updateQuantity: (key, quantity) => {
       setItems((current) => {
         const safeQuantity = Math.max(1, Math.min(99, Number(quantity) || 1));
-        const next = current.map((item) => cartItemKey(item) === key
+        const updated = current.map((item) => cartItemKey(item) === key
           ? {
               ...item,
               quantity: safeQuantity,
-              ...(safeQuantity < 4 ? { customRoast: false, roastLevel: undefined, roastNote: undefined } : {}),
             }
           : item);
+        const next = normalizeCartCustomRoast(updated);
         persist(next);
         return next;
       });
     },
     removeItem: (key) => {
       setItems((current) => {
-        const next = current.filter((item) => cartItemKey(item) !== key);
+        const next = normalizeCartCustomRoast(
+          current.filter((item) => cartItemKey(item) !== key),
+        );
         persist(next);
         return next;
       });
@@ -139,8 +164,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       setItems((current) => {
         const next = current.map((item) => {
           if (cartItemKey(item) !== key) return item;
-          const descriptor = `${item.optionLabel} ${item.optionDetail} ${item.optionId || ""}`;
-          const eligible = item.quantity >= 4 && !/耳掛|drip/i.test(descriptor) && /半磅|咖啡豆|咖啡粉|227g|beans|ground/i.test(descriptor);
+          const eligible = isCustomRoastLineEligible(current, item);
           if (!eligible || !config.enabled) {
             return { ...item, customRoast: false, roastLevel: undefined, roastNote: undefined };
           }

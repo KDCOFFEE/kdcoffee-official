@@ -3,12 +3,20 @@
 import { useMemo, useState } from "react";
 import { useCart } from "./CartProvider";
 import type { CoffeeArtwork, PurchaseOption } from "@/data/websiteData";
+import {
+  ALLOWED_BEAN_PREPARATIONS,
+  ALLOWED_ROAST_LEVELS,
+  CUSTOM_ROAST_MIN_QUANTITY,
+  getSkuAggregateQuantity,
+  isCustomRoastLineEligible,
+  isCustomRoastSku,
+  isDripSku,
+} from "@/lib/checkoutRules";
 
 const PREPARATIONS = [
-  { value: "咖啡豆", label: "咖啡豆", note: "保留完整風味，適合家中有磨豆機" },
-  { value: "咖啡粉", label: "咖啡粉", note: "結帳備註沖煮方式，我們協助研磨" },
+  { value: ALLOWED_BEAN_PREPARATIONS[0], label: "咖啡豆", note: "保留完整風味，適合家中有磨豆機" },
+  { value: ALLOWED_BEAN_PREPARATIONS[1], label: "咖啡粉", note: "結帳備註沖煮方式，我們協助研磨" },
 ];
-const ROAST_LEVELS = ["淺焙", "淺中焙", "中焙", "中深焙"];
 
 function normalizeOptions(product: CoffeeArtwork): PurchaseOption[] {
   const source = Array.isArray(product.skus) && product.skus.length ? product.skus : product.purchase;
@@ -25,7 +33,7 @@ function normalizeOptions(product: CoffeeArtwork): PurchaseOption[] {
 }
 
 export default function AddToCart({ product }: { product: CoffeeArtwork }) {
-  const { addItem } = useCart();
+  const { addItem, items } = useCart();
   const options = useMemo(() => normalizeOptions(product), [product]);
   const [selectedId, setSelectedId] = useState(options[0]?.id || "");
   const [preparation, setPreparation] = useState("咖啡豆");
@@ -35,10 +43,23 @@ export default function AddToCart({ product }: { product: CoffeeArtwork }) {
   const [roastNote, setRoastNote] = useState("");
   const [notice, setNotice] = useState("");
   const option = options.find((item) => item.id === selectedId) || options[0];
-  const descriptor = option ? `${option.label} ${option.detail} ${option.kind || ""}` : "";
-  const isDrip = /耳掛|drip/i.test(descriptor);
-  const needsPreparation = !!option && !isDrip && /半磅|咖啡豆|227g|beans/i.test(descriptor);
-  const customRoastEligible = needsPreparation && quantity >= 4;
+  const needsPreparation = !!option && isCustomRoastSku(option);
+  const selectedLine = option
+    ? {
+        slug: product.slug,
+        optionId: option.id,
+        optionLabel: option.label,
+        optionDetail: option.detail,
+        kind: option.kind,
+        quantity,
+      }
+    : null;
+  const aggregateQuantity = selectedLine
+    ? getSkuAggregateQuantity([...items, selectedLine], selectedLine)
+    : 0;
+  const customRoastEligible =
+    !!selectedLine &&
+    isCustomRoastLineEligible([...items, selectedLine], selectedLine);
   const unavailable = product.purchasable === false || product.status === "sold_out" || !option || option.enabled === false || option.stock === 0;
 
   function resetCustomRoast() {
@@ -51,7 +72,7 @@ export default function AddToCart({ product }: { product: CoffeeArtwork }) {
     setSelectedId(item.id || "");
     setNotice("");
     resetCustomRoast();
-    if (/耳掛|drip/i.test(`${item.label} ${item.detail} ${item.kind || ""}`)) setPreparation("");
+    if (isDripSku(item)) setPreparation("");
     else setPreparation((current) => current || "咖啡豆");
   }
 
@@ -59,7 +80,18 @@ export default function AddToCart({ product }: { product: CoffeeArtwork }) {
     const safe = Math.max(1, Math.min(99, next));
     setQuantity(safe);
     setNotice("");
-    if (safe < 4) resetCustomRoast();
+    if (!option) return;
+    const nextLine = {
+      slug: product.slug,
+      optionId: option.id,
+      optionLabel: option.label,
+      optionDetail: option.detail,
+      kind: option.kind,
+      quantity: safe,
+    };
+    if (!isCustomRoastLineEligible([...items, nextLine], nextLine)) {
+      resetCustomRoast();
+    }
   }
 
   function commit(goCheckout: boolean) {
@@ -128,11 +160,11 @@ export default function AddToCart({ product }: { product: CoffeeArtwork }) {
         <div><h3>KD Coffee 專屬烘焙服務</h3><p>同一款半磅咖啡豆或咖啡粉達 4 包，可選擇是否調整烘焙度。一般耳掛不提供此服務。</p></div>
         <label className="custom-roast-toggle"><input type="checkbox" checked={customRoast} onChange={(event) => { setCustomRoast(event.target.checked); if (!event.target.checked) { setRoastLevel(""); setRoastNote(""); } }} /><span>我要使用專屬烘焙服務</span></label>
         {customRoast ? <div className="custom-roast-fields">
-          <fieldset><legend>選擇烘焙度</legend><div className="roast-level-options">{ROAST_LEVELS.map((level) => <label key={level} className={roastLevel === level ? "active" : ""}><input type="radio" name="roastLevel" value={level} checked={roastLevel === level} onChange={() => setRoastLevel(level)} /><span>{level}</span></label>)}</div></fieldset>
+          <fieldset><legend>選擇烘焙度</legend><div className="roast-level-options">{ALLOWED_ROAST_LEVELS.map((level) => <label key={level} className={roastLevel === level ? "active" : ""}><input type="radio" name="roastLevel" value={level} checked={roastLevel === level} onChange={() => setRoastLevel(level)} /><span>{level}</span></label>)}</div></fieldset>
           <label>風味需求或備註 <small>選填</small><textarea value={roastNote} onChange={(event) => setRoastNote(event.target.value.slice(0,160))} rows={3} placeholder="例如：希望甜感明顯、酸感柔和；實際烘焙仍會依咖啡豆特性由工作室確認。" /></label>
           <p className="custom-roast-caution">專屬烘焙會由工作室確認需求與豆款適合度；若指定烘焙度不適合該豆款，我們會先與你聯繫。</p>
         </div> : null}
-      </section> : needsPreparation ? <p className="custom-roast-progress">同一款再選 {Math.max(0, 4 - quantity)} 包，即達 2 磅並可選擇專屬烘焙服務。</p> : null}
+      </section> : needsPreparation ? <p className="custom-roast-progress">同一 SKU 再選 {Math.max(0, CUSTOM_ROAST_MIN_QUANTITY - aggregateQuantity)} 包，即達 2 磅並可選擇專屬烘焙服務。</p> : null}
 
       <button type="button" className="buy-now-button" onClick={() => commit(true)} disabled={unavailable}>立即購買，前往結帳</button>
       {notice ? <p className="commerce-live-notice" role="status">{notice}</p> : null}
