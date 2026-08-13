@@ -4,13 +4,14 @@ import Footer from "@/components/layout/Footer";
 import ProductVisualMedia from "@/components/commerce/ProductVisualMedia";
 import { getLiveWebsiteData } from "@/data/websiteData";
 import { resolveListAsset } from "@/lib/productVisualAssets";
+import { isProductListedInWorks } from "@/lib/productListing";
 
 export const metadata={title:"本月咖啡作品｜KD Coffee 咖啡藝術工坊",description:"查看 KD Coffee 本月咖啡作品、風味、價格與購買規格。第一次喝精品咖啡，也能快速找到適合自己的味道。"};
 export const dynamic="force-dynamic";
 
 export default async function WorksPage(){
   const live=await getLiveWebsiteData();
-  const products=live.menu.products.filter((p:any)=>p.inMonthlyMenu&&p.status!=="hidden"&&p.status!=="discontinued"&&(p.status!=="sold_out"||p.showWhenSoldOut!==false)).sort((a:any,b:any)=>Number(a.sort||0)-Number(b.sort||0));
+  const products=live.menu.products.filter(isProductListedInWorks).sort((a:any,b:any)=>Number(a.sort||0)-Number(b.sort||0));
   return <main className="works-page"><Header/>
     <section className="works-hero sales-catalog-hero"><p className="eyebrow">{live.menu.monthLabel}</p><h1>不用先懂咖啡，<br/>先從你喜歡的味道開始。</h1><p>{live.menu.intro}</p><div className="catalog-jump-links"><a href="#catalog">查看全部作品</a><Link href="/#beginner">不知道怎麼選？看入門推薦</Link></div></section>
     <section className="works-catalog section-light"><div className="works-catalog-head"><span>本月共 {products.length} 件作品</span><p>每張卡片都直接顯示風味、價格與供應狀態。</p></div>
