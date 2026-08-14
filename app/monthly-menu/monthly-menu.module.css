@@ -1,0 +1,508 @@
+.page {
+  --menu-ink: #231d17;
+  --menu-muted: #756b60;
+  --menu-gold: #8b7049;
+  --menu-line: rgba(54, 43, 31, 0.2);
+  --menu-paper: #f6f0e6;
+  min-width: 0;
+  color: var(--menu-ink);
+  background:
+    radial-gradient(circle at 77% 12%, rgba(174, 142, 91, 0.06), transparent 29rem),
+    linear-gradient(180deg, #faf7f0 0%, #eee7dc 100%);
+}
+
+.sheetStage {
+  padding: 98px 24px 76px;
+}
+
+.sheet {
+  width: min(100%, 840px);
+  aspect-ratio: 210 / 297;
+  margin: 0 auto;
+  padding: 42px 42px 28px;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid rgba(66, 51, 36, 0.22);
+  background:
+    radial-gradient(circle at 18% 9%, rgba(193, 160, 110, 0.07), transparent 18rem),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.52), transparent 46%),
+    var(--menu-paper);
+  box-shadow: 0 20px 60px rgba(55, 40, 24, 0.11);
+}
+
+.sheetHeader {
+  padding-bottom: 21px;
+  border-bottom: 1px solid var(--menu-ink);
+}
+
+.sheetHeader p,
+.sheetHeader > span,
+.tableHeader,
+.numberCell,
+.artworkCell > a > span,
+.flavorCell,
+.factsCell,
+.priceCell,
+.moreCell,
+.sheetFooter {
+  font-family: var(--font-sans);
+}
+
+.sheetHeader p,
+.sheetHeader > span {
+  margin: 0;
+  display: block;
+  color: var(--menu-gold);
+  font-size: 0.67rem;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  line-height: 1.5;
+}
+
+.sheetHeader > span {
+  margin-top: 2px;
+  color: var(--menu-muted);
+  font-size: 0.58rem;
+  letter-spacing: 0.18em;
+}
+
+.sheetHeader h1 {
+  margin: 22px 0 0;
+  font-family: var(--font-serif);
+  font-size: clamp(2.8rem, 5vw, 4.5rem);
+  font-weight: 400;
+  letter-spacing: -0.055em;
+  line-height: 0.94;
+}
+
+.sheetHeader small {
+  margin-top: 14px;
+  display: block;
+  color: var(--menu-muted);
+  font-family: var(--font-sans);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+}
+
+.menuTable {
+  flex: 1;
+  min-height: 0;
+  padding-top: 15px;
+  display: flex;
+  flex-direction: column;
+}
+
+.tableHeader,
+.artwork {
+  display: grid;
+  grid-template-columns: 48px minmax(180px, 1.54fr) minmax(95px, 0.9fr) minmax(104px, 0.95fr) minmax(132px, 1.1fr) 58px;
+  column-gap: 12px;
+}
+
+.tableHeader {
+  min-height: 28px;
+  align-items: center;
+  padding: 0 0 9px;
+  border-bottom: 1px solid var(--menu-line);
+  color: var(--menu-muted);
+  font-size: 0.49rem;
+  font-weight: 700;
+  letter-spacing: 0.11em;
+}
+
+.tableHeader span:last-child {
+  text-align: right;
+}
+
+.tableRows {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: repeat(8, minmax(0, 1fr));
+}
+
+.artwork {
+  min-width: 0;
+  min-height: 0;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--menu-line);
+}
+
+.artwork:last-child {
+  border-bottom: 0;
+}
+
+.numberCell {
+  min-width: 0;
+  align-self: stretch;
+  padding-top: 4px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+}
+
+.numberCell > span {
+  font-family: var(--font-serif);
+  font-size: 1.15rem;
+  line-height: 1;
+}
+
+.numberCell em {
+  padding: 2px 4px;
+  border: 1px solid rgba(92, 72, 50, 0.3);
+  color: var(--menu-muted);
+  font-size: 0.44rem;
+  font-style: normal;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+.artworkCell {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 74px minmax(0, 1fr);
+  align-items: center;
+  gap: 11px;
+}
+
+.thumbnail {
+  position: relative;
+  width: 74px;
+  height: 74px;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  background: #e9ded0;
+}
+
+.thumbnail > span {
+  color: rgba(91, 70, 48, 0.55);
+  font-family: var(--font-serif);
+  font-size: 1.15rem;
+}
+
+.image {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+
+.artworkCell > a {
+  min-width: 0;
+  color: inherit;
+  text-decoration: none;
+}
+
+.artworkCell h2 {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: clamp(1rem, 1.65vw, 1.42rem);
+  font-weight: 400;
+  letter-spacing: -0.04em;
+  line-height: 1.12;
+}
+
+.artworkCell > a > span {
+  display: block;
+  margin-top: 5px;
+  color: var(--menu-gold);
+  font-size: 0.48rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  line-height: 1.35;
+}
+
+.flavorCell,
+.factsCell,
+.priceCell,
+.moreCell {
+  min-width: 0;
+  font-size: 0.58rem;
+  line-height: 1.5;
+}
+
+.flavorCell > b,
+.factsCell > b,
+.priceCell > b,
+.moreCell > b {
+  display: none;
+}
+
+.flavorCell p,
+.factsCell p {
+  margin: 0;
+}
+
+.flavorCell p span {
+  display: inline;
+}
+
+.factsCell p {
+  display: grid;
+  gap: 1px;
+}
+
+.factsCell p span {
+  display: block;
+}
+
+.priceCell ul {
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+  list-style: none;
+}
+
+.priceCell li {
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.priceCell li span {
+  min-width: 0;
+  color: var(--menu-muted);
+}
+
+.priceCell strong {
+  flex: none;
+  font-size: 0.6rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.moreCell {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 6px;
+  text-align: right;
+}
+
+.moreCell > span {
+  color: #86594e;
+  font-size: 0.54rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.moreCell a {
+  color: var(--menu-ink);
+  font-size: 0.55rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.moreCell i {
+  margin-left: 3px;
+  font-style: normal;
+}
+
+.sheetFooter {
+  min-height: 43px;
+  padding-top: 12px;
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 16px;
+  border-top: 1px solid var(--menu-ink);
+  color: var(--menu-muted);
+  font-size: 0.54rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+}
+
+.sheetFooter > div {
+  display: flex;
+  gap: 22px;
+}
+
+.sheetFooter > a {
+  color: var(--menu-ink);
+  font-size: 0.6rem;
+  text-decoration: none;
+}
+
+.page a:focus-visible {
+  outline: 2px solid var(--menu-gold);
+  outline-offset: 3px;
+}
+
+@media (max-width: 760px) {
+  .sheetStage {
+    padding: 100px 16px 60px;
+  }
+
+  .sheet {
+    aspect-ratio: auto;
+    padding: 31px 20px 24px;
+  }
+
+  .sheetHeader {
+    padding-bottom: 18px;
+  }
+
+  .sheetHeader h1 {
+    margin-top: 18px;
+    font-size: 2.6rem;
+  }
+
+  .menuTable {
+    padding-top: 0;
+  }
+
+  .tableHeader {
+    display: none;
+  }
+
+  .tableRows {
+    display: block;
+  }
+
+  .artwork {
+    min-height: 218px;
+    padding: 17px 0;
+    display: grid;
+    grid-template-columns: 72px minmax(0, 1fr);
+    grid-template-areas:
+      "number number"
+      "artwork artwork"
+      "flavor flavor"
+      "facts facts"
+      "price price"
+      "more more";
+    row-gap: 7px;
+    column-gap: 14px;
+  }
+
+  .numberCell {
+    grid-area: number;
+    min-height: 18px;
+    padding: 0;
+    flex-direction: row;
+    align-items: center;
+  }
+
+  .numberCell > span {
+    font-size: 1.04rem;
+  }
+
+  .numberCell em {
+    font-size: 0.52rem;
+  }
+
+  .artworkCell {
+    grid-area: artwork;
+    grid-template-columns: 64px minmax(0, 1fr);
+    gap: 12px;
+  }
+
+  .thumbnail {
+    width: 64px;
+    height: 64px;
+  }
+
+  .artworkCell h2 {
+    font-size: 1.55rem;
+  }
+
+  .artworkCell > a > span {
+    font-size: 0.6rem;
+  }
+
+  .flavorCell,
+  .factsCell,
+  .priceCell,
+  .moreCell {
+    font-size: 0.72rem;
+  }
+
+  .flavorCell {
+    grid-area: flavor;
+  }
+
+  .factsCell {
+    grid-area: facts;
+  }
+
+  .flavorCell > b,
+  .factsCell > b,
+  .priceCell > b,
+  .moreCell > b {
+    margin-right: 8px;
+    display: inline;
+    color: var(--menu-gold);
+    font-size: 0.54rem;
+    letter-spacing: 0.12em;
+  }
+
+  .factsCell p {
+    display: inline;
+  }
+
+  .factsCell p span {
+    display: inline;
+  }
+
+  .factsCell p span + span::before {
+    content: "｜";
+    color: var(--menu-muted);
+  }
+
+  .priceCell {
+    grid-area: price;
+  }
+
+  .priceCell li {
+    font-size: 0.69rem;
+  }
+
+  .priceCell strong {
+    font-size: 0.72rem;
+  }
+
+  .moreCell {
+    grid-area: more;
+    align-items: flex-start;
+    justify-content: start;
+    gap: 4px;
+  }
+
+  .moreCell > b {
+    display: none;
+  }
+
+  .moreCell a {
+    font-size: 0.7rem;
+  }
+
+  .sheetFooter {
+    padding-top: 16px;
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 9px;
+    font-size: 0.58rem;
+  }
+
+  .sheetFooter > div {
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .sheetFooter > a {
+    font-size: 0.69rem;
+  }
+}

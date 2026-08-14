@@ -118,6 +118,7 @@ export type WebsiteData = {
   campaign: MonthlyCampaign;
 
   menu: {
+    monthKey?: string;
     monthLabel: string;
     title: string;
     intro: string;
