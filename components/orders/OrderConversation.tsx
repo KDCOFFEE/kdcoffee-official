@@ -3,7 +3,9 @@
 import Link from "next/link";
 import { FormEvent, useEffect, useRef, useState } from "react";
 
+import OrderTimeline from "@/components/orders/OrderTimeline";
 import type { OrderMessage } from "@/lib/orderConversation";
+import type { OrderTimelineEntry } from "@/lib/orderTimeline";
 
 type CustomerOrderSummary = {
   orderNumber: string;
@@ -29,6 +31,7 @@ function mergeMessage(messages: OrderMessage[], message: OrderMessage) {
 export default function OrderConversation({ orderNumber }: { orderNumber: string }) {
   const [order, setOrder] = useState<CustomerOrderSummary>();
   const [messages, setMessages] = useState<OrderMessage[]>([]);
+  const [timeline, setTimeline] = useState<OrderTimelineEntry[]>([]);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -48,6 +51,7 @@ export default function OrderConversation({ orderNumber }: { orderNumber: string
         if (!response.ok) throw new Error(result.error || "無法讀取訂單。");
         setOrder(result.order);
         setMessages(Array.isArray(result.messages) ? result.messages : []);
+        setTimeline(Array.isArray(result.timeline) ? result.timeline : []);
       })
       .catch((reason) => setError(reason instanceof Error ? reason.message : "無法讀取訂單。"))
       .finally(() => setLoading(false));
@@ -72,6 +76,7 @@ export default function OrderConversation({ orderNumber }: { orderNumber: string
       const result = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(result.error || "留言暫時無法送出。");
       setMessages((current) => mergeMessage(current, result.message));
+      if (Array.isArray(result.timeline)) setTimeline(result.timeline);
       setMessage("");
       actionId.current = "";
       setNotice("詢問已送出，我們看到後會盡快回覆。");
@@ -103,6 +108,8 @@ export default function OrderConversation({ orderNumber }: { orderNumber: string
         <span>{new Date(order.createdAt).toLocaleString("zh-TW")}・{order.modeLabel}</span>
         <div><b>{order.statusLabel}</b><strong>NT$ {order.total.toLocaleString("zh-TW")}</strong></div>
       </header>
+
+      <OrderTimeline entries={timeline} audience="customer" />
 
       <div className="order-conversation-thread" aria-live="polite">
         <div className="order-conversation-heading">

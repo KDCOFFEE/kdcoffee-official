@@ -23,6 +23,7 @@ import {
   validateOrderMessage,
   validateOrderMessageActionId,
 } from "@/lib/orderConversation";
+import { buildOrderTimeline } from "@/lib/orderTimeline";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -43,6 +44,7 @@ export async function GET(
   return NextResponse.json({
     messages: getOrderMessages(order),
     inquiry: assessOrderInquiryState(order),
+    timeline: buildOrderTimeline(order, "admin"),
   }, {
     headers: { "Cache-Control": "no-store" },
   });
@@ -114,6 +116,7 @@ export async function POST(
         replayed: true,
         message: saved.message,
         inquiry: assessOrderInquiryState(saved.order),
+        timeline: buildOrderTimeline(saved.order, "admin"),
       });
     }
     if (!notifyCustomer) {
@@ -122,6 +125,7 @@ export async function POST(
         saved: true,
         message: saved.message,
         inquiry: assessOrderInquiryState(saved.order),
+        timeline: buildOrderTimeline(saved.order, "admin"),
       });
     }
     if (!saved.channels.length || !saved.notificationClaimed) {
@@ -130,6 +134,7 @@ export async function POST(
         saved: true,
         message: saved.message,
         inquiry: assessOrderInquiryState(saved.order),
+        timeline: buildOrderTimeline(saved.order, "admin"),
         warning: "已保存回覆，但此訂單沒有可用通知方式。",
       });
     }
@@ -158,8 +163,10 @@ export async function POST(
       channels: saved.channels,
       results,
     });
-    await withStoredOrderUpdateLock(orderNumber, async (latestOrder, persistOrder) => {
-      await persistOrder(appendCustomerNotificationHistory(latestOrder, historyEntry));
+    const notifiedOrder = await withStoredOrderUpdateLock(orderNumber, async (latestOrder, persistOrder) => {
+      const updatedOrder = appendCustomerNotificationHistory(latestOrder, historyEntry);
+      await persistOrder(updatedOrder);
+      return updatedOrder;
     });
 
     const allSent = saved.channels.every((channel) => results[channel]?.status === "sent");
@@ -168,6 +175,7 @@ export async function POST(
       saved: true,
       message: saved.message,
       inquiry: assessOrderInquiryState(saved.order),
+      timeline: buildOrderTimeline(notifiedOrder, "admin"),
       warning: allSent ? undefined : "回覆已保存，但通知客人失敗。",
     }, { status: allSent ? 200 : 502 });
   } catch (error) {

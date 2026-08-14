@@ -16,6 +16,7 @@ import {
 } from "@/lib/orderConversation";
 import { orderStatusLabel } from "@/lib/orderInventoryPolicy";
 import { sendInternalLineNotification } from "@/lib/internalLineNotifications";
+import { buildOrderTimeline } from "@/lib/orderTimeline";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -61,6 +62,7 @@ export async function GET(
   return NextResponse.json({
     order: customerOrderDto(authorized.order),
     messages: getOrderMessages(authorized.order),
+    timeline: buildOrderTimeline(authorized.order, "customer"),
   }, { headers: { "Cache-Control": "no-store" } });
 }
 
@@ -125,6 +127,7 @@ export async function POST(
       ok: true,
       replayed: !result.appended,
       message: result.message,
+      timeline: buildOrderTimeline(result.order, "customer"),
     });
   } catch (error) {
     if (error instanceof OrderMessageValidationError || error instanceof OrderMessageRateLimitError) {

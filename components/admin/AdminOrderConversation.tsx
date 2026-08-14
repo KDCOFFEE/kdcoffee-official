@@ -2,7 +2,9 @@
 
 import { FormEvent, useEffect, useRef, useState } from "react";
 
+import OrderTimeline from "@/components/orders/OrderTimeline";
 import type { OrderMessage } from "@/lib/orderConversation";
+import type { OrderTimelineEntry } from "@/lib/orderTimeline";
 
 type InquirySummary = {
   pending: boolean;
@@ -23,6 +25,7 @@ export default function AdminOrderConversation({
   emailAvailable: boolean;
 }) {
   const [messages, setMessages] = useState<OrderMessage[]>([]);
+  const [timeline, setTimeline] = useState<OrderTimelineEntry[]>([]);
   const [reply, setReply] = useState("");
   const [notifyCustomer, setNotifyCustomer] = useState(true);
   const [lineSelected, setLineSelected] = useState(lineAvailable);
@@ -43,6 +46,7 @@ export default function AdminOrderConversation({
         const result = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(result.error || "無法讀取訂單對話。");
         setMessages(Array.isArray(result.messages) ? result.messages : []);
+        setTimeline(Array.isArray(result.timeline) ? result.timeline : []);
         if (result.inquiry) setInquiry(result.inquiry);
       })
       .catch(() => {
@@ -72,6 +76,7 @@ export default function AdminOrderConversation({
       const result = await response.json().catch(() => ({}));
       if (!response.ok && !result.saved) throw new Error(result.error || "回覆暫時無法保存。");
       if (result.message) setMessages((current) => mergeMessage(current, result.message));
+      if (Array.isArray(result.timeline)) setTimeline(result.timeline);
       if (result.inquiry) setInquiry(result.inquiry);
       setReply("");
       actionId.current = "";
@@ -107,7 +112,9 @@ export default function AdminOrderConversation({
   }
 
   return (
-    <div className="admin-order-conversation">
+    <>
+      <OrderTimeline entries={timeline} audience="admin" />
+      <div className="admin-order-conversation">
       <div className="admin-conversation-head">
         <div><p className="eyebrow dark">ORDER CONVERSATION</p><h2>訂單對話</h2></div>
         {inquiry.pending ? <b>客人有新的詢問等待處理</b> : null}
@@ -142,6 +149,7 @@ export default function AdminOrderConversation({
         {feedback ? <p className={failed ? "form-error" : "admin-save-message"} role="status">{feedback}</p> : null}
         <button className="admin-primary-button" type="submit" disabled={submitting || !reply.trim()}>{submitting ? "保存中…" : "保存回覆"}</button>
       </form>
-    </div>
+      </div>
+    </>
   );
 }
