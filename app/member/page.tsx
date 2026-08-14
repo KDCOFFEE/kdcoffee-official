@@ -494,6 +494,13 @@ export default async function MemberPage({
                         ? "LINE 已通知工作室"
                         : "訂單已保存"}
                     </small>
+
+                    <Link
+                      className="member-order-detail-link"
+                      href={`/orders/${encodeURIComponent(order.orderNumber)}`}
+                    >
+                      查看訂單／詢問此訂單
+                    </Link>
                   </div>
                 </article>
               ),

@@ -78,14 +78,25 @@ export default function CheckoutPage() {
       }) });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "訂單送出失敗");
+      if (result.orderNumber && result.orderAccessToken) {
+        sessionStorage.setItem(
+          `kdcoffee-order-access:${result.orderNumber}`,
+          result.orderAccessToken,
+        );
+      }
       if (response.status === 202) {
         setWarning(result.warning || "訂單正在確認中，請保留本頁並使用相同內容重試；系統不會重複扣庫存。");
         return;
       }
       if(result.warning) setWarning(result.warning);
+      const orderAccessToken = result.orderAccessToken || (
+        result.orderNumber
+          ? sessionStorage.getItem(`kdcoffee-order-access:${result.orderNumber}`)
+          : ""
+      );
       sessionStorage.removeItem(IDEMPOTENCY_STORAGE_KEY);
       clearCart(); sessionStorage.setItem("kdcoffee-last-order", JSON.stringify(result));
-      router.push(`/order-complete?order=${encodeURIComponent(result.orderNumber)}&line=${result.lineNotification?.sent?"sent":"pending"}&mode=${mode}`);
+      router.push(`/order-complete?order=${encodeURIComponent(result.orderNumber)}&line=${result.lineNotification?.sent?"sent":"pending"}&mode=${mode}${orderAccessToken ? `#token=${encodeURIComponent(orderAccessToken)}` : ""}`);
     } catch (e) { setError(e instanceof Error ? e.message : "訂單送出失敗"); }
     finally { setSubmitting(false); }
   }

@@ -1,5 +1,7 @@
 import Link from "next/link";
 
+import OrderCompleteConversationLink from "@/components/orders/OrderCompleteConversationLink";
+
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
 function getValue(value: string | string[] | undefined) {
@@ -65,6 +67,9 @@ export default async function OrderCompletePage({ searchParams }: { searchParams
         </div>
 
         <div className="order-success-actions">
+          {orderNumber && (
+            <OrderCompleteConversationLink orderNumber={orderNumber} />
+          )}
           <Link className="order-success-primary" href="/">返回首頁</Link>
           <Link className="order-success-secondary" href="/works">繼續選咖啡</Link>
           <a className="order-success-line" href="https://line.me/R/ti/p/@kdcoffee" target="_blank" rel="noreferrer">

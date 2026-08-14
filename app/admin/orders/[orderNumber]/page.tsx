@@ -4,7 +4,7 @@ import { isAdminAuthenticated } from "@/lib/adminAuth";
 import { assessOrderCancellation, assessOrderInventoryTransaction, orderStatusLabel, readOrder } from "@/lib/adminOrders";
 import { assessOrderStatusCompatibility } from "@/lib/orderStatusPolicy";
 import { resolveTrustedCustomerNotificationCapability } from "@/lib/customerNotifications";
-import OrderStatusForm from "@/components/admin/OrderStatusForm";
+import OrderStatusForm from "@/components/admin/OrderStatusConversationWorkspace";
 
 type OrderItem = {
   slug?: string;

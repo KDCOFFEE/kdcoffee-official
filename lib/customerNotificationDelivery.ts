@@ -57,6 +57,7 @@ export async function sendCustomerOrderEmail(input: {
   recipientEmail: string;
   orderNumber: string;
   template: CustomerNotificationTemplate;
+  subject?: string;
   photo?: CustomerNotificationPhoto;
   fetcher?: typeof fetch;
 }): Promise<CustomerNotificationResult> {
@@ -73,7 +74,7 @@ export async function sendCustomerOrderEmail(input: {
       body: JSON.stringify({
         from,
         to: [input.recipientEmail],
-        subject: `KD Coffee 訂單進度｜${input.orderNumber}`,
+        subject: input.subject || `KD Coffee 訂單進度｜${input.orderNumber}`,
         text: input.template.text,
         html: `<div style="font-family:Arial,'Noto Sans TC',sans-serif;line-height:1.75;color:#2b211b;max-width:600px;margin:auto;padding:24px"><h1 style="font-size:24px">KD Coffee</h1><p>${safeText}</p>${safePhotoUrl ? `<p><img src="${safePhotoUrl}" alt="訂單準備照片" style="max-width:100%;height:auto;border-radius:10px"></p>` : ""}</div>`,
       }),
@@ -86,4 +87,3 @@ export async function sendCustomerOrderEmail(input: {
   }
   return { status: "failed", error: "Email 通知發送失敗" };
 }
-

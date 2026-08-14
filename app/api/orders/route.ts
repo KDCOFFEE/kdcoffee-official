@@ -19,6 +19,7 @@ import {
 } from "@/lib/orderIdempotency";
 import { getCurrentMember, updateMemberProfile } from "@/lib/memberAuth";
 import { updateStoredOrderSafely } from "@/lib/adminOrders";
+import { createGuestOrderAccess } from "@/lib/orderConversation";
 import {
   addDateOnlyDays,
   getDateOnlyInTimeZone,
@@ -62,6 +63,10 @@ export async function POST(request: Request) {
     const idempotencyKey = clean(body.idempotencyKey, 100);
     if (!isValidIdempotencyKey(idempotencyKey)) throw new Error("結帳識別碼無效，請重新整理結帳頁後再試。");
     const member = await getCurrentMember();
+    const guestAccess = member ? null : createGuestOrderAccess();
+    const guestOrderAccess = guestAccess
+      ? { tokenHash: guestAccess.tokenHash, createdAt: new Date().toISOString() }
+      : undefined;
     const orderMode = clean(body.orderMode, 30) || "711_cod";
     if (!["711_cod", "studio_pickup", "corporate_gift"].includes(orderMode)) throw new Error("訂購方式不正確");
     const customer = { name: clean(body.customer?.name, 20), phone: clean(body.customer?.phone, 10), email: clean(body.customer?.email, 120), note: clean(body.customer?.note, 300) };
@@ -93,7 +98,7 @@ export async function POST(request: Request) {
       if (orderMode === "corporate_gift") {
         const gift = { companyName: clean(body.corporateGift?.companyName, 80), boxSize: clean(body.corporateGift?.boxSize, 20), boxQuantity: Number(body.corporateGift?.boxQuantity || 0), desiredDate: clean(body.corporateGift?.desiredDate, 20), invoiceTaxId: clean(body.corporateGift?.invoiceTaxId, 8), customization: clean(body.corporateGift?.customization, 600) };
         if (!gift.companyName || !["18", "24", "custom"].includes(gift.boxSize) || !Number.isInteger(gift.boxQuantity) || gift.boxQuantity < 1) throw new Error("企業送禮資料不完整");
-        order = { orderNumber, createdAt, status: "corporate_gift_inquiry", orderMode, customer, member: memberInfo, corporateGift: gift, startingPrice: 1200, idempotencyKey, idempotencyRequestHash: requestHash };
+        order = { orderNumber, createdAt, status: "corporate_gift_inquiry", orderMode, customer, member: memberInfo, guestOrderAccess, corporateGift: gift, startingPrice: 1200, idempotencyKey, idempotencyRequestHash: requestHash };
         const boxLabel = gift.boxSize === "custom" ? "其他客製數量" : `${gift.boxSize} 入耳掛禮盒`;
         lineText = `【KD Coffee 企業送禮需求】\n\n洽詢編號：${orderNumber}\n會員：${member ? `${member.displayName}（LINE 會員）` : "訪客"}\n公司／單位：${gift.companyName}\n聯絡人：${customer.name}\n手機：${customer.phone}\nEmail：${customer.email || "未提供"}\n\n希望盒型：${boxLabel}\n預估盒數：${gift.boxQuantity} 盒\n方案價格：NT$1,200 起／依需求正式報價\n希望交貨日：${gift.desiredDate || "未指定"}\n統一編號：${gift.invoiceTaxId || "未提供"}\n\n客製需求：${gift.customization || "未填寫"}\n其他備註：${customer.note || "無"}`;
         const created = await createOrderFile(orderDir(), orderNumber, order, makeOrderNumber);
@@ -115,7 +120,7 @@ export async function POST(request: Request) {
               if (!validStoreId(store.id) || !store.name || !store.address) throw new Error("請選擇正確且完整的 7-ELEVEN 門市");
               favoriteStore = store;
               return {
-                order: { orderNumber: candidateOrderNumber, createdAt, status: "waiting_merchant_create_cod_shipment", orderMode, customer, member: memberInfo, store, payment: "cash_on_delivery", delivery: "7-ELEVEN 門市取貨付款", lineNotification: { sent: false, status: "pending" }, idempotencyKey, idempotencyRequestHash: requestHash, ...priced },
+                order: { orderNumber: candidateOrderNumber, createdAt, status: "waiting_merchant_create_cod_shipment", orderMode, customer, member: memberInfo, guestOrderAccess, store, payment: "cash_on_delivery", delivery: "7-ELEVEN 門市取貨付款", lineNotification: { sent: false, status: "pending" }, idempotencyKey, idempotencyRequestHash: requestHash, ...priced },
                 lineText: `【KD Coffee 新訂單｜7-ELEVEN 取貨付款】\n\n訂單編號：${candidateOrderNumber}\n會員：${member ? `${member.displayName}（LINE 會員）` : "訪客"}\n姓名：${customer.name}\n手機：${customer.phone}\nEmail：${customer.email || "未提供"}\n\n門市店號：${store.id}\n門市名稱：${store.name}\n門市地址：${store.address}\n\n訂購內容：\n${itemLines}\n\n商品小計：NT$ ${priced.subtotal.toLocaleString("zh-TW")}\n運費：${priced.shipping ? `NT$ ${priced.shipping}` : "免運"}\n取貨付款總額：NT$ ${priced.total.toLocaleString("zh-TW")}\n\n備註：${customer.note || "無"}\n\n下一步：請核對門市資料後，建立 7-ELEVEN 取貨付款寄件單。`,
               };
             }
@@ -127,7 +132,7 @@ export async function POST(request: Request) {
             if (!isDateOnlyOnOrAfter(pickup.preferredDate, earliestPickupDate)) throw new Error(hasCustomRoast ? `訂單含專屬烘焙，工作室自取最早為 ${earliestPickupDate}` : "工作室自取日期不正確或早於今天");
             if (!allowedPickupTimes.has(pickup.preferredTime)) throw new Error("工作室自取時間僅開放下午 2:00 至晚上 8:00");
             return {
-              order: { orderNumber: candidateOrderNumber, createdAt, status: "waiting_studio_pickup_confirmation", orderMode, customer, member: memberInfo, studioPickup: pickup, payment: "pickup_confirmation", delivery: "KD Coffee 工作室自取", lineNotification: { sent: false, status: "pending" }, idempotencyKey, idempotencyRequestHash: requestHash, ...priced, shipping: 0, total: priced.subtotal },
+              order: { orderNumber: candidateOrderNumber, createdAt, status: "waiting_studio_pickup_confirmation", orderMode, customer, member: memberInfo, guestOrderAccess, studioPickup: pickup, payment: "pickup_confirmation", delivery: "KD Coffee 工作室自取", lineNotification: { sent: false, status: "pending" }, idempotencyKey, idempotencyRequestHash: requestHash, ...priced, shipping: 0, total: priced.subtotal },
               lineText: `【KD Coffee 新訂單｜工作室自取】\n\n訂單編號：${candidateOrderNumber}\n會員：${member ? `${member.displayName}（LINE 會員）` : "訪客"}\n姓名：${customer.name}\n手機：${customer.phone}\nEmail：${customer.email || "未提供"}\n\n希望取貨日期：${pickup.preferredDate || "未指定"}\n希望時段：${pickup.preferredTime || "由工作室聯絡確認"}\n\n訂購內容：\n${itemLines}\n\n訂單總額：NT$ ${priced.subtotal.toLocaleString("zh-TW")}\n備註：${customer.note || "無"}`,
             };
           },
@@ -159,6 +164,7 @@ export async function POST(request: Request) {
       return NextResponse.json({
         orderNumber: core.orderNumber,
         orderMode: core.orderMode,
+        orderAccessToken: guestAccess?.token,
         saved: true,
         pending: true,
         lineNotification: { sent: false, reason: "inventory finalization pending" },
@@ -197,7 +203,7 @@ export async function POST(request: Request) {
     }
     if (!lineResult.sent) console.error(`Order ${orderNumber} saved but LINE notification failed:`, lineResult.reason);
 
-    return NextResponse.json({ orderNumber, orderMode, saved: true, lineNotification: lineResult, warning: warnings.length ? warnings.join(" ") : undefined });
+    return NextResponse.json({ orderNumber, orderMode, saved: true, orderAccessToken: guestAccess?.token, lineNotification: lineResult, warning: warnings.length ? warnings.join(" ") : undefined });
   } catch (error) {
     const serverError = error instanceof OrderFileCreationError || error instanceof OrderFileNotFoundError || error instanceof OrderFileValidationError || error instanceof InventoryTransactionError || error instanceof FileLockTimeoutError || error instanceof OrderIdempotencyError;
     return NextResponse.json(
