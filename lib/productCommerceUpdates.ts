@@ -10,7 +10,10 @@ export const PRODUCT_METADATA_FIELDS = [
   "mood",
   "sort",
   "subtitle",
+  "tag",
 ] as const;
+
+export const PRODUCT_TAG_MAX_LENGTH = 12;
 
 export const PRODUCT_SENSITIVE_FIELDS = [
   "status",
@@ -167,6 +170,20 @@ function normalizeMetadataField(field: ProductMetadataField, value: unknown) {
     return value.map((item) => item.trim()).filter(Boolean);
   }
   if (field === "sort") return normalizeNonNegativeInteger(value, "商品排序");
+  if (field === "tag") {
+    const tag = normalizeString(value, "作品標籤").trim();
+    if (Array.from(tag).length > PRODUCT_TAG_MAX_LENGTH) {
+      throw new ProductCommerceUpdateError(`作品標籤不可超過 ${PRODUCT_TAG_MAX_LENGTH} 個字。`);
+    }
+    const containsUnsafeCharacter = tag.includes("<") || tag.includes(">") || Array.from(tag).some((character) => {
+      const codePoint = character.codePointAt(0) ?? 0;
+      return codePoint <= 31 || codePoint === 127;
+    });
+    if (containsUnsafeCharacter) {
+      throw new ProductCommerceUpdateError("作品標籤不可包含 HTML 標記或控制字元。");
+    }
+    return tag;
+  }
   return normalizeString(value, `商品欄位 ${field}`);
 }
 
