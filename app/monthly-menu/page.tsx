@@ -3,6 +3,7 @@ import Link from "next/link";
 import ProductVisualMedia from "@/components/commerce/ProductVisualMedia";
 import Footer from "@/components/layout/Footer";
 import Header from "@/components/layout/Header";
+import MonthlyMenuPrintButton from "@/components/monthly-menu/MonthlyMenuPrintButton";
 import { getLiveWebsiteData, type CoffeeArtwork } from "@/data/websiteData";
 import { isProductListedInWorks } from "@/lib/productListing";
 import { resolveListAsset } from "@/lib/productVisualAssets";
@@ -83,34 +84,42 @@ export default async function MonthlyMenuPage() {
       <Header />
 
       <div className={styles.sheetStage}>
-        <article className={styles.sheet} aria-labelledby="monthly-menu-title">
-          <header className={styles.sheetHeader}>
-            <p>KD COFFEE</p>
-            <span>MONTHLY SELECTION</span>
-            <h1 id="monthly-menu-title">{month.title}</h1>
-            <small aria-label={month.label}>{month.issue} · {products.length} 件作品</small>
-          </header>
+        <div className={styles.sheetPreview}>
+          <article className={styles.sheet} aria-labelledby="monthly-menu-title">
+            <header className={styles.sheetHeader}>
+              <div className={styles.headerCopy}>
+                <p>KD COFFEE</p>
+                <span>MONTHLY SELECTION</span>
+                <h1 id="monthly-menu-title">{month.title}</h1>
+                <small aria-label={month.label}>{month.issue} · {products.length} 件作品</small>
+              </div>
+              <div className={styles.monthlyVisual} aria-label="當月主題視覺">
+                <span className={styles.visualArc} aria-hidden="true" />
+                <span className={styles.visualSun} aria-hidden="true" />
+                <span className={styles.visualStem} aria-hidden="true" />
+              </div>
+            </header>
 
-          <section className={styles.menuTable} aria-label={`${month.title}作品清單`}>
-            <div className={styles.tableHeader} aria-hidden="true">
-              <span>NO.</span>
-              <span>ARTWORK</span>
-              <span>FLAVOR</span>
-              <span>ORIGIN / PROCESS / ROAST</span>
-              <span>PRICE</span>
-              <span>MORE</span>
-            </div>
+            <section className={styles.menuTable} aria-label={`${month.title}作品清單`}>
+              <div className={styles.tableHeader} aria-hidden="true">
+                <span>NO.</span>
+                <span>ARTWORK</span>
+                <span>FLAVOR</span>
+                <span>ORIGIN / PROCESS / ROAST</span>
+                <span>PRICE</span>
+                <span>MORE</span>
+              </div>
 
-            <div className={styles.tableRows}>
-              {products.map((product, index) => {
-                const listAsset = resolveListAsset(product);
-                const flavors = product.flavors?.filter(Boolean).slice(0, 4) || [];
-                const purchases = getDisplayPurchases(product);
-                const soldOut = isSoldOut(product);
-                const headingId = `monthly-artwork-${product.slug}`;
+              <div className={styles.tableRows}>
+                {products.map((product, index) => {
+                  const listAsset = resolveListAsset(product);
+                  const flavors = product.flavors?.filter(Boolean).slice(0, 4) || [];
+                  const purchases = getDisplayPurchases(product);
+                  const soldOut = isSoldOut(product);
+                  const headingId = `monthly-artwork-${product.slug}`;
 
-                return (
-                  <article className={styles.artwork} aria-labelledby={headingId} key={product.slug}>
+                  return (
+                    <article className={styles.artwork} aria-labelledby={headingId} key={product.slug}>
                     <div className={styles.numberCell}>
                       <span>{String(index + 1).padStart(2, "0")}</span>
                       {product.tag?.trim() ? <em>{product.tag.trim()}</em> : null}
@@ -170,20 +179,26 @@ export default async function MonthlyMenuPage() {
                       {soldOut ? <span>暫時售完</span> : null}
                       <Link href={`/works/${product.slug}`}>查看作品 <i aria-hidden="true">→</i></Link>
                     </div>
-                  </article>
-                );
-              })}
-            </div>
-          </section>
+                    </article>
+                  );
+                })}
+              </div>
+            </section>
 
-          <footer className={styles.sheetFooter}>
-            <div>
-              <span>KD COFFEE · 1962</span>
-              <span>www.kdcoffee1962.com</span>
-            </div>
-            <Link href="/works">查看全部咖啡 <span aria-hidden="true">→</span></Link>
-          </footer>
-        </article>
+            <footer className={styles.sheetFooter}>
+              <div>
+                <span>KD COFFEE · 1962</span>
+                <span>www.kdcoffee1962.com</span>
+              </div>
+              <Link href="/works">查看全部咖啡 <span aria-hidden="true">→</span></Link>
+            </footer>
+          </article>
+        </div>
+
+        <div className={styles.printActions}>
+          <MonthlyMenuPrintButton />
+          <Link href="/works">查看全部咖啡 <span aria-hidden="true">→</span></Link>
+        </div>
       </div>
 
       <Footer />

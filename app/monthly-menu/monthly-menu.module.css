@@ -15,8 +15,13 @@
   padding: 98px 24px 76px;
 }
 
-.sheet {
+.sheetPreview {
   width: min(100%, 840px);
+  margin: 0 auto;
+}
+
+.sheet {
+  width: 840px;
   aspect-ratio: 210 / 297;
   margin: 0 auto;
   padding: 42px 42px 28px;
@@ -31,12 +36,19 @@
 }
 
 .sheetHeader {
+  display: grid;
+  grid-template-columns: minmax(0, 1.62fr) minmax(0, 1fr);
+  gap: 24px;
   padding-bottom: 21px;
   border-bottom: 1px solid var(--menu-ink);
 }
 
+.headerCopy {
+  min-width: 0;
+}
+
 .sheetHeader p,
-.sheetHeader > span,
+.sheetHeader .headerCopy > span,
 .tableHeader,
 .numberCell,
 .artworkCell > a > span,
@@ -59,7 +71,7 @@
   line-height: 1.5;
 }
 
-.sheetHeader > span {
+.sheetHeader .headerCopy > span {
   margin-top: 2px;
   color: var(--menu-muted);
   font-size: 0.58rem;
@@ -83,6 +95,53 @@
   font-size: 0.68rem;
   font-weight: 700;
   letter-spacing: 0.14em;
+}
+
+.monthlyVisual {
+  position: relative;
+  min-height: 126px;
+  overflow: hidden;
+  align-self: stretch;
+  border-left: 1px solid rgba(139, 112, 73, 0.18);
+  background:
+    radial-gradient(circle at 73% 31%, rgba(151, 112, 62, 0.14) 0 10%, transparent 10.5%),
+    radial-gradient(ellipse at 62% 70%, rgba(166, 129, 80, 0.08) 0 29%, transparent 29.5%);
+}
+
+.visualArc,
+.visualSun,
+.visualStem {
+  position: absolute;
+  display: block;
+  pointer-events: none;
+}
+
+.visualArc {
+  width: 150px;
+  height: 150px;
+  right: -53px;
+  bottom: -77px;
+  border: 1px solid rgba(129, 95, 51, 0.33);
+  border-radius: 50%;
+}
+
+.visualSun {
+  width: 45px;
+  height: 45px;
+  right: 45px;
+  top: 22px;
+  border: 1px solid rgba(129, 95, 51, 0.4);
+  border-radius: 50%;
+}
+
+.visualStem {
+  width: 1px;
+  height: 102px;
+  right: 82px;
+  bottom: -19px;
+  background: linear-gradient(180deg, transparent, rgba(129, 95, 51, 0.36));
+  transform: rotate(-26deg);
+  transform-origin: bottom;
 }
 
 .menuTable {
@@ -119,7 +178,7 @@
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-rows: repeat(8, minmax(0, 1fr));
+  grid-auto-rows: minmax(0, 1fr);
 }
 
 .artwork {
@@ -336,6 +395,34 @@
   text-decoration: none;
 }
 
+.printActions {
+  margin: 28px auto 0;
+  display: flex;
+  justify-content: center;
+  gap: 14px;
+}
+
+.printActions button,
+.printActions a {
+  min-height: 42px;
+  padding: 0 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--menu-line);
+  background: transparent;
+  color: var(--menu-ink);
+  font-family: var(--font-sans);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-decoration: none;
+}
+
+.printActions button {
+  cursor: pointer;
+}
+
 .page a:focus-visible {
   outline: 2px solid var(--menu-gold);
   outline-offset: 3px;
@@ -346,163 +433,75 @@
     padding: 100px 16px 60px;
   }
 
+  .sheetPreview {
+    width: 100%;
+    aspect-ratio: 210 / 297;
+    contain: size;
+    container-type: inline-size;
+  }
+
   .sheet {
-    aspect-ratio: auto;
-    padding: 31px 20px 24px;
+    margin: 0;
+    transform: scale(calc(100cqw / 840px));
+    transform-origin: top left;
   }
 
-  .sheetHeader {
-    padding-bottom: 18px;
+  .printActions {
+    margin-top: 22px;
+    flex-direction: column;
   }
 
-  .sheetHeader h1 {
-    margin-top: 18px;
-    font-size: 2.6rem;
+  .printActions button,
+  .printActions a {
+    width: 100%;
+    min-height: 44px;
+    font-size: 0.74rem;
+  }
+}
+
+@page {
+  size: A4 portrait;
+  margin: 0;
+}
+
+@media print {
+
+  html,
+  body {
+    width: 210mm;
+    height: 297mm;
+    margin: 0;
+    background: #fff;
   }
 
-  .menuTable {
-    padding-top: 0;
+  .page {
+    background: var(--menu-paper);
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
 
-  .tableHeader {
-    display: none;
+  .page > header,
+  .page > footer,
+  .printActions {
+    display: none !important;
   }
 
-  .tableRows {
-    display: block;
-  }
-
-  .artwork {
-    min-height: 218px;
-    padding: 17px 0;
-    display: grid;
-    grid-template-columns: 72px minmax(0, 1fr);
-    grid-template-areas:
-      "number number"
-      "artwork artwork"
-      "flavor flavor"
-      "facts facts"
-      "price price"
-      "more more";
-    row-gap: 7px;
-    column-gap: 14px;
-  }
-
-  .numberCell {
-    grid-area: number;
-    min-height: 18px;
+  .sheetStage,
+  .sheetPreview {
+    width: 210mm;
+    height: 297mm;
+    margin: 0;
     padding: 0;
-    flex-direction: row;
-    align-items: center;
   }
 
-  .numberCell > span {
-    font-size: 1.04rem;
-  }
-
-  .numberCell em {
-    font-size: 0.52rem;
-  }
-
-  .artworkCell {
-    grid-area: artwork;
-    grid-template-columns: 64px minmax(0, 1fr);
-    gap: 12px;
-  }
-
-  .thumbnail {
-    width: 64px;
-    height: 64px;
-  }
-
-  .artworkCell h2 {
-    font-size: 1.55rem;
-  }
-
-  .artworkCell > a > span {
-    font-size: 0.6rem;
-  }
-
-  .flavorCell,
-  .factsCell,
-  .priceCell,
-  .moreCell {
-    font-size: 0.72rem;
-  }
-
-  .flavorCell {
-    grid-area: flavor;
-  }
-
-  .factsCell {
-    grid-area: facts;
-  }
-
-  .flavorCell > b,
-  .factsCell > b,
-  .priceCell > b,
-  .moreCell > b {
-    margin-right: 8px;
-    display: inline;
-    color: var(--menu-gold);
-    font-size: 0.54rem;
-    letter-spacing: 0.12em;
-  }
-
-  .factsCell p {
-    display: inline;
-  }
-
-  .factsCell p span {
-    display: inline;
-  }
-
-  .factsCell p span + span::before {
-    content: "｜";
-    color: var(--menu-muted);
-  }
-
-  .priceCell {
-    grid-area: price;
-  }
-
-  .priceCell li {
-    font-size: 0.69rem;
-  }
-
-  .priceCell strong {
-    font-size: 0.72rem;
-  }
-
-  .moreCell {
-    grid-area: more;
-    align-items: flex-start;
-    justify-content: start;
-    gap: 4px;
-  }
-
-  .moreCell > b {
-    display: none;
-  }
-
-  .moreCell a {
-    font-size: 0.7rem;
-  }
-
-  .sheetFooter {
-    padding-top: 16px;
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 9px;
-    font-size: 0.58rem;
-  }
-
-  .sheetFooter > div {
-    flex-direction: column;
-    gap: 4px;
-  }
-
-  .sheetFooter > a {
-    font-size: 0.69rem;
+  .sheet {
+    width: 210mm;
+    height: 297mm;
+    margin: 0;
+    box-sizing: border-box;
+    box-shadow: none;
+    break-inside: avoid;
+    page-break-inside: avoid;
+    page-break-after: avoid;
   }
 }
