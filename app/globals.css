@@ -339,6 +339,8 @@
 .delivery-notice{padding:22px;border:1px solid rgba(63,43,33,.16);border-radius:16px;background:#faf7f1}
 .delivery-notice strong{display:block;font-size:1.05rem;color:#2d2019;margin-bottom:8px}
 .delivery-notice p{margin:0;line-height:1.75;color:#65564e}
+.checkout-auth-intro{display:grid;gap:18px;padding:22px;border:1px solid rgba(63,43,33,.16);border-radius:16px;background:#faf7f1}.checkout-auth-intro strong{display:block;font-size:1.05rem;color:#2d2019;margin-bottom:8px}.checkout-auth-intro p{margin:0;line-height:1.75;color:#65564e}.checkout-login-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.checkout-login-options .line-login-button,.email-login-button{display:flex;align-items:center;justify-content:center;min-width:0;min-height:52px;margin:0;padding:12px 14px;border-radius:12px;text-align:center;text-decoration:none;font-size:13px;font-weight:800}.email-login-button{border:1px solid #6f5540;background:#fff;color:#3a2b21}.checkout-guest-divider{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:12px;color:#8c7a6b;font-size:12px}.checkout-guest-divider::before,.checkout-guest-divider::after{content:"";height:1px;background:#dfd2c3}.checkout-guest-intro{padding-top:2px}.checkout-guest-intro strong{margin-bottom:4px}.checkout-member-notice{margin-bottom:2px}
+@media(max-width:620px){.checkout-auth-intro{padding:18px}.checkout-login-options{grid-template-columns:1fr}}
 .order-complete-note{font-size:.92rem;color:#76665c}
 
 /* v6.2 取貨付款與門市資料 */

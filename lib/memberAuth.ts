@@ -505,13 +505,7 @@ export function randomState() {
 export function safeReturnPath(
   value: string | null | undefined,
 ) {
-  if (
-    !value ||
-    !value.startsWith("/") ||
-    value.startsWith("//")
-  ) {
-    return "/member";
-  }
-
-  return value.slice(0, 300);
+  return value === "/checkout" || value === "/member"
+    ? value
+    : "/member";
 }

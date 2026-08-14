@@ -98,10 +98,31 @@ export default function CheckoutPage() {
         <div className="checkout-form">
           <section className="form-card">
             <div className="form-card-head"><span>01</span><h2>聯絡人資料</h2></div>
-            {memberLoaded && (member ? <div className="delivery-notice"><strong>已使用 LINE 會員登入：{member.displayName}</strong><p>已自動帶入上次使用的姓名、手機與常用門市；本次修改後會同步更新會員資料。</p></div> : <div className="delivery-notice"><strong>登入 LINE，回購更快速</strong><p>可保存聯絡資料、常用門市與訂單紀錄。沒有登入也可以直接完成購買。</p><a className="line-login-button" href="/api/auth/line/login?returnTo=/checkout">使用 LINE 登入／註冊</a></div>)}
+            {memberLoaded && (member ? (
+              <div className="delivery-notice checkout-member-notice">
+                <strong>已登入會員：{member.displayName || "KD Coffee 會員"}</strong>
+                <p>已自動帶入常用聯絡資料與門市；本次修改後會同步更新會員資料。</p>
+              </div>
+            ) : (
+              <div className="checkout-auth-intro">
+                <div>
+                  <strong>登入會員，結帳更快速</strong>
+                  <p>可保存聯絡資料、常用門市與訂單紀錄。不登入也可以直接以訪客身分購買。</p>
+                </div>
+                <div className="checkout-login-options">
+                  <a className="line-login-button" href="/api/auth/line/login?returnTo=/checkout">使用 LINE 登入／註冊</a>
+                  <Link className="email-login-button" href="/member?returnTo=/checkout">Email 登入／註冊</Link>
+                </div>
+                <div className="checkout-guest-divider" aria-hidden="true"><span>或</span></div>
+                <div className="checkout-guest-intro">
+                  <strong>訪客直接購買</strong>
+                  <p>無需登入，填寫以下資料即可完成結帳。</p>
+                </div>
+              </div>
+            ))}
             <label>姓名<input name="name" value={name} onChange={e=>setName(e.target.value)} required maxLength={20} autoComplete="name" placeholder="請填寫真實姓名" /></label>
             <label>手機號碼<input name="phone" value={phone} onChange={e=>setPhone(e.target.value.replace(/\D/g,"").slice(0,10))} required inputMode="tel" pattern="09[0-9]{8}" autoComplete="tel" placeholder="例如 0912345678" /></label>
-            <label>Email <small>選填</small><input name="email" value={email} onChange={e=>setEmail(e.target.value)} type="email" autoComplete="email" placeholder="用於日後寄送訂單通知" /></label>
+            <label>Email <small>選填</small><input name="email" value={email} onChange={e=>setEmail(e.target.value)} type="email" autoComplete="email" placeholder="name@example.com" /><span className="field-help">用於訂單相關通知</span></label>
           </section>
           <section className="form-card"><div className="form-card-head"><span>02</span><h2>取貨方式</h2></div><div className="delivery-mode-grid">
             <label className={mode === "711_cod" ? "delivery-mode active" : "delivery-mode"}><input type="radio" name="orderMode" value="711_cod" checked={mode === "711_cod"} onChange={()=>setMode("711_cod")} /><b>7-ELEVEN 取貨付款</b><span>商品到店後再付款取貨</span></label>

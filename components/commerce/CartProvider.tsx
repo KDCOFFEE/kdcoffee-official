@@ -38,7 +38,7 @@ export const cartItemKey = (item: Pick<CartItem, "slug" | "optionId" | "optionLa
 
 function normalizeCartCustomRoast(items: CartItem[]) {
   return items.map((item) => {
-    const eligible = isCustomRoastLineEligible(items, item);
+    const eligible = isCustomRoastLineEligible(item);
     if (item.customRoast === true && eligible) return item;
     return {
       ...item,
@@ -118,7 +118,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         };
         const customRoast =
           item.customRoast === true &&
-          isCustomRoastLineEligible([...current, candidate], candidate);
+          isCustomRoastLineEligible(candidate);
         const normalized = {
           ...item,
           customRoast,
@@ -164,7 +164,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       setItems((current) => {
         const next = current.map((item) => {
           if (cartItemKey(item) !== key) return item;
-          const eligible = isCustomRoastLineEligible(current, item);
+          const eligible = isCustomRoastLineEligible(item);
           if (!eligible || !config.enabled) {
             return { ...item, customRoast: false, roastLevel: undefined, roastNote: undefined };
           }

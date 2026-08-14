@@ -2,7 +2,7 @@ import Link from "next/link";
 import { promises as fs } from "fs";
 import path from "path";
 
-import { getCurrentMember } from "@/lib/memberAuth";
+import { getCurrentMember, safeReturnPath } from "@/lib/memberAuth";
 import { getOrdersDir } from "@/lib/storagePaths";
 
 import MemberProfileForm from "@/components/member/MemberProfileForm";
@@ -212,10 +212,12 @@ export default async function MemberPage({
 }: {
   searchParams: Promise<{
     error?: string;
+    returnTo?: string;
   }>;
 }) {
   const params =
     await searchParams;
+  const returnTo = safeReturnPath(params.returnTo);
 
   const member =
     await getCurrentMember();
@@ -247,12 +249,12 @@ export default async function MemberPage({
 
           <a
             className="line-login-button"
-            href="/api/auth/line/login?returnTo=/member"
+            href={`/api/auth/line/login?returnTo=${encodeURIComponent(returnTo)}`}
           >
             使用 LINE 登入／註冊
           </a>
 
-          <EmailAuthForms />
+          <EmailAuthForms returnTo={returnTo} />
 
           <Link
             className="text-link"

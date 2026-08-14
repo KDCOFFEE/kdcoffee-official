@@ -40,7 +40,6 @@ type SkuDescriptor = {
 export type SkuQuantityLine = SkuDescriptor & {
   slug?: unknown;
   optionId?: unknown;
-  preparationLabel?: unknown;
   quantity?: unknown;
 };
 
@@ -68,52 +67,21 @@ export function isDripSku(value: SkuDescriptor) {
 }
 
 export function isCustomRoastSku(value: SkuDescriptor) {
-  if (isDripSku(value)) return false;
   if (value.kind === "beans") return true;
+  if (isDripSku(value)) return false;
   return /半磅|咖啡豆|咖啡粉|227g|beans|ground/i.test(
     descriptorText(value),
   );
 }
 
-export function productionBatchIdentity(value: SkuQuantityLine) {
-  const slug = String(value.slug ?? "").trim();
-  const optionId = String(value.optionId ?? "").trim();
-  const preparationLabel = String(value.preparationLabel ?? "").trim();
-  return slug && optionId && preparationLabel
-    ? `${slug}::id:${optionId}::preparation:${preparationLabel}`
-    : "";
-}
-
-export function aggregateProductionBatchQuantities(
-  lines: readonly SkuQuantityLine[],
-) {
-  const quantities = new Map<string, number>();
-  for (const line of lines) {
-    const identity = productionBatchIdentity(line);
-    const quantity = Number(line.quantity);
-    if (!identity || !Number.isInteger(quantity) || quantity < 1) continue;
-    quantities.set(identity, (quantities.get(identity) ?? 0) + quantity);
-  }
-  return quantities;
-}
-
-export function getProductionBatchQuantity(
-  lines: readonly SkuQuantityLine[],
-  target: SkuQuantityLine,
-) {
-  const identity = productionBatchIdentity(target);
-  return identity
-    ? aggregateProductionBatchQuantities(lines).get(identity) ?? 0
-    : 0;
-}
-
 export function isCustomRoastLineEligible(
-  lines: readonly SkuQuantityLine[],
-  target: SkuQuantityLine,
+  line: SkuQuantityLine,
 ) {
+  const quantity = Number(line.quantity);
   return (
-    isCustomRoastSku(target) &&
-    getProductionBatchQuantity(lines, target) >= CUSTOM_ROAST_MIN_QUANTITY
+    isCustomRoastSku(line) &&
+    Number.isInteger(quantity) &&
+    quantity >= CUSTOM_ROAST_MIN_QUANTITY
   );
 }
 

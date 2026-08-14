@@ -18,7 +18,7 @@ export default function CartPage() {
       {items.length === 0 ? <div className="empty-cart"><h2>購物車目前是空的</h2><p>從本月作品中，選一杯想帶回家的風味。</p><Link href="/works">探索咖啡作品 →</Link></div> : <div className="cart-layout">
         <div className="cart-list">{items.map((item) => {
           const key = cartItemKey(item);
-          const eligible = isCustomRoastLineEligible(items, item);
+          const eligible = isCustomRoastLineEligible(item);
           const note = draftNotes[key] ?? item.roastNote ?? "";
           return <article className="cart-row" key={key}>
             <div className="cart-row-copy">

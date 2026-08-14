@@ -7,7 +7,11 @@ import { useCart } from "@/components/commerce/CartProvider";
 
 type Mode = "login" | "register" | "forgot";
 
-export default function EmailAuthForms() {
+export default function EmailAuthForms({
+  returnTo = "/member",
+}: {
+  returnTo?: string;
+}) {
   const router = useRouter();
   const { items, ready } = useCart();
   const [mode, setMode] = useState<Mode>("login");
@@ -72,7 +76,11 @@ export default function EmailAuthForms() {
         return;
       }
 
-      window.location.assign("/member");
+      const destination =
+        returnTo === "/checkout" || returnTo === "/member"
+          ? returnTo
+          : "/member";
+      window.location.assign(destination);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "操作失敗，請稍後再試");
       setSubmitting(false);
