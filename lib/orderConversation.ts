@@ -17,6 +17,21 @@ export type OrderMessage = {
   message: string;
 };
 
+export type OrderConversationState = {
+  resolvedThroughMessageId?: string;
+  resolvedAt?: string;
+  resolvedBy?: "admin";
+  lastAlertedMessageId?: string;
+  lastAlertedAt?: string;
+};
+
+export type OrderInquiryAssessment = {
+  pending: boolean;
+  latestCustomerMessage?: OrderMessage;
+  latestAdminMessage?: OrderMessage;
+  unresolvedCustomerMessages: number;
+};
+
 export type OrderConversationAccess = "member" | "guest";
 
 const ACTION_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -104,6 +119,125 @@ export function validateOrderMessage(value: unknown) {
 
 export function getOrderMessages(order: StoredOrder): OrderMessage[] {
   return Array.isArray(order.orderMessages) ? order.orderMessages as OrderMessage[] : [];
+}
+
+type PositionedMessage = {
+  message: OrderMessage;
+  index: number;
+};
+
+function comparePositionedMessages(left: PositionedMessage, right: PositionedMessage) {
+  const leftTime = Date.parse(left.message.createdAt);
+  const rightTime = Date.parse(right.message.createdAt);
+  if (Number.isFinite(leftTime) && Number.isFinite(rightTime) && leftTime !== rightTime) {
+    return leftTime - rightTime;
+  }
+  return left.index - right.index;
+}
+
+function latestMessageByAuthor(messages: OrderMessage[], authorType: OrderMessageAuthor) {
+  let latest: PositionedMessage | undefined;
+  messages.forEach((message, index) => {
+    if (message?.authorType !== authorType) return;
+    const candidate = { message, index };
+    if (!latest || comparePositionedMessages(candidate, latest) > 0) latest = candidate;
+  });
+  return latest;
+}
+
+function storedConversationState(order: StoredOrder): OrderConversationState {
+  return order.orderConversationState && typeof order.orderConversationState === "object"
+    ? order.orderConversationState as OrderConversationState
+    : {};
+}
+
+export function assessOrderInquiryState(order: StoredOrder): OrderInquiryAssessment {
+  const messages = getOrderMessages(order);
+  const customers = messages
+    .map((message, index) => ({ message, index }))
+    .filter((entry) => entry.message?.authorType === "customer");
+  const latestCustomer = latestMessageByAuthor(messages, "customer");
+  const latestAdmin = latestMessageByAuthor(messages, "admin");
+  const resolvedThroughMessageId = storedConversationState(order).resolvedThroughMessageId;
+  const resolvedThrough = resolvedThroughMessageId
+    ? messages
+        .map((message, index) => ({ message, index }))
+        .find((entry) => entry.message?.id === resolvedThroughMessageId)
+    : undefined;
+
+  let resolutionBoundary = latestAdmin;
+  if (
+    resolvedThrough &&
+    (!resolutionBoundary || comparePositionedMessages(resolvedThrough, resolutionBoundary) > 0)
+  ) {
+    resolutionBoundary = resolvedThrough;
+  }
+
+  const unresolvedCustomerMessages = resolutionBoundary
+    ? customers.filter((entry) => comparePositionedMessages(entry, resolutionBoundary) > 0).length
+    : customers.length;
+
+  return {
+    pending: unresolvedCustomerMessages > 0,
+    latestCustomerMessage: latestCustomer?.message,
+    latestAdminMessage: latestAdmin?.message,
+    unresolvedCustomerMessages,
+  };
+}
+
+export function listPendingOrderInquiries(orders: StoredOrder[]) {
+  return orders
+    .map((order) => ({ order, inquiry: assessOrderInquiryState(order) }))
+    .filter((entry) => entry.inquiry.pending && entry.inquiry.latestCustomerMessage)
+    .sort((left, right) => {
+      const leftTime = Date.parse(left.inquiry.latestCustomerMessage?.createdAt || "");
+      const rightTime = Date.parse(right.inquiry.latestCustomerMessage?.createdAt || "");
+      if (Number.isFinite(leftTime) && Number.isFinite(rightTime) && leftTime !== rightTime) {
+        return rightTime - leftTime;
+      }
+      return 0;
+    });
+}
+
+export function markOrderInquiryResolved(order: StoredOrder, now = new Date()) {
+  const inquiry = assessOrderInquiryState(order);
+  if (!inquiry.pending || !inquiry.latestCustomerMessage) {
+    return { changed: false as const, order, inquiry };
+  }
+
+  const nextOrder: StoredOrder = {
+    ...order,
+    orderConversationState: {
+      ...storedConversationState(order),
+      resolvedThroughMessageId: inquiry.latestCustomerMessage.id,
+      resolvedAt: now.toISOString(),
+      resolvedBy: "admin" as const,
+    },
+  };
+  return {
+    changed: true as const,
+    order: nextOrder,
+    inquiry: assessOrderInquiryState(nextOrder),
+  };
+}
+
+export function markOrderInquiryAlertClaimed(
+  order: StoredOrder,
+  message: OrderMessage,
+  now = new Date(),
+) {
+  return {
+    ...order,
+    orderConversationState: {
+      ...storedConversationState(order),
+      lastAlertedMessageId: message.id,
+      lastAlertedAt: now.toISOString(),
+    },
+  } as StoredOrder;
+}
+
+export function createOrderInquiryLineAlertText(orderNumber: string) {
+  return `KD Coffee｜新的訂單詢問\n\n訂單：${orderNumber}\n\n客人有新的訂單問題等待回覆。\n請登入後台查看並處理。`;
 }
 
 export function appendOrderMessage(input: {

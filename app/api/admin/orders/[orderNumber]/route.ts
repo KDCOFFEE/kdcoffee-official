@@ -19,6 +19,7 @@ import {
   type InventoryReturnMetadata,
 } from "@/lib/orderInventoryReturn";
 import { getWebsiteDataFile } from "@/lib/storagePaths";
+import { sendInternalLineNotification } from "@/lib/internalLineNotifications";
 
 /**
  * ============================================================
@@ -51,74 +52,6 @@ import { getWebsiteDataFile } from "@/lib/storagePaths";
  * 才會寫回真正 Persistent Storage 裡的商品資料。
  */
 const WEBSITE_FILE = getWebsiteDataFile();
-
-/**
- * ============================================================
- * LINE 群組通知
- * ============================================================
- *
- * 使用 LINE Messaging API
- * 通知管理群組訂單狀態更新。
- *
- * 原本邏輯完全保留。
- */
-async function notifyGroup(text: string) {
-  const token =
-    process.env.LINE_CHANNEL_ACCESS_TOKEN;
-
-  const to =
-    process.env.LINE_ORDER_RECIPIENT_ID;
-
-  /**
-   * 如果 Production 沒有設定 LINE 環境變數，
-   * 不阻擋訂單狀態更新。
-   */
-  if (!token || !to) {
-    return false;
-  }
-
-  try {
-    const response = await fetch(
-      "https://api.line.me/v2/bot/message/push",
-      {
-        method: "POST",
-
-        headers: {
-          Authorization:
-            `Bearer ${token}`,
-
-          "Content-Type":
-            "application/json",
-        },
-
-        body: JSON.stringify({
-          to,
-
-          messages: [
-            {
-              type: "text",
-              text,
-            },
-          ],
-        }),
-
-        /**
-         * LINE API 最多等待 5 秒。
-         *
-         * LINE 通知失敗不應卡住訂單後台。
-         */
-        signal:
-          AbortSignal.timeout(
-            5_000,
-          ),
-      },
-    );
-
-    return response.ok;
-  } catch {
-    return false;
-  }
-}
 
 /**
  * ============================================================
@@ -385,9 +318,10 @@ export async function PATCH(
             previous !==
             status
           ) {
-            const sent =
-              await notifyGroup(
+            const { sent } =
+              await sendInternalLineNotification(
                 `【KD Coffee 訂單狀態更新】\n\n訂單編號：${order.orderNumber}\n客戶：${order.customer?.name || "未填"}\n狀態：${orderStatusLabel(status)}\n物流編號：${order.trackingNumber || "尚未填寫"}`,
+                { attempts: 1, timeoutMs: 5_000 },
               );
 
             order = {

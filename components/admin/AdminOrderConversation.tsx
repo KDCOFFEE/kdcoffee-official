@@ -4,6 +4,11 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 
 import type { OrderMessage } from "@/lib/orderConversation";
 
+type InquirySummary = {
+  pending: boolean;
+  unresolvedCustomerMessages: number;
+};
+
 function mergeMessage(messages: OrderMessage[], message: OrderMessage) {
   return messages.some((entry) => entry.id === message.id) ? messages : [...messages, message];
 }
@@ -23,10 +28,14 @@ export default function AdminOrderConversation({
   const [lineSelected, setLineSelected] = useState(lineAvailable);
   const [emailSelected, setEmailSelected] = useState(!lineAvailable && emailAvailable);
   const [submitting, setSubmitting] = useState(false);
+  const [resolving, setResolving] = useState(false);
   const [feedback, setFeedback] = useState("");
   const [failed, setFailed] = useState(false);
+  const [inquiry, setInquiry] = useState<InquirySummary>({
+    pending: false,
+    unresolvedCustomerMessages: 0,
+  });
   const actionId = useRef("");
-  const customerWaiting = messages.at(-1)?.authorType === "customer";
 
   useEffect(() => {
     fetch(`/api/admin/orders/${encodeURIComponent(orderNumber)}/messages`, { cache: "no-store" })
@@ -34,6 +43,7 @@ export default function AdminOrderConversation({
         const result = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(result.error || "無法讀取訂單對話。");
         setMessages(Array.isArray(result.messages) ? result.messages : []);
+        if (result.inquiry) setInquiry(result.inquiry);
       })
       .catch(() => {
         setFailed(true);
@@ -62,6 +72,7 @@ export default function AdminOrderConversation({
       const result = await response.json().catch(() => ({}));
       if (!response.ok && !result.saved) throw new Error(result.error || "回覆暫時無法保存。");
       if (result.message) setMessages((current) => mergeMessage(current, result.message));
+      if (result.inquiry) setInquiry(result.inquiry);
       setReply("");
       actionId.current = "";
       setFailed(!response.ok || Boolean(result.warning));
@@ -74,12 +85,41 @@ export default function AdminOrderConversation({
     }
   }
 
+  async function resolveInquiry() {
+    setResolving(true);
+    setFeedback("");
+    setFailed(false);
+    try {
+      const response = await fetch(
+        `/api/admin/orders/${encodeURIComponent(orderNumber)}/messages/resolve`,
+        { method: "POST" },
+      );
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || "目前無法更新詢問狀態。");
+      if (result.inquiry) setInquiry(result.inquiry);
+      setFeedback(result.resolved ? "已標記為處理完成。" : "此詢問目前已處理。");
+    } catch (reason) {
+      setFailed(true);
+      setFeedback(reason instanceof Error ? reason.message : "目前無法更新詢問狀態。");
+    } finally {
+      setResolving(false);
+    }
+  }
+
   return (
     <div className="admin-order-conversation">
       <div className="admin-conversation-head">
         <div><p className="eyebrow dark">ORDER CONVERSATION</p><h2>訂單對話</h2></div>
-        {customerWaiting ? <b>客人有新詢問</b> : null}
+        {inquiry.pending ? <b>客人有新的詢問等待處理</b> : null}
       </div>
+      {inquiry.pending ? (
+        <div className="admin-inquiry-actions">
+          <span>{inquiry.unresolvedCustomerMessages} 則尚待處理</span>
+          <button type="button" onClick={resolveInquiry} disabled={resolving || submitting}>
+            {resolving ? "處理中…" : "標記為已處理"}
+          </button>
+        </div>
+      ) : null}
       <div className="admin-conversation-thread">
         {messages.length ? messages.map((entry) => (
           <article className={`order-message ${entry.authorType}`} key={entry.id}>

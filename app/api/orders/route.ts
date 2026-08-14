@@ -20,6 +20,7 @@ import {
 import { getCurrentMember, updateMemberProfile } from "@/lib/memberAuth";
 import { updateStoredOrderSafely } from "@/lib/adminOrders";
 import { createGuestOrderAccess } from "@/lib/orderConversation";
+import { sendInternalLineNotification } from "@/lib/internalLineNotifications";
 import {
   addDateOnlyDays,
   getDateOnlyInTimeZone,
@@ -31,28 +32,6 @@ function clean(value: unknown, max = 200) { return String(value ?? "").trim().sl
 function validPhone(value: string) { return /^09\d{8}$/.test(value); }
 function validEmail(value: string) { return !value || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value); }
 function validStoreId(value: string) { return /^[0-9A-Za-z]{4,10}$/.test(value); }
-
-async function sendLineNotification(text: string) {
-  const token = process.env.LINE_CHANNEL_ACCESS_TOKEN;
-  const to = process.env.LINE_ORDER_RECIPIENT_ID;
-  if (!token || !to) return { sent: false, reason: "LINE environment variables are not configured" };
-  let lastError = "LINE notification failed";
-  for (let attempt = 1; attempt <= 2; attempt++) {
-    try {
-      const response = await fetch("https://api.line.me/v2/bot/message/push", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ to, messages: [{ type: "text", text }] }),
-        signal: AbortSignal.timeout(12000),
-      });
-      const responseText = await response.text();
-      if (response.ok) return { sent: true, requestId: response.headers.get("x-line-request-id") || undefined };
-      lastError = `LINE ${response.status}: ${responseText.slice(0, 300)}`;
-    } catch (error) { lastError = error instanceof Error ? error.message : "LINE notification failed"; }
-    if (attempt === 1) await new Promise(resolve => setTimeout(resolve, 800));
-  }
-  return { sent: false, reason: lastError };
-}
 
 const orderDir = () => getOrdersDir();
 const websiteFile = () => getWebsiteDataFile();
@@ -184,7 +163,7 @@ export async function POST(request: Request) {
       }
     }
 
-    const lineResult = await sendLineNotification(lineText);
+    const lineResult = await sendInternalLineNotification(lineText);
     if (!lineResult.sent) warnings.push("訂單已保存，但 LINE 群組通知暫時失敗，工作室可從訂單資料補查。");
     try {
       await updateStoredOrderSafely(

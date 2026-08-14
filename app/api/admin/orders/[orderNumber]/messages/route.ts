@@ -16,6 +16,7 @@ import {
 } from "@/lib/customerNotificationDelivery";
 import {
   appendOrderMessage,
+  assessOrderInquiryState,
   createOrderReplyNotificationTemplate,
   getOrderMessages,
   OrderMessageValidationError,
@@ -39,7 +40,10 @@ export async function GET(
   }
   const order = await readOrder(orderNumber);
   if (!order) return NextResponse.json({ error: "找不到訂單。" }, { status: 404 });
-  return NextResponse.json({ messages: getOrderMessages(order) }, {
+  return NextResponse.json({
+    messages: getOrderMessages(order),
+    inquiry: assessOrderInquiryState(order),
+  }, {
     headers: { "Cache-Control": "no-store" },
   });
 }
@@ -105,16 +109,27 @@ export async function POST(
     );
 
     if (!saved.appended) {
-      return NextResponse.json({ ok: true, replayed: true, message: saved.message });
+      return NextResponse.json({
+        ok: true,
+        replayed: true,
+        message: saved.message,
+        inquiry: assessOrderInquiryState(saved.order),
+      });
     }
     if (!notifyCustomer) {
-      return NextResponse.json({ ok: true, saved: true, message: saved.message });
+      return NextResponse.json({
+        ok: true,
+        saved: true,
+        message: saved.message,
+        inquiry: assessOrderInquiryState(saved.order),
+      });
     }
     if (!saved.channels.length || !saved.notificationClaimed) {
       return NextResponse.json({
         ok: true,
         saved: true,
         message: saved.message,
+        inquiry: assessOrderInquiryState(saved.order),
         warning: "已保存回覆，但此訂單沒有可用通知方式。",
       });
     }
@@ -152,6 +167,7 @@ export async function POST(
       ok: allSent,
       saved: true,
       message: saved.message,
+      inquiry: assessOrderInquiryState(saved.order),
       warning: allSent ? undefined : "回覆已保存，但通知客人失敗。",
     }, { status: allSent ? 200 : 502 });
   } catch (error) {

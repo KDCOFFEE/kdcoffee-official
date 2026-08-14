@@ -4,14 +4,18 @@ import { readOrder, withStoredOrderUpdateLock } from "@/lib/adminOrders";
 import { resolveCustomerOrderAccess } from "@/lib/customerOrderAccess";
 import {
   appendOrderMessage,
+  assessOrderInquiryState,
   authorizeOrderConversationAccess,
+  createOrderInquiryLineAlertText,
   getOrderMessages,
+  markOrderInquiryAlertClaimed,
   OrderMessageRateLimitError,
   OrderMessageValidationError,
   validateOrderMessage,
   validateOrderMessageActionId,
 } from "@/lib/orderConversation";
 import { orderStatusLabel } from "@/lib/orderInventoryPolicy";
+import { sendInternalLineNotification } from "@/lib/internalLineNotifications";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -85,18 +89,38 @@ export async function POST(
           guestToken,
         });
         if (!latestAccess) return null;
+        const previousInquiry = assessOrderInquiryState(latestOrder);
         const appended = appendOrderMessage({
           order: latestOrder,
           actionId,
           authorType: "customer",
           message,
         });
-        if (appended.appended) await persistOrder(appended.order);
-        return appended;
+        if (!appended.appended) return { ...appended, alertClaimed: false as const };
+
+        const alertClaimed = !previousInquiry.pending;
+        const updatedOrder = alertClaimed
+          ? markOrderInquiryAlertClaimed(appended.order, appended.message)
+          : appended.order;
+        await persistOrder(updatedOrder);
+        return { ...appended, order: updatedOrder, alertClaimed };
       },
     );
 
     if (!result) return NextResponse.json({ error: "找不到訂單。" }, { status: 404 });
+    if (result.alertClaimed) {
+      const alert = await sendInternalLineNotification(
+        createOrderInquiryLineAlertText(orderNumber),
+        { attempts: 1, timeoutMs: 8_000 },
+      );
+      if (!alert.sent) {
+        console.warn("Order inquiry LINE alert was not sent", {
+          event: "order_inquiry_line_alert_failed",
+          orderNumber,
+          configured: alert.reason !== "LINE environment variables are not configured",
+        });
+      }
+    }
     return NextResponse.json({
       ok: true,
       replayed: !result.appended,
