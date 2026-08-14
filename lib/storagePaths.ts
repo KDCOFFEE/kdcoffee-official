@@ -255,3 +255,11 @@ export function getHome003UploadDir() {
         "home003",
       );
 }
+
+export function getOrderNotificationUploadsDir() {
+  const root = getPersistentDataRoot();
+
+  return root
+    ? path.join(root, "uploads", "order-notifications")
+    : path.join(process.cwd(), "public", "uploads", "order-notifications");
+}
