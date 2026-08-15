@@ -430,20 +430,228 @@
 
 @media (max-width: 760px) {
   .sheetStage {
-    padding: 100px 16px 60px;
+    padding: 88px 12px 52px;
   }
 
   .sheetPreview {
     width: 100%;
-    aspect-ratio: 210 / 297;
-    contain: size;
-    container-type: inline-size;
   }
 
   .sheet {
+    width: 100%;
     margin: 0;
-    transform: scale(calc(100cqw / 840px));
-    transform-origin: top left;
+    padding: 26px 16px 22px;
+    aspect-ratio: auto;
+  }
+
+  .sheetHeader {
+    grid-template-columns: minmax(0, 1fr) 76px;
+    gap: 14px;
+    padding-bottom: 16px;
+  }
+
+  .sheetHeader h1 {
+    margin-top: 13px;
+    font-size: 2.25rem;
+    line-height: 1;
+  }
+
+  .sheetHeader small {
+    margin-top: 8px;
+    font-size: 0.68rem;
+    letter-spacing: 0.1em;
+  }
+
+  .sheetHeader .headerCopy > span {
+    font-size: 0.68rem;
+  }
+
+  .monthlyVisual {
+    min-height: 92px;
+  }
+
+  .visualArc {
+    width: 94px;
+    height: 94px;
+    right: -41px;
+    bottom: -43px;
+  }
+
+  .visualSun {
+    width: 31px;
+    height: 31px;
+    right: 20px;
+    top: 17px;
+  }
+
+  .visualStem {
+    height: 76px;
+    right: 36px;
+  }
+
+  .menuTable {
+    padding-top: 3px;
+  }
+
+  .tableHeader {
+    display: none;
+    font-size: 0.68rem;
+  }
+
+  .tableRows {
+    display: block;
+  }
+
+  .artwork {
+    min-height: 184px;
+    padding: 9px 0;
+    display: grid;
+    grid-template-columns: 92px minmax(0, 1fr);
+    grid-template-rows: repeat(6, auto);
+    column-gap: 13px;
+    row-gap: 4px;
+    align-content: start;
+    align-items: start;
+  }
+
+  .numberCell {
+    grid-column: 2;
+    grid-row: 1;
+    align-self: auto;
+    padding: 0;
+    flex-direction: row;
+    align-items: center;
+    gap: 7px;
+  }
+
+  .numberCell > span {
+    font-size: 1rem;
+  }
+
+  .numberCell em {
+    padding: 1px 4px;
+    font-size: 0.68rem;
+  }
+
+  .artworkCell {
+    display: contents;
+  }
+
+  .thumbnail {
+    grid-column: 1;
+    grid-row: 1 / span 6;
+    width: 92px;
+    height: 92px;
+  }
+
+  .artworkCell > a {
+    grid-column: 2;
+    grid-row: 2;
+  }
+
+  .artworkCell h2 {
+    font-size: 1.3rem;
+    line-height: 1.08;
+  }
+
+  .artworkCell > a > span {
+    margin-top: 2px;
+    font-size: 0.7rem;
+  }
+
+  .flavorCell,
+  .factsCell,
+  .priceCell,
+  .moreCell {
+    grid-column: 2;
+    font-size: 0.72rem;
+    line-height: 1.35;
+  }
+
+  .flavorCell {
+    grid-row: 3;
+  }
+
+  .factsCell {
+    grid-row: 4;
+  }
+
+  .priceCell {
+    grid-row: 5;
+  }
+
+  .moreCell {
+    grid-row: 6;
+    align-self: auto;
+    align-items: flex-start;
+    justify-content: flex-start;
+    gap: 3px;
+    text-align: left;
+  }
+
+  .flavorCell > b,
+  .factsCell > b,
+  .priceCell > b {
+    margin-right: 6px;
+    display: inline;
+    color: var(--menu-gold);
+    font-size: 0.68rem;
+    letter-spacing: 0.08em;
+  }
+
+  .flavorCell p,
+  .factsCell p {
+    display: inline;
+  }
+
+  .factsCell p span {
+    display: inline;
+  }
+
+  .factsCell p span + span::before {
+    content: "｜";
+    color: var(--menu-muted);
+  }
+
+  .priceCell ul {
+    margin-top: 2px;
+    gap: 1px;
+  }
+
+  .priceCell strong {
+    font-size: 0.77rem;
+  }
+
+  .moreCell > b {
+    display: none;
+  }
+
+  .moreCell > span {
+    font-size: 0.68rem;
+  }
+
+  .moreCell a {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    align-self: flex-start;
+    font-size: 0.75rem;
+  }
+
+  .sheetFooter {
+    min-height: 52px;
+    padding-top: 10px;
+    align-items: flex-start;
+    font-size: 0.68rem;
+  }
+
+  .sheetFooter > div {
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .sheetFooter > a {
+    font-size: 0.7rem;
   }
 
   .printActions {
