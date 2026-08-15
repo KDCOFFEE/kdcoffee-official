@@ -3,7 +3,9 @@ import Link from "next/link";
 import ProductVisualMedia from "@/components/commerce/ProductVisualMedia";
 import Footer from "@/components/layout/Footer";
 import Header from "@/components/layout/Header";
-import MonthlyMenuPrintButton from "@/components/monthly-menu/MonthlyMenuPrintButton";
+import MonthlyMenuPrintButton, {
+  type MonthlyMenuDownloadArtwork,
+} from "@/components/monthly-menu/MonthlyMenuPrintButton";
 import { getLiveWebsiteData, type CoffeeArtwork } from "@/data/websiteData";
 import { isProductListedInWorks } from "@/lib/productListing";
 import { resolveListAsset } from "@/lib/productVisualAssets";
@@ -78,6 +80,19 @@ export default async function MonthlyMenuPage() {
   const live = await getLiveWebsiteData();
   const products = getMonthlyArtworks(live.menu.products);
   const month = getMonthPresentation(live.menu.monthKey, live.menu.monthLabel);
+  const downloadArtworks: MonthlyMenuDownloadArtwork[] = products.map((product, index) => ({
+    number: String(index + 1).padStart(2, "0"),
+    tag: product.tag?.trim() || undefined,
+    availability: isSoldOut(product) ? "暫時售完" : undefined,
+    imageSrc: resolveListAsset(product)?.path,
+    name: product.name,
+    artist: product.artist,
+    flavors: product.flavors?.filter(Boolean).slice(0, 4) || [],
+    origin: product.origin,
+    process: product.process,
+    roast: product.roast,
+    purchases: getDisplayPurchases(product),
+  }));
 
   return (
     <main id="top" className={styles.page}>
@@ -196,7 +211,12 @@ export default async function MonthlyMenuPage() {
         </div>
 
         <div className={styles.printActions}>
-          <MonthlyMenuPrintButton />
+          <MonthlyMenuPrintButton
+            monthKey={live.menu.monthKey}
+            monthTitle={month.title}
+            monthIssue={month.issue}
+            artworks={downloadArtworks}
+          />
           <Link href="/works">查看全部咖啡 <span aria-hidden="true">→</span></Link>
         </div>
       </div>
