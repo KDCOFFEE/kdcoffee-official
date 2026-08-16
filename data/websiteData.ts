@@ -2,6 +2,7 @@ import websiteDataJson from "@/public/data/website-data.json";
 import { promises as fs } from "fs";
 import { getWebsiteDataFile } from "@/lib/storagePaths";
 import type { MediaAsset } from "@/lib/media";
+import type { MonthlyMenuBackground } from "@/lib/monthlyMenuBackground";
 
 /**
  * 商品購買規格
@@ -123,6 +124,7 @@ export type WebsiteData = {
     title: string;
     intro: string;
     products: CoffeeArtwork[];
+    background?: Partial<MonthlyMenuBackground>;
   };
 };
 

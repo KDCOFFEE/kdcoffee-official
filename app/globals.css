@@ -1120,3 +1120,20 @@ html,body{max-width:100%;overflow-x:hidden}.commerce-product-page{min-height:100
     transition-delay:0s!important;
   }
 }
+
+/* Monthly menu background management. */
+.monthly-background-layout{display:grid;grid-template-columns:minmax(260px,.75fr) minmax(0,1.25fr);gap:24px;align-items:start}
+.monthly-background-preview{position:relative;min-height:390px;overflow:hidden;border:1px solid #d8cbbc;background:#f6f0e6}
+.monthly-background-preview>span{position:absolute;inset:0;background-repeat:no-repeat}
+.monthly-background-preview>div{position:relative;z-index:1;display:grid;gap:13px;padding:34px;color:#30271f}
+.monthly-background-preview small{color:#8b7049;font-size:.68rem;font-weight:800;letter-spacing:.12em}
+.monthly-background-preview strong{font-family:var(--font-serif);font-size:2.2rem;font-weight:500}
+.monthly-background-preview i{display:block;height:38px;border-top:1px solid rgba(54,43,31,.26);border-bottom:1px solid rgba(54,43,31,.13)}
+.monthly-background-fields select{width:100%;border:1px solid #d5ccc2;background:#fff;padding:11px 12px;font:inherit}
+.monthly-background-upload{display:grid;gap:8px;font-size:13px}
+.monthly-background-upload>div{display:flex;flex-wrap:wrap;gap:10px}
+.monthly-background-upload small,.monthly-background-fields label>small{color:#766d65;font-weight:400}
+.monthly-opacity-field>span{display:flex;justify-content:space-between;gap:14px}
+.monthly-opacity-field input{padding:0;border:0;accent-color:#8b7049}
+.monthly-prompt-panel textarea{width:100%;min-height:520px;resize:vertical;border:1px solid #d5ccc2;background:#fcfaf7;padding:18px;font:inherit;font-size:.82rem;line-height:1.7}
+@media(max-width:800px){.monthly-background-layout{grid-template-columns:1fr}.monthly-background-preview{min-height:310px}.monthly-prompt-panel textarea{min-height:420px}}

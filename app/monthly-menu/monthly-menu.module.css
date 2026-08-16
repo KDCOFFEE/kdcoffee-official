@@ -21,6 +21,8 @@
 }
 
 .sheet {
+  position: relative;
+  overflow: hidden;
   width: 100%;
   max-width: 1120px;
   margin: 0 auto;
@@ -33,6 +35,20 @@
     linear-gradient(135deg, rgba(255, 255, 255, 0.52), transparent 46%),
     var(--menu-paper);
   box-shadow: 0 20px 60px rgba(55, 40, 24, 0.11);
+}
+
+.backgroundArtwork {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  display: block;
+  pointer-events: none;
+  background-repeat: no-repeat;
+}
+
+.sheet > :not(.backgroundArtwork) {
+  position: relative;
+  z-index: 1;
 }
 
 .sheetHeader {

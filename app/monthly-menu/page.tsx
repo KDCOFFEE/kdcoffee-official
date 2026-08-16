@@ -9,6 +9,7 @@ import MonthlyMenuPrintButton, {
 import { getLiveWebsiteData, type CoffeeArtwork } from "@/data/websiteData";
 import { isProductListedInWorks } from "@/lib/productListing";
 import { resolveListAsset } from "@/lib/productVisualAssets";
+import { normalizeMonthlyMenuBackground } from "@/lib/monthlyMenuBackground";
 import styles from "./monthly-menu.module.css";
 
 export const metadata: Metadata = {
@@ -76,10 +77,20 @@ function isSoldOut(product: CoffeeArtwork) {
   );
 }
 
+const backgroundPositions = {
+  auto: "center",
+  center: "center",
+  "top-left": "left top",
+  "top-right": "right top",
+  "bottom-left": "left bottom",
+  "bottom-right": "right bottom",
+} as const;
+
 export default async function MonthlyMenuPage() {
   const live = await getLiveWebsiteData();
   const products = getMonthlyArtworks(live.menu.products);
   const month = getMonthPresentation(live.menu.monthKey, live.menu.monthLabel);
+  const background = normalizeMonthlyMenuBackground(live.menu.background);
   const downloadArtworks: MonthlyMenuDownloadArtwork[] = products.map((product, index) => ({
     number: String(index + 1).padStart(2, "0"),
     tag: product.tag?.trim() || undefined,
@@ -101,6 +112,18 @@ export default async function MonthlyMenuPage() {
       <div className={styles.sheetStage}>
         <div className={styles.sheetPreview}>
           <article className={styles.sheet} aria-labelledby="monthly-menu-title">
+            {background.image ? (
+              <span
+                className={styles.backgroundArtwork}
+                aria-hidden="true"
+                style={{
+                  backgroundImage: `url(${background.image})`,
+                  backgroundPosition: backgroundPositions[background.position],
+                  backgroundSize: background.fit,
+                  opacity: background.opacity,
+                }}
+              />
+            ) : null}
             <header className={styles.sheetHeader}>
               <div className={styles.headerCopy}>
                 <p>KD COFFEE</p>
@@ -216,6 +239,7 @@ export default async function MonthlyMenuPage() {
             monthTitle={month.title}
             monthIssue={month.issue}
             artworks={downloadArtworks}
+            background={background}
           />
           <Link href="/works">查看全部咖啡 <span aria-hidden="true">→</span></Link>
         </div>

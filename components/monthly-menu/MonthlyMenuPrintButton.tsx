@@ -2,6 +2,10 @@
 
 import { useState } from "react";
 import styles from "@/app/monthly-menu/monthly-menu.module.css";
+import type {
+  MonthlyMenuBackground,
+  MonthlyMenuBackgroundPosition,
+} from "@/lib/monthlyMenuBackground";
 
 type DownloadPurchase = {
   label: string;
@@ -28,6 +32,7 @@ type MonthlyMenuDownloadButtonProps = {
   monthTitle: string;
   monthIssue: string;
   artworks: MonthlyMenuDownloadArtwork[];
+  background: MonthlyMenuBackground;
 };
 
 type DrawableImage = CanvasImageSource & {
@@ -162,6 +167,43 @@ function drawImageCover(
   );
 }
 
+function getAlignment(position: MonthlyMenuBackgroundPosition) {
+  if (position === "top-left") return { x: 0, y: 0 };
+  if (position === "top-right") return { x: 1, y: 0 };
+  if (position === "bottom-left") return { x: 0, y: 1 };
+  if (position === "bottom-right") return { x: 1, y: 1 };
+  return { x: 0.5, y: 0.5 };
+}
+
+function drawBackgroundImage(
+  context: CanvasRenderingContext2D,
+  image: DrawableImage,
+  width: number,
+  height: number,
+  fit: MonthlyMenuBackground["fit"],
+  position: MonthlyMenuBackgroundPosition,
+) {
+  const alignment = getAlignment(position);
+  const scale = fit === "contain"
+    ? Math.min(width / image.width, height / image.height)
+    : Math.max(width / image.width, height / image.height);
+
+  if (fit === "contain") {
+    const destinationWidth = image.width * scale;
+    const destinationHeight = image.height * scale;
+    const destinationX = (width - destinationWidth) * alignment.x;
+    const destinationY = (height - destinationHeight) * alignment.y;
+    context.drawImage(image, destinationX, destinationY, destinationWidth, destinationHeight);
+    return;
+  }
+
+  const sourceWidth = width / scale;
+  const sourceHeight = height / scale;
+  const sourceX = (image.width - sourceWidth) * alignment.x;
+  const sourceY = (image.height - sourceHeight) * alignment.y;
+  context.drawImage(image, sourceX, sourceY, sourceWidth, sourceHeight, 0, 0, width, height);
+}
+
 function createArtworkLayouts(
   context: CanvasRenderingContext2D,
   artworks: MonthlyMenuDownloadArtwork[],
@@ -231,6 +273,7 @@ async function generateMonthlyMenuImage(
   monthTitle: string,
   monthIssue: string,
   artworks: MonthlyMenuDownloadArtwork[],
+  background: MonthlyMenuBackground,
 ) {
   await document.fonts.ready;
 
@@ -246,6 +289,28 @@ async function generateMonthlyMenuImage(
 
   context.fillStyle = COLORS.paper;
   context.fillRect(0, 0, canvas.width, canvas.height);
+
+  let backgroundImage: DrawableImage | null = null;
+  if (background.image) {
+    try {
+      backgroundImage = await loadDrawableImage(background.image);
+      context.save();
+      context.globalAlpha = background.opacity;
+      drawBackgroundImage(
+        context,
+        backgroundImage,
+        canvas.width,
+        canvas.height,
+        background.fit,
+        background.position,
+      );
+      context.restore();
+      context.fillStyle = "rgba(246, 240, 230, 0.12)";
+      context.fillRect(0, 0, canvas.width, canvas.height);
+    } catch (error) {
+      console.warn("Monthly menu background could not be loaded; using paper fallback.", error);
+    }
+  }
 
   const paperGlow = context.createRadialGradient(360, 180, 20, 360, 180, 760);
   paperGlow.addColorStop(0, "rgba(193, 160, 110, 0.12)");
@@ -310,7 +375,9 @@ async function generateMonthlyMenuImage(
 
   const imageEntries = await Promise.all(
     artworks.map(async (artwork) => ({
-      image: artwork.imageSrc ? await loadDrawableImage(artwork.imageSrc) : null,
+      image: artwork.imageSrc
+        ? await loadDrawableImage(artwork.imageSrc).catch(() => null)
+        : null,
     })),
   );
 
@@ -391,6 +458,7 @@ async function generateMonthlyMenuImage(
   });
 
   imageEntries.forEach(({ image }) => image?.close?.());
+  backgroundImage?.close?.();
 
   context.fillStyle = COLORS.gold;
   setFont(context, 25, SANS_FONT, 700);
@@ -416,6 +484,7 @@ export default function MonthlyMenuPrintButton({
   monthTitle,
   monthIssue,
   artworks,
+  background,
 }: MonthlyMenuDownloadButtonProps) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState("");
@@ -433,6 +502,7 @@ export default function MonthlyMenuPrintButton({
         monthTitle,
         monthIssue,
         artworks,
+        background,
       );
       const objectUrl = URL.createObjectURL(blob);
       const link = document.createElement("a");

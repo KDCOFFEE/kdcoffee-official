@@ -257,6 +257,25 @@ export async function POST(
   const isCampaign =
     assetGroup === "campaign";
 
+  const isMonthlyMenu =
+    assetGroup === "monthly-menu";
+
+  if (isMonthlyMenu) {
+    const allowedTypes = ["image/webp", "image/jpeg", "image/png"];
+    if (!allowedTypes.includes(file.type)) {
+      return NextResponse.json(
+        { error: "豆單背景只接受 WebP、JPG、JPEG 或 PNG 圖片" },
+        { status: 400 },
+      );
+    }
+    if (file.size > 20 * 1024 * 1024) {
+      return NextResponse.json(
+        { error: "豆單背景圖片不可超過 20MB" },
+        { status: 400 },
+      );
+    }
+  }
+
   /**
    * 使用者指定 desiredName 時，
    * 先取得不含副檔名的檔名。
@@ -396,9 +415,9 @@ export async function POST(
      * Artwork：
      * 1800 px
      */
-    const maxWidth =
-      isHome003 ||
-      isCampaign
+    const maxWidth = isMonthlyMenu
+      ? 3000
+      : isHome003 || isCampaign
         ? 1600
         : 1800;
 
