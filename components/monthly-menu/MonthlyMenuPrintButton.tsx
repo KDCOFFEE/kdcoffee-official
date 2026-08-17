@@ -334,15 +334,6 @@ async function generateMonthlyMenuImage(
   setFont(context, 30, SANS_FONT, 600);
   context.fillText(`${monthIssue} · ${artworks.length} 件作品`, PAGE_MARGIN, 372);
 
-  context.strokeStyle = "rgba(139, 112, 73, 0.34)";
-  context.lineWidth = 2;
-  context.beginPath();
-  context.arc(1870, 188, 74, 0, Math.PI * 2);
-  context.stroke();
-  context.beginPath();
-  context.arc(1950, 274, 190, Math.PI * 0.78, Math.PI * 1.8);
-  context.stroke();
-
   context.strokeStyle = COLORS.ink;
   context.lineWidth = 2;
   context.beginPath();

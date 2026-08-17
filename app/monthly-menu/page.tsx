@@ -131,11 +131,6 @@ export default async function MonthlyMenuPage() {
                 <h1 id="monthly-menu-title">{month.title}</h1>
                 <small aria-label={month.label}>{month.issue} · {products.length} 件作品</small>
               </div>
-              <div className={styles.monthlyVisual} aria-label="當月主題視覺">
-                <span className={styles.visualArc} aria-hidden="true" />
-                <span className={styles.visualSun} aria-hidden="true" />
-                <span className={styles.visualStem} aria-hidden="true" />
-              </div>
             </header>
 
             <section className={styles.menuTable} aria-label={`${month.title}作品清單`}>

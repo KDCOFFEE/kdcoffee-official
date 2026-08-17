@@ -53,7 +53,7 @@
 
 .sheetHeader {
   display: grid;
-  grid-template-columns: minmax(0, 1.62fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 24px;
   padding-bottom: 21px;
   border-bottom: 1px solid var(--menu-ink);
@@ -111,53 +111,6 @@
   font-size: 0.68rem;
   font-weight: 700;
   letter-spacing: 0.14em;
-}
-
-.monthlyVisual {
-  position: relative;
-  min-height: 126px;
-  overflow: hidden;
-  align-self: stretch;
-  border-left: 1px solid rgba(139, 112, 73, 0.18);
-  background:
-    radial-gradient(circle at 73% 31%, rgba(151, 112, 62, 0.14) 0 10%, transparent 10.5%),
-    radial-gradient(ellipse at 62% 70%, rgba(166, 129, 80, 0.08) 0 29%, transparent 29.5%);
-}
-
-.visualArc,
-.visualSun,
-.visualStem {
-  position: absolute;
-  display: block;
-  pointer-events: none;
-}
-
-.visualArc {
-  width: 150px;
-  height: 150px;
-  right: -53px;
-  bottom: -77px;
-  border: 1px solid rgba(129, 95, 51, 0.33);
-  border-radius: 50%;
-}
-
-.visualSun {
-  width: 45px;
-  height: 45px;
-  right: 45px;
-  top: 22px;
-  border: 1px solid rgba(129, 95, 51, 0.4);
-  border-radius: 50%;
-}
-
-.visualStem {
-  width: 1px;
-  height: 102px;
-  right: 82px;
-  bottom: -19px;
-  background: linear-gradient(180deg, transparent, rgba(129, 95, 51, 0.36));
-  transform: rotate(-26deg);
-  transform-origin: bottom;
 }
 
 .menuTable {
@@ -490,7 +443,7 @@
   }
 
   .sheetHeader {
-    grid-template-columns: minmax(0, 1fr) 76px;
+    grid-template-columns: minmax(0, 1fr);
     gap: 14px;
     padding-bottom: 16px;
   }
@@ -509,29 +462,6 @@
 
   .sheetHeader .headerCopy > span {
     font-size: 0.68rem;
-  }
-
-  .monthlyVisual {
-    min-height: 92px;
-  }
-
-  .visualArc {
-    width: 94px;
-    height: 94px;
-    right: -41px;
-    bottom: -43px;
-  }
-
-  .visualSun {
-    width: 31px;
-    height: 31px;
-    right: 20px;
-    top: 17px;
-  }
-
-  .visualStem {
-    height: 76px;
-    right: 36px;
   }
 
   .menuTable {
