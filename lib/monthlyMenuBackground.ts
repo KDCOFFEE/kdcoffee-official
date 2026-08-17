@@ -13,6 +13,8 @@ export type MonthlyMenuBackground = {
   position: MonthlyMenuBackgroundPosition;
   fit: MonthlyMenuBackgroundFit;
   theme: string;
+  themeTitle: string;
+  themeSubtitle: string;
 };
 
 export const DEFAULT_MONTHLY_MENU_BACKGROUND: MonthlyMenuBackground = {
@@ -20,6 +22,8 @@ export const DEFAULT_MONTHLY_MENU_BACKGROUND: MonthlyMenuBackground = {
   position: "auto",
   fit: "cover",
   theme: "",
+  themeTitle: "",
+  themeSubtitle: "",
 };
 
 const MONTHLY_MENU_IMAGE_PATH = /^\/uploads\/artworks\/monthly-menu\/kdcoffee-monthly-menu-background-v\d+\.webp$/i;
@@ -48,7 +52,36 @@ export function normalizeMonthlyMenuBackground(value: unknown): MonthlyMenuBackg
     position,
     fit,
     theme: typeof background.theme === "string" ? background.theme.trim().slice(0, 80) : "",
+    themeTitle: typeof background.themeTitle === "string" ? background.themeTitle.trim().slice(0, 24) : "",
+    themeSubtitle: typeof background.themeSubtitle === "string" ? background.themeSubtitle.trim().slice(0, 80) : "",
   };
+}
+
+export type TaiwanMonthlyTheme = {
+  title: string;
+  subtitle: string;
+  keywords: string;
+  visualDirection: string;
+};
+
+export const TAIWAN_MONTHLY_THEMES: Record<number, TaiwanMonthlyTheme> = {
+  1: { title: "歲初暖光", subtitle: "冬陽 · 沉靜 · 新的開始", keywords: "新年、冬陽、沉靜、開始", visualDirection: "冬日上午暖光、米白、淡金" },
+  2: { title: "春信初來", subtitle: "初春 · 微風 · 新芽 · 柔光", keywords: "初春、微風、新芽、柔光", visualDirection: "淡霧、嫩芽、柔和晨光" },
+  3: { title: "春日花信", subtitle: "春雨 · 花季 · 清新 · 甦醒", keywords: "花季、春雨、清新、甦醒", visualDirection: "春雨、水氣、少量自然花瓣、淡粉米色" },
+  4: { title: "清明新綠", subtitle: "新綠 · 雨後 · 清透 · 土地", keywords: "新綠、雨後、清透、土地", visualDirection: "雨後葉影、薄霧、淺綠" },
+  5: { title: "初夏微風", subtitle: "初夏 · 日光 · 綠意 · 輕盈", keywords: "初夏、日光、綠意、輕盈", visualDirection: "窗光、樹影、風吹薄簾" },
+  6: { title: "雨季拾光", subtitle: "梅雨 · 雨聲 · 水氣 · 安靜", keywords: "梅雨、雨聲、水氣、安靜", visualDirection: "玻璃雨痕、水面、灰藍暖光" },
+  7: { title: "盛夏光景", subtitle: "盛夏 · 烈日 · 午後 · 明亮", keywords: "盛夏、烈日、午後、明亮", visualDirection: "夏季日光、自然陰影、天空、夏風" },
+  8: { title: "夏末午後", subtitle: "暖金 · 微風 · 柔和日光", keywords: "暖金、微風、柔和日光、夏末", visualDirection: "金色午後、柔光、夏末空氣" },
+  9: { title: "月下秋意", subtitle: "月色 · 團聚 · 入秋 · 夜風", keywords: "月色、團聚、入秋、夜風", visualDirection: "月光、夜色、暖金、初秋氣息" },
+  10: { title: "秋日澄光", subtitle: "涼風 · 乾爽 · 澄澈 · 成熟", keywords: "涼風、乾爽、澄澈、成熟", visualDirection: "清澈天空、斜陽、金褐色調" },
+  11: { title: "入冬暖意", subtitle: "東北風 · 微涼 · 溫暖 · 沉靜", keywords: "東北風、微涼、溫暖、沉靜", visualDirection: "晨霧、柔和冬光、溫暖室內外光線" },
+  12: { title: "歲末微光", subtitle: "年末 · 相聚 · 回望 · 期待", keywords: "年末、相聚、回望、期待", visualDirection: "夜色、窗光、暖金、小型自然光點" },
+};
+
+export function getTaiwanMonthlyTheme(monthKey?: string) {
+  const match = monthKey?.match(/^\d{4}-(0[1-9]|1[0-2])$/);
+  return match ? TAIWAN_MONTHLY_THEMES[Number(match[1])] : undefined;
 }
 
 export const MONTHLY_MENU_BACKGROUND_PROMPT = `請建立一張 KD Coffee 每月精品咖啡豆單使用的「藝術背景素材」。
@@ -227,14 +260,33 @@ quiet luxury
 不要加入任何文字。
 不要加入 Logo。`;
 
-export function getMonthlyMenuBackgroundPrompt(theme: string) {
+export function getMonthlyMenuBackgroundPrompt(
+  theme: string,
+  monthKey?: string,
+  themeTitle?: string,
+  themeSubtitle?: string,
+) {
+  const recommendation = getTaiwanMonthlyTheme(monthKey);
+  const title = themeTitle?.trim().slice(0, 24) || recommendation?.title || "";
+  const subtitle = themeSubtitle?.trim().slice(0, 80) || recommendation?.subtitle || "";
   const normalizedTheme = theme.trim().slice(0, 80);
-  if (!normalizedTheme) return MONTHLY_MENU_BACKGROUND_PROMPT;
-  return `${MONTHLY_MENU_BACKGROUND_PROMPT}
+  const seasonal = recommendation ? `
 
-本月藝術主題：
-${normalizedTheme}
+台灣月份季節主題：
+${title}
 
-請在不破壞上述低對比、留白與可讀性原則的前提下，
-將這個主題轉化為非常克制的抽象背景語言。`;
+Atmosphere:
+${subtitle || recommendation.keywords}
+
+Visual direction:
+${recommendation.visualDirection}` : "";
+  const custom = normalizedTheme ? `
+
+本月額外藝術方向：
+${normalizedTheme}` : "";
+  return `${MONTHLY_MENU_BACKGROUND_PROMPT}${seasonal}${custom}
+
+月份視覺請避免公式化。咖啡器具不是必要元素；優先使用光影、雨、水氣、植物、天空、月色、風、窗光、季節色溫與自然抽象形態。
+
+請在不破壞上述低對比、留白與可讀性原則的前提下，將月份主題轉化為非常克制的背景語言。`;
 }

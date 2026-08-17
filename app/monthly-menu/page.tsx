@@ -9,7 +9,7 @@ import MonthlyMenuPrintButton, {
 import { getLiveWebsiteData, type CoffeeArtwork } from "@/data/websiteData";
 import { isProductListedInWorks } from "@/lib/productListing";
 import { resolveListAsset } from "@/lib/productVisualAssets";
-import { normalizeMonthlyMenuBackground } from "@/lib/monthlyMenuBackground";
+import { getTaiwanMonthlyTheme, normalizeMonthlyMenuBackground } from "@/lib/monthlyMenuBackground";
 import styles from "./monthly-menu.module.css";
 
 export const metadata: Metadata = {
@@ -91,6 +91,9 @@ export default async function MonthlyMenuPage() {
   const products = getMonthlyArtworks(live.menu.products);
   const month = getMonthPresentation(live.menu.monthKey, live.menu.monthLabel);
   const background = normalizeMonthlyMenuBackground(live.menu.background);
+  const recommendedTheme = getTaiwanMonthlyTheme(live.menu.monthKey);
+  const themeTitle = background.themeTitle || recommendedTheme?.title || "";
+  const themeSubtitle = background.themeSubtitle || recommendedTheme?.subtitle || "";
   const downloadArtworks: MonthlyMenuDownloadArtwork[] = products.map((product, index) => ({
     number: String(index + 1).padStart(2, "0"),
     tag: product.tag?.trim() || undefined,
@@ -131,6 +134,13 @@ export default async function MonthlyMenuPage() {
                 <h1 id="monthly-menu-title">{month.title}</h1>
                 <small aria-label={month.label}>{month.issue} · {products.length} 件作品</small>
               </div>
+              {themeTitle ? (
+                <div className={styles.monthlyTheme}>
+                  <span>MONTHLY THEME</span>
+                  <strong>{themeTitle}</strong>
+                  {themeSubtitle ? <small>{themeSubtitle}</small> : null}
+                </div>
+              ) : null}
             </header>
 
             <section className={styles.menuTable} aria-label={`${month.title}作品清單`}>
@@ -235,6 +245,8 @@ export default async function MonthlyMenuPage() {
             monthIssue={month.issue}
             artworks={downloadArtworks}
             background={background}
+            themeTitle={themeTitle}
+            themeSubtitle={themeSubtitle}
           />
           <Link href="/works">查看全部咖啡 <span aria-hidden="true">→</span></Link>
         </div>

@@ -34,6 +34,7 @@ export async function GET() {
   const website = await readWebsiteData();
   return NextResponse.json({
     background: normalizeMonthlyMenuBackground(website.menu?.background),
+    monthKey: typeof website.menu?.monthKey === "string" ? website.menu.monthKey : undefined,
   });
 }
 
@@ -61,8 +62,16 @@ export async function PUT(request: Request) {
     }
 
     const theme = typeof background.theme === "string" ? background.theme.trim() : "";
+    const themeTitle = typeof background.themeTitle === "string" ? background.themeTitle.trim() : "";
+    const themeSubtitle = typeof background.themeSubtitle === "string" ? background.themeSubtitle.trim() : "";
     if (theme.length > 80) {
       return NextResponse.json({ error: "本月背景主題不可超過 80 字" }, { status: 400 });
+    }
+    if (themeTitle.length > 24) {
+      return NextResponse.json({ error: "本月主題名稱不可超過 24 字" }, { status: 400 });
+    }
+    if (themeSubtitle.length > 80) {
+      return NextResponse.json({ error: "本月主題副標不可超過 80 字" }, { status: 400 });
     }
     const image = typeof background.image === "string" ? background.image.trim() : "";
     if (image && !isMonthlyMenuBackgroundImage(image)) {
@@ -82,6 +91,8 @@ export async function PUT(request: Request) {
       position: background.position,
       fit: background.fit,
       theme,
+      themeTitle,
+      themeSubtitle,
     };
 
     const version = await withFileLock(websiteFile, async () => {

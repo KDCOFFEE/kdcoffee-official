@@ -4,10 +4,11 @@ import { useEffect, useMemo, useState, type ChangeEvent } from "react";
 import {
   DEFAULT_MONTHLY_MENU_BACKGROUND,
   getMonthlyMenuBackgroundPrompt,
+  getTaiwanMonthlyTheme,
   type MonthlyMenuBackground,
 } from "@/lib/monthlyMenuBackground";
 
-type Payload = { background: MonthlyMenuBackground };
+type Payload = { background: MonthlyMenuBackground; monthKey?: string };
 
 const positionLabels: Record<MonthlyMenuBackground["position"], string> = {
   auto: "自動", center: "置中", "top-left": "左上", "top-right": "右上",
@@ -25,7 +26,9 @@ export default function MonthlyMenuBackgroundManager() {
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState("讀取中…");
-  const prompt = useMemo(() => getMonthlyMenuBackgroundPrompt(background.theme), [background.theme]);
+  const [monthKey, setMonthKey] = useState<string | undefined>();
+  const recommendation = useMemo(() => getTaiwanMonthlyTheme(monthKey), [monthKey]);
+  const prompt = useMemo(() => getMonthlyMenuBackgroundPrompt(background.theme, monthKey, background.themeTitle, background.themeSubtitle), [background.theme, background.themeSubtitle, background.themeTitle, monthKey]);
 
   useEffect(() => {
     fetch("/api/admin/monthly-menu", { cache: "no-store" })
@@ -34,7 +37,7 @@ export default function MonthlyMenuBackgroundManager() {
         if (!response.ok) throw new Error(payload.error || "讀取失敗");
         return payload as Payload;
       })
-      .then((payload) => { setBackground(payload.background); setMessage(""); })
+.then((payload) => { setBackground(payload.background); setMonthKey(payload.monthKey); setMessage(""); })
       .catch((error) => setMessage(error instanceof Error ? error.message : "讀取失敗"))
       .finally(() => setLoading(false));
   }, []);
@@ -118,6 +121,20 @@ export default function MonthlyMenuBackgroundManager() {
       </div>
       {message ? <div className="cms-message" role="status">{message}</div> : null}
 
+      {recommendation ? (
+        <section className="cms-panel">
+          <div className="cms-panel-head">
+            <div><h2>月份主題建議</h2><p>{monthKey} · 依台灣季節與生活感自動推薦，可套用後再自行修改。</p></div>
+            <button type="button" className="cms-secondary-button" onClick={() => patch({ themeTitle: recommendation.title, themeSubtitle: recommendation.subtitle })}>套用本月建議</button>
+          </div>
+          <div className="cms-grid two">
+            <div><b>推薦主題</b><p>{recommendation.title}</p></div>
+            <div><b>推薦關鍵字</b><p>{recommendation.keywords}</p></div>
+            <div className="span-two"><b>推薦視覺方向</b><p>{recommendation.visualDirection}</p></div>
+          </div>
+        </section>
+      ) : null}
+
       <section className="cms-panel">
         <div className="cms-panel-head"><div><h2>背景圖片與呈現</h2><p>圖片會保持在文字、價格與作品縮圖下方；建議使用直式低對比構圖。</p></div></div>
         <div className="monthly-background-layout">
@@ -144,7 +161,9 @@ export default function MonthlyMenuBackgroundManager() {
             <label className="span-two monthly-opacity-field"><span>背景濃度 <b>{Math.round(background.opacity * 100)}%</b></span><input type="range" min="0" max="20" step="1" value={Math.round(background.opacity * 100)} onChange={(event) => patch({ opacity: Number(event.target.value) / 100 })} /></label>
             <label>背景位置<select value={background.position} onChange={(event) => patch({ position: event.target.value as MonthlyMenuBackground["position"] })}>{Object.entries(positionLabels).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>
             <label>背景呈現<select value={background.fit} onChange={(event) => patch({ fit: event.target.value as MonthlyMenuBackground["fit"] })}><option value="cover">Cover</option><option value="contain">Contain</option></select></label>
-            <label className="span-two">本月背景主題（最多 80 字）<input value={background.theme} maxLength={80} placeholder="盛夏午後、暖金、柔和日光" onChange={(event) => patch({ theme: event.target.value })} /><small>{background.theme.length} / 80</small></label>
+            <label>本月主題名稱<input value={background.themeTitle} maxLength={24} placeholder={recommendation?.title || "夏末午後"} onChange={(event) => patch({ themeTitle: event.target.value })} /><small>{background.themeTitle.length} / 24</small></label>
+            <label>本月主題副標<input value={background.themeSubtitle} maxLength={80} placeholder={recommendation?.subtitle || "暖金 · 微風 · 柔和日光"} onChange={(event) => patch({ themeSubtitle: event.target.value })} /><small>{background.themeSubtitle.length} / 80</small></label>
+            <label className="span-two">背景額外藝術方向（選填，最多 80 字）<input value={background.theme} maxLength={80} placeholder="可補充本月想要的特殊氣氛" onChange={(event) => patch({ theme: event.target.value })} /><small>{background.theme.length} / 80</small></label>
           </div>
         </div>
       </section>

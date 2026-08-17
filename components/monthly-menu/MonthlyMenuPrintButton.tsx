@@ -33,6 +33,8 @@ type MonthlyMenuDownloadButtonProps = {
   monthIssue: string;
   artworks: MonthlyMenuDownloadArtwork[];
   background: MonthlyMenuBackground;
+  themeTitle?: string;
+  themeSubtitle?: string;
 };
 
 type DrawableImage = CanvasImageSource & {
@@ -274,6 +276,8 @@ async function generateMonthlyMenuImage(
   monthIssue: string,
   artworks: MonthlyMenuDownloadArtwork[],
   background: MonthlyMenuBackground,
+  themeTitle?: string,
+  themeSubtitle?: string,
 ) {
   await document.fonts.ready;
 
@@ -333,6 +337,24 @@ async function generateMonthlyMenuImage(
   context.fillStyle = COLORS.muted;
   setFont(context, 30, SANS_FONT, 600);
   context.fillText(`${monthIssue} · ${artworks.length} 件作品`, PAGE_MARGIN, 372);
+
+  if (themeTitle) {
+    const themeX = CANVAS_WIDTH - PAGE_MARGIN;
+    context.textAlign = "right";
+    context.fillStyle = COLORS.gold;
+    setFont(context, 22, SANS_FONT, 700);
+    context.fillText("MONTHLY THEME", themeX, 170);
+    context.fillStyle = COLORS.ink;
+    setFont(context, 54, SERIF_FONT);
+    context.fillText(themeTitle, themeX, 242);
+    if (themeSubtitle) {
+      context.fillStyle = COLORS.muted;
+      setFont(context, 25, SANS_FONT, 500);
+      const lines = wrapText(context, themeSubtitle, 620);
+      lines.slice(0, 2).forEach((line, index) => context.fillText(line, themeX, 292 + index * 38));
+    }
+    context.textAlign = "left";
+  }
 
   context.strokeStyle = COLORS.ink;
   context.lineWidth = 2;
@@ -476,6 +498,8 @@ export default function MonthlyMenuPrintButton({
   monthIssue,
   artworks,
   background,
+  themeTitle,
+  themeSubtitle,
 }: MonthlyMenuDownloadButtonProps) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState("");
@@ -494,6 +518,8 @@ export default function MonthlyMenuPrintButton({
         monthIssue,
         artworks,
         background,
+        themeTitle,
+        themeSubtitle,
       );
       const objectUrl = URL.createObjectURL(blob);
       const link = document.createElement("a");
