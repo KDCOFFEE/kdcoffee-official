@@ -4,37 +4,43 @@ import { useEffect, useState } from "react";
 
 type MobilePurchaseReturnButtonProps = {
   targetId?: string;
+  sentinelId?: string;
 };
 
 export default function MobilePurchaseReturnButton({
   targetId = "purchase",
+  sentinelId = "purchase-end-sentinel",
 }: MobilePurchaseReturnButtonProps) {
   const [hasPassedPurchase, setHasPassedPurchase] = useState(false);
 
   useEffect(() => {
     const mobileQuery = window.matchMedia("(max-width: 760px)");
-    const target = document.getElementById(targetId);
-    if (!target) return;
+    const sentinel = document.getElementById(sentinelId);
+    if (!sentinel) return;
 
     let observer: IntersectionObserver | undefined;
-    const observePurchase = () => {
+    const observePurchaseEnd = () => {
       observer?.disconnect();
       setHasPassedPurchase(false);
       if (!mobileQuery.matches) return;
 
       observer = new IntersectionObserver(([entry]) => {
-        setHasPassedPurchase(entry.boundingClientRect.bottom <= 0);
+        // A non-intersecting target may be below or above the viewport. Only
+        // the latter means that the complete purchase section was passed.
+        setHasPassedPurchase(
+          !entry.isIntersecting && entry.boundingClientRect.top < 0,
+        );
       }, { threshold: 0 });
-      observer.observe(target);
+      observer.observe(sentinel);
     };
 
-    observePurchase();
-    mobileQuery.addEventListener("change", observePurchase);
+    observePurchaseEnd();
+    mobileQuery.addEventListener("change", observePurchaseEnd);
     return () => {
       observer?.disconnect();
-      mobileQuery.removeEventListener("change", observePurchase);
+      mobileQuery.removeEventListener("change", observePurchaseEnd);
     };
-  }, [targetId]);
+  }, [sentinelId]);
 
   function returnToPurchase() {
     const target = document.getElementById(targetId);

@@ -1171,8 +1171,12 @@ html,body{max-width:100%;overflow-x:hidden}.commerce-product-page{min-height:100
 
 /* F.2A.1 — appears only after the existing purchase panel has fully passed. */
 .mobile-purchase-return{display:none}
+.purchase-end-sentinel{height:1px;margin-top:-1px;pointer-events:none}
 @media(max-width:760px){
   .mobile-purchase-return{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
     position:fixed;
     z-index:100;
     right:16px;

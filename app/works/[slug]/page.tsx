@@ -179,6 +179,11 @@ export default async function WorkPage({ params }: { params: Promise<{ slug: str
           <AddToCart product={product} />
         </div>
       </section>
+      <div
+        id="purchase-end-sentinel"
+        className="purchase-end-sentinel"
+        aria-hidden="true"
+      />
 
       <section className="revenue-proof-strip">
         <div><b>自製熱風烘焙</b><span>風味乾淨，降低焦苦與雜味</span></div>
