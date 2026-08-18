@@ -1169,6 +1169,41 @@ html,body{max-width:100%;overflow-x:hidden}.commerce-product-page{min-height:100
   outline-offset:3px;
 }
 
+/* F.2A.1 — appears only after the existing purchase panel has fully passed. */
+.mobile-purchase-return{display:none}
+@media(max-width:760px){
+  .mobile-purchase-return{
+    position:fixed;
+    z-index:100;
+    right:16px;
+    bottom:calc(16px + env(safe-area-inset-bottom));
+    min-width:94px;
+    min-height:46px;
+    padding:0 15px;
+    border:1px solid rgba(255,248,235,.38);
+    border-radius:999px;
+    background:#33261e;
+    color:#fff8eb;
+    font:inherit;
+    font-size:.82rem;
+    font-weight:800;
+    letter-spacing:.08em;
+    opacity:0;
+    visibility:hidden;
+    pointer-events:none;
+    transform:translateY(8px);
+    transition:opacity .18s ease,transform .18s ease,visibility 0s linear .18s;
+  }
+  .mobile-purchase-return.is-visible{
+    opacity:1;
+    visibility:visible;
+    pointer-events:auto;
+    transform:translateY(0);
+    transition-delay:0s;
+  }
+  .mobile-purchase-return span{margin-left:3px;font-size:1rem;line-height:1}
+}
+
 @media(prefers-reduced-motion:reduce){
   html{scroll-behavior:auto}
   *,*::before,*::after{

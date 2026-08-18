@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { getLiveWebsiteData } from "@/data/websiteData";
 import AddToCart from "@/components/commerce/AddToCart";
 import CartLink from "@/components/commerce/CartLink";
+import MobilePurchaseReturnButton from "@/components/commerce/MobilePurchaseReturnButton";
 import ProductVisualMedia from "@/components/commerce/ProductVisualMedia";
 import KdMedia from "@/components/media/KdMedia";
 import {
@@ -210,7 +211,7 @@ export default async function WorkPage({ params }: { params: Promise<{ slug: str
 
       {layout.showRelatedWorks !== false && related.length ? <section className="revenue-content-section revenue-related"><div className="revenue-section-title"><p>YOU MAY ALSO LIKE</p><h2>也可以比較這三款</h2></div><div className="revenue-related-grid">{related.map((item: any) => { const listAsset = resolveListAsset(item); const price = item.purchase?.length ? Math.min(...item.purchase.map((o: any) => o.price)) : null; return <Link key={item.slug} href={`/works/${item.slug}`} className="revenue-related-card"><div className="related-thumb"><ProductVisualMedia src={listAsset?.path} alt={listAsset?.alt || item.name} className="product-list-image" fallback={<ProductBagFallback product={item} compact />}/></div><div><small>{item.tag || item.artist}</small><h3>{item.name}</h3><p>{item.flavors?.slice(0, 3).join("、")}</p>{price !== null ? <b>NT$ {price.toLocaleString("zh-TW")} 起</b> : null}<span>查看與購買 →</span></div></Link>; })}</div></section> : null}
 
-      {minPrice !== null && product.purchasable !== false && product.status !== "sold_out" ? <div className="revenue-mobile-bar"><span><small>{product.name}</small><b>NT$ {minPrice.toLocaleString("zh-TW")} 起</b></span><a href="#top-purchase">選擇規格</a></div> : null}
+      {minPrice !== null && product.purchasable !== false && product.status !== "sold_out" ? <MobilePurchaseReturnButton /> : null}
     </main>
   );
 }
