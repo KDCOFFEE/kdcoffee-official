@@ -10,11 +10,6 @@ import {
 
 type Payload = { background: MonthlyMenuBackground; monthKey?: string };
 
-const positionLabels: Record<MonthlyMenuBackground["position"], string> = {
-  auto: "自動", center: "置中", "top-left": "左上", "top-right": "右上",
-  "bottom-left": "左下", "bottom-right": "右下",
-};
-
 const cssPositions: Record<MonthlyMenuBackground["position"], string> = {
   auto: "center", center: "center", "top-left": "left top", "top-right": "right top",
   "bottom-left": "left bottom", "bottom-right": "right bottom",
@@ -28,7 +23,7 @@ export default function MonthlyMenuBackgroundManager() {
   const [message, setMessage] = useState("讀取中…");
   const [monthKey, setMonthKey] = useState<string | undefined>();
   const recommendation = useMemo(() => getTaiwanMonthlyTheme(monthKey), [monthKey]);
-  const prompt = useMemo(() => getMonthlyMenuBackgroundPrompt(background.theme, monthKey, background.themeTitle, background.themeSubtitle), [background.theme, background.themeSubtitle, background.themeTitle, monthKey]);
+  const prompt = useMemo(() => getMonthlyMenuBackgroundPrompt(monthKey), [monthKey]);
 
   useEffect(() => {
     fetch("/api/admin/monthly-menu", { cache: "no-store" })
@@ -60,7 +55,7 @@ export default function MonthlyMenuBackgroundManager() {
     }
 
     setUploading(true);
-    setMessage("背景圖片上傳中…");
+    setMessage("主題視覺上傳中…");
     try {
       const form = new FormData();
       form.append("file", file);
@@ -72,7 +67,7 @@ export default function MonthlyMenuBackgroundManager() {
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || "上傳失敗");
       patch({ image: payload.path });
-      setMessage("背景圖片上傳完成，請按「儲存背景設定」。");
+      setMessage("主題視覺上傳完成，請按「儲存主題視覺」。");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "上傳失敗");
     } finally {
@@ -91,7 +86,7 @@ export default function MonthlyMenuBackgroundManager() {
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || "儲存失敗");
       setBackground(payload.background);
-      setMessage("本月豆單背景已儲存。");
+      setMessage("本月主題視覺已儲存。");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "儲存失敗");
     } finally {
@@ -102,7 +97,7 @@ export default function MonthlyMenuBackgroundManager() {
   async function copyPrompt() {
     try {
       await navigator.clipboard.writeText(prompt);
-      setMessage("AI 豆單背景提示詞已複製。");
+      setMessage("AI 主題視覺提示詞已複製。");
     } catch {
       setMessage("無法自動複製，請手動選取提示詞內容。");
     }
@@ -113,10 +108,10 @@ export default function MonthlyMenuBackgroundManager() {
   return (
     <div className="homepage-manager monthly-menu-background-manager">
       <div className="cms-toolbar">
-        <div><p className="eyebrow dark">MONTHLY MENU ART DIRECTION</p><h1>本月豆單背景</h1><p>同一組設定會套用到公開豆單與下載的 WebP 圖片。</p></div>
+        <div><p className="eyebrow dark">MONTHLY THEME ARTWORK</p><h1>本月主題視覺</h1><p>同一張 artwork 會融入公開 A4 豆單 Header 與下載圖片。</p></div>
         <div className="cms-toolbar-actions">
           <a href="/monthly-menu" target="_blank">預覽豆單 ↗</a>
-          <button type="button" onClick={save} disabled={saving || uploading}>{saving ? "儲存中…" : "儲存背景設定"}</button>
+          <button type="button" onClick={save} disabled={saving || uploading}>{saving ? "儲存中…" : "儲存主題視覺"}</button>
         </div>
       </div>
       {message ? <div className="cms-message" role="status">{message}</div> : null}
@@ -124,8 +119,7 @@ export default function MonthlyMenuBackgroundManager() {
       {recommendation ? (
         <section className="cms-panel">
           <div className="cms-panel-head">
-            <div><h2>月份主題建議</h2><p>{monthKey} · 依台灣季節與生活感自動推薦，可套用後再自行修改。</p></div>
-            <button type="button" className="cms-secondary-button" onClick={() => patch({ themeTitle: recommendation.title, themeSubtitle: recommendation.subtitle })}>套用本月建議</button>
+            <div><h2>AI 建議主題</h2><p>{monthKey} · 依台灣季節與節慶情境自動產生，主題名稱會直接包含在生成 artwork 裡。</p></div>
           </div>
           <div className="cms-grid two">
             <div><b>推薦主題</b><p>{recommendation.title}</p></div>
@@ -136,34 +130,27 @@ export default function MonthlyMenuBackgroundManager() {
       ) : null}
 
       <section className="cms-panel">
-        <div className="cms-panel-head"><div><h2>背景圖片與呈現</h2><p>圖片會保持在文字、價格與作品縮圖下方；建議使用直式低對比構圖。</p></div></div>
+        <div className="cms-panel-head"><div><h2>主題 Artwork 上傳與預覽</h2><p>建議 1600 × 700 px、橫式約 16:7；左側保留安靜區，主視覺與圖內主題文字集中於中央至右側。</p></div></div>
         <div className="monthly-background-layout">
           <div className="monthly-background-preview" aria-label="豆單背景效果預覽">
             {background.image ? <span style={{
               backgroundImage: `url(${background.image})`,
               backgroundPosition: cssPositions[background.position],
               backgroundSize: background.fit,
-              opacity: background.opacity,
+              opacity: 1,
             }} /> : null}
             <div><small>KD COFFEE · MONTHLY SELECTION</small><strong>本月豆單</strong><i /><i /><i /></div>
           </div>
 
           <div className="cms-grid two monthly-background-fields">
             <div className="monthly-background-upload span-two">
-              <b>豆單背景圖片</b>
+              <b>Theme artwork</b>
               <div>
                 <label className="upload-label">{uploading ? "上傳中…" : background.image ? "更換圖片" : "上傳圖片"}<input type="file" accept="image/webp,image/jpeg,image/png,.webp,.jpg,.jpeg,.png" disabled={uploading} onChange={upload} /></label>
                 <button type="button" className="cms-secondary-button" disabled={!background.image || uploading} onClick={() => patch({ image: undefined })}>清除圖片</button>
               </div>
-              <small>接受 WebP、JPG、JPEG、PNG；上限 20MB，上傳後會最佳化為 WebP。</small>
+              <small>接受 WebP、JPG、JPEG、PNG；上限 20MB，上傳後會最佳化為 WebP。圖片內應直接包含主題名稱。</small>
             </div>
-
-            <label className="span-two monthly-opacity-field"><span>背景濃度 <b>{Math.round(background.opacity * 100)}%</b></span><input type="range" min="0" max="20" step="1" value={Math.round(background.opacity * 100)} onChange={(event) => patch({ opacity: Number(event.target.value) / 100 })} /></label>
-            <label>背景位置<select value={background.position} onChange={(event) => patch({ position: event.target.value as MonthlyMenuBackground["position"] })}>{Object.entries(positionLabels).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>
-            <label>背景呈現<select value={background.fit} onChange={(event) => patch({ fit: event.target.value as MonthlyMenuBackground["fit"] })}><option value="cover">Cover</option><option value="contain">Contain</option></select></label>
-            <label>本月主題名稱<input value={background.themeTitle} maxLength={24} placeholder={recommendation?.title || "夏末午後"} onChange={(event) => patch({ themeTitle: event.target.value })} /><small>{background.themeTitle.length} / 24</small></label>
-            <label>本月主題副標<input value={background.themeSubtitle} maxLength={80} placeholder={recommendation?.subtitle || "暖金 · 微風 · 柔和日光"} onChange={(event) => patch({ themeSubtitle: event.target.value })} /><small>{background.themeSubtitle.length} / 80</small></label>
-            <label className="span-two">背景額外藝術方向（選填，最多 80 字）<input value={background.theme} maxLength={80} placeholder="可補充本月想要的特殊氣氛" onChange={(event) => patch({ theme: event.target.value })} /><small>{background.theme.length} / 80</small></label>
           </div>
         </div>
       </section>

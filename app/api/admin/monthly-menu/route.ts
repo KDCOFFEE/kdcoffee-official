@@ -51,8 +51,8 @@ export async function PUT(request: Request) {
     }
 
     const opacity = Number(background.opacity);
-    if (!Number.isFinite(opacity) || opacity < 0 || opacity > 0.2) {
-      return NextResponse.json({ error: "背景濃度必須介於 0% 至 20%" }, { status: 400 });
+    if (!Number.isFinite(opacity) || opacity !== 1) {
+      return NextResponse.json({ error: "主題視覺濃度設定不合法" }, { status: 400 });
     }
     if (!MONTHLY_MENU_BACKGROUND_POSITIONS.includes(background.position as MonthlyMenuBackgroundPosition)) {
       return NextResponse.json({ error: "背景位置不合法" }, { status: 400 });
@@ -61,18 +61,6 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: "背景呈現方式不合法" }, { status: 400 });
     }
 
-    const theme = typeof background.theme === "string" ? background.theme.trim() : "";
-    const themeTitle = typeof background.themeTitle === "string" ? background.themeTitle.trim() : "";
-    const themeSubtitle = typeof background.themeSubtitle === "string" ? background.themeSubtitle.trim() : "";
-    if (theme.length > 80) {
-      return NextResponse.json({ error: "本月背景主題不可超過 80 字" }, { status: 400 });
-    }
-    if (themeTitle.length > 24) {
-      return NextResponse.json({ error: "本月主題名稱不可超過 24 字" }, { status: 400 });
-    }
-    if (themeSubtitle.length > 80) {
-      return NextResponse.json({ error: "本月主題副標不可超過 80 字" }, { status: 400 });
-    }
     const image = typeof background.image === "string" ? background.image.trim() : "";
     if (image && !isMonthlyMenuBackgroundImage(image)) {
       return NextResponse.json({ error: "豆單背景圖片路徑不合法" }, { status: 400 });
@@ -90,9 +78,6 @@ export async function PUT(request: Request) {
       opacity,
       position: background.position,
       fit: background.fit,
-      theme,
-      themeTitle,
-      themeSubtitle,
     };
 
     const version = await withFileLock(websiteFile, async () => {
