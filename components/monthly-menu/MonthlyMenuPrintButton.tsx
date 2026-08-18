@@ -52,7 +52,7 @@ type ArtworkLayout = {
 
 const CANVAS_WIDTH = 2160;
 const PAGE_MARGIN = 120;
-const HEADER_HEIGHT = 560;
+const HEADER_HEIGHT = 590;
 const FOOTER_HEIGHT = 150;
 const THUMBNAIL_SIZE = 180;
 
@@ -296,7 +296,7 @@ async function generateMonthlyMenuImage(
       backgroundImage = await loadDrawableImage(background.image);
       const themeCanvas = document.createElement("canvas");
       themeCanvas.width = CANVAS_WIDTH;
-      themeCanvas.height = 432;
+      themeCanvas.height = 460;
       const themeContext = themeCanvas.getContext("2d");
       if (themeContext) {
         themeContext.save();
@@ -319,6 +319,14 @@ async function generateMonthlyMenuImage(
         themeContext.fillStyle = fade;
         themeContext.fillRect(0, 0, themeCanvas.width, themeCanvas.height);
 
+        const lowerFade = themeContext.createLinearGradient(0, 0, 0, themeCanvas.height);
+        lowerFade.addColorStop(0, "rgba(0,0,0,1)");
+        lowerFade.addColorStop(0.62, "rgba(0,0,0,1)");
+        lowerFade.addColorStop(0.88, "rgba(0,0,0,0.58)");
+        lowerFade.addColorStop(1, "rgba(0,0,0,0)");
+        themeContext.fillStyle = lowerFade;
+        themeContext.fillRect(0, 0, themeCanvas.width, themeCanvas.height);
+
         context.drawImage(themeCanvas, 0, 0);
       }
     } catch (error) {
@@ -330,7 +338,7 @@ async function generateMonthlyMenuImage(
   paperGlow.addColorStop(0, "rgba(193, 160, 110, 0.12)");
   paperGlow.addColorStop(1, "rgba(193, 160, 110, 0)");
   context.fillStyle = paperGlow;
-  context.fillRect(0, 0, canvas.width, 900);
+  context.fillRect(0, 0, canvas.width, 920);
 
   context.fillStyle = COLORS.gold;
   setFont(context, 28, SANS_FONT, 700);
@@ -351,8 +359,8 @@ async function generateMonthlyMenuImage(
   context.strokeStyle = COLORS.ink;
   context.lineWidth = 2;
   context.beginPath();
-  context.moveTo(PAGE_MARGIN, 432);
-  context.lineTo(CANVAS_WIDTH - PAGE_MARGIN, 432);
+  context.moveTo(PAGE_MARGIN, 460);
+  context.lineTo(CANVAS_WIDTH - PAGE_MARGIN, 460);
   context.stroke();
 
   const columns = {
@@ -365,17 +373,17 @@ async function generateMonthlyMenuImage(
 
   context.fillStyle = COLORS.muted;
   setFont(context, 21, SANS_FONT, 700);
-  context.fillText("NO.", columns.number, 492);
-  context.fillText("ARTWORK", columns.artwork, 492);
-  context.fillText("FLAVOR", columns.flavor, 492);
-  context.fillText("ORIGIN / PROCESS / ROAST", columns.facts, 492);
-  context.fillText("PRICE", columns.price, 492);
+  context.fillText("NO.", columns.number, 522);
+  context.fillText("ARTWORK", columns.artwork, 522);
+  context.fillText("FLAVOR", columns.flavor, 522);
+  context.fillText("ORIGIN / PROCESS / ROAST", columns.facts, 522);
+  context.fillText("PRICE", columns.price, 522);
 
   context.strokeStyle = COLORS.line;
   context.lineWidth = 2;
   context.beginPath();
-  context.moveTo(PAGE_MARGIN, 526);
-  context.lineTo(CANVAS_WIDTH - PAGE_MARGIN, 526);
+  context.moveTo(PAGE_MARGIN, 556);
+  context.lineTo(CANVAS_WIDTH - PAGE_MARGIN, 556);
   context.stroke();
 
   const imageEntries = await Promise.all(
