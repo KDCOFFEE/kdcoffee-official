@@ -1237,3 +1237,65 @@ html,body{max-width:100%;overflow-x:hidden}.commerce-product-page{min-height:100
 .monthly-opacity-field input{padding:0;border:0;accent-color:#8b7049}
 .monthly-prompt-panel textarea{width:100%;min-height:520px;resize:vertical;border:1px solid #d5ccc2;background:#fcfaf7;padding:18px;font:inherit;font-size:.82rem;line-height:1.7}
 @media(max-width:800px){.monthly-background-layout{grid-template-columns:1fr}.monthly-background-preview{min-height:310px}.monthly-prompt-panel textarea{min-height:420px}}
+
+/* F.2B — Giotto mobile commerce polish. Presentation only; AddToCart remains shared. */
+@media(max-width:760px){
+  .giotto-art-direction .revenue-buybox{padding:24px 20px 22px}
+  .giotto-art-direction .revenue-kicker{font-size:10px;letter-spacing:.2em}
+  .giotto-art-direction .revenue-badges{margin-top:10px}
+  .giotto-art-direction .revenue-badges span{padding:6px 9px;font-size:11px}
+  .giotto-art-direction .revenue-buybox h1{font-size:38px;line-height:1.1;margin:11px 0 10px}
+  .giotto-art-direction .revenue-lead{font-size:16px;line-height:1.65}
+
+  .giotto-art-direction .revenue-quickfacts{grid-template-columns:repeat(3,minmax(0,1fr));margin-top:18px}
+  .giotto-art-direction .revenue-quickfacts span{display:block;min-width:0;padding:12px 7px;text-align:center;border-right:1px solid rgba(128,95,52,.24);border-bottom:0}
+  .giotto-art-direction .revenue-quickfacts span:last-child{border-right:0}
+  .giotto-art-direction .revenue-quickfacts small{margin:0 0 5px;font-size:10px;letter-spacing:.08em}
+  .giotto-art-direction .revenue-quickfacts b{font-size:15px;line-height:1.35;overflow-wrap:anywhere}
+
+  .giotto-art-direction .revenue-flavors{margin-top:14px;gap:0;line-height:1.5}
+  .giotto-art-direction .revenue-flavors span{padding:0 8px;font-size:14px}
+  .giotto-art-direction .revenue-price{margin-top:17px;padding:13px 0 10px}
+  .giotto-art-direction .revenue-price strong{font-size:25px;color:#332216}
+  .giotto-purchase-heading{margin:18px 0 0;font-size:10px;letter-spacing:.18em}
+
+  .giotto-art-direction .buy-panel{gap:12px}
+  .giotto-art-direction .buy-step{margin:8px 0 0;gap:8px}
+  .giotto-art-direction .buy-step>span{width:24px;height:24px;background:#6f5132;font-size:11px}
+  .giotto-art-direction .buy-step>b{font-size:15px}
+  .giotto-art-direction .buy-options{grid-template-columns:1fr;gap:9px}
+  .giotto-art-direction .revenue-buybox .buy-options button{min-height:68px;padding:13px 15px;border:1px solid rgba(122,91,51,.3);border-radius:0;background:#fffdf8;color:#332216;box-shadow:none}
+  .giotto-art-direction .revenue-buybox .buy-options button.active{border:2px solid #5a3d24;background:#f8edda;box-shadow:none}
+  .giotto-art-direction .buy-options button span{gap:3px;min-width:0}
+  .giotto-art-direction .buy-options strong{font-size:16px}
+  .giotto-art-direction .buy-options small{color:#756553;font-size:12px}
+  .giotto-art-direction .buy-options b{font-size:16px;color:#332216;white-space:nowrap}
+
+  .giotto-art-direction .preparation-options{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin:0}
+  .giotto-art-direction .preparation-options button{min-height:86px;padding:12px;border:1px solid rgba(122,91,51,.3);border-radius:0;background:#fffdf8;color:#332216;box-shadow:none}
+  .giotto-art-direction .preparation-options button.active{border:2px solid #5a3d24;background:#f8edda;box-shadow:none}
+  .giotto-art-direction .preparation-options button strong{font-size:15px}
+  .giotto-art-direction .preparation-options button small{font-size:11px;line-height:1.45;color:#756553}
+
+  .giotto-art-direction .buy-actions{grid-template-columns:1fr;gap:8px}
+  .giotto-art-direction .quantity-control{width:100%;height:56px;grid-template-columns:repeat(3,minmax(0,1fr));border-color:rgba(122,91,51,.3);background:#fffdf8}
+  .giotto-art-direction .quantity-control button{min-width:44px;color:#332216;font-size:28px}
+  .giotto-art-direction .quantity-control span{font-size:18px;font-weight:700;color:#332216}
+  .giotto-art-direction .add-cart-button,.giotto-art-direction .buy-now-button{min-height:56px;border:0;border-radius:0;color:#fffdf8;font-size:17px;font-weight:700;letter-spacing:.03em}
+  .giotto-art-direction .add-cart-button{background:#332216}
+  .giotto-art-direction .buy-now-button{margin-top:0;background:#b9853d}
+  .giotto-art-direction .add-cart-button:disabled,.giotto-art-direction .buy-now-button:disabled{background:#c9b9a7;color:#685b4e;opacity:1}
+
+  .giotto-art-direction .custom-roast-progress{margin:2px 0 0;color:#766556;font-size:12px;line-height:1.55}
+  .giotto-art-direction .custom-roast-panel{margin:2px 0 0;padding:14px;background:#f8f2e8;border-color:#d7c29f;gap:10px}
+  .giotto-art-direction .custom-roast-panel h3{font-size:19px}
+  .giotto-art-direction .custom-roast-panel p{font-size:12px;line-height:1.6}
+  .giotto-art-direction .custom-roast-toggle{padding:12px!important}
+  .giotto-art-direction .buy-hint{margin:0;font-size:11px!important;line-height:1.55}
+
+  .giotto-art-direction .revenue-proof-strip{display:grid;width:100%;margin:0;grid-template-columns:repeat(3,minmax(0,1fr));background:#f0e5d5;color:#49372a}
+  .giotto-art-direction .revenue-proof-strip div{min-width:0;padding:12px 7px;text-align:center;border-right:1px solid rgba(112,80,47,.2);border-bottom:0}
+  .giotto-art-direction .revenue-proof-strip div:last-child{border-right:0}
+  .giotto-art-direction .revenue-proof-strip b{font-size:10px;line-height:1.45}
+  .giotto-art-direction .revenue-proof-strip span{margin-top:2px;color:#705d4a;font-size:10px;line-height:1.35}
+}
