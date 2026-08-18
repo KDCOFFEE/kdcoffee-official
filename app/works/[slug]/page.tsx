@@ -127,20 +127,12 @@ export default async function WorkPage({ params }: { params: Promise<{ slug: str
                     )
                   }
                 />
-                <div className="wide-hero-shade" />
-                <div className="wide-hero-copy">
-                  <small>{isGiottoPrototype ? "KD COFFEE · COFFEE ARTWORK" : "KD COFFEE ARTWORK"}</small>
-                  {isGiottoPrototype ? <span>{product.artist} · {product.flavors?.slice(0, 3).join("・")}</span> : <><strong>{product.name}</strong><span>{product.flavors?.slice(0, 3).join("・")}</span></>}
-                </div>
+                {!isGiottoPrototype ? <><div className="wide-hero-shade" /><div className="wide-hero-copy"><small>KD COFFEE ARTWORK</small><strong>{product.name}</strong><span>{product.flavors?.slice(0, 3).join("・")}</span></div></> : null}
               </>
             ) : heroPath ? (
               <>
                 <img className="wide-hero-image" src={heroPath} alt={presentationHeroAsset?.alt || `${product.name} 商品形象主視覺`} />
-                <div className="wide-hero-shade" />
-                <div className="wide-hero-copy">
-                  <small>{isGiottoPrototype ? "KD COFFEE · COFFEE ARTWORK" : "KD COFFEE ARTWORK"}</small>
-                  {isGiottoPrototype ? <span>{product.artist} · {product.flavors?.slice(0, 3).join("・")}</span> : <><strong>{product.name}</strong><span>{product.flavors?.slice(0, 3).join("・")}</span></>}
-                </div>
+                {!isGiottoPrototype ? <><div className="wide-hero-shade" /><div className="wide-hero-copy"><small>KD COFFEE ARTWORK</small><strong>{product.name}</strong><span>{product.flavors?.slice(0, 3).join("・")}</span></div></> : null}
               </>
             ) : productPath ? (
               <img className="product-photo" src={productPath} alt={productAsset?.alt || `${product.name} 商品照片`} />

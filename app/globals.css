@@ -744,7 +744,7 @@ html,body{max-width:100%;overflow-x:hidden}.commerce-product-page{min-height:100
 .giotto-art-direction{background:linear-gradient(135deg,#fbf6ec 0%,#f0e5d1 50%,#f8f1e5 100%);color:#30251d}
 .giotto-art-direction .revenue-product-nav{background:rgba(251,247,239,.94);border-color:rgba(122,94,57,.2)}
 .giotto-art-direction .revenue-hero{max-width:1240px;gap:0;background:#f8f0e3;border:1px solid rgba(122,94,57,.2)}
-.giotto-art-direction .revenue-media{border:0;background:#e9d6b7}
+.giotto-art-direction .revenue-media{border:0;background:#f8f0e3}
 .giotto-art-direction .revenue-image-stage{height:570px;background:radial-gradient(circle at 18% 22%,#fff7df 0%,rgba(255,247,223,0) 37%),#d8b47c}
 .giotto-art-direction .wide-hero-image{object-position:center center}
 .giotto-art-direction .wide-hero-shade{background:linear-gradient(90deg,rgba(54,37,19,.18),rgba(54,37,19,0) 52%),linear-gradient(0deg,rgba(39,27,16,.26),rgba(39,27,16,0) 44%)}
@@ -780,8 +780,10 @@ html,body{max-width:100%;overflow-x:hidden}.commerce-product-page{min-height:100
 .giotto-art-direction .revenue-taste-card .taste-main strong{font-family:Georgia,"Noto Serif TC",serif;font-weight:400;color:#5b4129}
 
 @media(max-width:760px){
-  .giotto-art-direction .revenue-hero{border:0}
-  .giotto-art-direction .revenue-image-stage{height:344px}
+  .giotto-art-direction .revenue-hero{border:0;background:#fbf6ec}
+  .giotto-art-direction .revenue-media{width:100%;background:#f8f0e3}
+  .giotto-art-direction .revenue-image-stage{height:clamp(400px,58svh,520px);background:#f8f0e3}
+  .giotto-art-direction .wide-hero-image{object-fit:cover;object-position:60% center}
   .giotto-art-direction .wide-hero-copy{top:20px;left:20px;max-width:82%}
   .giotto-art-direction .revenue-buybox{padding:28px 20px 34px;background:#fbf6ec}
   .giotto-art-direction .revenue-buybox h1{font-size:39px;margin:10px 0 12px}

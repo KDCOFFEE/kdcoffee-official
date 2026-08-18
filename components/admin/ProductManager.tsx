@@ -20,7 +20,7 @@ type AssetType = {key:string;label:string;size:string;ratio:string;format:string
 const assetTypes:AssetType[] = [
   { key:"artworkCover", label:"Artwork Cover／作品藝術封面", size:"1600 × 2000", ratio:"4:5", format:"WebP", group:"Website", defaultUse:"HOME004、作品列表、Related Products 與其他作品卡片", note:"純作品藝術封面；不得放入真實或 AI 虛構商品包裝，也不燒入 Logo、作品名稱、價格、QR Code 或商品標籤。" },
   { key:"mainVisual", label:"主視覺（相容）", size:"1080 × 1350", ratio:"4:5", format:"PNG / WebP", group:"Website", defaultUse:"尚未導入 Artwork Cover 時的作品列表相容 fallback", note:"既有相容素材；新 Artwork Cover 與真實 Product Photo 應使用各自獨立角色。" },
-  { key:"hero", label:"Hero", size:"1920 × 1080", ratio:"16:9", format:"WebP", group:"Website", defaultUse:"作品頁頂部 Hero", note:"網站橫幅；主體偏右或偏下，預留文案區。" },
+  { key:"hero", label:"Product Hero／商品頁頂部主視覺", size:"1920 × 1080", ratio:"16:9", format:"WebP", group:"Website", defaultUse:"作品頁頂部 Product Hero", note:"可使用已含真實 KD Coffee pouch 的成品 Product Hero；前台會單獨呈現此素材，不會自動疊加 Product Photo。" },
   { key:"label", label:"Label", size:"80 × 100 mm", ratio:"4:5", format:"PNG / PDF", group:"Packaging", defaultUse:"作品頁 Gallery、標籤細節", note:"黑白熱感應標籤；線條清楚，背景需真正透明。" },
   { key:"productPhoto", label:"Product Photo／真實商品照片", size:"1600 × 2000", ratio:"4:5", format:"WebP / JPG", group:"Website", defaultUse:"商品詳細頁購買區與未來商品實拍 Gallery", note:"只能使用真實 KD Coffee 商品包裝；袋身、標籤與封口需清楚，不得以 AI 虛構或替換包裝與 Logo。" },
   { key:"facebook", label:"Facebook", size:"1080 × 1350", ratio:"4:5", format:"WebP / JPG", group:"Marketing", defaultUse:"Facebook 廣告與 Gallery", note:"社群廣告；產品為主角，保留標題與 CTA 區域。" },
