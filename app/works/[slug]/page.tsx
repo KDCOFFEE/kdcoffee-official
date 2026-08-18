@@ -55,6 +55,8 @@ export default async function WorkPage({ params }: { params: Promise<{ slug: str
   const product: any = live.menu.products.find((item: any) => item.slug === slug);
   if (!product || product.status === "hidden") notFound();
 
+  const isGiottoPrototype = product.slug === "giotto-awakening";
+
   const d = product.displayFields || {};
   const layout = {
     heroAsset: "hero",
@@ -66,12 +68,13 @@ export default async function WorkPage({ params }: { params: Promise<{ slug: str
     ...(product.pageLayout || {}),
   };
   const heroAsset = resolveHeroAsset(product);
+  const presentationHeroAsset = heroAsset || (isGiottoPrototype ? resolveListAsset(product) : null);
   const productAsset = resolveProductAsset(product);
   const heroMedia = getProductMediaAsset(product, "hero");
   const heroVideo = heroMedia?.type === "video" ? heroMedia : undefined;
   const legacyHeroPath = resolveProductAssetPath(product, "hero");
   const staticProductFallback = resolveStaticProductImage(product);
-  const heroPath = heroAsset?.path || "";
+  const heroPath = presentationHeroAsset?.path || "";
   const productPath = productAsset?.path || "";
   const gallery = resolveGalleryAssets(product);
   const related = live.menu.products.filter((p: any) => p.slug !== product.slug && p.status !== "hidden" && p.inMonthlyMenu).slice(0, 3);
@@ -90,7 +93,7 @@ export default async function WorkPage({ params }: { params: Promise<{ slug: str
       : "想探索不同風味的人";
 
   return (
-    <main className="revenue-product-page">
+    <main className={`revenue-product-page${isGiottoPrototype ? " giotto-art-direction" : ""}`}>
       <header className="revenue-product-nav">
         <Link href="/works">← 返回本月作品</Link>
         <Link className="brand" href="/"><span>KD</span><b>COFFEE</b></Link>
@@ -104,7 +107,7 @@ export default async function WorkPage({ params }: { params: Promise<{ slug: str
               <>
                 <KdMedia
                   media={heroVideo}
-                  alt={heroAsset?.alt || `${product.name} 商品形象主視覺`}
+                  alt={presentationHeroAsset?.alt || `${product.name} 商品形象主視覺`}
                   className="wide-hero-image"
                   backgroundVideo
                   eager
@@ -125,19 +128,17 @@ export default async function WorkPage({ params }: { params: Promise<{ slug: str
                 />
                 <div className="wide-hero-shade" />
                 <div className="wide-hero-copy">
-                  <small>KD COFFEE ARTWORK</small>
-                  <strong>{product.name}</strong>
-                  <span>{product.flavors?.slice(0, 3).join("・")}</span>
+                  <small>{isGiottoPrototype ? "KD COFFEE · COFFEE ARTWORK" : "KD COFFEE ARTWORK"}</small>
+                  {isGiottoPrototype ? <span>{product.artist} · {product.flavors?.slice(0, 3).join("・")}</span> : <><strong>{product.name}</strong><span>{product.flavors?.slice(0, 3).join("・")}</span></>}
                 </div>
               </>
             ) : heroPath ? (
               <>
-                <img className="wide-hero-image" src={heroPath} alt={heroAsset?.alt || `${product.name} 商品形象主視覺`} />
+                <img className="wide-hero-image" src={heroPath} alt={presentationHeroAsset?.alt || `${product.name} 商品形象主視覺`} />
                 <div className="wide-hero-shade" />
                 <div className="wide-hero-copy">
-                  <small>KD COFFEE ARTWORK</small>
-                  <strong>{product.name}</strong>
-                  <span>{product.flavors?.slice(0, 3).join("・")}</span>
+                  <small>{isGiottoPrototype ? "KD COFFEE · COFFEE ARTWORK" : "KD COFFEE ARTWORK"}</small>
+                  {isGiottoPrototype ? <span>{product.artist} · {product.flavors?.slice(0, 3).join("・")}</span> : <><strong>{product.name}</strong><span>{product.flavors?.slice(0, 3).join("・")}</span></>}
                 </div>
               </>
             ) : productPath ? (
@@ -173,6 +174,7 @@ export default async function WorkPage({ params }: { params: Promise<{ slug: str
 
           {product.flavors?.length ? <div className="revenue-flavors">{product.flavors.slice(0, 5).map((f: string) => <span key={f}>{f}</span>)}</div> : null}
           {minPrice !== null ? <div className="revenue-price"><small>售價</small><strong>NT$ {minPrice.toLocaleString("zh-TW")} 起</strong></div> : null}
+          {isGiottoPrototype ? <p className="giotto-purchase-heading">SELECT YOUR COFFEE</p> : null}
           <AddToCart product={product} />
         </div>
       </section>
@@ -185,8 +187,8 @@ export default async function WorkPage({ params }: { params: Promise<{ slug: str
 
       <section className="revenue-content-section revenue-taste">
         <div className="revenue-section-title">
-          <p>WHAT IT TASTES LIKE</p>
-          <h2>喝起來是什麼感覺？</h2>
+          <p>{isGiottoPrototype ? "THE ARTWORK" : "WHAT IT TASTES LIKE"}</p>
+          <h2>{isGiottoPrototype ? product.name : "喝起來是什麼感覺？"}</h2>
           <span>{product.mood || "一杯乾淨、清楚，而且容易親近的精品咖啡。"}</span>
         </div>
         <div className="revenue-taste-card">

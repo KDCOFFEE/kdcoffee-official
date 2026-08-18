@@ -740,6 +740,65 @@ html,body{max-width:100%;overflow-x:hidden}.commerce-product-page{min-height:100
   .buy-now-button { min-height: 52px; }
 }
 
+/* F.2A — Giotto is the first product-only art direction prototype. */
+.giotto-art-direction{background:linear-gradient(135deg,#fbf6ec 0%,#f0e5d1 50%,#f8f1e5 100%);color:#30251d}
+.giotto-art-direction .revenue-product-nav{background:rgba(251,247,239,.94);border-color:rgba(122,94,57,.2)}
+.giotto-art-direction .revenue-hero{max-width:1240px;gap:0;background:#f8f0e3;border:1px solid rgba(122,94,57,.2)}
+.giotto-art-direction .revenue-media{border:0;background:#e9d6b7}
+.giotto-art-direction .revenue-image-stage{height:570px;background:radial-gradient(circle at 18% 22%,#fff7df 0%,rgba(255,247,223,0) 37%),#d8b47c}
+.giotto-art-direction .wide-hero-image{object-position:center center}
+.giotto-art-direction .wide-hero-shade{background:linear-gradient(90deg,rgba(54,37,19,.18),rgba(54,37,19,0) 52%),linear-gradient(0deg,rgba(39,27,16,.26),rgba(39,27,16,0) 44%)}
+.giotto-art-direction .wide-hero-copy{top:27px;bottom:auto;left:30px;max-width:76%;text-shadow:0 1px 14px rgba(54,34,16,.24)}
+.giotto-art-direction .wide-hero-copy small{color:#fff6de;font-size:9px;letter-spacing:.22em}
+.giotto-art-direction .wide-hero-copy span{margin-top:8px;color:#fff8e9;font-size:11px;letter-spacing:.14em}
+.giotto-art-direction .revenue-buybox{background:rgba(255,252,245,.88);border:0;box-shadow:none;padding:48px 46px}
+.giotto-art-direction .revenue-kicker{color:#8a6438}
+.giotto-art-direction .revenue-badges span{border:1px solid rgba(128,95,52,.34);background:transparent;color:#735330}
+.giotto-art-direction .revenue-lead{color:#5f5041}
+.giotto-art-direction .revenue-order-promise{display:none}
+.giotto-art-direction .revenue-quickfacts{border-color:rgba(128,95,52,.28);background:rgba(249,241,226,.74)}
+.giotto-art-direction .revenue-quickfacts span{border-color:rgba(128,95,52,.24)}
+.giotto-art-direction .revenue-quickfacts small{color:#94734f;text-transform:uppercase;letter-spacing:.12em}
+.giotto-art-direction .revenue-quickfacts b{color:#382b20}
+.giotto-art-direction .revenue-fit{display:none}
+.giotto-art-direction .revenue-flavors{margin-top:20px;gap:0}
+.giotto-art-direction .revenue-flavors span{padding:0 12px;border:0;color:#705536;font-family:Georgia,"Noto Serif TC",serif;font-size:15px}
+.giotto-art-direction .revenue-flavors span:first-child{padding-left:0}
+.giotto-art-direction .revenue-flavors span+span{border-left:1px solid rgba(128,95,52,.32)}
+.giotto-art-direction .revenue-price{margin-top:22px;border-color:rgba(128,95,52,.3)}
+.giotto-art-direction .revenue-price strong{color:#30231a}
+.giotto-purchase-heading{margin:26px 0 0;color:#8b673e;font-size:10px;font-weight:800;letter-spacing:.2em}
+.giotto-art-direction .buy-panel{margin-top:0}
+.giotto-art-direction .buy-step>span{background:#6f5132}
+.giotto-art-direction .buy-options button,.giotto-art-direction .preparation-options button{border-color:rgba(122,91,51,.28);background:rgba(255,252,245,.72)}
+.giotto-art-direction .buy-options button.active,.giotto-art-direction .preparation-options button.active{border-color:#8c633f;background:#f5ead9;box-shadow:inset 0 0 0 1px #8c633f}
+.giotto-art-direction .add-cart-button,.giotto-art-direction .buy-now-button{background:#3b2b1f}
+.giotto-art-direction .revenue-proof-strip{display:none}
+.giotto-art-direction .revenue-content-section{padding-top:94px}
+.giotto-art-direction .revenue-taste-card{background:transparent;border-top:1px solid rgba(122,94,57,.35);border-bottom:1px solid rgba(122,94,57,.35);padding:30px 0}
+.giotto-art-direction .revenue-taste-card dl div{border-color:rgba(122,94,57,.24)}
+.giotto-art-direction .revenue-taste-card .taste-main strong{font-family:Georgia,"Noto Serif TC",serif;font-weight:400;color:#5b4129}
+
+@media(max-width:760px){
+  .giotto-art-direction .revenue-hero{border:0}
+  .giotto-art-direction .revenue-image-stage{height:344px}
+  .giotto-art-direction .wide-hero-copy{top:20px;left:20px;max-width:82%}
+  .giotto-art-direction .revenue-buybox{padding:28px 20px 34px;background:#fbf6ec}
+  .giotto-art-direction .revenue-buybox h1{font-size:39px;margin:10px 0 12px}
+  .giotto-art-direction .revenue-quickfacts{grid-template-columns:1fr;margin-top:18px}
+  .giotto-art-direction .revenue-quickfacts span{display:grid;grid-template-columns:88px 1fr;gap:10px;align-items:baseline;padding:10px 12px;border-right:0;border-bottom:1px solid rgba(128,95,52,.2)}
+  .giotto-art-direction .revenue-quickfacts span:last-child{border-bottom:0}
+  .giotto-art-direction .revenue-quickfacts small{margin:0}
+  .giotto-art-direction .revenue-flavors{margin-top:17px}
+  .giotto-art-direction .revenue-flavors span{font-size:14px;padding:0 8px}
+  .giotto-art-direction .revenue-content-section{padding-top:68px}
+  .giotto-art-direction .revenue-taste-card{padding:24px 0}
+}
+
+@media(prefers-reduced-motion:reduce){
+  .giotto-art-direction *{scroll-behavior:auto}
+}
+
 
 /* KD Coffee Studio v15.0 Interaction Foundation
    Decorative layers must never intercept navigation, product selection or touch input. */
