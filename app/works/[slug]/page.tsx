@@ -135,8 +135,9 @@ export default async function WorkPage({ params }: { params: Promise<{ slug: str
       <ProductPageEntrance enabled={isGiottoPrototype}>
       <section className={`revenue-hero ${heroVideo || heroPath ? "has-wide-hero" : ""}`} id="top-purchase">
         <div className="revenue-media">
-          <div className={`revenue-image-stage ${heroVideo || heroPath ? "wide-hero-stage" : "product-stage"} page-entrance-hero`}>
-            {heroVideo ? (
+          <div className="product-hero-sticky">
+            <div className={`revenue-image-stage ${heroVideo || heroPath ? "wide-hero-stage" : "product-stage"} page-entrance-hero`}>
+              {heroVideo ? (
               <>
                 <KdMedia
                   media={heroVideo}
@@ -171,7 +172,8 @@ export default async function WorkPage({ params }: { params: Promise<{ slug: str
             ) : (
               <ProductBagFallback product={product} />
             )}
-            {isGiottoPrototype ? <div className="giotto-hero-light-veil" aria-hidden="true" /> : null}
+              {isGiottoPrototype ? <div className="giotto-hero-light-veil" aria-hidden="true" /> : null}
+            </div>
           </div>
           {!isGiottoPrototype ? <div className="revenue-media-caption"><span>{heroVideo || heroPath ? "商品情境主視覺" : "實際商品包裝"}</span><b>實際出貨內容以所選規格為準</b></div> : null}
         </div>
@@ -200,7 +202,7 @@ export default async function WorkPage({ params }: { params: Promise<{ slug: str
           </div>
 
           {product.flavors?.length ? <div className="revenue-flavors product-entrance-profile">{product.flavors.slice(0, 5).map((f: string) => <span key={f}>{f}</span>)}</div> : null}
-          {minPrice !== null ? <div className="revenue-price product-entrance-price"><small>售價</small><strong>NT$ {minPrice.toLocaleString("zh-TW")} 起</strong></div> : null}
+          {minPrice !== null ? <div className={`revenue-price product-entrance-price${isGiottoPrototype ? " giotto-desktop-price" : ""}`}><small>售價</small><strong>NT$ {minPrice.toLocaleString("zh-TW")} 起</strong></div> : null}
           </div>
 
           <div className="product-purchase-chapter">
