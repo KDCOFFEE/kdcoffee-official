@@ -4,23 +4,29 @@ import { useEffect, useRef, useState } from "react";
 
 type RoastedBeanViewerProps = { productName: string; imageSrc: string; imageAlt: string };
 type ViewerState = "closed" | "open" | "closing";
+const closeDuration = 300;
 
 export default function RoastedBeanViewer({ productName, imageSrc, imageAlt }: RoastedBeanViewerProps) {
   const [viewerState, setViewerState] = useState<ViewerState>("closed");
+  const viewerStateRef = useRef<ViewerState>("closed");
   const triggerRef = useRef<HTMLButtonElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
   const closeTimerRef = useRef<number | null>(null);
   const isOpen = viewerState !== "closed";
 
+  const setViewerPhase = (nextState: ViewerState) => {
+    viewerStateRef.current = nextState;
+    setViewerState(nextState);
+  };
   const finishClose = () => {
-    setViewerState("closed");
+    setViewerPhase("closed");
     window.requestAnimationFrame(() => triggerRef.current?.focus());
   };
   const closeViewer = () => {
-    if (viewerState !== "open") return;
+    if (viewerStateRef.current !== "open") return;
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return finishClose();
-    setViewerState("closing");
-    closeTimerRef.current = window.setTimeout(finishClose, 240);
+    setViewerPhase("closing");
+    closeTimerRef.current = window.setTimeout(finishClose, closeDuration);
   };
 
   useEffect(() => {
@@ -28,6 +34,7 @@ export default function RoastedBeanViewer({ productName, imageSrc, imageAlt }: R
     const previousOverflow = document.body.style.overflow;
     const previousPaddingRight = document.body.style.paddingRight;
     const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+    document.body.classList.add("roasted-bean-viewer-open");
     document.body.style.overflow = "hidden";
     if (scrollbarWidth > 0) document.body.style.paddingRight = `${scrollbarWidth}px`;
 
@@ -46,6 +53,7 @@ export default function RoastedBeanViewer({ productName, imageSrc, imageAlt }: R
     document.addEventListener("keydown", onKeyDown);
     return () => {
       window.cancelAnimationFrame(focusInitialControl);
+      document.body.classList.remove("roasted-bean-viewer-open");
       document.body.style.overflow = previousOverflow;
       document.body.style.paddingRight = previousPaddingRight;
       document.removeEventListener("keydown", onKeyDown);
@@ -55,14 +63,15 @@ export default function RoastedBeanViewer({ productName, imageSrc, imageAlt }: R
   useEffect(() => () => { if (closeTimerRef.current !== null) window.clearTimeout(closeTimerRef.current); }, []);
 
   return <>
-    <button ref={triggerRef} type="button" className="roasted-bean-viewer-trigger" onClick={() => setViewerState("open")} aria-haspopup="dialog" aria-expanded={isOpen}>
-      <span>實際烘焙豆</span><strong>查看照片 <i aria-hidden="true">→</i></strong>
+    <button ref={triggerRef} type="button" className="roasted-bean-viewer-trigger" onClick={() => setViewerPhase("open")} aria-haspopup="dialog" aria-expanded={isOpen}>
+      <span className="roasted-bean-viewer-eyebrow">ROASTED BEANS</span>
+      <span className="roasted-bean-viewer-copy"><strong>看見這支咖啡烘焙後的樣子</strong><span>VIEW ROASTED BEANS <i aria-hidden="true">↗</i></span></span>
     </button>
     {isOpen ? <div className={`roasted-bean-viewer-backdrop${viewerState === "closing" ? " is-closing" : ""}`} role="presentation" onMouseDown={(event) => { if (event.currentTarget === event.target) closeViewer(); }}>
       <div ref={dialogRef} className={`roasted-bean-viewer-modal${viewerState === "closing" ? " is-closing" : ""}`} role="dialog" aria-modal="true" aria-labelledby="roasted-bean-viewer-title">
+        <div className="roasted-bean-viewer-heading"><p>ROASTED BEANS</p><h2 id="roasted-bean-viewer-title">{productName}</h2></div>
         <button type="button" className="roasted-bean-viewer-close" aria-label="關閉烘焙豆照片" data-roasted-bean-close onClick={closeViewer}>×</button>
-        <div className="roasted-bean-viewer-heading"><p>實際烘焙豆</p><h2 id="roasted-bean-viewer-title">{productName}</h2></div>
-        <img src={imageSrc} alt={imageAlt} className="roasted-bean-viewer-image" />
+        <figure className="roasted-bean-viewer-figure"><img src={imageSrc} alt={imageAlt} className="roasted-bean-viewer-image" /><figcaption>實際烘焙豆影像</figcaption></figure>
       </div>
     </div> : null}
   </>;
