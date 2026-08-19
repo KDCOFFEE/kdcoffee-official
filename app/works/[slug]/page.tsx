@@ -5,6 +5,7 @@ import AddToCart from "@/components/commerce/AddToCart";
 import CartLink from "@/components/commerce/CartLink";
 import MobilePurchaseReturnButton from "@/components/commerce/MobilePurchaseReturnButton";
 import ProductPageEntrance from "@/components/commerce/ProductPageEntrance";
+import RoastedBeanViewer from "@/components/commerce/RoastedBeanViewer";
 import ProductSectionReveals from "@/components/commerce/ProductSectionReveals";
 import ProductVisualMedia from "@/components/commerce/ProductVisualMedia";
 import KdMedia from "@/components/media/KdMedia";
@@ -104,6 +105,9 @@ export default async function WorkPage({ params }: { params: Promise<{ slug: str
   const productPath = productAsset?.path || "";
   const artworkCoverPath = resolveStaticProductAssetImage(product, "artworkCover");
   const artworkCoverAlt = product.assets?.artworkCover?.alt || `${product.name} Artwork Cover`;
+  const roastedBeanPhotoPath = resolveStaticProductAssetImage(product, "roastedBeanPhoto");
+  const showRoastedBeanViewer = product.showRoastedBeanPhoto === true && Boolean(roastedBeanPhotoPath);
+  const roastedBeanPhotoAlt = product.assets?.roastedBeanPhoto?.alt || `${product.name} 實際烘焙咖啡豆`;
   const gallery = resolveGalleryAssets(product);
   const related = live.menu.products.filter((p: any) => p.slug !== product.slug && p.status !== "hidden" && p.inMonthlyMenu).slice(0, 3);
   const facts = [
@@ -226,7 +230,7 @@ export default async function WorkPage({ params }: { params: Promise<{ slug: str
         </div>
         <div className="product-story-details">
           {product.flavors?.length ? <section className="flavor-notes" aria-labelledby="flavor-notes-title"><div className="story-detail-heading" data-section-reveal><EditorialIcon name="flavor" /><div><p>FLAVOR NOTES</p><h3 id="flavor-notes-title">風味筆記</h3></div></div><div className="flavor-notes-list">{product.flavors.map((flavor: string, index: number) => <span key={flavor} data-section-reveal data-reveal-delay={String(index * 80)}>{flavor}</span>)}</div></section> : null}
-          {facts.length ? <section className="coffee-profile" aria-labelledby="coffee-profile-title"><div className="story-detail-heading" data-section-reveal><div><p>COFFEE PROFILE</p><h3 id="coffee-profile-title">咖啡資料</h3></div></div><dl>{facts.map(([key, label, value], index) => <div key={String(key)} data-section-reveal data-reveal-delay={String(index * 80)}><dt><EditorialIcon name={key as "origin" | "process" | "roast"} /><span>{label}</span></dt><dd>{value}</dd></div>)}</dl></section> : null}
+          {facts.length || showRoastedBeanViewer ? <section className="coffee-profile" aria-labelledby="coffee-profile-title"><div className="story-detail-heading" data-section-reveal><div><p>COFFEE PROFILE</p><h3 id="coffee-profile-title">咖啡資料</h3></div></div>{facts.length ? <dl>{facts.map(([key, label, value], index) => <div key={String(key)} data-section-reveal data-reveal-delay={String(index * 80)}><dt><EditorialIcon name={key as "origin" | "process" | "roast"} /><span>{label}</span></dt><dd>{value}</dd></div>)}</dl> : null}{showRoastedBeanViewer ? <div className="roasted-bean-viewer-entry" data-section-reveal data-reveal-delay="180"><RoastedBeanViewer productName={product.name} imageSrc={roastedBeanPhotoPath} imageAlt={roastedBeanPhotoAlt} /></div> : null}</section> : null}
         </div>
       </section>
 

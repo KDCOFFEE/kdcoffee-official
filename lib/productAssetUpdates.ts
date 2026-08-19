@@ -4,6 +4,7 @@ export type ProductAssetUpdate = {
   cover?: unknown;
   assets?: unknown;
   pageLayout?: unknown;
+  showRoastedBeanPhoto?: unknown;
 };
 
 export class ProductAssetUpdateError extends Error {
@@ -77,6 +78,7 @@ export function preserveServerAssetFields<T extends ProductRecord>(serverProduct
     cover: serverProduct["cover"],
     assets: serverProduct["assets"],
     pageLayout: serverProduct["pageLayout"],
+    showRoastedBeanPhoto: serverProduct["showRoastedBeanPhoto"],
   } as T;
 }
 
@@ -108,6 +110,10 @@ export function mergeProductAssetUpdates(
     if ("cover" in update) next["cover"] = String(update.cover ?? "").trim();
     if ("assets" in update) next["assets"] = mergeAssets(current["assets"], update.assets);
     if ("pageLayout" in update) next["pageLayout"] = normalizePageLayout(update.pageLayout);
+    if ("showRoastedBeanPhoto" in update) {
+      if (typeof update.showRoastedBeanPhoto !== "boolean") throw new ProductAssetUpdateError("烘焙豆照片顯示設定格式不正確。");
+      next["showRoastedBeanPhoto"] = update.showRoastedBeanPhoto;
+    }
     products[index] = next;
   }
 

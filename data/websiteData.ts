@@ -62,6 +62,9 @@ export type CoffeeArtwork = {
     }
   >;
 
+  /** Optional product-media feature; absent products remain disabled. */
+  showRoastedBeanPhoto?: boolean;
+
   pageLayout?: {
     heroAsset?: string;
     productAsset?: string;
