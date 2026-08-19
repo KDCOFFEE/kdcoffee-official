@@ -1375,3 +1375,49 @@ html,body{max-width:100%;overflow-x:hidden}.commerce-product-page{min-height:100
   .coffee-profile dd{font-size:13px}
   .flavor-notes-list span{font-size:15px}
 }
+
+/* F.4 — Progressive editorial reveals and compact mobile recommendation rail. */
+.product-section-reveals{display:contents}
+.product-section-reveals.is-reveal-enabled [data-section-reveal]{
+  opacity:0;
+  transform:translateY(12px);
+  transition:opacity 480ms cubic-bezier(.22,.61,.36,1) var(--product-reveal-delay,0ms),transform 480ms cubic-bezier(.22,.61,.36,1) var(--product-reveal-delay,0ms);
+}
+.product-section-reveals.is-reveal-enabled [data-section-reveal].is-revealed{opacity:1;transform:translateY(0)}
+
+@media(max-width:760px){
+  .revenue-related{
+    width:100%;
+    padding-right:0;
+    padding-left:16px;
+    overflow:hidden;
+  }
+  .revenue-related>.revenue-section-title{padding-right:16px}
+  .revenue-related-grid{
+    display:grid;
+    grid-auto-flow:column;
+    grid-auto-columns:76vw;
+    grid-template-columns:none;
+    gap:12px;
+    margin-top:24px;
+    padding:0 16px 8px 0;
+    overflow-x:auto;
+    overscroll-behavior-x:contain;
+    scroll-snap-type:x mandatory;
+    -webkit-overflow-scrolling:touch;
+    scrollbar-width:none;
+  }
+  .revenue-related-grid::-webkit-scrollbar{display:none}
+  .revenue-related-card{min-width:0;scroll-snap-align:start}
+  .revenue-related-card .related-thumb{height:auto;aspect-ratio:4/3}
+  .revenue-related-card>div:last-child{padding:16px}
+  .revenue-related-card h3{font-size:20px}
+}
+
+@media(prefers-reduced-motion:reduce){
+  .product-section-reveals.is-reveal-enabled [data-section-reveal]{
+    opacity:1;
+    transform:none;
+    transition:none;
+  }
+}
