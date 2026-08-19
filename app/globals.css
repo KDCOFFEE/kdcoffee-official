@@ -1469,5 +1469,96 @@ html,body{max-width:100%;overflow-x:hidden}.commerce-product-page{min-height:100
   .giotto-art-direction .product-page-entrance.is-entrance-ready .product-entrance-title{transition-delay:750ms}
   .giotto-art-direction .product-page-entrance.is-entrance-ready .product-entrance-summary{transition-delay:970ms}
   .giotto-art-direction .product-page-entrance.is-entrance-ready .product-entrance-profile{transition-delay:1200ms}
-  .giotto-art-direction .product-page-entrance.is-entrance-ready .product-entrance-price{transition-delay:1370ms}
+.giotto-art-direction .product-page-entrance.is-entrance-ready .product-entrance-price{transition-delay:1370ms}
 }
+
+/* F.4.3 — Giotto roasting craft and purchase guidance editorial refinement. */
+.giotto-art-direction .clean-roasting-section{
+  position:relative;
+  gap:clamp(34px,6vw,78px);
+  padding-top:68px;
+  padding-bottom:62px;
+  border-top:0;
+  background:#f2eae0;
+  box-shadow:0 0 0 100vmax #f2eae0;
+  clip-path:inset(0 -100vmax);
+}
+.giotto-art-direction .clean-roasting-intro{max-width:400px}
+.giotto-art-direction .clean-roasting-intro>p{color:#876543}
+.giotto-art-direction .clean-roasting-intro h2{margin-bottom:18px;font-size:clamp(32px,3.5vw,46px)}
+.giotto-art-direction .clean-roasting-intro strong{font-family:Georgia,"Noto Serif TC",serif;font-size:21px;font-weight:500}
+.giotto-art-direction .clean-roasting-intro span{margin-top:9px;color:#705f50}
+.giotto-art-direction .clean-roasting-proofs{
+  counter-reset:giotto-roasting-proof;
+  border:0;
+  background:transparent;
+}
+.giotto-art-direction .clean-roasting-proofs article{
+  position:relative;
+  display:grid;
+  grid-template-columns:28px 24px minmax(0,1fr);
+  align-items:start;
+  gap:11px;
+  min-width:0;
+  padding:8px 20px;
+  border:0;
+  background:transparent;
+}
+.giotto-art-direction .clean-roasting-proofs article+article{border-left:1px solid rgba(102,75,48,.22)}
+.giotto-art-direction .clean-roasting-proofs article::before{
+  counter-increment:giotto-roasting-proof;
+  content:"0" counter(giotto-roasting-proof);
+  padding-top:2px;
+  color:#9a7a58;
+  font-size:10px;
+  font-weight:800;
+  letter-spacing:.12em;
+}
+.giotto-art-direction .clean-roasting-proofs .editorial-icon{width:21px;height:21px;margin:0;color:#806042}
+.giotto-art-direction .clean-roasting-proofs h3{font-size:14px;line-height:1.45}
+.giotto-art-direction .clean-roasting-proofs p{margin-top:5px;color:#79695a;font-size:12px;line-height:1.65}
+
+.giotto-art-direction .revenue-faq{
+  position:relative;
+  padding-top:50px;
+  padding-bottom:54px;
+  border-top:0;
+  background:#faf7f1;
+  box-shadow:0 0 0 100vmax #faf7f1;
+  clip-path:inset(0 -100vmax);
+}
+.giotto-art-direction .revenue-faq::before{content:"";position:absolute;top:0;left:-100vmax;right:-100vmax;height:1px;background:rgba(102,75,48,.16)}
+.giotto-art-direction .revenue-faq .revenue-section-title{max-width:640px}
+.giotto-art-direction .revenue-faq .revenue-section-title>p{color:#876543}
+.giotto-art-direction .revenue-faq .revenue-section-title h2{margin:9px 0 10px;font-size:clamp(30px,3.2vw,42px);line-height:1.18}
+.giotto-faq-mobile-break{display:none}
+.giotto-art-direction .giotto-faq-supporting-copy{max-width:430px;color:#756557;font-size:15px;line-height:1.7}
+.giotto-art-direction .revenue-faq-list{max-width:760px;margin-top:26px;border-top:1px solid rgba(102,75,48,.26)}
+.giotto-art-direction .revenue-faq-list details{background:transparent;border-color:rgba(102,75,48,.22)}
+.giotto-art-direction .revenue-faq-list summary{min-height:58px;align-items:center;padding:16px 3px;color:#3c2c20;font-size:15px;line-height:1.55}
+.giotto-art-direction .revenue-faq-list summary::after{color:#806042;font-size:20px;line-height:1}
+.giotto-art-direction .revenue-faq-list details p{max-width:620px;padding:0 3px 17px;color:#756557;font-size:14px;line-height:1.72}
+@keyframes giotto-faq-answer-in{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+@media(prefers-reduced-motion:no-preference){.giotto-art-direction .revenue-faq-list details[open] p{animation:giotto-faq-answer-in 240ms ease-out both}}
+
+@media(max-width:760px){
+  .giotto-art-direction .clean-roasting-section{grid-template-columns:1fr;gap:28px;padding-top:50px;padding-bottom:42px}
+  .giotto-art-direction .clean-roasting-intro h2{margin:7px 0 14px;font-size:34px}
+  .giotto-art-direction .clean-roasting-intro strong{font-size:20px}
+  .giotto-art-direction .clean-roasting-proofs{display:grid;grid-template-columns:1fr}
+  .giotto-art-direction .clean-roasting-proofs article{grid-template-columns:28px 23px minmax(0,1fr);gap:10px;padding:17px 0}
+  .giotto-art-direction .clean-roasting-proofs article+article{border-top:1px solid rgba(102,75,48,.18);border-left:0}
+  .giotto-art-direction .clean-roasting-proofs .editorial-icon{width:20px;height:20px}
+  .giotto-art-direction .clean-roasting-proofs h3{font-size:14px}
+  .giotto-art-direction .clean-roasting-proofs p{font-size:12px}
+
+  .giotto-art-direction .revenue-faq{padding-top:44px;padding-bottom:46px}
+  .giotto-art-direction .revenue-faq .revenue-section-title h2{font-size:32px}
+  .giotto-faq-mobile-break{display:block}
+  .giotto-art-direction .giotto-faq-supporting-copy{font-size:14px;line-height:1.7}
+  .giotto-art-direction .revenue-faq-list{margin-top:22px}
+  .giotto-art-direction .revenue-faq-list summary{min-height:56px;padding:15px 2px;font-size:15px}
+  .giotto-art-direction .revenue-faq-list details p{padding:0 2px 16px;font-size:13px}
+}
+
+@media(prefers-reduced-motion:reduce){.giotto-art-direction .revenue-faq-list details[open] p{animation:none}}

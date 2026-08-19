@@ -237,12 +237,16 @@ export default async function WorkPage({ params }: { params: Promise<{ slug: str
           <strong data-section-reveal data-reveal-delay="120">流床式熱風烘焙</strong>
           <span data-section-reveal data-reveal-delay="180">讓咖啡豆均勻翻動，呈現乾淨清楚的風味。</span>
         </div>
-        <div className="clean-roasting-proofs">{CLEAN_ROASTING_PROOFS.map((proof, index) => <article key={proof.title} data-section-reveal data-reveal-delay={String(index * 80)}><EditorialIcon name={proof.icon} /><div><h3>{proof.title}</h3><p>{proof.text}</p></div></article>)}</div>
+        <div className="clean-roasting-proofs">{CLEAN_ROASTING_PROOFS.map((proof, index) => <article key={proof.title} data-section-reveal data-reveal-delay={String(isGiottoPrototype ? 220 + (index * 110) : index * 80)}><EditorialIcon name={proof.icon} /><div><h3>{proof.title}</h3><p>{proof.text}</p></div></article>)}</div>
       </section>
 
       <section className="revenue-content-section revenue-faq">
-        <div className="revenue-section-title" data-section-reveal><p>BEFORE YOU ORDER</p><h2>第一次購買也不用擔心</h2></div>
-        <div className="revenue-faq-list" data-section-reveal>
+        <div className="revenue-section-title" data-section-reveal={isGiottoPrototype ? undefined : "true"}>
+          <p data-section-reveal={isGiottoPrototype ? "true" : undefined}>BEFORE YOU ORDER</p>
+          <h2 data-section-reveal={isGiottoPrototype ? "true" : undefined} data-reveal-delay={isGiottoPrototype ? "80" : undefined}>{isGiottoPrototype ? <>第一次選咖啡，<br className="giotto-faq-mobile-break" />我們陪你慢慢選。</> : "第一次購買也不用擔心"}</h2>
+          {isGiottoPrototype ? <span className="giotto-faq-supporting-copy" data-section-reveal="true" data-reveal-delay="160">不用先懂產區、處理法或烘焙度，從你喜歡的味道開始就好。</span> : null}
+        </div>
+        <div className="revenue-faq-list" data-section-reveal={isGiottoPrototype ? "true" : undefined}>
           <details open><summary>這款會不會很酸？</summary><p>精品咖啡的果酸更接近水果或果茶的明亮感，不是尖銳的酸敗味。仍不確定時，可在訂單備註平常喜歡的口感。</p></details>
           <details><summary>咖啡豆可以幫我磨粉嗎？</summary><p>可以。請在訂單備註填寫手沖、咖啡機或其他沖煮方式，我們會在確認訂單時核對研磨需求。</p></details>
           <details><summary>付款與取貨怎麼進行？</summary><p>可選擇 7-ELEVEN 取貨付款，或預約至 KD Coffee 工作室自取。送單後我們會確認庫存與取貨資料。</p></details>

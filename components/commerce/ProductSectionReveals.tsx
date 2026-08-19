@@ -48,7 +48,8 @@ export default function ProductSectionReveals({ children, calibrated = false }: 
 
     targets.forEach((target) => {
       const requestedDelay = Number.parseInt(target.dataset.revealDelay || "0", 10);
-      const delay = Number.isFinite(requestedDelay) ? Math.min(Math.max(requestedDelay, 0), 220) : 0;
+      const maximumDelay = calibrated ? 440 : 220;
+      const delay = Number.isFinite(requestedDelay) ? Math.min(Math.max(requestedDelay, 0), maximumDelay) : 0;
       target.style.setProperty("--product-reveal-delay", `${delay}ms`);
       observer.observe(target);
     });
