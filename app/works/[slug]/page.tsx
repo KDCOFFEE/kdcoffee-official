@@ -129,7 +129,7 @@ export default async function WorkPage({ params }: { params: Promise<{ slug: str
 
       <section className={`revenue-hero ${heroVideo || heroPath ? "has-wide-hero" : ""}`} id="top-purchase">
         <div className="revenue-media">
-          <div className={`revenue-image-stage ${heroVideo || heroPath ? "wide-hero-stage" : "product-stage"}`}>
+          <div className={`revenue-image-stage ${heroVideo || heroPath ? "wide-hero-stage" : "product-stage"} page-entrance-hero`}>
             {heroVideo ? (
               <>
                 <KdMedia
@@ -170,29 +170,29 @@ export default async function WorkPage({ params }: { params: Promise<{ slug: str
         </div>
 
         <div className="revenue-buybox">
-          <p className="revenue-kicker">KD COFFEE · {product.artist}</p>
-          <div className="revenue-badges">
+          <p className="revenue-kicker product-entrance-eyebrow">KD COFFEE · {product.artist}</p>
+          <div className="revenue-badges product-entrance-eyebrow">
             {product.tag ? <span>{product.tag}</span> : null}
             {product.stock && product.stock <= 5 ? <span className="stock-alert">少量供應</span> : null}
           </div>
-          <h1>{product.name}</h1>
-          <p className="revenue-lead">{product.shortCopy || product.subtitle}</p>
-          <p className="revenue-order-promise">第一次購買也安心：選規格、填取貨資料，收到商品再付款。</p>
+          <h1 className="product-entrance-title">{product.name}</h1>
+          <p className="revenue-lead product-entrance-summary">{product.shortCopy || product.subtitle}</p>
+          <p className="revenue-order-promise product-entrance-summary">第一次購買也安心：選規格、填取貨資料，收到商品再付款。</p>
 
-          <div className="revenue-quickfacts">
+          <div className="revenue-quickfacts product-entrance-profile">
             {product.origin ? <span><small>產區</small><b>{product.origin}</b></span> : null}
             {product.process ? <span><small>處理法</small><b>{product.process}</b></span> : null}
             {product.roast ? <span><small>烘焙度</small><b>{product.roast}</b></span> : null}
           </div>
 
-          <div className="revenue-fit">
+          <div className="revenue-fit product-entrance-profile">
             <b>適合這樣的你</b>
             <span>✓ {suitable}</span>
             <span>✓ 想喝乾淨、清楚、不焦苦的咖啡</span>
           </div>
 
-          {product.flavors?.length ? <div className="revenue-flavors">{product.flavors.slice(0, 5).map((f: string) => <span key={f}>{f}</span>)}</div> : null}
-          {minPrice !== null ? <div className="revenue-price"><small>售價</small><strong>NT$ {minPrice.toLocaleString("zh-TW")} 起</strong></div> : null}
+          {product.flavors?.length ? <div className="revenue-flavors product-entrance-profile">{product.flavors.slice(0, 5).map((f: string) => <span key={f}>{f}</span>)}</div> : null}
+          {minPrice !== null ? <div className="revenue-price product-entrance-profile"><small>售價</small><strong>NT$ {minPrice.toLocaleString("zh-TW")} 起</strong></div> : null}
           {isGiottoPrototype ? <p className="giotto-purchase-heading">SELECT YOUR COFFEE</p> : null}
           <AddToCart product={product} />
         </div>
