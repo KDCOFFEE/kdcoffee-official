@@ -13,6 +13,7 @@ import {
   resolveListAsset,
   resolveProductAsset,
   resolveProductAssetPath,
+  resolveStaticProductAssetImage,
   resolveStaticProductImage,
 } from "@/lib/productVisualAssets";
 
@@ -50,6 +51,28 @@ function ProductBagFallback({ product, compact = false }: { product: any; compac
   );
 }
 
+type EditorialIconName = "flavor" | "origin" | "process" | "roast" | "air" | "heat" | "cupping";
+
+function EditorialIcon({ name }: { name: EditorialIconName }) {
+  const paths: Record<EditorialIconName, React.ReactNode> = {
+    flavor: <><circle cx="12" cy="12" r="2.5" /><path d="M12 3.5v3M12 17.5v3M3.5 12h3M17.5 12h3M6 6l2.1 2.1M15.9 15.9 18 18M18 6l-2.1 2.1M8.1 15.9 6 18" /></>,
+    origin: <><path d="M12 21s6-5.1 6-11a6 6 0 1 0-12 0c0 5.9 6 11 6 11Z" /><circle cx="12" cy="10" r="2" /></>,
+    process: <><path d="M4 8.5c2.3-2 4.8-2 7 0s4.7 2 9 0M4 15.5c2.3-2 4.8-2 7 0s4.7 2 9 0" /><path d="M7 4.5v15M17 4.5v15" /></>,
+    roast: <><path d="M7 4.5c4.8 0 8 3.4 8 7.5s-3.2 7.5-8 7.5c-1.3-2.2-1.3-4.8 0-7.5-1.3-2.7-1.3-5.3 0-7.5Z" /><path d="M7 12h8" /></>,
+    air: <><path d="M4 9c2.5-2.6 5.3-2.6 8.3 0 2.4 2 4.9 2 7.7 0" /><path d="M4 15c2.5-2.6 5.3-2.6 8.3 0 2.4 2 4.9 2 7.7 0" /></>,
+    heat: <><path d="M12 4v10" /><path d="M8.5 8.5a5 5 0 1 0 7 0" /><circle cx="12" cy="17" r="1" /></>,
+    cupping: <><path d="M5 8h11v4.5a5.5 5.5 0 0 1-11 0V8Z" /><path d="M16 9.5h1.2a2.3 2.3 0 0 1 0 4.6H16M4 20h14" /></>,
+  };
+
+  return <svg className="editorial-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.45" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>;
+}
+
+const CLEAN_ROASTING_PROOFS = [
+  { icon: "air" as const, title: "流床式熱風烘焙", text: "讓咖啡豆均勻翻動，呈現乾淨清楚的風味。" },
+  { icon: "heat" as const, title: "紅外線熱顯像", text: "精準控溫。" },
+  { icon: "cupping" as const, title: "杯測確認", text: "透過實際品飲確認香氣、甜感與整體平衡。" },
+];
+
 export default async function WorkPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const live = await getLiveWebsiteData();
@@ -77,15 +100,17 @@ export default async function WorkPage({ params }: { params: Promise<{ slug: str
   const staticProductFallback = resolveStaticProductImage(product);
   const heroPath = presentationHeroAsset?.path || "";
   const productPath = productAsset?.path || "";
+  const artworkCoverPath = resolveStaticProductAssetImage(product, "artworkCover");
+  const artworkCoverAlt = product.assets?.artworkCover?.alt || `${product.name} Artwork Cover`;
   const gallery = resolveGalleryAssets(product);
   const related = live.menu.products.filter((p: any) => p.slug !== product.slug && p.status !== "hidden" && p.inMonthlyMenu).slice(0, 3);
   const facts = [
     ["origin", "產區", product.origin],
     ["process", "處理法", product.process],
     ["roast", "烘焙度", product.roast],
-    ["variety", "品種", product.variety],
-    ["altitude", "海拔", product.altitude],
   ].filter(([key, , value]) => d[key as string] !== false && value && value !== "待確認");
+  const storyLead = product.mood || product.shortCopy || product.subtitle || "一杯乾淨、清楚，而且容易親近的精品咖啡。";
+  const storySupportingCopy = product.shortCopy && product.shortCopy !== storyLead ? product.shortCopy : "";
   const minPrice = product.purchase?.length ? Math.min(...product.purchase.map((o: any) => o.price)) : null;
   const suitable = product.tag?.includes("入門")
     ? "第一次喝精品咖啡的人"
@@ -183,16 +208,30 @@ export default async function WorkPage({ params }: { params: Promise<{ slug: str
         <div><b>7-ELEVEN 取貨付款</b><span>收到商品再付款，第一次購買更安心</span></div>
       </section>
 
-      <section className="revenue-content-section revenue-taste">
-        <div className="revenue-section-title">
-          <p>{isGiottoPrototype ? "THE ARTWORK" : "WHAT IT TASTES LIKE"}</p>
-          <h2>{isGiottoPrototype ? product.name : "喝起來是什麼感覺？"}</h2>
-          <span>{product.mood || "一杯乾淨、清楚，而且容易親近的精品咖啡。"}</span>
+      <section className="revenue-content-section product-story-section">
+        <div className={`product-story-grid${artworkCoverPath ? "" : " without-artwork"}`}>
+          <div className="product-story-intro revenue-section-title">
+            <p>THE ARTWORK</p>
+            <h2>{product.name}</h2>
+            <span>{storyLead}</span>
+            {storySupportingCopy ? <p className="product-story-supporting-copy">{storySupportingCopy}</p> : null}
+          </div>
+          {artworkCoverPath ? <figure className="product-story-artwork"><img src={artworkCoverPath} alt={artworkCoverAlt} /></figure> : null}
         </div>
-        <div className="revenue-taste-card">
-          <div className="taste-main"><small>主要風味</small><strong>{product.flavors?.slice(0, 3).join("、") || "乾淨甜感"}</strong><p>{product.subtitle || product.shortCopy}</p></div>
-          {facts.length ? <dl>{facts.map(([key, label, value]) => <div key={String(key)}><dt>{label}</dt><dd>{value}</dd></div>)}</dl> : null}
+        <div className="product-story-details">
+          {product.flavors?.length ? <section className="flavor-notes" aria-labelledby="flavor-notes-title"><div className="story-detail-heading"><EditorialIcon name="flavor" /><div><p>FLAVOR NOTES</p><h3 id="flavor-notes-title">風味筆記</h3></div></div><div className="flavor-notes-list">{product.flavors.map((flavor: string) => <span key={flavor}>{flavor}</span>)}</div></section> : null}
+          {facts.length ? <section className="coffee-profile" aria-labelledby="coffee-profile-title"><div className="story-detail-heading"><div><p>COFFEE PROFILE</p><h3 id="coffee-profile-title">咖啡資料</h3></div></div><dl>{facts.map(([key, label, value]) => <div key={String(key)}><dt><EditorialIcon name={key as "origin" | "process" | "roast"} /><span>{label}</span></dt><dd>{value}</dd></div>)}</dl></section> : null}
         </div>
+      </section>
+
+      <section className="revenue-content-section clean-roasting-section" aria-labelledby="clean-roasting-title">
+        <div className="clean-roasting-intro">
+          <p>CLEAN ROASTING</p>
+          <h2 id="clean-roasting-title">乾淨的烘焙</h2>
+          <strong>流床式熱風烘焙</strong>
+          <span>讓咖啡豆均勻翻動，呈現乾淨清楚的風味。</span>
+        </div>
+        <div className="clean-roasting-proofs">{CLEAN_ROASTING_PROOFS.map((proof) => <article key={proof.title}><EditorialIcon name={proof.icon} /><div><h3>{proof.title}</h3><p>{proof.text}</p></div></article>)}</div>
       </section>
 
       <section className="revenue-content-section revenue-faq">
