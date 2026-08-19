@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 type RoastedBeanViewerProps = { productName: string; imageSrc: string; imageAlt: string };
 type ViewerState = "closed" | "open" | "closing";
@@ -12,7 +13,9 @@ export default function RoastedBeanViewer({ productName, imageSrc, imageAlt }: R
   const triggerRef = useRef<HTMLButtonElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
   const closeTimerRef = useRef<number | null>(null);
+  const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
   const isOpen = viewerState !== "closed";
+  const isViewerMounted = isOpen && portalTarget !== null;
 
   const setViewerPhase = (nextState: ViewerState) => {
     viewerStateRef.current = nextState;
@@ -30,7 +33,7 @@ export default function RoastedBeanViewer({ productName, imageSrc, imageAlt }: R
   };
 
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isViewerMounted) return;
     const previousOverflow = document.body.style.overflow;
     const previousPaddingRight = document.body.style.paddingRight;
     const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
@@ -58,8 +61,9 @@ export default function RoastedBeanViewer({ productName, imageSrc, imageAlt }: R
       document.body.style.paddingRight = previousPaddingRight;
       document.removeEventListener("keydown", onKeyDown);
     };
-  }, [isOpen]);
+  }, [isViewerMounted]);
 
+  useEffect(() => { setPortalTarget(document.body); }, []);
   useEffect(() => () => { if (closeTimerRef.current !== null) window.clearTimeout(closeTimerRef.current); }, []);
 
   return <>
@@ -67,12 +71,12 @@ export default function RoastedBeanViewer({ productName, imageSrc, imageAlt }: R
       <span className="roasted-bean-viewer-eyebrow">ROASTED BEANS</span>
       <span className="roasted-bean-viewer-copy"><strong>看見這支咖啡烘焙後的樣子</strong><span>VIEW ROASTED BEANS <i aria-hidden="true">↗</i></span></span>
     </button>
-    {isOpen ? <div className={`roasted-bean-viewer-backdrop${viewerState === "closing" ? " is-closing" : ""}`} role="presentation" onMouseDown={(event) => { if (event.currentTarget === event.target) closeViewer(); }}>
+    {isViewerMounted ? createPortal(<div className={`roasted-bean-viewer-backdrop${viewerState === "closing" ? " is-closing" : ""}`} role="presentation" onMouseDown={(event) => { if (!(event.target as HTMLElement).closest("[data-roasted-bean-content]")) closeViewer(); }}>
       <div ref={dialogRef} className={`roasted-bean-viewer-modal${viewerState === "closing" ? " is-closing" : ""}`} role="dialog" aria-modal="true" aria-labelledby="roasted-bean-viewer-title">
-        <div className="roasted-bean-viewer-heading"><p>ROASTED BEANS</p><h2 id="roasted-bean-viewer-title">{productName}</h2></div>
-        <button type="button" className="roasted-bean-viewer-close" aria-label="關閉烘焙豆照片" data-roasted-bean-close onClick={closeViewer}>×</button>
-        <figure className="roasted-bean-viewer-figure"><img src={imageSrc} alt={imageAlt} className="roasted-bean-viewer-image" /><figcaption>實際烘焙豆影像</figcaption></figure>
+        <div className="roasted-bean-viewer-heading" data-roasted-bean-content><p>ROASTED BEANS</p><h2 id="roasted-bean-viewer-title">{productName}</h2></div>
+        <button type="button" className="roasted-bean-viewer-close" aria-label="關閉烘焙豆照片" data-roasted-bean-close data-roasted-bean-content onClick={closeViewer}>×</button>
+        <figure className="roasted-bean-viewer-figure" data-roasted-bean-content><img src={imageSrc} alt={imageAlt} className="roasted-bean-viewer-image" /><figcaption>實際烘焙豆影像</figcaption></figure>
       </div>
-    </div> : null}
+    </div>, portalTarget) : null}
   </>;
 }
