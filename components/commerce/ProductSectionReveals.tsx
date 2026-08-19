@@ -4,13 +4,14 @@ import { type ReactNode, useEffect, useRef, useState } from "react";
 
 type ProductSectionRevealsProps = {
   children: ReactNode;
+  calibrated?: boolean;
 };
 
 /**
  * Adds restrained, progressive reveal motion to editorial product content.
  * One observer is shared by every marked section inside this boundary.
  */
-export default function ProductSectionReveals({ children }: ProductSectionRevealsProps) {
+export default function ProductSectionReveals({ children, calibrated = false }: ProductSectionRevealsProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const [motionEnabled, setMotionEnabled] = useState(false);
 
@@ -27,6 +28,10 @@ export default function ProductSectionReveals({ children }: ProductSectionReveal
       return;
     }
 
+    const triggerOffset = calibrated
+      ? getComputedStyle(root).getPropertyValue("--product-section-trigger-offset").trim() || "-22%"
+      : "12%";
+
     const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
@@ -38,12 +43,12 @@ export default function ProductSectionReveals({ children }: ProductSectionReveal
           observer.unobserve(entry.target);
         });
       },
-      { rootMargin: "0px 0px 12% 0px", threshold: 0.01 },
+      { rootMargin: `0px 0px ${triggerOffset} 0px`, threshold: calibrated ? 0.1 : 0.01 },
     );
 
     targets.forEach((target) => {
       const requestedDelay = Number.parseInt(target.dataset.revealDelay || "0", 10);
-      const delay = Number.isFinite(requestedDelay) ? Math.min(Math.max(requestedDelay, 0), 120) : 0;
+      const delay = Number.isFinite(requestedDelay) ? Math.min(Math.max(requestedDelay, 0), 220) : 0;
       target.style.setProperty("--product-reveal-delay", `${delay}ms`);
       observer.observe(target);
     });

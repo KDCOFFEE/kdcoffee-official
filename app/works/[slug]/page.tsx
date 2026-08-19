@@ -4,6 +4,7 @@ import { getLiveWebsiteData } from "@/data/websiteData";
 import AddToCart from "@/components/commerce/AddToCart";
 import CartLink from "@/components/commerce/CartLink";
 import MobilePurchaseReturnButton from "@/components/commerce/MobilePurchaseReturnButton";
+import ProductPageEntrance from "@/components/commerce/ProductPageEntrance";
 import ProductSectionReveals from "@/components/commerce/ProductSectionReveals";
 import ProductVisualMedia from "@/components/commerce/ProductVisualMedia";
 import KdMedia from "@/components/media/KdMedia";
@@ -127,6 +128,7 @@ export default async function WorkPage({ params }: { params: Promise<{ slug: str
         <CartLink compact />
       </header>
 
+      <ProductPageEntrance enabled={isGiottoPrototype}>
       <section className={`revenue-hero ${heroVideo || heroPath ? "has-wide-hero" : ""}`} id="top-purchase">
         <div className="revenue-media">
           <div className={`revenue-image-stage ${heroVideo || heroPath ? "wide-hero-stage" : "product-stage"} page-entrance-hero`}>
@@ -165,13 +167,14 @@ export default async function WorkPage({ params }: { params: Promise<{ slug: str
             ) : (
               <ProductBagFallback product={product} />
             )}
+            {isGiottoPrototype ? <div className="giotto-hero-light-veil" aria-hidden="true" /> : null}
           </div>
           <div className="revenue-media-caption"><span>{heroVideo || heroPath ? "商品情境主視覺" : "實際商品包裝"}</span><b>實際出貨內容以所選規格為準</b></div>
         </div>
 
         <div className="revenue-buybox">
           <p className="revenue-kicker product-entrance-eyebrow">KD COFFEE · {product.artist}</p>
-          <div className="revenue-badges product-entrance-eyebrow">
+          <div className="revenue-badges product-entrance-badge">
             {product.tag ? <span>{product.tag}</span> : null}
             {product.stock && product.stock <= 5 ? <span className="stock-alert">少量供應</span> : null}
           </div>
@@ -192,11 +195,12 @@ export default async function WorkPage({ params }: { params: Promise<{ slug: str
           </div>
 
           {product.flavors?.length ? <div className="revenue-flavors product-entrance-profile">{product.flavors.slice(0, 5).map((f: string) => <span key={f}>{f}</span>)}</div> : null}
-          {minPrice !== null ? <div className="revenue-price product-entrance-profile"><small>售價</small><strong>NT$ {minPrice.toLocaleString("zh-TW")} 起</strong></div> : null}
+          {minPrice !== null ? <div className="revenue-price product-entrance-price"><small>售價</small><strong>NT$ {minPrice.toLocaleString("zh-TW")} 起</strong></div> : null}
           {isGiottoPrototype ? <p className="giotto-purchase-heading">SELECT YOUR COFFEE</p> : null}
           <AddToCart product={product} />
         </div>
       </section>
+      </ProductPageEntrance>
       <div
         id="purchase-end-sentinel"
         className="purchase-end-sentinel"
@@ -209,36 +213,36 @@ export default async function WorkPage({ params }: { params: Promise<{ slug: str
         <div><b>7-ELEVEN 取貨付款</b><span>收到商品再付款，第一次購買更安心</span></div>
       </section>
 
-      <ProductSectionReveals>
+      <ProductSectionReveals calibrated={isGiottoPrototype}>
       <section className="revenue-content-section product-story-section">
         <div className={`product-story-grid${artworkCoverPath ? "" : " without-artwork"}`}>
-          <div className="product-story-intro revenue-section-title" data-section-reveal>
-            <p>THE ARTWORK</p>
-            <h2>{product.name}</h2>
-            <span>{storyLead}</span>
-            {storySupportingCopy ? <p className="product-story-supporting-copy">{storySupportingCopy}</p> : null}
+          <div className="product-story-intro revenue-section-title">
+            <p data-section-reveal>THE ARTWORK</p>
+            <h2 data-section-reveal data-reveal-delay="80">{product.name}</h2>
+            <span data-section-reveal data-reveal-delay="160">{storyLead}</span>
+            {storySupportingCopy ? <p className="product-story-supporting-copy" data-section-reveal data-reveal-delay="220">{storySupportingCopy}</p> : null}
           </div>
-          {artworkCoverPath ? <figure className="product-story-artwork" data-section-reveal data-reveal-delay="70"><img src={artworkCoverPath} alt={artworkCoverAlt} /></figure> : null}
+          {artworkCoverPath ? <figure className="product-story-artwork" data-section-reveal data-reveal-delay="180" data-reveal-variant="artwork-cover"><img src={artworkCoverPath} alt={artworkCoverAlt} /></figure> : null}
         </div>
         <div className="product-story-details">
-          {product.flavors?.length ? <section className="flavor-notes" aria-labelledby="flavor-notes-title" data-section-reveal data-reveal-delay="70"><div className="story-detail-heading"><EditorialIcon name="flavor" /><div><p>FLAVOR NOTES</p><h3 id="flavor-notes-title">風味筆記</h3></div></div><div className="flavor-notes-list">{product.flavors.map((flavor: string) => <span key={flavor}>{flavor}</span>)}</div></section> : null}
-          {facts.length ? <section className="coffee-profile" aria-labelledby="coffee-profile-title" data-section-reveal data-reveal-delay="120"><div className="story-detail-heading"><div><p>COFFEE PROFILE</p><h3 id="coffee-profile-title">咖啡資料</h3></div></div><dl>{facts.map(([key, label, value]) => <div key={String(key)}><dt><EditorialIcon name={key as "origin" | "process" | "roast"} /><span>{label}</span></dt><dd>{value}</dd></div>)}</dl></section> : null}
+          {product.flavors?.length ? <section className="flavor-notes" aria-labelledby="flavor-notes-title"><div className="story-detail-heading" data-section-reveal><EditorialIcon name="flavor" /><div><p>FLAVOR NOTES</p><h3 id="flavor-notes-title">風味筆記</h3></div></div><div className="flavor-notes-list">{product.flavors.map((flavor: string, index: number) => <span key={flavor} data-section-reveal data-reveal-delay={String(index * 80)}>{flavor}</span>)}</div></section> : null}
+          {facts.length ? <section className="coffee-profile" aria-labelledby="coffee-profile-title"><div className="story-detail-heading" data-section-reveal><div><p>COFFEE PROFILE</p><h3 id="coffee-profile-title">咖啡資料</h3></div></div><dl>{facts.map(([key, label, value], index) => <div key={String(key)} data-section-reveal data-reveal-delay={String(index * 80)}><dt><EditorialIcon name={key as "origin" | "process" | "roast"} /><span>{label}</span></dt><dd>{value}</dd></div>)}</dl></section> : null}
         </div>
       </section>
 
       <section className="revenue-content-section clean-roasting-section" aria-labelledby="clean-roasting-title">
-        <div className="clean-roasting-intro" data-section-reveal>
-          <p>CLEAN ROASTING</p>
-          <h2 id="clean-roasting-title">乾淨的烘焙</h2>
-          <strong>流床式熱風烘焙</strong>
-          <span>讓咖啡豆均勻翻動，呈現乾淨清楚的風味。</span>
+        <div className="clean-roasting-intro">
+          <p data-section-reveal>CLEAN ROASTING</p>
+          <h2 id="clean-roasting-title" data-section-reveal data-reveal-delay="80">乾淨的烘焙</h2>
+          <strong data-section-reveal data-reveal-delay="120">流床式熱風烘焙</strong>
+          <span data-section-reveal data-reveal-delay="180">讓咖啡豆均勻翻動，呈現乾淨清楚的風味。</span>
         </div>
-        <div className="clean-roasting-proofs">{CLEAN_ROASTING_PROOFS.map((proof, index) => <article key={proof.title} data-section-reveal data-reveal-delay={String(index * 60)}><EditorialIcon name={proof.icon} /><div><h3>{proof.title}</h3><p>{proof.text}</p></div></article>)}</div>
+        <div className="clean-roasting-proofs">{CLEAN_ROASTING_PROOFS.map((proof, index) => <article key={proof.title} data-section-reveal data-reveal-delay={String(index * 80)}><EditorialIcon name={proof.icon} /><div><h3>{proof.title}</h3><p>{proof.text}</p></div></article>)}</div>
       </section>
 
-      <section className="revenue-content-section revenue-faq" data-section-reveal>
-        <div className="revenue-section-title"><p>BEFORE YOU ORDER</p><h2>第一次購買也不用擔心</h2></div>
-        <div className="revenue-faq-list">
+      <section className="revenue-content-section revenue-faq">
+        <div className="revenue-section-title" data-section-reveal><p>BEFORE YOU ORDER</p><h2>第一次購買也不用擔心</h2></div>
+        <div className="revenue-faq-list" data-section-reveal>
           <details open><summary>這款會不會很酸？</summary><p>精品咖啡的果酸更接近水果或果茶的明亮感，不是尖銳的酸敗味。仍不確定時，可在訂單備註平常喜歡的口感。</p></details>
           <details><summary>咖啡豆可以幫我磨粉嗎？</summary><p>可以。請在訂單備註填寫手沖、咖啡機或其他沖煮方式，我們會在確認訂單時核對研磨需求。</p></details>
           <details><summary>付款與取貨怎麼進行？</summary><p>可選擇 7-ELEVEN 取貨付款，或預約至 KD Coffee 工作室自取。送單後我們會確認庫存與取貨資料。</p></details>
@@ -247,7 +251,7 @@ export default async function WorkPage({ params }: { params: Promise<{ slug: str
 
       {layout.showGallery !== false && gallery.length ? <section className="revenue-content-section revenue-gallery"><div className="revenue-section-title"><p>PRODUCT DETAILS</p><h2>包裝與作品細節</h2></div><div className="revenue-gallery-grid">{gallery.map((item: any) => <figure key={item.key}><img src={item.path} alt={item.alt || `${product.name} ${item.key}`} />{item.caption ? <figcaption>{item.caption}</figcaption> : null}</figure>)}</div></section> : null}
 
-      {layout.showRelatedWorks !== false && related.length ? <section className="revenue-content-section revenue-related" data-section-reveal><div className="revenue-section-title"><p>YOU MAY ALSO LIKE</p><h2>也可以比較這三款</h2></div><div className="revenue-related-grid">{related.map((item: any) => { const listAsset = resolveListAsset(item); const price = item.purchase?.length ? Math.min(...item.purchase.map((o: any) => o.price)) : null; return <Link key={item.slug} href={`/works/${item.slug}`} className="revenue-related-card"><div className="related-thumb"><ProductVisualMedia src={listAsset?.path} alt={listAsset?.alt || item.name} className="product-list-image" loading="lazy" decoding="async" fallback={<ProductBagFallback product={item} compact />}/></div><div><small>{item.tag || item.artist}</small><h3>{item.name}</h3><p>{item.flavors?.slice(0, 3).join("、")}</p>{price !== null ? <b>NT$ {price.toLocaleString("zh-TW")} 起</b> : null}<span>查看與購買 →</span></div></Link>; })}</div></section> : null}
+      {layout.showRelatedWorks !== false && related.length ? <section className="revenue-content-section revenue-related"><div className="revenue-section-title" data-section-reveal><p>YOU MAY ALSO LIKE</p><h2>也可以比較這三款</h2></div><div className="revenue-related-grid" data-section-reveal>{related.map((item: any) => { const listAsset = resolveListAsset(item); const price = item.purchase?.length ? Math.min(...item.purchase.map((o: any) => o.price)) : null; return <Link key={item.slug} href={`/works/${item.slug}`} className="revenue-related-card"><div className="related-thumb"><ProductVisualMedia src={listAsset?.path} alt={listAsset?.alt || item.name} className="product-list-image" loading="lazy" decoding="async" fallback={<ProductBagFallback product={item} compact />}/></div><div><small>{item.tag || item.artist}</small><h3>{item.name}</h3><p>{item.flavors?.slice(0, 3).join("、")}</p>{price !== null ? <b>NT$ {price.toLocaleString("zh-TW")} 起</b> : null}<span>查看與購買 →</span></div></Link>; })}</div></section> : null}
       </ProductSectionReveals>
 
       {minPrice !== null && product.purchasable !== false && product.status !== "sold_out" ? <MobilePurchaseReturnButton /> : null}
