@@ -173,10 +173,11 @@ export default async function WorkPage({ params }: { params: Promise<{ slug: str
             )}
             {isGiottoPrototype ? <div className="giotto-hero-light-veil" aria-hidden="true" /> : null}
           </div>
-          <div className="revenue-media-caption"><span>{heroVideo || heroPath ? "商品情境主視覺" : "實際商品包裝"}</span><b>實際出貨內容以所選規格為準</b></div>
+          {!isGiottoPrototype ? <div className="revenue-media-caption"><span>{heroVideo || heroPath ? "商品情境主視覺" : "實際商品包裝"}</span><b>實際出貨內容以所選規格為準</b></div> : null}
         </div>
 
-        <div className="revenue-buybox">
+        <div className="revenue-buybox product-hero-commerce">
+          <div className="product-hero-identity">
           <p className="revenue-kicker product-entrance-eyebrow">KD COFFEE · {product.artist}</p>
           <div className="revenue-badges product-entrance-badge">
             {product.tag ? <span>{product.tag}</span> : null}
@@ -200,8 +201,12 @@ export default async function WorkPage({ params }: { params: Promise<{ slug: str
 
           {product.flavors?.length ? <div className="revenue-flavors product-entrance-profile">{product.flavors.slice(0, 5).map((f: string) => <span key={f}>{f}</span>)}</div> : null}
           {minPrice !== null ? <div className="revenue-price product-entrance-price"><small>售價</small><strong>NT$ {minPrice.toLocaleString("zh-TW")} 起</strong></div> : null}
+          </div>
+
+          <div className="product-purchase-chapter">
           {isGiottoPrototype ? <p className="giotto-purchase-heading">SELECT YOUR COFFEE</p> : null}
           <AddToCart product={product} />
+          </div>
         </div>
       </section>
       </ProductPageEntrance>
