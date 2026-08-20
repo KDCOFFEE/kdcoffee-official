@@ -59,7 +59,7 @@ export type CoffeeArtwork = {
       title?: string;
       caption?: string;
       fileName?: string;
-    }
+    } | undefined
   >;
 
   /** Optional product-media feature; absent products remain disabled. */

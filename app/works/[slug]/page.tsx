@@ -132,7 +132,7 @@ export default async function WorkPage({ params }: { params: Promise<{ slug: str
         <CartLink compact />
       </header>
 
-      <ProductPageEntrance enabled={isGiottoPrototype}>
+      <ProductPageEntrance>
       <section className={`revenue-hero ${heroVideo || heroPath ? "has-wide-hero" : ""}`} id="top-purchase">
         <div className="revenue-media">
           <div className="product-hero-sticky">
@@ -172,7 +172,6 @@ export default async function WorkPage({ params }: { params: Promise<{ slug: str
             ) : (
               <ProductBagFallback product={product} />
             )}
-              {isGiottoPrototype ? <div className="giotto-hero-light-veil" aria-hidden="true" /> : null}
             </div>
           </div>
           {!isGiottoPrototype ? <div className="revenue-media-caption"><span>{heroVideo || heroPath ? "商品情境主視覺" : "實際商品包裝"}</span><b>實際出貨內容以所選規格為準</b></div> : null}

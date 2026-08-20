@@ -1447,40 +1447,55 @@ body{overflow-x:clip;overflow-y:visible}
   .product-entrance-profile{animation-delay:380ms}
 }
 
-/* F.4.2 — Giotto-specific first-paint entrance and reading-zone calibration. */
+/* F.4.3A.1 — Giotto Product Stage stays fully visible; no opacity-driven entrance. */
 .product-page-entrance{display:contents}
 .giotto-art-direction{
-  --product-hero-enter-duration:1500ms;
-  --product-hero-enter-delay:150ms;
-  --product-identity-duration:850ms;
-  --product-identity-stagger:170ms;
   --product-section-reveal-duration:780ms;
   --product-artwork-cover-reveal-duration:850ms;
   --product-section-trigger-offset:-22%;
 }
-.giotto-art-direction .giotto-hero-light-veil{position:absolute;z-index:3;inset:0;pointer-events:none;background:radial-gradient(circle at 24% 22%,rgba(255,247,224,.52),rgba(255,247,224,0) 42%),linear-gradient(115deg,rgba(255,248,231,.26),rgba(255,248,231,0) 62%);opacity:0}
-@media(prefers-reduced-motion:no-preference){
-  .giotto-art-direction .page-entrance-hero,.giotto-art-direction .product-entrance-eyebrow,.giotto-art-direction .product-entrance-badge,.giotto-art-direction .product-entrance-title,.giotto-art-direction .product-entrance-summary,.giotto-art-direction .product-entrance-profile,.giotto-art-direction .product-entrance-price{animation:none}
-  .giotto-art-direction .product-page-entrance:not(.is-entrance-ready) .page-entrance-hero{opacity:.6;transform:scale(1.035)}
-  .giotto-art-direction .product-page-entrance:not(.is-entrance-ready) .product-entrance-eyebrow,.giotto-art-direction .product-page-entrance:not(.is-entrance-ready) .product-entrance-badge,.giotto-art-direction .product-page-entrance:not(.is-entrance-ready) .product-entrance-title,.giotto-art-direction .product-page-entrance:not(.is-entrance-ready) .product-entrance-summary,.giotto-art-direction .product-page-entrance:not(.is-entrance-ready) .product-entrance-profile,.giotto-art-direction .product-page-entrance:not(.is-entrance-ready) .product-entrance-price{opacity:0;transform:translateY(12px)}
-  .giotto-art-direction .product-page-entrance:not(.is-entrance-ready) .giotto-hero-light-veil{opacity:.32}
-  .giotto-art-direction .product-page-entrance.is-entrance-ready .page-entrance-hero{opacity:1;transform:scale(1);transition:opacity var(--product-hero-enter-duration) cubic-bezier(.22,.61,.36,1) var(--product-hero-enter-delay),transform var(--product-hero-enter-duration) cubic-bezier(.22,.61,.36,1) var(--product-hero-enter-delay)}
-  .giotto-art-direction .product-page-entrance.is-entrance-ready .giotto-hero-light-veil{opacity:0;transition:opacity 1450ms cubic-bezier(.22,.61,.36,1) var(--product-hero-enter-delay)}
-  .giotto-art-direction .product-page-entrance.is-entrance-ready .product-entrance-eyebrow,.giotto-art-direction .product-page-entrance.is-entrance-ready .product-entrance-badge,.giotto-art-direction .product-page-entrance.is-entrance-ready .product-entrance-title,.giotto-art-direction .product-page-entrance.is-entrance-ready .product-entrance-summary,.giotto-art-direction .product-page-entrance.is-entrance-ready .product-entrance-profile,.giotto-art-direction .product-page-entrance.is-entrance-ready .product-entrance-price{opacity:1;transform:translateY(0);transition:opacity var(--product-identity-duration) cubic-bezier(.22,.61,.36,1),transform var(--product-identity-duration) cubic-bezier(.22,.61,.36,1)}
-  .giotto-art-direction .product-page-entrance.is-entrance-ready .product-entrance-eyebrow{transition-delay:420ms}
-  .giotto-art-direction .product-page-entrance.is-entrance-ready .product-entrance-badge{transition-delay:calc(420ms + var(--product-identity-stagger))}
-  .giotto-art-direction .product-page-entrance.is-entrance-ready .product-entrance-title{transition-delay:750ms}
-  .giotto-art-direction .product-page-entrance.is-entrance-ready .product-entrance-summary{transition-delay:970ms}
-  .giotto-art-direction .product-page-entrance.is-entrance-ready .product-entrance-profile{transition-delay:1200ms}
-.giotto-art-direction .product-page-entrance.is-entrance-ready .product-entrance-price{transition-delay:1370ms}
+.giotto-art-direction .page-entrance-hero,
+.giotto-art-direction .wide-hero-image,
+.giotto-art-direction .product-hero-identity,
+.giotto-art-direction .product-entrance-eyebrow,
+.giotto-art-direction .product-entrance-badge,
+.giotto-art-direction .product-entrance-title,
+.giotto-art-direction .product-entrance-summary,
+.giotto-art-direction .product-entrance-profile,
+.giotto-art-direction .product-entrance-price{
+  opacity:1;
+  visibility:visible;
+  animation:none;
+  transition:none;
+}
+.giotto-art-direction .page-entrance-hero,
+.giotto-art-direction .product-hero-identity,
+.giotto-art-direction .product-entrance-eyebrow,
+.giotto-art-direction .product-entrance-badge,
+.giotto-art-direction .product-entrance-title,
+.giotto-art-direction .product-entrance-summary,
+.giotto-art-direction .product-entrance-profile,
+.giotto-art-direction .product-entrance-price{
+  transform:none;
 }
 
 /* F.4.3 — Giotto roasting craft and purchase guidance editorial refinement. */
+.giotto-art-direction .product-story-details{
+  align-items:start;
+  gap:clamp(24px,4vw,48px);
+  margin-top:38px;
+  padding-top:20px;
+}
+.giotto-art-direction .flavor-notes{padding-top:2px}
+.giotto-art-direction .flavor-notes-list{margin-top:16px}
+.giotto-art-direction .coffee-profile dl{margin-top:16px}
+.giotto-art-direction .coffee-profile dl div{padding-top:13px;padding-bottom:13px}
+.giotto-art-direction .coffee-profile dd{margin-top:8px}
 .giotto-art-direction .clean-roasting-section{
   position:relative;
-  gap:clamp(34px,6vw,78px);
-  padding-top:68px;
-  padding-bottom:62px;
+  gap:clamp(38px,5vw,64px);
+  padding-top:60px;
+  padding-bottom:56px;
   border-top:0;
   background:#f2eae0;
   box-shadow:0 0 0 100vmax #f2eae0;
@@ -1493,7 +1508,8 @@ body{overflow-x:clip;overflow-y:visible}
 .giotto-art-direction .clean-roasting-intro span{margin-top:9px;color:#705f50}
 .giotto-art-direction .clean-roasting-proofs{
   counter-reset:giotto-roasting-proof;
-  border:0;
+  border-top:1px solid rgba(102,75,48,.22);
+  border-bottom:1px solid rgba(102,75,48,.22);
   background:transparent;
 }
 .giotto-art-direction .clean-roasting-proofs article{
@@ -1503,7 +1519,7 @@ body{overflow-x:clip;overflow-y:visible}
   align-items:start;
   gap:11px;
   min-width:0;
-  padding:8px 20px;
+  padding:20px 18px;
   border:0;
   background:transparent;
 }
@@ -1545,6 +1561,8 @@ body{overflow-x:clip;overflow-y:visible}
 @media(prefers-reduced-motion:no-preference){.giotto-art-direction .revenue-faq-list details[open] p{animation:giotto-faq-answer-in 240ms ease-out both}}
 
 @media(max-width:760px){
+  .giotto-art-direction .product-story-details{gap:24px;margin-top:28px;padding-top:18px}
+  .giotto-art-direction .coffee-profile dl div{padding-top:12px;padding-bottom:12px}
   .giotto-art-direction .clean-roasting-section{grid-template-columns:1fr;gap:28px;padding-top:50px;padding-bottom:42px}
   .giotto-art-direction .clean-roasting-intro h2{margin:7px 0 14px;font-size:34px}
   .giotto-art-direction .clean-roasting-intro strong{font-size:20px}
@@ -1658,10 +1676,10 @@ body.roasted-bean-viewer-open .mobile-purchase-return{opacity:0!important;visibi
   .giotto-art-direction .revenue-content-section{width:min(1240px,calc(100% - 64px));padding-top:clamp(78px,7vw,112px);padding-bottom:clamp(78px,7vw,112px)}
   .giotto-art-direction .product-story-grid{grid-template-columns:minmax(0,1fr) minmax(460px,1.1fr);gap:clamp(36px,4vw,64px);align-items:center}
   .giotto-art-direction .product-story-artwork{justify-self:start;width:min(100%,580px)}
-  .giotto-art-direction .product-story-details{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:clamp(52px,7vw,96px);margin-top:64px;padding-top:30px}
+  .giotto-art-direction .product-story-details{grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr);gap:clamp(30px,4vw,54px);margin-top:40px;padding-top:22px;align-items:start}
   .giotto-art-direction .roasted-bean-viewer-entry{display:grid;align-items:center;min-height:166px;margin-top:48px;padding:28px 0}
-  .giotto-art-direction .clean-roasting-section{grid-template-columns:minmax(280px,.82fr) minmax(0,1.35fr);gap:clamp(50px,7vw,108px);padding-top:84px;padding-bottom:80px}
-  .giotto-art-direction .clean-roasting-proofs article{padding:10px clamp(14px,2vw,26px)}
+  .giotto-art-direction .clean-roasting-section{grid-template-columns:minmax(280px,.82fr) minmax(0,1.35fr);gap:clamp(42px,5vw,72px);padding-top:64px;padding-bottom:62px}
+  .giotto-art-direction .clean-roasting-proofs article{padding:20px clamp(14px,2vw,24px)}
   .giotto-art-direction .revenue-faq{display:grid;grid-template-columns:minmax(280px,.78fr) minmax(440px,1.22fr);gap:clamp(52px,7vw,108px);align-items:start;padding-top:72px;padding-bottom:74px}
   .giotto-art-direction .revenue-faq-list{max-width:none;margin-top:0}
   .giotto-art-direction .revenue-related-grid{gap:22px;margin-top:42px}
