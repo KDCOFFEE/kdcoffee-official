@@ -1478,6 +1478,38 @@ body{overflow-x:clip;overflow-y:visible}
 .giotto-art-direction .product-entrance-price{
   transform:none;
 }
+.giotto-art-direction .giotto-hero-light-veil{
+  display:none;
+  position:absolute;
+  z-index:3;
+  inset:0;
+  pointer-events:none;
+  background:radial-gradient(circle at 24% 22%,rgba(255,247,224,.52),rgba(255,247,224,0) 42%),linear-gradient(115deg,rgba(255,248,231,.26),rgba(255,248,231,0) 62%);
+  opacity:0;
+}
+@keyframes giotto-mobile-hero-entrance{
+  from{opacity:.6;transform:scale(1.035)}
+  to{opacity:1;transform:scale(1)}
+}
+@keyframes giotto-mobile-identity-entrance{
+  from{opacity:0;transform:translateY(12px)}
+  to{opacity:1;transform:translateY(0)}
+}
+@keyframes giotto-mobile-veil-entrance{
+  from{opacity:.32}
+  to{opacity:0}
+}
+@media(max-width:760px) and (prefers-reduced-motion:no-preference){
+  .giotto-art-direction .page-entrance-hero{animation:giotto-mobile-hero-entrance 1500ms cubic-bezier(.22,.61,.36,1) 150ms backwards}
+  .giotto-art-direction .giotto-hero-light-veil{display:block;animation:giotto-mobile-veil-entrance 1450ms cubic-bezier(.22,.61,.36,1) 150ms backwards}
+  .giotto-art-direction .product-entrance-eyebrow,.giotto-art-direction .product-entrance-badge,.giotto-art-direction .product-entrance-title,.giotto-art-direction .product-entrance-summary,.giotto-art-direction .product-entrance-profile,.giotto-art-direction .product-entrance-price{animation:giotto-mobile-identity-entrance 850ms cubic-bezier(.22,.61,.36,1) backwards}
+  .giotto-art-direction .product-entrance-eyebrow{animation-delay:420ms}
+  .giotto-art-direction .product-entrance-badge{animation-delay:590ms}
+  .giotto-art-direction .product-entrance-title{animation-delay:750ms}
+  .giotto-art-direction .product-entrance-summary{animation-delay:970ms}
+  .giotto-art-direction .product-entrance-profile{animation-delay:1200ms}
+  .giotto-art-direction .product-entrance-price{animation-delay:1370ms}
+}
 
 /* F.4.3 — Giotto roasting craft and purchase guidance editorial refinement. */
 .giotto-art-direction .product-story-details{
