@@ -202,7 +202,7 @@ export default async function WorkPage({ params }: { params: Promise<{ slug: str
           </div>
 
           {product.flavors?.length ? <div className="revenue-flavors product-entrance-profile">{product.flavors.slice(0, 5).map((f: string) => <span key={f}>{f}</span>)}</div> : null}
-          {minPrice !== null ? <div className={`revenue-price product-entrance-price${isGiottoPrototype ? " giotto-desktop-price" : ""}`}><small>售價</small><strong>NT$ {minPrice.toLocaleString("zh-TW")} 起</strong></div> : null}
+          {minPrice !== null && !isGiottoPrototype ? <div className="revenue-price product-entrance-price"><small>售價</small><strong>NT$ {minPrice.toLocaleString("zh-TW")} 起</strong></div> : null}
           </div>
 
           <div className="product-purchase-chapter">
