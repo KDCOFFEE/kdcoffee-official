@@ -1580,6 +1580,34 @@ body.roasted-bean-viewer-open .mobile-purchase-return{opacity:0!important;visibi
 @media(max-width:760px){.roasted-bean-viewer-entry{margin-top:30px;padding-top:24px}.roasted-bean-viewer-trigger{grid-template-columns:1fr;gap:9px}.roasted-bean-viewer-copy strong{font-size:18px}.roasted-bean-viewer-copy span{grid-column:1;grid-row:auto;align-self:auto}.roasted-bean-viewer-heading{padding-bottom:14px}.roasted-bean-viewer-image{width:calc(100vw - 32px);max-width:100%;max-height:72dvh}.roasted-bean-viewer-close{top:calc(12px + env(safe-area-inset-top));right:calc(12px + env(safe-area-inset-right))}}
 .giotto-art-direction .roasted-bean-viewer-entry{border-color:rgba(122,94,57,.3)}.giotto-art-direction .roasted-bean-viewer-eyebrow{color:#8b673e}.giotto-art-direction .roasted-bean-viewer-copy strong{color:#4c3624}.giotto-art-direction .roasted-bean-viewer-copy span{color:#765634}
 
+/* F.4.2E — Bridge Giotto's existing two-column product stage below 1024px. */
+@media(min-width:761px) and (max-width:1023px){
+  .revenue-product-page.giotto-art-direction{overflow:visible}
+  .giotto-art-direction .revenue-hero{align-items:stretch}
+  .giotto-art-direction .revenue-media{position:relative;align-self:stretch;overflow:visible}
+  .giotto-art-direction .product-hero-sticky{position:sticky;top:max(28px,calc((100dvh - 640px)/2));overflow:visible}
+  .giotto-art-direction .revenue-image-stage{height:min(clamp(520px,43vw,640px),calc(100dvh - 56px));max-height:calc(100dvh - 56px)}
+  .giotto-art-direction .product-hero-commerce,.giotto-art-direction .product-hero-identity{min-width:0}
+  .giotto-art-direction .giotto-desktop-price{display:none}
+  .giotto-art-direction .product-purchase-chapter .buy-options{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+  .giotto-art-direction .product-purchase-chapter .buy-options button{min-height:64px;padding:10px 12px;border-radius:0}
+  .giotto-art-direction .buy-options button span{min-width:0;flex:1;gap:2px}
+  .giotto-art-direction .buy-options strong{font-size:14px;white-space:nowrap}
+  .giotto-art-direction .buy-options small{font-size:11px}
+  .giotto-art-direction .buy-options b{flex:0 0 auto;margin-left:8px;font-size:15px}
+  .giotto-art-direction .add-cart-button,.giotto-art-direction .buy-now-button{min-height:54px;border:0;border-radius:0;color:#fffdf7;-webkit-text-fill-color:#fffdf7;font-weight:700;letter-spacing:.025em;opacity:1}
+  .giotto-art-direction .add-cart-button{background-color:#3a281c;color:#fffdf7}
+  .giotto-art-direction .buy-now-button{width:100%;margin:0;background-color:#8a5c2e;color:#fffdf7}
+  .giotto-art-direction .add-cart-button:hover:not(:disabled){background:#493426}
+  .giotto-art-direction .buy-now-button:hover:not(:disabled){background:#795027}
+  .giotto-art-direction .add-cart-button:disabled{background-color:#9b897a;color:#fffdf7;-webkit-text-fill-color:#fffdf7;cursor:not-allowed;opacity:1}
+  .giotto-art-direction .buy-now-button:disabled{background-color:#b39b82;color:#fffdf7;-webkit-text-fill-color:#fffdf7;cursor:not-allowed;opacity:1}
+}
+@media(min-width:761px) and (max-width:800px){
+  .giotto-art-direction .product-purchase-chapter .buy-options{gap:8px}
+  .giotto-art-direction .product-purchase-chapter .buy-options button{padding-right:8px;padding-left:8px}
+}
+
 /* F.4.2D-R — Giotto desktop inner sticky product stage. Mobile remains unchanged. */
 @media(min-width:1024px){
   .revenue-product-page.giotto-art-direction{overflow:visible}
