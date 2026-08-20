@@ -1580,13 +1580,21 @@ body.roasted-bean-viewer-open .mobile-purchase-return{opacity:0!important;visibi
 @media(max-width:760px){.roasted-bean-viewer-entry{margin-top:30px;padding-top:24px}.roasted-bean-viewer-trigger{grid-template-columns:1fr;gap:9px}.roasted-bean-viewer-copy strong{font-size:18px}.roasted-bean-viewer-copy span{grid-column:1;grid-row:auto;align-self:auto}.roasted-bean-viewer-heading{padding-bottom:14px}.roasted-bean-viewer-image{width:calc(100vw - 32px);max-width:100%;max-height:72dvh}.roasted-bean-viewer-close{top:calc(12px + env(safe-area-inset-top));right:calc(12px + env(safe-area-inset-right))}}
 .giotto-art-direction .roasted-bean-viewer-entry{border-color:rgba(122,94,57,.3)}.giotto-art-direction .roasted-bean-viewer-eyebrow{color:#8b673e}.giotto-art-direction .roasted-bean-viewer-copy strong{color:#4c3624}.giotto-art-direction .roasted-bean-viewer-copy span{color:#765634}
 
+/* F.4.2F — Keep the sticky offset centered against the rendered Hero height. */
+@media(min-width:761px){
+  .giotto-art-direction{
+    --giotto-hero-height:min(clamp(520px,43vw,640px),calc(100dvh - 56px));
+    --giotto-hero-sticky-top:max(28px,calc((100dvh - var(--giotto-hero-height))/2));
+  }
+}
+
 /* F.4.2E — Bridge Giotto's existing two-column product stage below 1024px. */
 @media(min-width:761px) and (max-width:1023px){
   .revenue-product-page.giotto-art-direction{overflow:visible}
   .giotto-art-direction .revenue-hero{align-items:stretch}
   .giotto-art-direction .revenue-media{position:relative;align-self:stretch;overflow:visible}
-  .giotto-art-direction .product-hero-sticky{position:sticky;top:max(28px,calc((100dvh - 640px)/2));overflow:visible}
-  .giotto-art-direction .revenue-image-stage{height:min(clamp(520px,43vw,640px),calc(100dvh - 56px));max-height:calc(100dvh - 56px)}
+  .giotto-art-direction .product-hero-sticky{position:sticky;top:var(--giotto-hero-sticky-top);overflow:visible}
+  .giotto-art-direction .revenue-image-stage{height:var(--giotto-hero-height);max-height:var(--giotto-hero-height)}
   .giotto-art-direction .product-hero-commerce,.giotto-art-direction .product-hero-identity{min-width:0}
   .giotto-art-direction .giotto-desktop-price{display:none}
   .giotto-art-direction .product-purchase-chapter .buy-options{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
@@ -1613,8 +1621,8 @@ body.roasted-bean-viewer-open .mobile-purchase-return{opacity:0!important;visibi
   .revenue-product-page.giotto-art-direction{overflow:visible}
   .giotto-art-direction .revenue-hero{width:min(1440px,calc(100% - 64px));grid-template-columns:minmax(0,56fr) minmax(0,44fr);gap:clamp(36px,4vw,68px);align-items:stretch;padding:clamp(24px,3vw,46px) 0;border:0;border-bottom:1px solid rgba(122,94,57,.18);background:transparent}
   .giotto-art-direction .revenue-media{position:relative;align-self:stretch;overflow:visible;background:#f8f0e3}
-  .giotto-art-direction .product-hero-sticky{position:sticky;top:max(28px,calc((100dvh - 640px)/2));overflow:visible}
-  .giotto-art-direction .revenue-image-stage{height:min(clamp(520px,43vw,640px),calc(100dvh - 56px));max-height:calc(100dvh - 56px)}
+  .giotto-art-direction .product-hero-sticky{position:sticky;top:var(--giotto-hero-sticky-top);overflow:visible}
+  .giotto-art-direction .revenue-image-stage{height:var(--giotto-hero-height);max-height:var(--giotto-hero-height)}
   .giotto-art-direction .product-hero-commerce{min-width:0;align-self:start;padding:0;background:transparent;border:0;box-shadow:none}
   .giotto-art-direction .product-hero-identity{min-width:0;padding:0}
   .giotto-art-direction .giotto-desktop-price{display:none}
