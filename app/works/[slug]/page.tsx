@@ -6,6 +6,7 @@ import CartLink from "@/components/commerce/CartLink";
 import CleanRoastingChapter from "@/components/commerce/CleanRoastingChapter";
 import MobilePurchaseReturnButton from "@/components/commerce/MobilePurchaseReturnButton";
 import ProductPageEntrance from "@/components/commerce/ProductPageEntrance";
+import PurchaseChapterReveal from "@/components/commerce/PurchaseChapterReveal";
 import RoastedBeanViewer from "@/components/commerce/RoastedBeanViewer";
 import ProductSectionReveals from "@/components/commerce/ProductSectionReveals";
 import ProductVisualMedia from "@/components/commerce/ProductVisualMedia";
@@ -206,10 +207,16 @@ export default async function WorkPage({ params }: { params: Promise<{ slug: str
           {minPrice !== null && !isGiottoPrototype ? <div className="revenue-price product-entrance-price"><small>售價</small><strong>NT$ {minPrice.toLocaleString("zh-TW")} 起</strong></div> : null}
           </div>
 
-          <div className="product-purchase-chapter">
-          {isGiottoPrototype ? <p className="giotto-purchase-heading">SELECT YOUR COFFEE</p> : null}
-          <AddToCart product={product} />
-          </div>
+          {isGiottoPrototype ? (
+            <PurchaseChapterReveal>
+              <p className="giotto-purchase-heading">SELECT YOUR COFFEE</p>
+              <AddToCart product={product} />
+            </PurchaseChapterReveal>
+          ) : (
+            <div className="product-purchase-chapter">
+              <AddToCart product={product} />
+            </div>
+          )}
         </div>
       </section>
       </ProductPageEntrance>
