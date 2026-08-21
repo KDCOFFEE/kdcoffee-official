@@ -1896,6 +1896,11 @@ body.roasted-bean-viewer-open .mobile-purchase-return{opacity:0!important;visibi
 .is-product-campaign-enhanced .product-campaign-controls{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
 .product-campaign-controls button{display:flex;align-items:center;gap:8px;min-height:40px;padding:8px 12px;border:1px solid rgba(65,48,34,.2);background:transparent;color:#5f5145;font:inherit;font-size:11px;cursor:pointer}
 .product-campaign-controls button[aria-pressed="true"]{border-color:#6f5132;background:#6f5132;color:#fff}
+
+/* G.1.1 — Keep shared purchase-option copy and pricing in independent layout columns. */
+.buy-options button{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;justify-content:normal;column-gap:12px}
+.buy-options button span{min-width:0}
+@media(min-width:761px){.giotto-art-direction .buy-options b{margin-left:0}}
 .product-campaign-controls span{font-size:9px;letter-spacing:.12em}
 
 .campaign-admin-actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
