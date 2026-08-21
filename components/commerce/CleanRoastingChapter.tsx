@@ -42,7 +42,7 @@ export default function CleanRoastingChapter({ proofs }: CleanRoastingChapterPro
           setIsActivated(true);
           observer?.disconnect();
         },
-        { rootMargin: "300px 0px", threshold: 0.01 },
+        { rootMargin: "0px", threshold: 0.15 },
       );
       observer.observe(section);
     } catch {
