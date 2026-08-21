@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { getLiveWebsiteData } from "@/data/websiteData";
 import AddToCart from "@/components/commerce/AddToCart";
 import CartLink from "@/components/commerce/CartLink";
+import CleanRoastingChapter from "@/components/commerce/CleanRoastingChapter";
 import MobilePurchaseReturnButton from "@/components/commerce/MobilePurchaseReturnButton";
 import ProductPageEntrance from "@/components/commerce/ProductPageEntrance";
 import RoastedBeanViewer from "@/components/commerce/RoastedBeanViewer";
@@ -242,32 +243,10 @@ export default async function WorkPage({ params }: { params: Promise<{ slug: str
         </div>
       </section>
 
-      <section className="revenue-content-section clean-roasting-section" aria-labelledby="clean-roasting-title">
-        {isGiottoPrototype ? (
-          <>
-            <div className="clean-roasting-visual">
-              <div className="clean-roasting-intro">
-                <p>CLEAN ROASTING</p>
-                <h2 id="clean-roasting-title">乾淨的烘焙</h2>
-              </div>
-              <figure className="clean-roasting-video-frame">
-                <video
-                  autoPlay
-                  muted
-                  loop
-                  playsInline
-                  preload="metadata"
-                  aria-label="KD Coffee 流床式熱風烘焙實拍影片"
-                >
-                  <source src="/videos/kdcoffee-clean-roasting-fluid-bed-v01.mp4" type="video/mp4" />
-                </video>
-                <span className="clean-roasting-video-overlay" aria-hidden="true" />
-              </figure>
-            </div>
-            <div className="clean-roasting-proofs">{CLEAN_ROASTING_PROOFS.map((proof) => <article key={proof.title}><div><h3>{proof.title}</h3><p>{proof.text}</p></div></article>)}</div>
-          </>
-        ) : (
-          <>
+      {isGiottoPrototype ? (
+        <CleanRoastingChapter proofs={CLEAN_ROASTING_PROOFS} />
+      ) : (
+        <section className="revenue-content-section clean-roasting-section" aria-labelledby="clean-roasting-title">
             <div className="clean-roasting-intro">
               <p data-section-reveal>CLEAN ROASTING</p>
               <h2 id="clean-roasting-title" data-section-reveal data-reveal-delay="80">乾淨的烘焙</h2>
@@ -275,9 +254,8 @@ export default async function WorkPage({ params }: { params: Promise<{ slug: str
               <span data-section-reveal data-reveal-delay="180">讓咖啡豆均勻翻動，呈現乾淨清楚的風味。</span>
             </div>
             <div className="clean-roasting-proofs">{CLEAN_ROASTING_PROOFS.map((proof, index) => <article key={proof.title} data-section-reveal data-reveal-delay={String(index * 80)}><EditorialIcon name={proof.icon} /><div><h3>{proof.title}</h3><p>{proof.text}</p></div></article>)}</div>
-          </>
-        )}
-      </section>
+        </section>
+      )}
 
       <section className="revenue-content-section revenue-faq">
         <div className="revenue-section-title" data-section-reveal={isGiottoPrototype ? undefined : "true"}>

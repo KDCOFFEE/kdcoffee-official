@@ -1741,6 +1741,22 @@ body.roasted-bean-viewer-open .mobile-purchase-return{opacity:0!important;visibi
 .giotto-art-direction .clean-roasting-proofs article::before{padding-top:3px}
 .giotto-art-direction .clean-roasting-proofs h3{font-size:17px}
 .giotto-art-direction .clean-roasting-proofs p{max-width:390px;margin-top:7px;font-size:14px;line-height:1.7}
+@keyframes clean-roasting-heading-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+@keyframes clean-roasting-video-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+@keyframes clean-roasting-proof-in{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+@media(prefers-reduced-motion:no-preference){
+  .giotto-art-direction .clean-roasting-section.is-clean-roasting-active .clean-roasting-reveal-heading{animation:clean-roasting-heading-in 360ms cubic-bezier(.22,.61,.36,1) 0ms both}
+  .giotto-art-direction .clean-roasting-section.is-clean-roasting-active .clean-roasting-reveal-video{animation:clean-roasting-video-in 400ms cubic-bezier(.22,.61,.36,1) 120ms both}
+  .giotto-art-direction .clean-roasting-section.is-clean-roasting-active .clean-roasting-proofs article{animation:clean-roasting-proof-in 360ms cubic-bezier(.22,.61,.36,1) both}
+  .giotto-art-direction .clean-roasting-section.is-clean-roasting-active .clean-roasting-proofs article:nth-child(1){animation-delay:300ms}
+  .giotto-art-direction .clean-roasting-section.is-clean-roasting-active .clean-roasting-proofs article:nth-child(2){animation-delay:450ms}
+  .giotto-art-direction .clean-roasting-section.is-clean-roasting-active .clean-roasting-proofs article:nth-child(3){animation-delay:600ms}
+}
+@media(prefers-reduced-motion:reduce){
+  .giotto-art-direction .clean-roasting-section .clean-roasting-reveal-heading,
+  .giotto-art-direction .clean-roasting-section .clean-roasting-reveal-video,
+  .giotto-art-direction .clean-roasting-section .clean-roasting-proofs article{animation:none}
+}
 
 @media(max-width:760px){
   .giotto-art-direction .clean-roasting-section{grid-template-columns:1fr;align-items:stretch;gap:30px}
