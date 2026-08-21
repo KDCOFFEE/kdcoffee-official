@@ -117,6 +117,16 @@ function collectProductUsage(
         ...(slug ? { slug } : {}),
       }, snapshot);
     }
+    const cleanRoastingMedia = isRecord(product.cleanRoastingMedia) ? product.cleanRoastingMedia : {};
+    recordArray(cleanRoastingMedia.items).forEach((item, index) => {
+      addReferencedVideo(item, {
+        sourceType: "product",
+        sourceLabel,
+        section: "Clean Roasting",
+        field: `Media ${index + 1}`,
+        ...(slug ? { slug } : {}),
+      }, snapshot);
+    });
   }
 }
 

@@ -15,6 +15,12 @@ type MediaUploaderProps = {
   disabled?: boolean;
   showPreview?: boolean;
   imageActionLabel?: string;
+  videoActionLabel?: string;
+  productMediaNaming?: {
+    productSlug: string;
+    mediaPurpose: "clean-roasting";
+    reservedPublicIds?: string[];
+  };
   onChange: (media: MediaAsset) => void;
   onImageSelect?: (file: File) => void;
   onImageUpload?: (file: File) => Promise<MediaAsset>;
@@ -150,6 +156,8 @@ export default function MediaUploader({
   disabled = false,
   showPreview = true,
   imageActionLabel = "選擇圖片",
+  videoActionLabel,
+  productMediaNaming,
   onChange,
   onImageSelect,
   onImageUpload,
@@ -183,7 +191,13 @@ export default function MediaUploader({
       const signResponse = await fetch("/api/admin/media/sign", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ usage, fileName: file.name, fileSize: file.size, mimeType: file.type }),
+        body: JSON.stringify({
+          usage,
+          fileName: file.name,
+          fileSize: file.size,
+          mimeType: file.type,
+          ...(productMediaNaming || {}),
+        }),
       });
       const signed = (await signResponse.json()) as SignedUploadResponse & { error?: string };
       if (!signResponse.ok) throw new Error(signed.error || "無法取得影片上傳授權。");
@@ -277,7 +291,7 @@ export default function MediaUploader({
 
       <div className="kd-media-upload-actions">
         <label>{imageActionLabel}<input type="file" accept="image/*" onChange={chooseImage} disabled={uploading || disabled} /></label>
-        <label>{value?.type === "video" ? "更換影片" : "選擇影片"}<input type="file" accept="video/mp4,video/quicktime,video/webm,.mp4,.mov,.webm" onChange={chooseVideo} disabled={uploading || disabled} /></label>
+        <label>{videoActionLabel || (value?.type === "video" ? "更換影片" : "選擇影片")}<input type="file" accept="video/mp4,video/quicktime,video/webm,.mp4,.mov,.webm" onChange={chooseVideo} disabled={uploading || disabled} /></label>
         {uploading ? (
           <button type="button" onClick={cancelUpload}>取消上傳</button>
         ) : lastVideo && progress < 100 ? (

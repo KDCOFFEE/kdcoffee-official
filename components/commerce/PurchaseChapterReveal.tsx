@@ -1,19 +1,26 @@
 "use client";
 
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { type CSSProperties, type ReactNode, useEffect, useRef, useState } from "react";
+import {
+  getProductAnimationAttributes,
+  normalizeAnimationDelay,
+  normalizeAnimationDuration,
+  type ProductSectionAnimationConfig,
+} from "@/lib/productPageAnimations";
 
 type PurchaseChapterRevealProps = {
   children: ReactNode;
+  animation?: ProductSectionAnimationConfig | null;
 };
 
-export default function PurchaseChapterReveal({ children }: PurchaseChapterRevealProps) {
+export default function PurchaseChapterReveal({ children, animation = null }: PurchaseChapterRevealProps) {
   const chapterRef = useRef<HTMLDivElement>(null);
   const [isActivated, setIsActivated] = useState(false);
 
   useEffect(() => {
     const chapter = chapterRef.current;
 
-    if (!chapter || !("IntersectionObserver" in window)) {
+    if (animation || !chapter || !("IntersectionObserver" in window)) {
       return;
     }
 
@@ -51,12 +58,28 @@ export default function PurchaseChapterReveal({ children }: PurchaseChapterRevea
       window.removeEventListener("scroll", beginObserving);
       observer?.disconnect();
     };
-  }, []);
+  }, [animation]);
+
+  const animationAttributes = getProductAnimationAttributes(animation);
+  const left = animation?.children?.left;
+  const right = animation?.children?.right;
+  const animationStyle = "style" in animationAttributes ? animationAttributes.style : {};
 
   return (
     <div
+      {...animationAttributes}
+      id="select-your-coffee"
       ref={chapterRef}
       className={`product-purchase-chapter${isActivated ? " is-purchase-chapter-active" : ""}`}
+      data-select-left-effect={left?.effect || "slide-left"}
+      data-select-right-effect={right?.effect || "slide-right"}
+      style={{
+        ...animationStyle,
+        "--select-left-duration": `${normalizeAnimationDuration(left?.durationMs, 540)}ms`,
+        "--select-left-delay": `${normalizeAnimationDelay(left?.delayMs, 0)}ms`,
+        "--select-right-duration": `${normalizeAnimationDuration(right?.durationMs, 540)}ms`,
+        "--select-right-delay": `${normalizeAnimationDelay(right?.delayMs, 100)}ms`,
+      } as CSSProperties}
     >
       {children}
     </div>

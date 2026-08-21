@@ -2,12 +2,16 @@ import crypto from "crypto";
 import { NextResponse } from "next/server";
 
 import { isAdminAuthenticated } from "@/lib/adminAuth";
-import { createSignedVideoUpload } from "@/lib/cloudinary";
+import {
+  createSignedProductVideoUpload,
+  createSignedVideoUpload,
+} from "@/lib/cloudinary";
 import {
   isAllowedVideoUpload,
   isCloudinaryMediaUsage,
   VIDEO_UPLOAD_LIMITS,
 } from "@/lib/media";
+import { isCanonicalProductSlug } from "@/lib/productMediaNaming";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -46,7 +50,37 @@ export async function POST(request: Request) {
       );
     }
 
-    const signedUpload = createSignedVideoUpload(crypto.randomUUID());
+    const productSlug = typeof body.productSlug === "string" ? body.productSlug.trim() : "";
+    const mediaPurpose = typeof body.mediaPurpose === "string" ? body.mediaPurpose : "";
+    const usesProductMediaNaming = Boolean(productSlug || mediaPurpose);
+    const reservedPublicIds = Array.isArray(body.reservedPublicIds)
+      ? body.reservedPublicIds
+      : [];
+
+    if (
+      usesProductMediaNaming &&
+      (
+        !isCanonicalProductSlug(productSlug) ||
+        mediaPurpose !== "clean-roasting" ||
+        reservedPublicIds.length > 8 ||
+        reservedPublicIds.some((publicId) =>
+          typeof publicId !== "string" || !publicId.trim() || publicId.length > 220
+        )
+      )
+    ) {
+      return NextResponse.json(
+        { error: "商品影片命名資料不正確。" },
+        { status: 400, headers: noStoreHeaders },
+      );
+    }
+
+    const signedUpload = usesProductMediaNaming
+      ? await createSignedProductVideoUpload({
+          productSlug,
+          mediaPurpose: "clean-roasting",
+          reservedPublicIds: reservedPublicIds.map((publicId) => String(publicId).trim()),
+        })
+      : createSignedVideoUpload(crypto.randomUUID());
 
     return NextResponse.json(
       {

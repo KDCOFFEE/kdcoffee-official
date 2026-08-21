@@ -10,6 +10,7 @@ import {
   CLOUDINARY_VIDEO_FOLDER,
   isCloudinaryMediaUsage,
 } from "@/lib/media";
+import { isProductMediaPublicId } from "@/lib/productMediaNaming";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -40,11 +41,16 @@ export async function POST(request: Request) {
     const body = (await request.json()) as Record<string, unknown>;
     const publicId = String(body.publicId || "").trim();
     const usage = isCloudinaryMediaUsage(body.usage) ? body.usage : "content";
-    const safePublicId = new RegExp(
+    const legacyPublicId = new RegExp(
       `^${CLOUDINARY_VIDEO_FOLDER.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}/[a-f0-9-]{36}$`,
     );
 
-    const publicIdPrefixValid = safePublicId.test(publicId);
+    const publicIdPrefixValid =
+      legacyPublicId.test(publicId) ||
+      (
+        publicId.startsWith(`${CLOUDINARY_VIDEO_FOLDER}/`) &&
+        isProductMediaPublicId({ publicId, mediaPurpose: "clean-roasting" })
+      );
     if (!publicIdPrefixValid) {
       console.warn(JSON.stringify({
         event: "cloudinary_finalize_failed",

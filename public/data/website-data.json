@@ -150,7 +150,39 @@
         },
         "nameEn": "",
         "id": "P00001",
-        "sku": "KD0001"
+        "sku": "KD0001",
+        "cleanRoastingMedia": {
+          "enabled": true,
+          "items": [
+            {
+              "id": "e5fc13b1-84ee-4523-9c80-b5768f97d96e",
+              "type": "video",
+              "src": "https://res.cloudinary.com/sd4wjx7m/video/upload/c_limit,q_auto,vc_h264:high:4.0,w_1920/v1/kd-coffee/videos/kdcoffee-giotto-awakening-clean-roasting-04.mp4?_a=BAMAAAcg0",
+              "alt": "喬托・初醒 烘焙影片",
+              "poster": "https://res.cloudinary.com/sd4wjx7m/video/upload/c_limit,f_auto,q_auto,w_1600/v1/kd-coffee/videos/kdcoffee-giotto-awakening-clean-roasting-04.jpg?_a=BAMAAAcg0",
+              "enabled": true,
+              "order": 0,
+              "media": {
+                "type": "video",
+                "url": "https://res.cloudinary.com/sd4wjx7m/video/upload/c_limit,q_auto,vc_h264:high:4.0,w_1920/v1/kd-coffee/videos/kdcoffee-giotto-awakening-clean-roasting-04.mp4?_a=BAMAAAcg0",
+                "provider": "cloudinary",
+                "publicId": "kd-coffee/videos/kdcoffee-giotto-awakening-clean-roasting-04",
+                "posterUrl": "https://res.cloudinary.com/sd4wjx7m/video/upload/c_limit,f_auto,q_auto,w_1600/v1/kd-coffee/videos/kdcoffee-giotto-awakening-clean-roasting-04.jpg?_a=BAMAAAcg0",
+                "width": 1920,
+                "height": 1080,
+                "bytes": 14707312,
+                "format": "mp4"
+              }
+            }
+          ],
+          "display": {
+            "mode": "slider",
+            "transition": "slide",
+            "transitionDurationMs": 450,
+            "autoplay": false,
+            "autoplayIntervalMs": 6000
+          }
+        }
       },
       {
         "active": true,

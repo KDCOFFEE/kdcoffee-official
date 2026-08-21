@@ -1,3 +1,16 @@
+import {
+  DEFAULT_OPTIONAL_SECTION_LAYOUT,
+  PRODUCT_SECTION_REGISTRY,
+  normalizeProductSectionOrder,
+  normalizeProductSectionPlacement,
+} from "@/lib/productPageSections";
+import {
+  PRODUCT_ANIMATION_CHILDREN_BY_SECTION,
+  normalizeProductSectionAnimation,
+  type ProductAnimationChildKey,
+} from "@/lib/productPageAnimations";
+import { normalizeCleanRoastingMedia } from "@/lib/cleanRoastingMedia";
+
 export const PRODUCT_METADATA_FIELDS = [
   "name",
   "nameEn",
@@ -13,6 +26,8 @@ export const PRODUCT_METADATA_FIELDS = [
   "tag",
   "relatedProducts",
   "campaignDisplay",
+  "productPageAnimations",
+  "cleanRoastingMedia",
 ] as const;
 
 export const PRODUCT_TAG_MAX_LENGTH = 12;
@@ -185,10 +200,13 @@ function normalizeRelatedProducts(value: unknown) {
   if (value.title !== undefined && typeof value.title !== "string") {
     throw new ProductCommerceUpdateError("推薦比較作品標題格式不正確。");
   }
+  const fallback = DEFAULT_OPTIONAL_SECTION_LAYOUT["related-products"];
   return {
     enabled: value.enabled !== false,
     title: typeof value.title === "string" ? value.title.trim() : "也可以比較這三款",
     productIds: normalizeReferenceIds(value.productIds, "推薦比較作品", 3),
+    placement: normalizeProductSectionPlacement(value.placement, fallback.placement),
+    order: normalizeProductSectionOrder(value.order, fallback.order),
   };
 }
 
@@ -196,10 +214,30 @@ function normalizeCampaignDisplay(value: unknown) {
   if (!isRecord(value) || (value.enabled !== undefined && typeof value.enabled !== "boolean")) {
     throw new ProductCommerceUpdateError("最新活動設定格式不正確。");
   }
+  const fallback = DEFAULT_OPTIONAL_SECTION_LAYOUT.campaigns;
   return {
     enabled: value.enabled === true,
     campaignIds: normalizeReferenceIds(value.campaignIds, "最新活動"),
+    placement: normalizeProductSectionPlacement(value.placement, fallback.placement),
+    order: normalizeProductSectionOrder(value.order, fallback.order),
   };
+}
+
+function normalizeProductPageAnimations(value: unknown) {
+  if (!isRecord(value)) return {};
+  const normalized: ProductRecord = {};
+  for (const section of PRODUCT_SECTION_REGISTRY) {
+    if (!hasOwn(value, section.key)) continue;
+    const animation = normalizeProductSectionAnimation(value[section.key]);
+    const allowedChildren = PRODUCT_ANIMATION_CHILDREN_BY_SECTION[section.key];
+    if (animation.children) {
+      animation.children = allowedChildren
+        ? Object.fromEntries(Object.entries(animation.children).filter(([key]) => allowedChildren.includes(key as ProductAnimationChildKey)))
+        : undefined;
+    }
+    normalized[section.key] = animation;
+  }
+  return normalized;
 }
 
 function normalizeMetadataField(field: ProductMetadataField, value: unknown) {
@@ -226,6 +264,8 @@ function normalizeMetadataField(field: ProductMetadataField, value: unknown) {
   }
   if (field === "relatedProducts") return normalizeRelatedProducts(value);
   if (field === "campaignDisplay") return normalizeCampaignDisplay(value);
+  if (field === "productPageAnimations") return normalizeProductPageAnimations(value);
+  if (field === "cleanRoastingMedia") return normalizeCleanRoastingMedia(value);
   return normalizeString(value, `商品欄位 ${field}`);
 }
 

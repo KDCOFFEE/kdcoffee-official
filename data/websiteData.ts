@@ -3,6 +3,9 @@ import { promises as fs } from "fs";
 import { getWebsiteDataFile } from "@/lib/storagePaths";
 import type { MediaAsset } from "@/lib/media";
 import type { MonthlyMenuBackground } from "@/lib/monthlyMenuBackground";
+import type { ProductSectionPlacement } from "@/lib/productPageSections";
+import type { ProductPageAnimations } from "@/lib/productPageAnimations";
+import type { CleanRoastingMediaConfig } from "@/lib/cleanRoastingMedia";
 
 /**
  * 商品購買規格
@@ -78,12 +81,19 @@ export type CoffeeArtwork = {
     enabled?: boolean;
     title?: string;
     productIds: string[];
+    placement?: ProductSectionPlacement;
+    order?: number;
   };
 
   campaignDisplay?: {
     enabled?: boolean;
     campaignIds: string[];
+    placement?: ProductSectionPlacement;
+    order?: number;
   };
+
+  productPageAnimations?: ProductPageAnimations;
+  cleanRoastingMedia?: CleanRoastingMediaConfig;
 
   displayFields?: Record<string, boolean>;
 

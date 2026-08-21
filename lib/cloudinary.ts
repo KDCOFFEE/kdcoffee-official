@@ -9,6 +9,12 @@ import {
   type MediaAsset,
   VIDEO_UPLOAD_LIMITS,
 } from "@/lib/media";
+import {
+  buildProductMediaPublicId,
+  nextAvailableProductMediaSequence,
+  productMediaPublicIdPrefix,
+  type ProductMediaPurpose,
+} from "@/lib/productMediaNaming";
 
 type CloudinaryCredentials = {
   cloudName: string;
@@ -28,6 +34,16 @@ type CloudinaryVideoResource = {
   duration?: unknown;
   created_at?: unknown;
 };
+
+const WEB_VIDEO_TRANSFORMATION = {
+  width: 1920,
+  crop: "limit",
+  quality: "auto",
+  video_codec: { codec: "h264", profile: "high", level: "4.0" },
+} as const;
+
+const WEB_VIDEO_EAGER_TRANSFORMATION =
+  "c_limit,q_auto,vc_h264:high:4.0,w_1920/mp4";
 
 export type CloudinaryCleanupVideoResource = {
   publicId: string;
@@ -115,6 +131,7 @@ export type SignedVideoUpload = {
     allowed_formats: string;
     overwrite: string;
     timestamp: number;
+    eager?: string;
   };
 };
 
@@ -144,14 +161,18 @@ function configureCloudinary(): CloudinaryCredentials {
   return credentials;
 }
 
-export function createSignedVideoUpload(publicId: string): SignedVideoUpload {
-  const { cloudName, apiKey, apiSecret } = configureCloudinary();
+function signedVideoUpload(
+  publicId: string,
+  { cloudName, apiKey, apiSecret }: CloudinaryCredentials,
+  eagerWebVideo = false,
+): SignedVideoUpload {
   const timestamp = Math.floor(Date.now() / 1000);
   const params = {
     public_id: `${CLOUDINARY_VIDEO_FOLDER}/${publicId}`,
     allowed_formats: ALLOWED_VIDEO_EXTENSIONS.join(","),
     overwrite: "false",
     timestamp,
+    ...(eagerWebVideo ? { eager: WEB_VIDEO_EAGER_TRANSFORMATION } : {}),
   };
 
   return {
@@ -162,6 +183,53 @@ export function createSignedVideoUpload(publicId: string): SignedVideoUpload {
     signature: cloudinary.utils.api_sign_request(params, apiSecret),
     params,
   };
+}
+
+export function createSignedVideoUpload(publicId: string): SignedVideoUpload {
+  return signedVideoUpload(publicId, configureCloudinary());
+}
+
+export async function createSignedProductVideoUpload({
+  productSlug,
+  mediaPurpose,
+  reservedPublicIds = [],
+}: {
+  productSlug: string;
+  mediaPurpose: ProductMediaPurpose;
+  reservedPublicIds?: string[];
+}): Promise<SignedVideoUpload> {
+  const credentials = configureCloudinary();
+  const prefix = `${CLOUDINARY_VIDEO_FOLDER}/${productMediaPublicIdPrefix({ productSlug, mediaPurpose })}`;
+  const existingPublicIds = new Set(reservedPublicIds);
+  let nextCursor: string | undefined;
+
+  do {
+    const result = await cloudinary.api.resources({
+      resource_type: "video",
+      type: "upload",
+      prefix,
+      max_results: 100,
+      ...(nextCursor ? { next_cursor: nextCursor } : {}),
+    }) as Record<string, unknown>;
+    if (Array.isArray(result.resources)) {
+      for (const resource of result.resources) {
+        if (!resource || typeof resource !== "object" || Array.isArray(resource)) continue;
+        const publicId = String((resource as CloudinaryVideoResource).public_id || "").trim();
+        if (publicId.startsWith(prefix)) existingPublicIds.add(publicId);
+      }
+    }
+    nextCursor = typeof result.next_cursor === "string" && result.next_cursor.trim()
+      ? result.next_cursor.trim()
+      : undefined;
+  } while (nextCursor);
+
+  const sequence = nextAvailableProductMediaSequence({
+    productSlug,
+    mediaPurpose,
+    existingPublicIds,
+  });
+  const publicId = buildProductMediaPublicId({ productSlug, mediaPurpose, sequence });
+  return signedVideoUpload(publicId, credentials, true);
 }
 
 function cleanNumber(value: unknown) {
@@ -413,14 +481,7 @@ export async function verifyCloudinaryVideo(
       type: "upload",
       secure: true,
       format: "mp4",
-      transformation: [
-        {
-          width: 1920,
-          crop: "limit",
-          quality: "auto",
-          video_codec: "auto",
-        },
-      ],
+      transformation: [WEB_VIDEO_TRANSFORMATION],
     }), cloudName);
   } catch (error) {
     throw new CloudinaryFinalizeError({

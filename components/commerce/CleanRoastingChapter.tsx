@@ -1,6 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { type CSSProperties, useEffect, useRef, useState } from "react";
+import CleanRoastingMediaStage from "@/components/commerce/CleanRoastingMediaStage";
+import {
+  getProductAnimationAttributes,
+  normalizeAnimationDelay,
+  type ProductSectionAnimationConfig,
+} from "@/lib/productPageAnimations";
+import { CLEAN_ROASTING_LEGACY_CONFIG, type CleanRoastingMediaConfig } from "@/lib/cleanRoastingMedia";
 
 type CleanRoastingProof = {
   title: string;
@@ -9,13 +16,12 @@ type CleanRoastingProof = {
 
 type CleanRoastingChapterProps = {
   proofs: readonly CleanRoastingProof[];
+  animation?: ProductSectionAnimationConfig | null;
+  mediaConfig?: CleanRoastingMediaConfig;
 };
 
-const CLEAN_ROASTING_VIDEO = "/videos/kdcoffee-clean-roasting-fluid-bed-v01.mp4";
-
-export default function CleanRoastingChapter({ proofs }: CleanRoastingChapterProps) {
+export default function CleanRoastingChapter({ proofs, animation = null, mediaConfig = CLEAN_ROASTING_LEGACY_CONFIG }: CleanRoastingChapterProps) {
   const sectionRef = useRef<HTMLElement>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
   const [isActivated, setIsActivated] = useState(false);
 
   useEffect(() => {
@@ -52,42 +58,32 @@ export default function CleanRoastingChapter({ proofs }: CleanRoastingChapterPro
     return () => observer?.disconnect();
   }, []);
 
-  useEffect(() => {
-    if (!isActivated || !videoRef.current) {
-      return;
-    }
-
-    videoRef.current.load();
-    void videoRef.current.play().catch(() => {
-      // Muted autoplay can still be declined by browser or user policy.
-    });
-  }, [isActivated]);
+  const animationAttributes = getProductAnimationAttributes(animation);
+  const animationStyle = "style" in animationAttributes ? animationAttributes.style : {};
+  const childDelays = animation?.children;
 
   return (
     <section
+      {...animationAttributes}
+      id="clean-roasting"
       ref={sectionRef}
       className={`revenue-content-section clean-roasting-section${isActivated ? " is-clean-roasting-active" : ""}`}
       aria-labelledby="clean-roasting-title"
+      style={{
+        ...animationStyle,
+        "--clean-heading-delay": `${normalizeAnimationDelay(childDelays?.heading?.delayMs, 0)}ms`,
+        "--clean-media-delay": `${normalizeAnimationDelay(childDelays?.["media-stage"]?.delayMs, 120)}ms`,
+        "--clean-proof-1-delay": `${normalizeAnimationDelay(childDelays?.["proof-1"]?.delayMs, 300)}ms`,
+        "--clean-proof-2-delay": `${normalizeAnimationDelay(childDelays?.["proof-2"]?.delayMs, 450)}ms`,
+        "--clean-proof-3-delay": `${normalizeAnimationDelay(childDelays?.["proof-3"]?.delayMs, 600)}ms`,
+      } as CSSProperties}
     >
       <div className="clean-roasting-visual">
         <div className="clean-roasting-intro clean-roasting-reveal-heading">
           <p>CLEAN ROASTING</p>
           <h2 id="clean-roasting-title">乾淨的烘焙</h2>
         </div>
-        <figure className="clean-roasting-video-frame clean-roasting-reveal-video">
-          <video
-            ref={videoRef}
-            autoPlay
-            muted
-            loop
-            playsInline
-            preload="none"
-            aria-label="KD Coffee 流床式熱風烘焙實拍影片"
-          >
-            {isActivated ? <source src={CLEAN_ROASTING_VIDEO} type="video/mp4" /> : null}
-          </video>
-          <span className="clean-roasting-video-overlay" aria-hidden="true" />
-        </figure>
+        <CleanRoastingMediaStage config={mediaConfig} eligible={isActivated} />
       </div>
       <div className="clean-roasting-proofs">
         {proofs.map((proof) => (

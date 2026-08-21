@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getLiveWebsiteData } from "@/data/websiteData";
+import { Fragment } from "react";
+import { getLiveWebsiteData, type CoffeeArtwork } from "@/data/websiteData";
 import AddToCart from "@/components/commerce/AddToCart";
 import CartLink from "@/components/commerce/CartLink";
 import CleanRoastingChapter from "@/components/commerce/CleanRoastingChapter";
@@ -23,6 +24,22 @@ import {
   resolveStaticProductAssetImage,
   resolveStaticProductImage,
 } from "@/lib/productVisualAssets";
+import {
+  DEFAULT_OPTIONAL_SECTION_LAYOUT,
+  normalizeProductSectionOrder,
+  normalizeProductSectionPlacement,
+  type ProductSectionPlacement,
+} from "@/lib/productPageSections";
+import {
+  getProductAnimationAttributes,
+  resolveProductSectionAnimation,
+  type ProductPageAnimations,
+  type ProductSectionAnimationConfig,
+} from "@/lib/productPageAnimations";
+import {
+  CLEAN_ROASTING_LEGACY_CONFIG,
+  normalizeCleanRoastingMedia,
+} from "@/lib/cleanRoastingMedia";
 
 export const dynamic = "force-dynamic";
 
@@ -58,6 +75,44 @@ function ProductBagFallback({ product, compact = false }: { product: any; compac
   );
 }
 
+function RelatedProductsSection({ products, title, animation }: { products: CoffeeArtwork[]; title: string; animation: ProductSectionAnimationConfig | null }) {
+  return (
+    <section {...getProductAnimationAttributes(animation)} id="related-products" className="revenue-content-section revenue-related">
+      <div className="revenue-section-title" data-section-reveal>
+        <p>YOU MAY ALSO LIKE</p>
+        <h2>{title}</h2>
+      </div>
+      <div className="revenue-related-grid" data-section-reveal>
+        {products.map((item) => {
+          const listAsset = resolveListAsset(item);
+          const price = item.purchase?.length ? Math.min(...item.purchase.map((option) => option.price)) : null;
+          return (
+            <Link key={item.slug} href={`/works/${item.slug}`} className="revenue-related-card">
+              <div className="related-thumb">
+                <ProductVisualMedia
+                  src={listAsset?.path}
+                  alt={listAsset?.alt || item.name}
+                  className="product-list-image"
+                  loading="lazy"
+                  decoding="async"
+                  fallback={<ProductBagFallback product={item} compact />}
+                />
+              </div>
+              <div>
+                <small>{item.tag || item.artist}</small>
+                <h3>{item.name}</h3>
+                <p>{item.flavors?.slice(0, 3).join("、")}</p>
+                {price !== null ? <b>NT$ {price.toLocaleString("zh-TW")} 起</b> : null}
+                <span>查看與購買 →</span>
+              </div>
+            </Link>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 type EditorialIconName = "flavor" | "origin" | "process" | "roast" | "air" | "heat" | "cupping";
 
 function EditorialIcon({ name }: { name: EditorialIconName }) {
@@ -87,6 +142,11 @@ export default async function WorkPage({ params }: { params: Promise<{ slug: str
   if (!product || product.status === "hidden") notFound();
 
   const isGiottoPrototype = product.slug === "giotto-awakening";
+  const hasCleanRoastingMediaConfig = product.cleanRoastingMedia && typeof product.cleanRoastingMedia === "object";
+  const cleanRoastingMedia = normalizeCleanRoastingMedia(
+    product.cleanRoastingMedia,
+    isGiottoPrototype ? CLEAN_ROASTING_LEGACY_CONFIG : undefined,
+  );
 
   const d = product.displayFields || {};
   const layout = {
@@ -132,6 +192,29 @@ export default async function WorkPage({ params }: { params: Promise<{ slug: str
   const productCampaigns = product.campaignDisplay?.enabled === true
     ? resolveProductCampaigns(homepageData, product.campaignDisplay.campaignIds)
     : [];
+  const productPageAnimations = product.productPageAnimations as ProductPageAnimations | undefined;
+  const sectionAnimation = (sectionKey: Parameters<typeof resolveProductSectionAnimation>[1]) =>
+    resolveProductSectionAnimation(productPageAnimations, sectionKey);
+  const campaignLayout = DEFAULT_OPTIONAL_SECTION_LAYOUT.campaigns;
+  const relatedLayout = DEFAULT_OPTIONAL_SECTION_LAYOUT["related-products"];
+  const optionalSections = [
+    {
+      key: "campaigns",
+      placement: normalizeProductSectionPlacement(product.campaignDisplay?.placement, campaignLayout.placement),
+      order: normalizeProductSectionOrder(product.campaignDisplay?.order, campaignLayout.order),
+      node: productCampaigns.length ? <ProductCampaignSection campaigns={productCampaigns} animation={sectionAnimation("campaigns")} /> : null,
+    },
+    {
+      key: "related-products",
+      placement: normalizeProductSectionPlacement(relatedSettings?.placement, relatedLayout.placement),
+      order: normalizeProductSectionOrder(relatedSettings?.order, relatedLayout.order),
+      node: showRelated && related.length ? <RelatedProductsSection products={related} title={relatedTitle} animation={sectionAnimation("related-products")} /> : null,
+    },
+  ] as const;
+  const renderOptionalSections = (placement: ProductSectionPlacement) => optionalSections
+    .filter((section) => section.node && section.placement === placement)
+    .sort((a, b) => a.order - b.order || (a.key === "campaigns" ? -1 : 1))
+    .map((section) => <Fragment key={section.key}>{section.node}</Fragment>);
   const facts = [
     ["origin", "產區", product.origin],
     ["process", "處理法", product.process],
@@ -154,8 +237,10 @@ export default async function WorkPage({ params }: { params: Promise<{ slug: str
         <CartLink compact />
       </header>
 
+      <ProductSectionReveals key={product.slug} calibrated={isGiottoPrototype}>
       <ProductPageEntrance>
-      <section className={`revenue-hero ${heroVideo || heroPath ? "has-wide-hero" : ""}`} id="top-purchase">
+      <div id="top-purchase" aria-hidden="true" />
+      <section {...getProductAnimationAttributes(sectionAnimation("product-hero"))} className={`revenue-hero ${heroVideo || heroPath ? "has-wide-hero" : ""}`} id="product-hero">
         <div className="revenue-media">
           <div className="product-hero-sticky">
             <div className={`revenue-image-stage ${heroVideo || heroPath ? "wide-hero-stage" : "product-stage"} page-entrance-hero`}>
@@ -228,12 +313,12 @@ export default async function WorkPage({ params }: { params: Promise<{ slug: str
           </div>
 
           {isGiottoPrototype ? (
-            <PurchaseChapterReveal>
+            <PurchaseChapterReveal animation={sectionAnimation("select-your-coffee")}>
               <p className="giotto-purchase-heading">SELECT YOUR COFFEE</p>
               <AddToCart product={product} />
             </PurchaseChapterReveal>
           ) : (
-            <div className="product-purchase-chapter">
+            <div {...getProductAnimationAttributes(sectionAnimation("select-your-coffee"))} id="select-your-coffee" className="product-purchase-chapter">
               <AddToCart product={product} />
             </div>
           )}
@@ -246,13 +331,14 @@ export default async function WorkPage({ params }: { params: Promise<{ slug: str
         aria-hidden="true"
       />
 
+      {renderOptionalSections("after_purchase")}
+
       <section className="revenue-proof-strip">
         <div><b>自製熱風烘焙</b><span>風味乾淨，降低焦苦與雜味</span></div>
         <div><b>小量新鮮製作</b><span>依實際供應安排烘焙與包裝</span></div>
         <div><b>7-ELEVEN 取貨付款</b><span>收到商品再付款，第一次購買更安心</span></div>
       </section>
 
-      <ProductSectionReveals calibrated={isGiottoPrototype}>
       <section className="revenue-content-section product-story-section">
         <div className={`product-story-grid${artworkCoverPath ? "" : " without-artwork"}`}>
           <div className="product-story-intro revenue-section-title">
@@ -264,16 +350,18 @@ export default async function WorkPage({ params }: { params: Promise<{ slug: str
           {artworkCoverPath ? <figure className="product-story-artwork" data-section-reveal data-reveal-delay="180" data-reveal-variant="artwork-cover"><img src={artworkCoverPath} alt={artworkCoverAlt} /></figure> : null}
         </div>
         <div className="product-story-details">
-          {product.flavors?.length ? <section className="flavor-notes" aria-labelledby="flavor-notes-title"><div className="story-detail-heading" data-section-reveal><EditorialIcon name="flavor" /><div><p>FLAVOR NOTES</p><h3 id="flavor-notes-title">風味筆記</h3></div></div><div className="flavor-notes-list">{product.flavors.map((flavor: string, index: number) => <span key={flavor} data-section-reveal data-reveal-delay={String(index * 80)}>{flavor}</span>)}</div></section> : null}
-          {facts.length ? <section className="coffee-profile" aria-labelledby="coffee-profile-title"><div className="story-detail-heading" data-section-reveal><div><p>COFFEE PROFILE</p><h3 id="coffee-profile-title">咖啡資料</h3></div></div><dl>{facts.map(([key, label, value], index) => <div key={String(key)} data-section-reveal data-reveal-delay={String(index * 80)}><dt><EditorialIcon name={key as "origin" | "process" | "roast"} /><span>{label}</span></dt><dd>{value}</dd></div>)}</dl></section> : null}
+          {product.flavors?.length ? <section {...getProductAnimationAttributes(sectionAnimation("flavor-notes"))} id="flavor-notes" className="flavor-notes" aria-labelledby="flavor-notes-title"><div className="story-detail-heading" data-section-reveal><EditorialIcon name="flavor" /><div><p>FLAVOR NOTES</p><h3 id="flavor-notes-title">風味筆記</h3></div></div><div className="flavor-notes-list">{product.flavors.map((flavor: string, index: number) => <span key={flavor} data-section-reveal data-reveal-delay={String(index * 80)}>{flavor}</span>)}</div></section> : null}
+          {facts.length ? <section {...getProductAnimationAttributes(sectionAnimation("coffee-profile"))} id="coffee-profile" className="coffee-profile" aria-labelledby="coffee-profile-title"><div className="story-detail-heading" data-section-reveal><div><p>COFFEE PROFILE</p><h3 id="coffee-profile-title">咖啡資料</h3></div></div><dl>{facts.map(([key, label, value], index) => <div key={String(key)} data-section-reveal data-reveal-delay={String(index * 80)}><dt><EditorialIcon name={key as "origin" | "process" | "roast"} /><span>{label}</span></dt><dd>{value}</dd></div>)}</dl></section> : null}
           {showRoastedBeanViewer ? <section className="roasted-bean-viewer-entry" data-section-reveal data-reveal-delay="180" aria-label="烘焙豆照片"><RoastedBeanViewer productName={product.name} imageSrc={roastedBeanPhotoPath} imageAlt={roastedBeanPhotoAlt} /></section> : null}
         </div>
       </section>
 
-      {isGiottoPrototype ? (
-        <CleanRoastingChapter proofs={CLEAN_ROASTING_PROOFS} />
+      {renderOptionalSections("after_profile")}
+
+      {isGiottoPrototype || hasCleanRoastingMediaConfig ? (
+        <CleanRoastingChapter proofs={CLEAN_ROASTING_PROOFS} animation={sectionAnimation("clean-roasting")} mediaConfig={cleanRoastingMedia} />
       ) : (
-        <section className="revenue-content-section clean-roasting-section" aria-labelledby="clean-roasting-title">
+        <section {...getProductAnimationAttributes(sectionAnimation("clean-roasting"))} id="clean-roasting" className="revenue-content-section clean-roasting-section" aria-labelledby="clean-roasting-title">
             <div className="clean-roasting-intro">
               <p data-section-reveal>CLEAN ROASTING</p>
               <h2 id="clean-roasting-title" data-section-reveal data-reveal-delay="80">乾淨的烘焙</h2>
@@ -284,7 +372,10 @@ export default async function WorkPage({ params }: { params: Promise<{ slug: str
         </section>
       )}
 
-      <section className="revenue-content-section revenue-faq">
+      {renderOptionalSections("after_clean_roasting")}
+      {renderOptionalSections("before_before_you_order")}
+
+      <section {...getProductAnimationAttributes(sectionAnimation("before-you-order"))} id="before-you-order" className="revenue-content-section revenue-faq">
         <div className="revenue-section-title" data-section-reveal={isGiottoPrototype ? undefined : "true"}>
           <p data-section-reveal={isGiottoPrototype ? "true" : undefined}>BEFORE YOU ORDER</p>
           <h2 data-section-reveal={isGiottoPrototype ? "true" : undefined} data-reveal-delay={isGiottoPrototype ? "80" : undefined}>{isGiottoPrototype ? <>第一次選咖啡，<br className="giotto-faq-mobile-break" />我們陪你慢慢選。</> : "第一次購買也不用擔心"}</h2>
@@ -299,9 +390,7 @@ export default async function WorkPage({ params }: { params: Promise<{ slug: str
 
       {layout.showGallery !== false && gallery.length ? <section className="revenue-content-section revenue-gallery"><div className="revenue-section-title"><p>PRODUCT DETAILS</p><h2>包裝與作品細節</h2></div><div className="revenue-gallery-grid">{gallery.map((item: any) => <figure key={item.key}><img src={item.path} alt={item.alt || `${product.name} ${item.key}`} />{item.caption ? <figcaption>{item.caption}</figcaption> : null}</figure>)}</div></section> : null}
 
-      {productCampaigns.length ? <ProductCampaignSection campaigns={productCampaigns} /> : null}
-
-      {showRelated && related.length ? <section className="revenue-content-section revenue-related"><div className="revenue-section-title" data-section-reveal><p>YOU MAY ALSO LIKE</p><h2>{relatedTitle}</h2></div><div className="revenue-related-grid" data-section-reveal>{related.map((item: any) => { const listAsset = resolveListAsset(item); const price = item.purchase?.length ? Math.min(...item.purchase.map((o: any) => o.price)) : null; return <Link key={item.slug} href={`/works/${item.slug}`} className="revenue-related-card"><div className="related-thumb"><ProductVisualMedia src={listAsset?.path} alt={listAsset?.alt || item.name} className="product-list-image" loading="lazy" decoding="async" fallback={<ProductBagFallback product={item} compact />}/></div><div><small>{item.tag || item.artist}</small><h3>{item.name}</h3><p>{item.flavors?.slice(0, 3).join("、")}</p>{price !== null ? <b>NT$ {price.toLocaleString("zh-TW")} 起</b> : null}<span>查看與購買 →</span></div></Link>; })}</div></section> : null}
+      {renderOptionalSections("page_bottom")}
       </ProductSectionReveals>
 
       {minPrice !== null && product.purchasable !== false && product.status !== "sold_out" ? <MobilePurchaseReturnButton /> : null}
