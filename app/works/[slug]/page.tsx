@@ -6,11 +6,13 @@ import CartLink from "@/components/commerce/CartLink";
 import CleanRoastingChapter from "@/components/commerce/CleanRoastingChapter";
 import MobilePurchaseReturnButton from "@/components/commerce/MobilePurchaseReturnButton";
 import ProductPageEntrance from "@/components/commerce/ProductPageEntrance";
+import ProductCampaignSection from "@/components/commerce/ProductCampaignSection";
 import PurchaseChapterReveal from "@/components/commerce/PurchaseChapterReveal";
 import RoastedBeanViewer from "@/components/commerce/RoastedBeanViewer";
 import ProductSectionReveals from "@/components/commerce/ProductSectionReveals";
 import ProductVisualMedia from "@/components/commerce/ProductVisualMedia";
 import KdMedia from "@/components/media/KdMedia";
+import { getHomepageData, resolveProductCampaigns } from "@/data/homepageData";
 import {
   getProductMediaAsset,
   resolveGalleryAssets,
@@ -80,7 +82,7 @@ const CLEAN_ROASTING_PROOFS = [
 
 export default async function WorkPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const live = await getLiveWebsiteData();
+  const [live, homepageData] = await Promise.all([getLiveWebsiteData(), getHomepageData()]);
   const product: any = live.menu.products.find((item: any) => item.slug === slug);
   if (!product || product.status === "hidden") notFound();
 
@@ -111,7 +113,25 @@ export default async function WorkPage({ params }: { params: Promise<{ slug: str
   const showRoastedBeanViewer = product.showRoastedBeanPhoto === true && Boolean(roastedBeanPhotoPath);
   const roastedBeanPhotoAlt = product.assets?.roastedBeanPhoto?.alt || `${product.name} 實際烘焙咖啡豆`;
   const gallery = resolveGalleryAssets(product);
-  const related = live.menu.products.filter((p: any) => p.slug !== product.slug && p.status !== "hidden" && p.inMonthlyMenu).slice(0, 3);
+  const relatedSettings = product.relatedProducts && typeof product.relatedProducts === "object" ? product.relatedProducts : null;
+  const productBySlug = new Map(live.menu.products.map((item: any) => [item.slug, item]));
+  const seenRelatedSlugs = new Set<string>();
+  const related = relatedSettings
+    ? (Array.isArray(relatedSettings.productIds) ? relatedSettings.productIds : [])
+        .filter((relatedSlug: string) => {
+          if (seenRelatedSlugs.has(relatedSlug)) return false;
+          seenRelatedSlugs.add(relatedSlug);
+          return true;
+        })
+        .map((relatedSlug: string) => productBySlug.get(relatedSlug))
+        .filter((item: any) => item && item.slug !== product.slug && item.status !== "hidden" && item.active !== false)
+        .slice(0, 3)
+    : live.menu.products.filter((p: any) => p.slug !== product.slug && p.status !== "hidden" && p.inMonthlyMenu).slice(0, 3);
+  const showRelated = relatedSettings ? relatedSettings.enabled !== false : layout.showRelatedWorks !== false;
+  const relatedTitle = relatedSettings?.title?.trim() || "也可以比較這三款";
+  const productCampaigns = product.campaignDisplay?.enabled === true
+    ? resolveProductCampaigns(homepageData, product.campaignDisplay.campaignIds)
+    : [];
   const facts = [
     ["origin", "產區", product.origin],
     ["process", "處理法", product.process],
@@ -279,7 +299,9 @@ export default async function WorkPage({ params }: { params: Promise<{ slug: str
 
       {layout.showGallery !== false && gallery.length ? <section className="revenue-content-section revenue-gallery"><div className="revenue-section-title"><p>PRODUCT DETAILS</p><h2>包裝與作品細節</h2></div><div className="revenue-gallery-grid">{gallery.map((item: any) => <figure key={item.key}><img src={item.path} alt={item.alt || `${product.name} ${item.key}`} />{item.caption ? <figcaption>{item.caption}</figcaption> : null}</figure>)}</div></section> : null}
 
-      {layout.showRelatedWorks !== false && related.length ? <section className="revenue-content-section revenue-related"><div className="revenue-section-title" data-section-reveal><p>YOU MAY ALSO LIKE</p><h2>也可以比較這三款</h2></div><div className="revenue-related-grid" data-section-reveal>{related.map((item: any) => { const listAsset = resolveListAsset(item); const price = item.purchase?.length ? Math.min(...item.purchase.map((o: any) => o.price)) : null; return <Link key={item.slug} href={`/works/${item.slug}`} className="revenue-related-card"><div className="related-thumb"><ProductVisualMedia src={listAsset?.path} alt={listAsset?.alt || item.name} className="product-list-image" loading="lazy" decoding="async" fallback={<ProductBagFallback product={item} compact />}/></div><div><small>{item.tag || item.artist}</small><h3>{item.name}</h3><p>{item.flavors?.slice(0, 3).join("、")}</p>{price !== null ? <b>NT$ {price.toLocaleString("zh-TW")} 起</b> : null}<span>查看與購買 →</span></div></Link>; })}</div></section> : null}
+      {productCampaigns.length ? <ProductCampaignSection campaigns={productCampaigns} /> : null}
+
+      {showRelated && related.length ? <section className="revenue-content-section revenue-related"><div className="revenue-section-title" data-section-reveal><p>YOU MAY ALSO LIKE</p><h2>{relatedTitle}</h2></div><div className="revenue-related-grid" data-section-reveal>{related.map((item: any) => { const listAsset = resolveListAsset(item); const price = item.purchase?.length ? Math.min(...item.purchase.map((o: any) => o.price)) : null; return <Link key={item.slug} href={`/works/${item.slug}`} className="revenue-related-card"><div className="related-thumb"><ProductVisualMedia src={listAsset?.path} alt={listAsset?.alt || item.name} className="product-list-image" loading="lazy" decoding="async" fallback={<ProductBagFallback product={item} compact />}/></div><div><small>{item.tag || item.artist}</small><h3>{item.name}</h3><p>{item.flavors?.slice(0, 3).join("、")}</p>{price !== null ? <b>NT$ {price.toLocaleString("zh-TW")} 起</b> : null}<span>查看與購買 →</span></div></Link>; })}</div></section> : null}
       </ProductSectionReveals>
 
       {minPrice !== null && product.purchasable !== false && product.status !== "sold_out" ? <MobilePurchaseReturnButton /> : null}

@@ -11,6 +11,8 @@ export const PRODUCT_METADATA_FIELDS = [
   "sort",
   "subtitle",
   "tag",
+  "relatedProducts",
+  "campaignDisplay",
 ] as const;
 
 export const PRODUCT_TAG_MAX_LENGTH = 12;
@@ -162,6 +164,44 @@ function normalizeNonNegativeInteger(value: unknown, label: string) {
   return value;
 }
 
+function normalizeReferenceIds(value: unknown, label: string, maximum?: number) {
+  if (!Array.isArray(value) || value.some((item) => typeof item !== "string")) {
+    throw new ProductCommerceUpdateError(`${label}格式不正確。`);
+  }
+  const ids = value.map((item) => item.trim()).filter(Boolean);
+  if (maximum !== undefined && ids.length > maximum) {
+    throw new ProductCommerceUpdateError(`${label}最多只能設定 ${maximum} 筆。`);
+  }
+  if (new Set(ids).size !== ids.length) {
+    throw new ProductCommerceUpdateError(`${label}不可包含重複項目。`);
+  }
+  return ids;
+}
+
+function normalizeRelatedProducts(value: unknown) {
+  if (!isRecord(value) || (value.enabled !== undefined && typeof value.enabled !== "boolean")) {
+    throw new ProductCommerceUpdateError("推薦比較作品設定格式不正確。");
+  }
+  if (value.title !== undefined && typeof value.title !== "string") {
+    throw new ProductCommerceUpdateError("推薦比較作品標題格式不正確。");
+  }
+  return {
+    enabled: value.enabled !== false,
+    title: typeof value.title === "string" ? value.title.trim() : "也可以比較這三款",
+    productIds: normalizeReferenceIds(value.productIds, "推薦比較作品", 3),
+  };
+}
+
+function normalizeCampaignDisplay(value: unknown) {
+  if (!isRecord(value) || (value.enabled !== undefined && typeof value.enabled !== "boolean")) {
+    throw new ProductCommerceUpdateError("最新活動設定格式不正確。");
+  }
+  return {
+    enabled: value.enabled === true,
+    campaignIds: normalizeReferenceIds(value.campaignIds, "最新活動"),
+  };
+}
+
 function normalizeMetadataField(field: ProductMetadataField, value: unknown) {
   if (field === "flavors") {
     if (!Array.isArray(value) || value.some((item) => typeof item !== "string")) {
@@ -184,6 +224,8 @@ function normalizeMetadataField(field: ProductMetadataField, value: unknown) {
     }
     return tag;
   }
+  if (field === "relatedProducts") return normalizeRelatedProducts(value);
+  if (field === "campaignDisplay") return normalizeCampaignDisplay(value);
   return normalizeString(value, `商品欄位 ${field}`);
 }
 
@@ -346,6 +388,14 @@ export function applyProductChanges(serverProducts: ProductRecord[], requestedCh
       seenFields.add(rawField.field);
       if ((PRODUCT_METADATA_FIELDS as readonly string[]).includes(rawField.field)) {
         product[rawField.field] = normalizeMetadataField(rawField.field as ProductMetadataField, rawField.nextValue);
+        if (
+          rawField.field === "relatedProducts" &&
+          isRecord(product.relatedProducts) &&
+          Array.isArray(product.relatedProducts.productIds) &&
+          product.relatedProducts.productIds.includes(String(product.slug || ""))
+        ) {
+          throw new ProductCommerceUpdateError("推薦比較作品不可選擇目前商品本身。");
+        }
         summary.push(`更新 ${rawField.field}`);
         continue;
       }

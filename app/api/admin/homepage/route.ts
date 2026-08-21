@@ -3,7 +3,7 @@ import { promises as fs } from "fs";
 
 import { isAdminAuthenticated } from "@/lib/adminAuth";
 import { atomicWriteJson, withFileLock } from "@/lib/jsonFileStore";
-import { validateHomepageCampaignDates } from "@/lib/homepageCampaignValidation";
+import { validateHomepageCampaigns } from "@/lib/homepageCampaignValidation";
 import { verifyHomepageMedia } from "@/lib/homepageMedia";
 import {
   hasAvailableHome004Sku,
@@ -195,7 +195,7 @@ export async function PUT(request: Request) {
      * 保留原本既有驗證。
      */
     const campaignDateError =
-      validateHomepageCampaignDates(
+      validateHomepageCampaigns(
         homepage.campaigns,
       );
 

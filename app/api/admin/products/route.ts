@@ -19,6 +19,7 @@ import {
 
 import {
   getWebsiteDataFile,
+  getHomepageDataFile,
   getMonthlyMenusFile,
   getArtworkBackupsDir,
 } from "@/lib/storagePaths";
@@ -45,6 +46,7 @@ export const dynamic = "force-dynamic";
  * 商品、SKU、價格、庫存與後台更新邏輯全部維持原樣。
  */
 const websiteFile = getWebsiteDataFile();
+const homepageFile = getHomepageDataFile();
 const archiveFile = getMonthlyMenusFile();
 const backupDir = getArtworkBackupsDir();
 
@@ -212,7 +214,10 @@ export async function GET() {
   }
 
   // websiteFile 現在統一由 storagePaths.ts 決定。
-  const data = await readJson<ProductRecord>(websiteFile, {});
+  const [data, homepage] = await Promise.all([
+    readJson<ProductRecord>(websiteFile, {}),
+    readJson<ProductRecord>(homepageFile, {}),
+  ]);
 
   // monthly-menus.json 同樣統一由 storagePaths.ts 決定。
   const archive = await readJson<ProductRecord>(
@@ -241,6 +246,8 @@ export async function GET() {
 
   return NextResponse.json({
     products,
+
+    campaigns: Array.isArray(homepage.campaigns) ? homepage.campaigns : [],
 
     menu: {
       monthKey: menu.monthKey || "2026-08",

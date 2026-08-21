@@ -1,14 +1,14 @@
 "use client";
 import { useEffect,useState } from "react";
 import MediaUploader from "@/components/admin/MediaUploader";
-import { validateHomepageCampaignDates } from "@/lib/homepageCampaignValidation";
+import { validateHomepageCampaigns } from "@/lib/homepageCampaignValidation";
 import { home004IneligibilityReasons, resolveHome004Recommendations } from "@/lib/home004Recommendations";
 import { localImageMedia, resolveMediaAsset, type MediaAsset } from "@/lib/media";
 
 type ProductOption={slug:string;name:string;active?:boolean;status?:string;purchasable:boolean;inMonthlyMenu:boolean;hasAvailableSku:boolean};
 type Payload={homepage:any;products:ProductOption[]};
 type CampaignSectionValue={enabled?:boolean;eyebrow?:string;title?:string;intro?:string;displayLimit?:number};
-type CampaignValue={id?:string;enabled?:boolean;sort?:number;eyebrow?:string;title?:string;description?:string;details?:string[];ctaLabel?:string;ctaHref?:string;secondaryLabel?:string;secondaryHref?:string;note?:string;image?:string;media?:MediaAsset;startDate?:string;endDate?:string};
+type CampaignValue={id?:string;adminName?:string;enabled?:boolean;sort?:number;eyebrow?:string;title?:string;description?:string;details?:string[];ctaLabel?:string;ctaHref?:string;secondaryLabel?:string;secondaryHref?:string;note?:string;image?:string;media?:MediaAsset;startDate?:string;endDate?:string;placements?:string[]};
 type SetHomepagePath=(path:(string|number)[],value:unknown)=>void;
 type UploadHomepageImage=(file:File,path:(string|number)[],assetId:string,seoName?:string,assetGroup?:string)=>Promise<MediaAsset>;
 const sectionOrder=["home002","home003","home004","home005","home006","home007","home008","home009","home010"];
@@ -18,7 +18,7 @@ export default function HomepageManager(){
  useEffect(()=>{fetch("/api/admin/homepage",{cache:"no-store"}).then(r=>r.ok?r.json():Promise.reject(new Error("讀取失敗"))).then(v=>{setData(v);setMessage("")}).catch(e=>setMessage(e.message))},[]);
  const setPath=(path:(string|number)[],value:any)=>setData(cur=>{if(!cur)return cur;const n=structuredClone(cur);let t=n.homepage;for(const k of path.slice(0,-1))t=t[k as any];t[path[path.length-1] as any]=value;return n});
  const uploadImage:UploadHomepageImage=async(file,path,assetId,seoName,assetGroup)=>{setMessage(`上傳 ${assetId}…`);const form=new FormData();form.append("file",file);form.append("desiredName",seoName||`kd-coffee-${assetId.toLowerCase()}`);form.append("artworkSlug","homepage");form.append("assetType",assetId.toLowerCase());if(assetGroup)form.append("assetGroup",assetGroup);const r=await fetch("/api/admin/homepage/upload",{method:"POST",body:form});const j=await r.json();if(!r.ok){const error=j.error||"上傳失敗";setMessage(error);throw new Error(error)}setPath(path,j.path);setMessage(`${assetId} 上傳完成，請按儲存。`);return localImageMedia(j.path)};
- const save=async()=>{if(!data)return;const dateError=validateHomepageCampaignDates(data.homepage.campaigns);if(dateError){setMessage(dateError);return}const home004Resolution=resolveHome004Recommendations(data.homepage.home004?.productSlugs,data.products);if(!home004Resolution.valid){setMessage(home004Resolution.errors[0]);return}setSaving(true);setMessage("儲存中…");try{const r=await fetch("/api/admin/homepage",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({homepage:data.homepage})});const j=await r.json();setMessage(r.ok?"首頁 v3 已儲存。":"儲存失敗："+(j.error||"未知錯誤"))}finally{setSaving(false)}};
+ const save=async()=>{if(!data)return;const campaignError=validateHomepageCampaigns(data.homepage.campaigns);if(campaignError){setMessage(campaignError);return}const home004Resolution=resolveHome004Recommendations(data.homepage.home004?.productSlugs,data.products);if(!home004Resolution.valid){setMessage(home004Resolution.errors[0]);return}setSaving(true);setMessage("儲存中…");try{const r=await fetch("/api/admin/homepage",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({homepage:data.homepage})});const j=await r.json();setMessage(r.ok?"首頁 v3 已儲存。":"儲存失敗："+(j.error||"未知錯誤"))}finally{setSaving(false)}};
  if(!data)return <p>{message}</p>;const h=data.homepage;
  return <div className="homepage-manager v3-admin">
   <div className="cms-toolbar"><div><p className="eyebrow dark">HOMEPAGE v3 CONTROL CENTER</p><h1>首頁成交版管理</h1><p>前台 HOME001～HOME010 與這裡一一對應。每張圖都有編號、尺寸、ALT 與生成提示詞。</p></div><div className="cms-toolbar-actions"><a href="/" target="_blank">預覽首頁 ↗</a><button onClick={save} disabled={saving}>{saving?"儲存中…":"儲存全部"}</button></div></div>
@@ -36,7 +36,16 @@ export default function HomepageManager(){
  </div>
 }
 function CampaignEditor({section,campaigns,setPath,uploadImage}:{section:CampaignSectionValue;campaigns:CampaignValue[];setPath:SetHomepagePath;uploadImage:UploadHomepageImage}){
- return <section className="cms-panel campaign-editor"><div className="cms-panel-head"><div><h2>Monthly Campaign｜本月活動</h2><p>首頁 HOME003 與 HOME004 之間的期間限定活動。</p></div><label className="cms-switch"><input type="checkbox" checked={section?.enabled!==false} onChange={e=>setPath(["campaignSection","enabled"],e.target.checked)}/>啟用活動區</label></div>
+ const addCampaign=()=>{
+  const sort=campaigns.reduce((maximum,campaign)=>Math.max(maximum,Number(campaign.sort||0)),0)+1;
+  setPath(["campaigns"],[...campaigns,{id:`campaign-${Date.now()}`,adminName:"新活動",enabled:false,sort,eyebrow:"LATEST AT KD COFFEE",title:"新活動",description:"",details:[],ctaLabel:"了解更多",ctaHref:"/works",secondaryLabel:"",secondaryHref:"",note:"",startDate:"",endDate:"",placements:["frontend_campaign_section","product_pages"]}]);
+ };
+ const placementsFor=(campaign:CampaignValue)=>Array.isArray(campaign.placements)?campaign.placements:["frontend_campaign_section","product_pages"];
+ const setPlacement=(campaign:CampaignValue,index:number,placement:string,enabled:boolean)=>{
+  const current=placementsFor(campaign);
+  setPath(["campaigns",index,"placements"],enabled?[...new Set([...current,placement])]:current.filter(item=>item!==placement));
+ };
+ return <section className="cms-panel campaign-editor" id="campaign-management"><div className="cms-panel-head"><div><h2>活動管理</h2><p>這是首頁活動區與作品頁最新活動的共享內容來源。</p></div><div className="campaign-admin-actions"><label className="cms-switch"><input type="checkbox" checked={section?.enabled!==false} onChange={e=>setPath(["campaignSection","enabled"],e.target.checked)}/>啟用首頁活動區</label><button className="cms-secondary-button" type="button" onClick={addCampaign}>＋ 建立活動</button></div></div>
   <div className="cms-grid two">
    <label>區塊英文小標<input value={section?.eyebrow||""} onChange={e=>setPath(["campaignSection","eyebrow"],e.target.value)}/></label>
    <label>區塊標題<input value={section?.title||""} onChange={e=>setPath(["campaignSection","title"],e.target.value)}/></label>
@@ -45,8 +54,9 @@ function CampaignEditor({section,campaigns,setPath,uploadImage}:{section:Campaig
   </div>
   <div className="campaign-admin-list">{campaigns.map((campaign,index)=><article className="campaign-admin-card" key={campaign.id||index}>
    <div className="campaign-admin-title"><div><b>{campaign.id||`CAMPAIGN-${index+1}`}</b><label className="cms-switch"><input type="checkbox" checked={campaign.enabled!==false} onChange={e=>setPath(["campaigns",index,"enabled"],e.target.checked)}/>啟用</label></div><label>排序 <input type="number" step="1" value={Number(campaign.sort||0)} onChange={e=>setPath(["campaigns",index,"sort"],Number(e.target.value||0))}/></label></div>
-   <div className="cms-grid two">
-    <label>英文小標<input value={campaign.eyebrow||""} onChange={e=>setPath(["campaigns",index,"eyebrow"],e.target.value)}/></label>
+    <div className="cms-grid two">
+     <label>內部管理名稱<input value={campaign.adminName||campaign.title||""} onChange={e=>setPath(["campaigns",index,"adminName"],e.target.value)}/></label>
+     <label>英文小標<input value={campaign.eyebrow||""} onChange={e=>setPath(["campaigns",index,"eyebrow"],e.target.value)}/></label>
     <label>活動標題<input value={campaign.title||""} onChange={e=>setPath(["campaigns",index,"title"],e.target.value)}/></label>
     <label className="span-two">活動說明<textarea value={campaign.description||""} onChange={e=>setPath(["campaigns",index,"description"],e.target.value)}/></label>
     <label className="span-two">活動細節（每行一項）<textarea value={(campaign.details||[]).join("\n")} onChange={e=>setPath(["campaigns",index,"details"],e.target.value.split(/\r?\n/))}/></label>
@@ -56,7 +66,8 @@ function CampaignEditor({section,campaigns,setPath,uploadImage}:{section:Campaig
     <label>次要 CTA 連結<input value={campaign.secondaryHref||""} onChange={e=>setPath(["campaigns",index,"secondaryHref"],e.target.value)}/></label>
     <label>活動註記<input value={campaign.note||""} onChange={e=>setPath(["campaigns",index,"note"],e.target.value)}/></label>
     <label>開始日期<input type="date" value={campaign.startDate||""} onChange={e=>setPath(["campaigns",index,"startDate"],e.target.value)}/></label>
-    <label>結束日期<input type="date" value={campaign.endDate||""} onChange={e=>setPath(["campaigns",index,"endDate"],e.target.value)}/></label>
+     <label>結束日期<input type="date" value={campaign.endDate||""} onChange={e=>setPath(["campaigns",index,"endDate"],e.target.value)}/></label>
+     <fieldset className="campaign-placement-field span-two"><legend>顯示位置</legend><label><input type="checkbox" checked={placementsFor(campaign).includes("frontend_campaign_section")} onChange={e=>setPlacement(campaign,index,"frontend_campaign_section",e.target.checked)}/>首頁既有活動區</label><label><input type="checkbox" checked={placementsFor(campaign).includes("product_pages")} onChange={e=>setPlacement(campaign,index,"product_pages",e.target.checked)}/>可供作品頁引用</label></fieldset>
     <div className="span-two"><MediaUploader label="Campaign 圖片／影片" usage="content" value={resolveMediaAsset(campaign.media,campaign.image)} onImageUpload={file=>uploadImage(file,["campaigns",index,"image"],`CAMPAIGN-${index+1}`,`kdcoffee-campaign-${campaign.id||index+1}`,"campaign")} onChange={media=>setPath(["campaigns",index,"media"],media)} onRemove={campaign.media?()=>setPath(["campaigns",index,"media"],undefined):undefined}/><label className="media-path-field">既有圖片路徑<input value={campaign.image||""} placeholder={`/images/campaigns/kdcoffee-campaign-${campaign.id||index+1}-v01.webp`} onChange={e=>{const image=e.target.value;setPath(["campaigns",index,"image"],image);if(campaign.media?.type==="image")setPath(["campaigns",index,"media"],image?localImageMedia(image):undefined)}}/></label></div>
    </div>
   </article>)}</div>

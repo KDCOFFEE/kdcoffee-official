@@ -44,8 +44,11 @@ export type HeroSettings = {
  * 首頁活動資料
  * ============================================================
  */
+export type CampaignPlacement = "frontend_campaign_section" | "product_pages";
+
 export type HomepageCampaign = {
   id: string;
+  adminName?: string;
   enabled?: boolean;
   sort?: number;
   eyebrow: string;
@@ -61,6 +64,7 @@ export type HomepageCampaign = {
   media?: MediaAsset;
   startDate?: string;
   endDate?: string;
+  placements?: CampaignPlacement[];
 };
 
 /**
@@ -158,40 +162,33 @@ export async function getHomepageData(): Promise<HomepageData> {
  * 4. 依 sort 排序
  * 5. 套用 displayLimit
  */
+function campaignIsActive(campaign: HomepageCampaign, now: Date) {
+  const start = campaign.startDate
+    ? new Date(`${campaign.startDate}T00:00:00`)
+    : null;
+  const end = campaign.endDate
+    ? new Date(`${campaign.endDate}T23:59:59`)
+    : null;
+
+  return (
+    (!start || now >= start) &&
+    (!end || now <= end)
+  );
+}
+
+function campaignSupportsPlacement(campaign: HomepageCampaign, placement: CampaignPlacement) {
+  return !Array.isArray(campaign.placements) || campaign.placements.includes(placement);
+}
+
 export function activeHomepageCampaigns(
   homepageData: HomepageData,
   now = new Date(),
 ) {
   const items =
     homepageData.campaigns
-      .filter(
-        (campaign) =>
-          campaign.enabled !== false,
-      )
-      .filter(
-        (campaign) => {
-          const start =
-            campaign.startDate
-              ? new Date(
-                  `${campaign.startDate}T00:00:00`,
-                )
-              : null;
-
-          const end =
-            campaign.endDate
-              ? new Date(
-                  `${campaign.endDate}T23:59:59`,
-                )
-              : null;
-
-          return (
-            (!start ||
-              now >= start) &&
-            (!end ||
-              now <= end)
-          );
-        },
-      )
+      .filter((campaign) => campaign.enabled !== false)
+      .filter((campaign) => campaignIsActive(campaign, now))
+      .filter((campaign) => campaignSupportsPlacement(campaign, "frontend_campaign_section"))
       .sort(
         (a, b) =>
           Number(a.sort || 0) -
@@ -208,4 +205,29 @@ export function activeHomepageCampaigns(
   return limit > 0
     ? items.slice(0, limit)
     : items;
+}
+
+export function resolveProductCampaigns(
+  homepageData: HomepageData,
+  campaignIds: unknown,
+  now = new Date(),
+) {
+  if (!Array.isArray(campaignIds)) return [];
+
+  const campaignsById = new Map(homepageData.campaigns.map((campaign) => [campaign.id, campaign]));
+  const seen = new Set<string>();
+
+  return campaignIds
+    .filter((id): id is string => typeof id === "string" && Boolean(id.trim()))
+    .map((id) => id.trim())
+    .filter((id) => {
+      if (seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    })
+    .map((id) => campaignsById.get(id))
+    .filter((campaign): campaign is HomepageCampaign => Boolean(campaign))
+    .filter((campaign) => campaign.enabled !== false)
+    .filter((campaign) => campaignIsActive(campaign, now))
+    .filter((campaign) => campaignSupportsPlacement(campaign, "product_pages"));
 }

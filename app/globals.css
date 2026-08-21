@@ -1789,3 +1789,58 @@ body.roasted-bean-viewer-open .mobile-purchase-return{opacity:0!important;visibi
 .roasted-bean-admin-control{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(220px,.9fr);gap:22px;margin-top:24px;padding:22px 0 0;border-top:1px solid rgba(57,40,27,.16)}
 .roasted-bean-admin-control h3{margin:5px 0 8px;font-size:20px}.roasted-bean-admin-control>div>p:last-child{margin:0;color:#75685d;font-size:13px;line-height:1.65}.roasted-bean-visibility{display:flex;align-items:flex-start;gap:10px;padding:14px;border:1px solid rgba(57,40,27,.16);background:#faf7f2;cursor:pointer}.roasted-bean-visibility input{width:18px;height:18px;margin-top:2px;accent-color:#65452d}.roasted-bean-visibility strong,.roasted-bean-visibility small{display:block}.roasted-bean-visibility strong{font-size:14px}.roasted-bean-visibility small{margin-top:4px;color:#75685d;font-size:12px;line-height:1.5}.roasted-bean-admin-media{display:flex;align-items:center;justify-content:space-between;gap:14px;grid-column:1/-1;padding:14px;border:1px dashed rgba(57,40,27,.24);color:#75685d;font-size:13px}.roasted-bean-admin-media.has-photo{align-items:flex-start;border-style:solid}.roasted-bean-admin-preview{display:grid;gap:6px}.roasted-bean-admin-preview img{display:block;width:96px;height:72px;object-fit:cover;background:#eee4d8}.roasted-bean-admin-preview span{color:#75685d;font-size:11px;font-weight:700}.roasted-bean-admin-media>div:last-child{display:flex;gap:8px;margin-left:auto}.roasted-bean-admin-media label,.roasted-bean-admin-media button{display:inline-flex;align-items:center;justify-content:center;min-height:38px;padding:8px 11px;border:1px solid rgba(57,40,27,.26);background:#fff;color:#4b3628;font:inherit;font-size:12px;font-weight:700;cursor:pointer}.roasted-bean-admin-media label input{display:none}.roasted-bean-admin-media button{background:transparent}.roasted-bean-admin-warning{grid-column:1/-1;margin:0;color:#8a4c22;font-size:12px;line-height:1.55}
 @media(max-width:700px){.roasted-bean-admin-control{grid-template-columns:1fr;gap:14px}.roasted-bean-admin-media{align-items:flex-start;flex-direction:column}.roasted-bean-admin-media>div:last-child{margin-left:0}.roasted-bean-admin-media.has-photo{display:grid;grid-template-columns:96px minmax(0,1fr)}.roasted-bean-admin-media.has-photo>div:last-child{grid-column:2}}
+
+/* G.1 — shared campaign presentation and product relation administration. */
+.product-campaign-section{border-top:1px solid rgba(65,48,34,.16)}
+.product-campaign-presentation{margin-top:34px}
+.product-campaign-stack{display:grid;gap:22px}
+.product-campaign-card{display:grid;grid-template-columns:minmax(280px,.9fr) minmax(0,1.1fr);min-width:0;overflow:hidden;border:1px solid rgba(65,48,34,.16);background:#faf7f1}
+.product-campaign-visual{position:relative;min-height:330px;overflow:hidden;background:#211914}
+.product-campaign-visual>.kd-media-video-shell,.product-campaign-visual>img{position:absolute;inset:0;width:100%;height:100%}
+.product-campaign-visual img,.product-campaign-visual video{width:100%;height:100%;object-fit:cover}
+.product-campaign-visual>span{position:absolute;z-index:3;top:18px;left:20px;color:#fff;font-size:11px;font-weight:800;letter-spacing:.18em}
+.product-campaign-copy{display:flex;flex-direction:column;justify-content:center;padding:clamp(28px,4vw,48px)}
+.product-campaign-copy>p{margin:0;color:#896846;font-size:10px;font-weight:800;letter-spacing:.18em}
+.product-campaign-copy h3{margin:10px 0 14px;font-family:Georgia,"Noto Serif TC",serif;font-size:clamp(28px,3vw,42px);font-weight:500}
+.product-campaign-copy>div{color:#6a5d52;font-size:14px;line-height:1.8}
+.product-campaign-copy ul{margin:18px 0 0;padding-left:18px;color:#6a5d52;font-size:13px;line-height:1.75}
+.product-campaign-copy>a{display:inline-flex;align-items:center;align-self:flex-start;gap:18px;margin-top:26px;padding:13px 17px;background:#30231a;color:#fff;text-decoration:none;font-size:12px;font-weight:800}
+.product-campaign-controls{display:none}
+.is-product-campaign-enhanced .product-campaign-stack{display:grid}
+.is-product-campaign-enhanced .product-campaign-card{grid-area:1/1;opacity:0;visibility:hidden;pointer-events:none;transition:opacity 260ms ease,visibility 0s linear 260ms}
+.is-product-campaign-enhanced .product-campaign-card.is-active{opacity:1;visibility:visible;pointer-events:auto;transition:opacity 280ms ease 70ms,visibility 0s}
+.is-product-campaign-enhanced .product-campaign-controls{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.product-campaign-controls button{display:flex;align-items:center;gap:8px;min-height:40px;padding:8px 12px;border:1px solid rgba(65,48,34,.2);background:transparent;color:#5f5145;font:inherit;font-size:11px;cursor:pointer}
+.product-campaign-controls button[aria-pressed="true"]{border-color:#6f5132;background:#6f5132;color:#fff}
+.product-campaign-controls span{font-size:9px;letter-spacing:.12em}
+
+.campaign-admin-actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.campaign-placement-field{display:flex;align-items:center;gap:18px;margin:0;padding:13px 14px;border:1px solid #ddd2c6}
+.campaign-placement-field legend{padding:0 5px;font-size:12px;font-weight:800}
+.campaign-placement-field label{display:flex;grid-auto-flow:initial;align-items:center;gap:7px}
+.campaign-placement-field input{width:auto}
+.product-relations-editor{display:grid;gap:18px}
+.relation-admin-group{display:grid;gap:18px}
+.relation-admin-group .cms-panel-head{margin-bottom:0}
+.relation-legacy-note{margin:0;padding:12px 14px;border-left:3px solid #9b784e;background:#f4ede4;color:#6d5c4d;font-size:12px;line-height:1.65}
+.cms-grid.three,.relation-slot-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+.relation-admin-group select,.relation-campaign-picker select{width:100%;min-height:43px;padding:9px 11px;border:1px solid #d5ccc2;background:#fff;color:#30271f;font:inherit}
+.relation-selected-list{display:grid;border-top:1px solid #ddd2c6}
+.relation-selected-list>div{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:13px 0;border-bottom:1px solid #ddd2c6}
+.relation-selected-list>div>span{display:grid;grid-template-columns:34px minmax(0,1fr);gap:3px 8px;align-items:center;min-width:0}
+.relation-selected-list>div>span>b{grid-row:1/3;color:#987654;font-size:10px;letter-spacing:.12em}
+.relation-selected-list strong,.relation-selected-list small{min-width:0;overflow-wrap:anywhere}.relation-selected-list small{color:#76695e;font-size:11px}
+.relation-selected-list>div>div{display:flex;gap:6px}.relation-selected-list button{padding:7px 9px;border:1px solid #cfc2b5;background:#fff;color:#4f4035;font:inherit;font-size:11px;cursor:pointer}.relation-selected-list button:disabled{opacity:.38;cursor:not-allowed}
+.relation-campaign-picker{display:grid;gap:7px;font-size:13px;font-weight:650}
+
+@media(max-width:760px){
+  .product-campaign-card{grid-template-columns:1fr}
+  .product-campaign-visual{min-height:250px}
+  .product-campaign-copy{padding:26px 22px}
+  .cms-grid.three,.relation-slot-grid{grid-template-columns:1fr}
+  .campaign-admin-actions,.campaign-placement-field{align-items:flex-start;flex-direction:column}
+  .relation-selected-list>div{align-items:flex-start;flex-direction:column}
+}
+@media(prefers-reduced-motion:reduce){
+  .is-product-campaign-enhanced .product-campaign-card,.is-product-campaign-enhanced .product-campaign-card.is-active{transition:none}
+}

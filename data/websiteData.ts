@@ -74,6 +74,17 @@ export type CoffeeArtwork = {
     showRelatedWorks?: boolean;
   };
 
+  relatedProducts?: {
+    enabled?: boolean;
+    title?: string;
+    productIds: string[];
+  };
+
+  campaignDisplay?: {
+    enabled?: boolean;
+    campaignIds: string[];
+  };
+
   displayFields?: Record<string, boolean>;
 
   status?:
