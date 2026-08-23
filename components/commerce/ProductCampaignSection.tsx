@@ -7,7 +7,7 @@ import CampaignMedia from "@/components/home/CampaignMedia";
 import type { HomepageCampaign } from "@/data/homepageData";
 import { getProductAnimationAttributes, type ProductSectionAnimationConfig } from "@/lib/productPageAnimations";
 
-export default function ProductCampaignSection({ campaigns, animation = null }: { campaigns: HomepageCampaign[]; animation?: ProductSectionAnimationConfig | null }) {
+export default function ProductCampaignSection({ campaigns, eyebrow = "LATEST ACTIVITY", heading = "最新活動", description = "", animation = null }: { campaigns: HomepageCampaign[]; eyebrow?: string; heading?: string; description?: string; animation?: ProductSectionAnimationConfig | null }) {
   const presentationRef = useRef<HTMLDivElement>(null);
   const [activeIndex, setActiveIndex] = useState(0);
 
@@ -23,8 +23,9 @@ export default function ProductCampaignSection({ campaigns, animation = null }: 
   return (
     <section {...getProductAnimationAttributes(animation)} id="campaigns" className="revenue-content-section product-campaign-section" aria-labelledby="product-campaign-title">
       <div className="revenue-section-title">
-        <p>LATEST ACTIVITY</p>
-        <h2 id="product-campaign-title">最新活動</h2>
+        <p>{eyebrow}</p>
+        <h2 id="product-campaign-title">{heading}</h2>
+        {description ? <span>{description}</span> : null}
       </div>
       <div className="product-campaign-presentation" ref={presentationRef}>
         <div className="product-campaign-stack">

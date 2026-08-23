@@ -10,6 +10,10 @@ import {
   type ProductAnimationChildKey,
 } from "@/lib/productPageAnimations";
 import { normalizeCleanRoastingMedia } from "@/lib/cleanRoastingMedia";
+import {
+  normalizeProductPageContent,
+  ProductPageContentValidationError,
+} from "@/lib/productPageContentValidation";
 
 export const PRODUCT_METADATA_FIELDS = [
   "name",
@@ -28,6 +32,8 @@ export const PRODUCT_METADATA_FIELDS = [
   "campaignDisplay",
   "productPageAnimations",
   "cleanRoastingMedia",
+  "productPageContent",
+  "displayFields",
 ] as const;
 
 export const PRODUCT_TAG_MAX_LENGTH = 12;
@@ -266,6 +272,24 @@ function normalizeMetadataField(field: ProductMetadataField, value: unknown) {
   if (field === "campaignDisplay") return normalizeCampaignDisplay(value);
   if (field === "productPageAnimations") return normalizeProductPageAnimations(value);
   if (field === "cleanRoastingMedia") return normalizeCleanRoastingMedia(value);
+  if (field === "productPageContent") {
+    try {
+      return normalizeProductPageContent(value);
+    } catch (error) {
+      if (error instanceof ProductPageContentValidationError) {
+        throw new ProductCommerceUpdateError(error.message);
+      }
+      throw error;
+    }
+  }
+  if (field === "displayFields") {
+    if (!isRecord(value)) throw new ProductCommerceUpdateError("商品資料顯示設定格式不正確。");
+    const allowed = ["origin", "process", "roast", "variety", "altitude", "flavors", "shortCopy", "mood"];
+    return Object.fromEntries(allowed.filter((key) => hasOwn(value, key)).map((key) => {
+      if (typeof value[key] !== "boolean") throw new ProductCommerceUpdateError(`商品資料顯示設定 ${key} 必須是布林值。`);
+      return [key, value[key]];
+    }));
+  }
   return normalizeString(value, `商品欄位 ${field}`);
 }
 

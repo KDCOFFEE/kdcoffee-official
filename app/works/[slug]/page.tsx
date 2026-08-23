@@ -40,6 +40,7 @@ import {
   CLEAN_ROASTING_LEGACY_CONFIG,
   normalizeCleanRoastingMedia,
 } from "@/lib/cleanRoastingMedia";
+import { resolveProductPageContent } from "@/lib/productPageContent";
 
 export const dynamic = "force-dynamic";
 
@@ -75,12 +76,13 @@ function ProductBagFallback({ product, compact = false }: { product: any; compac
   );
 }
 
-function RelatedProductsSection({ products, title, animation }: { products: CoffeeArtwork[]; title: string; animation: ProductSectionAnimationConfig | null }) {
+function RelatedProductsSection({ products, eyebrow, title, description, cardCtaLabel, animation }: { products: CoffeeArtwork[]; eyebrow: string; title: string; description: string; cardCtaLabel: string; animation: ProductSectionAnimationConfig | null }) {
   return (
     <section {...getProductAnimationAttributes(animation)} id="related-products" className="revenue-content-section revenue-related">
       <div className="revenue-section-title" data-section-reveal>
-        <p>YOU MAY ALSO LIKE</p>
+        <p>{eyebrow}</p>
         <h2>{title}</h2>
+        {description ? <span>{description}</span> : null}
       </div>
       <div className="revenue-related-grid" data-section-reveal>
         {products.map((item) => {
@@ -103,7 +105,7 @@ function RelatedProductsSection({ products, title, animation }: { products: Coff
                 <h3>{item.name}</h3>
                 <p>{item.flavors?.slice(0, 3).join("、")}</p>
                 {price !== null ? <b>NT$ {price.toLocaleString("zh-TW")} 起</b> : null}
-                <span>查看與購買 →</span>
+                <span>{cardCtaLabel}</span>
               </div>
             </Link>
           );
@@ -129,17 +131,20 @@ function EditorialIcon({ name }: { name: EditorialIconName }) {
   return <svg className="editorial-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.45" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>;
 }
 
-const CLEAN_ROASTING_PROOFS = [
-  { icon: "air" as const, title: "流床式熱風烘焙", text: "讓咖啡豆均勻翻動，呈現乾淨清楚的風味。" },
-  { icon: "heat" as const, title: "紅外線熱顯像", text: "精準控溫。" },
-  { icon: "cupping" as const, title: "杯測確認", text: "透過實際品飲確認香氣、甜感與整體平衡。" },
-];
-
 export default async function WorkPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const [live, homepageData] = await Promise.all([getLiveWebsiteData(), getHomepageData()]);
   const product: any = live.menu.products.find((item: any) => item.slug === slug);
   if (!product || product.status === "hidden") notFound();
+  const pageContent = resolveProductPageContent(product);
+  const heroContent = pageContent["product-hero"];
+  const purchaseContent = pageContent["select-your-coffee"];
+  const flavorContent = pageContent["flavor-notes"];
+  const profileContent = pageContent["coffee-profile"];
+  const roastingContent = pageContent["clean-roasting"];
+  const campaignContent = pageContent.campaigns;
+  const relatedContent = pageContent["related-products"];
+  const beforeOrderContent = pageContent["before-you-order"];
 
   const isGiottoPrototype = product.slug === "giotto-awakening";
   const hasCleanRoastingMediaConfig = product.cleanRoastingMedia && typeof product.cleanRoastingMedia === "object";
@@ -188,7 +193,6 @@ export default async function WorkPage({ params }: { params: Promise<{ slug: str
         .slice(0, 3)
     : live.menu.products.filter((p: any) => p.slug !== product.slug && p.status !== "hidden" && p.inMonthlyMenu).slice(0, 3);
   const showRelated = relatedSettings ? relatedSettings.enabled !== false : layout.showRelatedWorks !== false;
-  const relatedTitle = relatedSettings?.title?.trim() || "也可以比較這三款";
   const productCampaigns = product.campaignDisplay?.enabled === true
     ? resolveProductCampaigns(homepageData, product.campaignDisplay.campaignIds)
     : [];
@@ -202,13 +206,13 @@ export default async function WorkPage({ params }: { params: Promise<{ slug: str
       key: "campaigns",
       placement: normalizeProductSectionPlacement(product.campaignDisplay?.placement, campaignLayout.placement),
       order: normalizeProductSectionOrder(product.campaignDisplay?.order, campaignLayout.order),
-      node: productCampaigns.length ? <ProductCampaignSection campaigns={productCampaigns} animation={sectionAnimation("campaigns")} /> : null,
+      node: productCampaigns.length ? <ProductCampaignSection campaigns={productCampaigns} eyebrow={campaignContent.eyebrow} heading={campaignContent.heading} description={campaignContent.description} animation={sectionAnimation("campaigns")} /> : null,
     },
     {
       key: "related-products",
       placement: normalizeProductSectionPlacement(relatedSettings?.placement, relatedLayout.placement),
       order: normalizeProductSectionOrder(relatedSettings?.order, relatedLayout.order),
-      node: showRelated && related.length ? <RelatedProductsSection products={related} title={relatedTitle} animation={sectionAnimation("related-products")} /> : null,
+      node: showRelated && related.length ? <RelatedProductsSection products={related} eyebrow={relatedContent.eyebrow} title={relatedContent.heading} description={relatedContent.description} cardCtaLabel={relatedContent.cardCtaLabel} animation={sectionAnimation("related-products")} /> : null,
     },
   ] as const;
   const renderOptionalSections = (placement: ProductSectionPlacement) => optionalSections
@@ -220,14 +224,8 @@ export default async function WorkPage({ params }: { params: Promise<{ slug: str
     ["process", "處理法", product.process],
     ["roast", "烘焙度", product.roast],
   ].filter(([key, , value]) => d[key as string] !== false && value && value !== "待確認");
-  const storyLead = product.mood || product.shortCopy || product.subtitle || "一杯乾淨、清楚，而且容易親近的精品咖啡。";
-  const storySupportingCopy = product.shortCopy && product.shortCopy !== storyLead ? product.shortCopy : "";
   const minPrice = product.purchase?.length ? Math.min(...product.purchase.map((o: any) => o.price)) : null;
-  const suitable = product.tag?.includes("入門")
-    ? "第一次喝精品咖啡的人"
-    : product.flavors?.length
-      ? `喜歡${product.flavors.slice(0, 2).join("、")}風味的人`
-      : "想探索不同風味的人";
+  const useLegacyGiottoFaqBreak = isGiottoPrototype && !pageContent.raw["before-you-order"]?.heading;
 
   return (
     <main className={`revenue-product-page${isGiottoPrototype ? " giotto-art-direction" : ""}`}>
@@ -287,13 +285,13 @@ export default async function WorkPage({ params }: { params: Promise<{ slug: str
 
         <div className="revenue-buybox product-hero-commerce">
           <div className="product-hero-identity">
-          <p className="revenue-kicker product-entrance-eyebrow">KD COFFEE · {product.artist}</p>
+          <p className="revenue-kicker product-entrance-eyebrow">KD COFFEE · {heroContent.artist}</p>
           <div className="revenue-badges product-entrance-badge">
             {product.tag ? <span>{product.tag}</span> : null}
             {product.stock && product.stock <= 5 ? <span className="stock-alert">少量供應</span> : null}
           </div>
-          <h1 className="product-entrance-title">{product.name}</h1>
-          <p className="revenue-lead product-entrance-summary">{product.shortCopy || product.subtitle}</p>
+          <h1 className="product-entrance-title">{heroContent.title}</h1>
+          <p className="revenue-lead product-entrance-summary">{heroContent.lead}</p>
           <p className="revenue-order-promise product-entrance-summary">第一次購買也安心：選規格、填取貨資料，收到商品再付款。</p>
 
           <div className="revenue-quickfacts product-entrance-profile">
@@ -303,9 +301,8 @@ export default async function WorkPage({ params }: { params: Promise<{ slug: str
           </div>
 
           <div className="revenue-fit product-entrance-profile">
-            <b>適合這樣的你</b>
-            <span>✓ {suitable}</span>
-            <span>✓ 想喝乾淨、清楚、不焦苦的咖啡</span>
+            <b>{heroContent.suitabilityHeading}</b>
+            {heroContent.suitabilityItems.map((item) => <span key={item.id}>✓ {item.text}</span>)}
           </div>
 
           {product.flavors?.length ? <div className="revenue-flavors product-entrance-profile">{product.flavors.slice(0, 5).map((f: string) => <span key={f}>{f}</span>)}</div> : null}
@@ -314,11 +311,14 @@ export default async function WorkPage({ params }: { params: Promise<{ slug: str
 
           {isGiottoPrototype ? (
             <PurchaseChapterReveal animation={sectionAnimation("select-your-coffee")}>
-              <p className="giotto-purchase-heading">SELECT YOUR COFFEE</p>
+              <p className="giotto-purchase-heading">{purchaseContent.eyebrow}</p>
+              {purchaseContent.heading ? <h2 className="product-purchase-title">{purchaseContent.heading}</h2> : null}
+              {purchaseContent.description ? <p className="product-purchase-description">{purchaseContent.description}</p> : null}
               <AddToCart product={product} />
             </PurchaseChapterReveal>
           ) : (
             <div {...getProductAnimationAttributes(sectionAnimation("select-your-coffee"))} id="select-your-coffee" className="product-purchase-chapter">
+              {pageContent.raw["select-your-coffee"] ? <div className="product-purchase-copy"><p className="giotto-purchase-heading">{purchaseContent.eyebrow}</p>{purchaseContent.heading ? <h2 className="product-purchase-title">{purchaseContent.heading}</h2> : null}{purchaseContent.description ? <span>{purchaseContent.description}</span> : null}</div> : null}
               <AddToCart product={product} />
             </div>
           )}
@@ -334,41 +334,39 @@ export default async function WorkPage({ params }: { params: Promise<{ slug: str
       {renderOptionalSections("after_purchase")}
 
       <section className="revenue-proof-strip">
-        <div><b>自製熱風烘焙</b><span>風味乾淨，降低焦苦與雜味</span></div>
-        <div><b>小量新鮮製作</b><span>依實際供應安排烘焙與包裝</span></div>
-        <div><b>7-ELEVEN 取貨付款</b><span>收到商品再付款，第一次購買更安心</span></div>
+        {purchaseContent.trustItems.map((item) => <div key={item.id}><b>{item.title}</b><span>{item.body}</span></div>)}
       </section>
 
       <section className="revenue-content-section product-story-section">
         <div className={`product-story-grid${artworkCoverPath ? "" : " without-artwork"}`}>
           <div className="product-story-intro revenue-section-title">
-            <p data-section-reveal>THE ARTWORK</p>
-            <h2 data-section-reveal data-reveal-delay="80">{product.name}</h2>
-            <span data-section-reveal data-reveal-delay="160">{storyLead}</span>
-            {storySupportingCopy ? <p className="product-story-supporting-copy" data-section-reveal data-reveal-delay="220">{storySupportingCopy}</p> : null}
+            <p data-section-reveal>{heroContent.storyEyebrow}</p>
+            <h2 data-section-reveal data-reveal-delay="80">{heroContent.title}</h2>
+            <span data-section-reveal data-reveal-delay="160">{heroContent.storyLead}</span>
+            {heroContent.storySupportingCopy ? <p className="product-story-supporting-copy" data-section-reveal data-reveal-delay="220">{heroContent.storySupportingCopy}</p> : null}
           </div>
           {artworkCoverPath ? <figure className="product-story-artwork" data-section-reveal data-reveal-delay="180" data-reveal-variant="artwork-cover"><img src={artworkCoverPath} alt={artworkCoverAlt} /></figure> : null}
         </div>
         <div className="product-story-details">
-          {product.flavors?.length ? <section {...getProductAnimationAttributes(sectionAnimation("flavor-notes"))} id="flavor-notes" className="flavor-notes" aria-labelledby="flavor-notes-title"><div className="story-detail-heading" data-section-reveal><EditorialIcon name="flavor" /><div><p>FLAVOR NOTES</p><h3 id="flavor-notes-title">風味筆記</h3></div></div><div className="flavor-notes-list">{product.flavors.map((flavor: string, index: number) => <span key={flavor} data-section-reveal data-reveal-delay={String(index * 80)}>{flavor}</span>)}</div></section> : null}
-          {facts.length ? <section {...getProductAnimationAttributes(sectionAnimation("coffee-profile"))} id="coffee-profile" className="coffee-profile" aria-labelledby="coffee-profile-title"><div className="story-detail-heading" data-section-reveal><div><p>COFFEE PROFILE</p><h3 id="coffee-profile-title">咖啡資料</h3></div></div><dl>{facts.map(([key, label, value], index) => <div key={String(key)} data-section-reveal data-reveal-delay={String(index * 80)}><dt><EditorialIcon name={key as "origin" | "process" | "roast"} /><span>{label}</span></dt><dd>{value}</dd></div>)}</dl></section> : null}
-          {showRoastedBeanViewer ? <section className="roasted-bean-viewer-entry" data-section-reveal data-reveal-delay="180" aria-label="烘焙豆照片"><RoastedBeanViewer productName={product.name} imageSrc={roastedBeanPhotoPath} imageAlt={roastedBeanPhotoAlt} /></section> : null}
+          {flavorContent.flavors.length ? <section {...getProductAnimationAttributes(sectionAnimation("flavor-notes"))} id="flavor-notes" className="flavor-notes" aria-labelledby="flavor-notes-title"><div className="story-detail-heading" data-section-reveal><EditorialIcon name="flavor" /><div><p>{flavorContent.eyebrow}</p><h3 id="flavor-notes-title">{flavorContent.heading}</h3>{flavorContent.description ? <span>{flavorContent.description}</span> : null}</div></div><div className="flavor-notes-list">{flavorContent.flavors.map((flavor: string, index: number) => <span key={flavor} data-section-reveal data-reveal-delay={String(index * 80)}>{flavor}</span>)}</div></section> : null}
+          {facts.length ? <section {...getProductAnimationAttributes(sectionAnimation("coffee-profile"))} id="coffee-profile" className="coffee-profile" aria-labelledby="coffee-profile-title"><div className="story-detail-heading" data-section-reveal><div><p>{profileContent.eyebrow}</p><h3 id="coffee-profile-title">{profileContent.heading}</h3>{profileContent.description ? <span>{profileContent.description}</span> : null}</div></div><dl>{facts.map(([key, label, value], index) => <div key={String(key)} data-section-reveal data-reveal-delay={String(index * 80)}><dt><EditorialIcon name={key as "origin" | "process" | "roast"} /><span>{label}</span></dt><dd>{value}</dd></div>)}</dl></section> : null}
+          {showRoastedBeanViewer ? <section className="roasted-bean-viewer-entry" data-section-reveal data-reveal-delay="180" aria-label="烘焙豆照片"><RoastedBeanViewer productName={heroContent.title} imageSrc={roastedBeanPhotoPath} imageAlt={roastedBeanPhotoAlt} heading={profileContent.roastedBeanHeading} cta={profileContent.roastedBeanCta} /></section> : null}
         </div>
       </section>
 
       {renderOptionalSections("after_profile")}
 
       {isGiottoPrototype || hasCleanRoastingMediaConfig ? (
-        <CleanRoastingChapter proofs={CLEAN_ROASTING_PROOFS} animation={sectionAnimation("clean-roasting")} mediaConfig={cleanRoastingMedia} />
+        <CleanRoastingChapter proofs={roastingContent.proofs} eyebrow={roastingContent.eyebrow} heading={roastingContent.heading} description={roastingContent.description} animation={sectionAnimation("clean-roasting")} mediaConfig={cleanRoastingMedia} />
       ) : (
         <section {...getProductAnimationAttributes(sectionAnimation("clean-roasting"))} id="clean-roasting" className="revenue-content-section clean-roasting-section" aria-labelledby="clean-roasting-title">
             <div className="clean-roasting-intro">
-              <p data-section-reveal>CLEAN ROASTING</p>
-              <h2 id="clean-roasting-title" data-section-reveal data-reveal-delay="80">乾淨的烘焙</h2>
-              <strong data-section-reveal data-reveal-delay="120">流床式熱風烘焙</strong>
-              <span data-section-reveal data-reveal-delay="180">讓咖啡豆均勻翻動，呈現乾淨清楚的風味。</span>
+              <p data-section-reveal>{roastingContent.eyebrow}</p>
+              <h2 id="clean-roasting-title" data-section-reveal data-reveal-delay="80">{roastingContent.heading}</h2>
+              {roastingContent.proofs[0] ? <strong data-section-reveal data-reveal-delay="120">{roastingContent.proofs[0].title}</strong> : null}
+              {roastingContent.description ? <span data-section-reveal data-reveal-delay="180">{roastingContent.description}</span> : null}
             </div>
-            <div className="clean-roasting-proofs">{CLEAN_ROASTING_PROOFS.map((proof, index) => <article key={proof.title} data-section-reveal data-reveal-delay={String(index * 80)}><EditorialIcon name={proof.icon} /><div><h3>{proof.title}</h3><p>{proof.text}</p></div></article>)}</div>
+            <div className="clean-roasting-proofs">{roastingContent.proofs.map((proof, index) => <article key={proof.id} data-section-reveal data-reveal-delay={String(index * 80)}><EditorialIcon name={proof.icon || "air"} /><div><h3>{proof.title}</h3><p>{proof.body}</p></div></article>)}</div>
         </section>
       )}
 
@@ -377,18 +375,16 @@ export default async function WorkPage({ params }: { params: Promise<{ slug: str
 
       <section {...getProductAnimationAttributes(sectionAnimation("before-you-order"))} id="before-you-order" className="revenue-content-section revenue-faq">
         <div className="revenue-section-title" data-section-reveal={isGiottoPrototype ? undefined : "true"}>
-          <p data-section-reveal={isGiottoPrototype ? "true" : undefined}>BEFORE YOU ORDER</p>
-          <h2 data-section-reveal={isGiottoPrototype ? "true" : undefined} data-reveal-delay={isGiottoPrototype ? "80" : undefined}>{isGiottoPrototype ? <>第一次選咖啡，<br className="giotto-faq-mobile-break" />我們陪你慢慢選。</> : "第一次購買也不用擔心"}</h2>
-          {isGiottoPrototype ? <span className="giotto-faq-supporting-copy" data-section-reveal="true" data-reveal-delay="160">不用先懂產區、處理法或烘焙度，從你喜歡的味道開始就好。</span> : null}
+          <p data-section-reveal={isGiottoPrototype ? "true" : undefined}>{beforeOrderContent.eyebrow}</p>
+          <h2 data-section-reveal={isGiottoPrototype ? "true" : undefined} data-reveal-delay={isGiottoPrototype ? "80" : undefined}>{useLegacyGiottoFaqBreak ? <>第一次選咖啡，<br className="giotto-faq-mobile-break" />我們陪你慢慢選。</> : beforeOrderContent.heading}</h2>
+          {beforeOrderContent.description ? <span className={isGiottoPrototype ? "giotto-faq-supporting-copy" : undefined} data-section-reveal={isGiottoPrototype ? "true" : undefined} data-reveal-delay={isGiottoPrototype ? "160" : undefined}>{beforeOrderContent.description}</span> : null}
         </div>
         <div className="revenue-faq-list" data-section-reveal={isGiottoPrototype ? "true" : undefined}>
-          <details open><summary>這款會不會很酸？</summary><p>精品咖啡的果酸更接近水果或果茶的明亮感，不是尖銳的酸敗味。仍不確定時，可在訂單備註平常喜歡的口感。</p></details>
-          <details><summary>咖啡豆可以幫我磨粉嗎？</summary><p>可以。請在訂單備註填寫手沖、咖啡機或其他沖煮方式，我們會在確認訂單時核對研磨需求。</p></details>
-          <details><summary>付款與取貨怎麼進行？</summary><p>可選擇 7-ELEVEN 取貨付款，或預約至 KD Coffee 工作室自取。送單後我們會確認庫存與取貨資料。</p></details>
+          {[...beforeOrderContent.lockedFaqs, ...beforeOrderContent.editorialFaqs].map((faq, index) => <details key={faq.id} open={index === 0}><summary>{faq.question}</summary><p>{faq.answer}</p></details>)}
         </div>
       </section>
 
-      {layout.showGallery !== false && gallery.length ? <section className="revenue-content-section revenue-gallery"><div className="revenue-section-title"><p>PRODUCT DETAILS</p><h2>包裝與作品細節</h2></div><div className="revenue-gallery-grid">{gallery.map((item: any) => <figure key={item.key}><img src={item.path} alt={item.alt || `${product.name} ${item.key}`} />{item.caption ? <figcaption>{item.caption}</figcaption> : null}</figure>)}</div></section> : null}
+      {layout.showGallery !== false && gallery.length ? <section className="revenue-content-section revenue-gallery"><div className="revenue-section-title"><p>{heroContent.galleryEyebrow}</p><h2>{heroContent.galleryHeading}</h2></div><div className="revenue-gallery-grid">{gallery.map((item: any) => <figure key={item.key}><img src={item.path} alt={item.alt || `${heroContent.title} ${item.key}`} />{item.caption ? <figcaption>{item.caption}</figcaption> : null}</figure>)}</div></section> : null}
 
       {renderOptionalSections("page_bottom")}
       </ProductSectionReveals>

@@ -6,6 +6,7 @@ import type { MonthlyMenuBackground } from "@/lib/monthlyMenuBackground";
 import type { ProductSectionPlacement } from "@/lib/productPageSections";
 import type { ProductPageAnimations } from "@/lib/productPageAnimations";
 import type { CleanRoastingMediaConfig } from "@/lib/cleanRoastingMedia";
+import type { ProductPageContent } from "@/lib/productPageContentValidation";
 
 /**
  * 商品購買規格
@@ -31,6 +32,7 @@ export type CoffeeArtwork = {
   active?: boolean;
   slug: string;
   name: string;
+  nameEn?: string;
   artist: string;
   subtitle: string;
   shortCopy?: string;
@@ -94,6 +96,7 @@ export type CoffeeArtwork = {
 
   productPageAnimations?: ProductPageAnimations;
   cleanRoastingMedia?: CleanRoastingMediaConfig;
+  productPageContent?: ProductPageContent;
 
   displayFields?: Record<string, boolean>;
 

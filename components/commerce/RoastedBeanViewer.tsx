@@ -3,11 +3,11 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
-type RoastedBeanViewerProps = { productName: string; imageSrc: string; imageAlt: string };
+type RoastedBeanViewerProps = { productName: string; imageSrc: string; imageAlt: string; heading?: string; cta?: string };
 type ViewerState = "closed" | "open" | "closing";
 const closeDuration = 300;
 
-export default function RoastedBeanViewer({ productName, imageSrc, imageAlt }: RoastedBeanViewerProps) {
+export default function RoastedBeanViewer({ productName, imageSrc, imageAlt, heading = "看見這支咖啡烘焙後的樣子", cta = "VIEW ROASTED BEANS" }: RoastedBeanViewerProps) {
   const [viewerState, setViewerState] = useState<ViewerState>("closed");
   const viewerStateRef = useRef<ViewerState>("closed");
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -69,7 +69,7 @@ export default function RoastedBeanViewer({ productName, imageSrc, imageAlt }: R
   return <>
     <button ref={triggerRef} type="button" className="roasted-bean-viewer-trigger" onClick={() => setViewerPhase("open")} aria-haspopup="dialog" aria-expanded={isOpen}>
       <span className="roasted-bean-viewer-eyebrow">ROASTED BEANS</span>
-      <span className="roasted-bean-viewer-copy"><strong>看見這支咖啡烘焙後的樣子</strong><span>VIEW ROASTED BEANS <i aria-hidden="true">↗</i></span></span>
+      <span className="roasted-bean-viewer-copy"><strong>{heading}</strong><span>{cta} <i aria-hidden="true">↗</i></span></span>
     </button>
     {isViewerMounted ? createPortal(<div className={`roasted-bean-viewer-backdrop${viewerState === "closing" ? " is-closing" : ""}`} role="presentation" onMouseDown={(event) => { if (!(event.target as HTMLElement).closest("[data-roasted-bean-content]")) closeViewer(); }}>
       <div ref={dialogRef} className={`roasted-bean-viewer-modal${viewerState === "closing" ? " is-closing" : ""}`} role="dialog" aria-modal="true" aria-labelledby="roasted-bean-viewer-title">

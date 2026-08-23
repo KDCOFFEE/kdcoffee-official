@@ -10,17 +10,21 @@ import {
 import { CLEAN_ROASTING_LEGACY_CONFIG, type CleanRoastingMediaConfig } from "@/lib/cleanRoastingMedia";
 
 type CleanRoastingProof = {
+  id: string;
   title: string;
-  text: string;
+  body: string;
 };
 
 type CleanRoastingChapterProps = {
   proofs: readonly CleanRoastingProof[];
+  eyebrow?: string;
+  heading?: string;
+  description?: string;
   animation?: ProductSectionAnimationConfig | null;
   mediaConfig?: CleanRoastingMediaConfig;
 };
 
-export default function CleanRoastingChapter({ proofs, animation = null, mediaConfig = CLEAN_ROASTING_LEGACY_CONFIG }: CleanRoastingChapterProps) {
+export default function CleanRoastingChapter({ proofs, eyebrow = "CLEAN ROASTING", heading = "乾淨的烘焙", description = "", animation = null, mediaConfig = CLEAN_ROASTING_LEGACY_CONFIG }: CleanRoastingChapterProps) {
   const sectionRef = useRef<HTMLElement>(null);
   const [isActivated, setIsActivated] = useState(false);
 
@@ -32,6 +36,8 @@ export default function CleanRoastingChapter({ proofs, animation = null, mediaCo
     }
 
     if (!("IntersectionObserver" in window)) {
+      // The fallback has no external subscription to trigger activation.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setIsActivated(true);
       return;
     }
@@ -80,17 +86,18 @@ export default function CleanRoastingChapter({ proofs, animation = null, mediaCo
     >
       <div className="clean-roasting-visual">
         <div className="clean-roasting-intro clean-roasting-reveal-heading">
-          <p>CLEAN ROASTING</p>
-          <h2 id="clean-roasting-title">乾淨的烘焙</h2>
+          <p>{eyebrow}</p>
+          <h2 id="clean-roasting-title">{heading}</h2>
+          {description ? <span>{description}</span> : null}
         </div>
         <CleanRoastingMediaStage config={mediaConfig} eligible={isActivated} />
       </div>
       <div className="clean-roasting-proofs">
         {proofs.map((proof) => (
-          <article key={proof.title}>
+          <article key={`clean-roasting-proof-${proof.id || proof.title}`}>
             <div>
               <h3>{proof.title}</h3>
-              <p>{proof.text}</p>
+              <p>{proof.body}</p>
             </div>
           </article>
         ))}

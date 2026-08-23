@@ -12,24 +12,9 @@ import {
 import { isProductListedInWorks } from "@/lib/productListing";
 import {
   DEFAULT_OPTIONAL_SECTION_LAYOUT,
-  PRODUCT_SECTION_PLACEMENTS,
-  PRODUCT_SECTION_REGISTRY,
   normalizeProductSectionOrder,
   normalizeProductSectionPlacement,
-  type ProductSectionPlacement,
-  type ProductSectionKey,
 } from "@/lib/productPageSections";
-import {
-  PRODUCT_ANIMATION_EFFECTS,
-  PRODUCT_ANIMATION_THRESHOLDS,
-  PRODUCT_ANIMATION_TRIGGERS,
-  getProductAnimationAdminDefault,
-  normalizeProductSectionAnimation,
-  type ProductAnimationChildConfig,
-  type ProductAnimationChildKey,
-  type ProductPageAnimations,
-  type ProductSectionAnimationConfig,
-} from "@/lib/productPageAnimations";
 import {
   CLEAN_ROASTING_LEGACY_CONFIG,
   CLEAN_ROASTING_MEDIA_MAX_ITEMS,
@@ -38,6 +23,7 @@ import {
   type CleanRoastingMediaItem,
 } from "@/lib/cleanRoastingMedia";
 import { isCanonicalProductSlug } from "@/lib/productMediaNaming";
+import ProductPageSectionEditor from "@/components/admin/ProductPageSectionEditor";
 
 type Artwork = any;
 type DetailTab = "overview" | "commerce" | "assets" | "layout" | "relations" | "history" | "publish";
@@ -153,7 +139,7 @@ export default function ProductManager(){
    </article>
   })}</div><section className="roasted-bean-admin-control"><div><p className="asset-group">Website · Product Detail</p><h3>烘焙豆實拍</h3><p>用於商品頁「查看實際烘焙豆」功能；僅上傳該商品實際烘焙完成後的咖啡豆照片。</p></div><label className="roasted-bean-visibility"><input type="checkbox" checked={selected.showRoastedBeanPhoto===true} onChange={e=>patch({showRoastedBeanPhoto:e.target.checked},'assets')}/><span><strong>在商品頁顯示</strong><small>{roastedBeanPhotoPath?'已設定照片，開啟後前台會顯示入口。':'需要先上傳照片才會在前台顯示。'}</small></span></label><div className={`roasted-bean-admin-media ${roastedBeanPhotoPath?'has-photo':''}`}>{roastedBeanPhotoPath?<div className="roasted-bean-admin-preview"><img src={roastedBeanPhotoPath} alt={selected.assets?.roastedBeanPhoto?.alt||`${selected.name} 實際烘焙咖啡豆`}/><span>已上傳</span></div>:<span>尚未上傳烘焙豆照片</span>}<div><label>{roastedBeanPhotoPath?'更換照片':'上傳照片'}<input type="file" accept="image/*" onChange={e=>chooseUpload(e,'roastedBeanPhoto')}/></label>{roastedBeanPhotoPath?<button type="button" onClick={clearRoastedBeanPhoto}>清除</button>:null}</div></div>{selected.showRoastedBeanPhoto===true&&!roastedBeanPhotoPath?<p className="roasted-bean-admin-warning">已開啟顯示，但尚未上傳照片；前台不會顯示壞掉的入口。</p>:null}</section></div>:null}
   {detailTab==='layout'?<div className="page-layout-editor"><section className="layout-controls"><div className="cms-panel-head"><div><h2>作品頁配置</h2><p>選擇每一張素材在前台作品頁出現的位置。儲存後前台立即讀取。</p></div>{selected.slug?<a href={`/works/${selected.slug}`} target="_blank">開啟作品頁 ↗</a>:null}</div><div className="layout-slot"><div><b>01</b><span><strong>Hero</strong><small>作品頁最上方的大型主視覺</small></span></div><select value={layout.heroAsset||'hero'} onChange={e=>patchLayout({heroAsset:e.target.value})}>{assetTypes.map(t=><option key={t.key} value={t.key} disabled={!hasAsset(selected,t.key)}>{t.label}{hasAsset(selected,t.key)?'':'（尚未上傳）'}</option>)}</select><a href={selected.slug?`/works/${selected.slug}#hero`:'#'} target="_blank">前台定位</a></div><div className="layout-slot"><div><b>02</b><span><strong>作品列表／首頁卡片</strong><small>消費者在作品列表看到的縮圖</small></span></div><select value={layout.listAsset||'mainVisual'} onChange={e=>patchLayout({listAsset:e.target.value})}>{assetTypes.map(t=><option key={t.key} value={t.key} disabled={!hasStaticAsset(selected,t.key)}>{t.label}{hasStaticAsset(selected,t.key)?'':'（缺少圖片 fallback）'}</option>)}</select><a href="/works" target="_blank">前台定位</a></div><div className="layout-slot"><div><b>03</b><span><strong>購買區產品照</strong><small>作品頁下方，放置實際包裝產品</small></span></div><select value={layout.productAsset||'productPhoto'} onChange={e=>patchLayout({productAsset:e.target.value})}>{assetTypes.map(t=><option key={t.key} value={t.key} disabled={!hasAsset(selected,t.key)}>{t.label}{hasAsset(selected,t.key)?'':'（尚未上傳）'}</option>)}</select><a href={selected.slug?`/works/${selected.slug}#purchase`:'#'} target="_blank">前台定位</a></div><div className="layout-gallery"><div className="layout-gallery-head"><div><b>04</b><span><strong>Gallery</strong><small>勾選要展示的素材；順序依下列排列。</small></span></div><label><input type="checkbox" checked={layout.showGallery!==false} onChange={e=>patchLayout({showGallery:e.target.checked})}/> 顯示 Gallery</label></div>{uploadedAssets.length?<div className="gallery-choice-grid">{uploadedAssets.map(t=>{const checked=(layout.galleryAssets||[]).includes(t.key);return <label key={t.key} className={checked?'active':''}><input type="checkbox" checked={checked} onChange={e=>{const current=layout.galleryAssets||[];patchLayout({galleryAssets:e.target.checked?[...current,t.key]:current.filter((k:string)=>k!==t.key)})}}/><span>{assetPath(t.key)?<img src={assetPath(t.key)} alt=""/>:null}<b>{t.label}</b><small>{checked?'將顯示於作品 Gallery':'未加入 Gallery'}</small></span></label>})}</div>:<p className="empty-admin-state">請先在 Assets 上傳素材，再回來設定 Gallery。</p>}<a className="layout-anchor" href={selected.slug?`/works/${selected.slug}#gallery`:'#'} target="_blank">在前台查看 Gallery ↗</a></div><div className="layout-slot"><div><b>05</b><span><strong>同系列作品</strong><small>作品頁底部推薦其他作品</small></span></div><label className="switch-line"><input type="checkbox" checked={layout.showRelatedWorks!==false} onChange={e=>patchLayout({showRelatedWorks:e.target.checked})}/>{layout.showRelatedWorks!==false?'顯示':'隱藏'}</label></div></section><aside className="layout-preview"><p className="eyebrow dark">LIVE STRUCTURE PREVIEW</p><h3>{selected.name}</h3><div className="preview-hero">{assetPath(layout.heroAsset)?<img src={assetPath(layout.heroAsset)} alt=""/>:<span>Hero 尚未上傳</span>}<b>Hero · {assetLabel(layout.heroAsset)}</b></div><div className="preview-copy"><i/><i/><i/></div><div className="preview-profile"><span>Origin</span><span>Process</span><span>Roast</span></div><div className="preview-product">{assetPath(layout.productAsset)?<img src={assetPath(layout.productAsset)} alt=""/>:<span>產品照尚未上傳</span>}<b>Purchase · {assetLabel(layout.productAsset)}</b></div>{layout.showGallery!==false?<div className="preview-gallery">{(layout.galleryAssets||[]).map((k:string)=><span key={k}>{assetPath(k)?<img src={assetPath(k)} alt=""/>:null}<small>{assetLabel(k)}</small></span>)}</div>:null}<small className="preview-note">這是區塊與圖片對應預覽；前台實際排版仍使用 KD Coffee 官方模板。</small></aside></div>:null}
-   {detailTab==='layout'?<><ProductSectionLayoutEditor selected={selected} products={artworks} patch={patch}/><CleanRoastingMediaAdmin selected={selected} patch={patch} setMessage={setMessage}/></>:null}
+   {detailTab==='layout'?<><ProductPageSectionEditor selected={selected} products={artworks} patch={patch}/><CleanRoastingMediaAdmin selected={selected} patch={patch} setMessage={setMessage}/></>:null}
     {detailTab==='relations'?<ProductRelationsEditor selected={selected} products={artworks} campaigns={campaigns} patch={patch}/>:null}
    {detailTab==='history'?<div className="cms-panel"><div className="cms-panel-head"><div><h2>History</h2><p>作品資料、素材與 Page Layout 修改都會寫入版本紀錄。</p></div></div>{(selected.history||[]).length?<div className="history-list">{selected.history.map((h:any,i:number)=><article key={h.id||i}><span>v{h.version||((selected.history||[]).length-i)}</span><div><strong>{h.summary||'作品資料更新'}</strong><small>{h.createdAt?new Date(h.createdAt).toLocaleString('zh-TW'):'—'}</small></div><em>{i===0?'Current':'Saved'}</em></article>)}</div>:<div className="empty-admin-state">尚未產生版本紀錄。修改作品後按「儲存變更」即可建立第一筆。</div>}</div>:null}
   {detailTab==='publish'?<div className="cms-panel"><div className="publish-head"><div><h2>發布位置</h2><p>Website Publish 控制首頁推薦與發布標記，不等於全部作品上架。作品列表顯示由 Commerce 的「顯示於全部作品」控制。</p></div><span>{Object.values(selected.publish||{}).filter(Boolean).length}/4</span></div><div className="publish-grid">{[['website','Website','首頁推薦與 Website 發布標記；不控制 /works 全部作品'],['facebook','Facebook','Facebook 素材已準備完成'],['google','Google 商家','Google 商家素材已準備完成'],['line','LINE','LINE 素材已準備完成']].map(([key,label,note])=><label key={key} className={selected.publish?.[key]?'active':''}><input type="checkbox" checked={!!selected.publish?.[key]} onChange={e=>patch({publish:{...(selected.publish||{}),[key]:e.target.checked},...(key==='website'?{showOnHomepage:e.target.checked,featured:e.target.checked}: {})})}/><span><strong>{label}</strong><small>{note}</small></span><b>{selected.publish?.[key]?'已發布':'未發布'}</b></label>)}</div></div>:null}
@@ -163,69 +149,6 @@ export default function ProductManager(){
   {seoPreview?<div className="cms-modal-backdrop" role="presentation" onMouseDown={e=>{if(e.currentTarget===e.target){setSeoPreview(null);setPendingFile(null)}}}><div className="cms-modal seo-upload-modal" role="dialog" aria-modal="true" aria-labelledby="seo-upload-title"><button className="cms-modal-close" type="button" aria-label="關閉" onClick={()=>{setSeoPreview(null);setPendingFile(null)}}>×</button><div className="seo-modal-header"><span className="eyebrow">SMART UPLOAD</span><h2 id="seo-upload-title">上傳與 SEO 命名確認</h2><p>系統已依照目前 Artwork 與素材用途建立建議資料，仍可在上傳前修改。</p></div><div className="rename-compare"><span><small>原始檔名</small><strong>{seoPreview.originalName}</strong></span><i aria-hidden="true">→</i><span><small>建議檔名</small><input aria-label="建議檔名" value={seoPreview.suggestedName} onChange={e=>setSeoPreview({...seoPreview,suggestedName:e.target.value})}/></span></div><div className="seo-fields"><label>ALT 替代文字<input value={seoPreview.alt} onChange={e=>setSeoPreview({...seoPreview,alt:e.target.value})}/></label><label>Image Title<input value={seoPreview.title} onChange={e=>setSeoPreview({...seoPreview,title:e.target.value})}/></label><label>Caption<textarea value={seoPreview.caption} onChange={e=>setSeoPreview({...seoPreview,caption:e.target.value})}/></label></div><div className="cms-modal-actions"><button className="cms-secondary-button" type="button" onClick={()=>{setSeoPreview(null);setPendingFile(null)}}>取消</button><button type="button" onClick={confirmUpload}>確認上傳</button></div></div></div>:null}
   {pendingSkuDeletion?<div className="cms-modal-backdrop" role="presentation" onMouseDown={e=>{if(e.currentTarget===e.target)setPendingSkuDeletion(null)}}><div className="cms-modal sku-delete-modal" role="dialog" aria-modal="true" aria-labelledby="sku-delete-title"><h2 id="sku-delete-title">確定要刪除</h2><p>「規格 {pendingSkuDeletion.index+1}：{pendingSkuDeletion.sku.label||'未命名規格'}{pendingSkuDeletion.sku.detail?`（${pendingSkuDeletion.sku.detail}）`:''}」嗎？</p><p>此變更將在儲存商品後生效。</p><div className="cms-modal-actions"><button className="cms-secondary-button" type="button" onClick={()=>setPendingSkuDeletion(null)}>取消</button><button type="button" onClick={confirmSkuDeletion}>確認刪除</button></div></div></div>:null}
  </div>;
-}
-
-const placementLabels: Record<ProductSectionPlacement, string> = {
- after_purchase:"購買區之後",
- after_profile:"Coffee Profile 之後",
- after_clean_roasting:"Clean Roasting 之後",
- before_before_you_order:"Before You Order 之前",
- page_bottom:"頁面底部",
-};
-
-type ProductSectionLayoutChange = {enabled?:boolean;placement?:ProductSectionPlacement;order?:number};
-type ProductSectionLayoutRow = {key:ProductSectionKey;fixed:boolean;enabled?:boolean;placement?:ProductSectionPlacement;order?:number;update?:(change:ProductSectionLayoutChange)=>void};
-
-const animationEffectLabels=Object.fromEntries([
- ["none","無效果"],["fade","淡入"],["slide-left","由左滑入"],["slide-right","由右滑入"],["slide-up","向上浮現"],["scale-fade","輕微縮放淡入"],
-]) as Record<(typeof PRODUCT_ANIMATION_EFFECTS)[number],string>;
-const animationTriggerLabels=Object.fromEntries([
- ["none","無動畫"],["page-load","頁面載入時"],["viewport","滑到此區塊時"],
-]) as Record<(typeof PRODUCT_ANIMATION_TRIGGERS)[number],string>;
-const animationThresholdLabels=Object.fromEntries([
- ["entry","剛進入畫面"],["slight","進入一點"],["quarter","進入四分之一"],["half","進入一半"],
-]) as Record<(typeof PRODUCT_ANIMATION_THRESHOLDS)[number],string>;
-
-function ProductSectionLayoutEditor({selected,products,patch}:{selected:Artwork;products:Artwork[];patch:(change:Record<string,unknown>)=>void}){
- const campaignDefault=DEFAULT_OPTIONAL_SECTION_LAYOUT.campaigns;
- const relatedDefault=DEFAULT_OPTIONAL_SECTION_LAYOUT["related-products"];
- const campaignSource=selected.campaignDisplay&&typeof selected.campaignDisplay==="object"?selected.campaignDisplay:{};
- const relatedSource=selected.relatedProducts&&typeof selected.relatedProducts==="object"?selected.relatedProducts:null;
- const legacyRelatedIds=products.filter(product=>product.slug!==selected.slug&&product.status!=="hidden"&&product.inMonthlyMenu).slice(0,3).map(product=>product.slug);
- const campaignDisplay={enabled:campaignSource.enabled===true,campaignIds:Array.isArray(campaignSource.campaignIds)?campaignSource.campaignIds:[],placement:normalizeProductSectionPlacement(campaignSource.placement,campaignDefault.placement),order:normalizeProductSectionOrder(campaignSource.order,campaignDefault.order)};
- const relatedProducts={enabled:relatedSource?relatedSource.enabled!==false:selected.pageLayout?.showRelatedWorks!==false,title:relatedSource?.title||"也可以比較這三款",productIds:relatedSource&&Array.isArray(relatedSource.productIds)?relatedSource.productIds:legacyRelatedIds,placement:normalizeProductSectionPlacement(relatedSource?.placement,relatedDefault.placement),order:normalizeProductSectionOrder(relatedSource?.order,relatedDefault.order)};
- const updateCampaign=(change:ProductSectionLayoutChange)=>patch({campaignDisplay:{...campaignDisplay,...change}});
- const updateRelated=(change:ProductSectionLayoutChange)=>patch({relatedProducts:{...relatedProducts,...change}});
- const optional:ProductSectionLayoutRow[]=[
-  {key:"campaigns",fixed:false,...campaignDisplay,update:updateCampaign},
-  {key:"related-products",fixed:false,...relatedProducts,update:updateRelated},
- ];
- const labels=Object.fromEntries(PRODUCT_SECTION_REGISTRY.map(section=>[section.key,section.label])) as Record<string,string>;
- const animationSource=selected.productPageAnimations&&typeof selected.productPageAnimations==="object"?selected.productPageAnimations as ProductPageAnimations:{};
- const animationFor=(sectionKey:ProductSectionKey)=>normalizeProductSectionAnimation(animationSource[sectionKey],getProductAnimationAdminDefault(selected.slug||"",sectionKey));
- const hasExplicitAnimation=(sectionKey:ProductSectionKey)=>Object.prototype.hasOwnProperty.call(animationSource,sectionKey);
- const updateAnimation=(sectionKey:ProductSectionKey,change:Partial<ProductSectionAnimationConfig>)=>patch({productPageAnimations:{...animationSource,[sectionKey]:{...animationFor(sectionKey),...change}}});
- const updateChildAnimation=(sectionKey:ProductSectionKey,childKey:ProductAnimationChildKey,change:Record<string,unknown>)=>{const current=animationFor(sectionKey);const child=current.children?.[childKey]||{};updateAnimation(sectionKey,{children:{...(current.children||{}),[childKey]:{...child,...change}}})};
- const optionalAt=(placement:ProductSectionPlacement)=>optional.filter(section=>section.placement===placement).sort((a,b)=>(a.order??0)-(b.order??0)||(a.key==="campaigns"?-1:1));
- const rows:ProductSectionLayoutRow[]=[
-  {key:"product-hero",fixed:true},
-  {key:"select-your-coffee",fixed:true},
-  ...optionalAt("after_purchase"),
-  {key:"flavor-notes",fixed:true},
-  {key:"coffee-profile",fixed:true},
-  ...optionalAt("after_profile"),
-  {key:"clean-roasting",fixed:true},
-  ...optionalAt("after_clean_roasting"),
-  ...optionalAt("before_before_you_order"),
-  {key:"before-you-order",fixed:true},
-  ...optionalAt("page_bottom"),
- ];
- return <section className="cms-panel product-section-layout-editor"><div className="cms-panel-head"><div><h2>前台 Section 順序與動畫</h2><p>依實際前台順序顯示。固定章節不可移動；動畫只使用安全預設，不接受任意 CSS。</p></div></div><datalist id="product-animation-duration-presets">{[300,400,500,600,700,800,1000].map(value=><option key={value} value={value}/>)}</datalist><datalist id="product-animation-delay-presets">{[0,100,200,300,400,500,600].map(value=><option key={value} value={value}/>)}</datalist><div className="product-section-layout-list">{rows.map((row,index)=>{const isFixed=row.fixed===true;const animation=animationFor(row.key);return <article key={row.key} className={isFixed?"is-fixed":"is-movable"}><span className="product-section-layout-index">{String(index+1).padStart(2,"0")}</span><div><strong>{labels[row.key]}</strong><small>區塊錨點　#{row.key}　系統固定</small></div>{isFixed?<em>FIXED</em>:<><label className="product-section-layout-toggle"><input type="checkbox" checked={row.enabled===true} onChange={e=>row.update?.({enabled:e.target.checked})}/>{row.enabled===true?"顯示":"隱藏"}</label><label>版位<select value={row.placement} onChange={e=>row.update?.({placement:e.target.value as ProductSectionPlacement})}>{PRODUCT_SECTION_PLACEMENTS.map(placement=><option key={placement} value={placement}>{placementLabels[placement]}</option>)}</select></label><label>同位置排序<input type="number" min="0" max="20" step="1" value={row.order} onChange={e=>row.update?.({order:Number(e.target.value)})}/></label></>}<div className="product-section-animation-admin"><div className="product-animation-status"><label><input type="checkbox" checked={animation.enabled===true} onChange={e=>updateAnimation(row.key,{enabled:e.target.checked})}/>啟用區塊動畫</label><small>{hasExplicitAnimation(row.key)?"已使用此商品的 Admin 設定":"目前使用相容預設；未儲存任何動畫資料"}</small></div><div className="product-animation-control-grid"><label>動畫效果<select value={animation.effect} onChange={e=>updateAnimation(row.key,{effect:e.target.value as ProductSectionAnimationConfig["effect"]})}>{PRODUCT_ANIMATION_EFFECTS.map(effect=><option key={effect} value={effect}>{animationEffectLabels[effect]}</option>)}</select></label><label>觸發方式<select value={animation.trigger} onChange={e=>updateAnimation(row.key,{trigger:e.target.value as ProductSectionAnimationConfig["trigger"]})}>{PRODUCT_ANIMATION_TRIGGERS.map(trigger=><option key={trigger} value={trigger}>{animationTriggerLabels[trigger]}</option>)}</select></label><label>動畫時間<input type="number" min="200" max="1500" step="100" list="product-animation-duration-presets" value={animation.durationMs} onChange={e=>updateAnimation(row.key,{durationMs:Number(e.target.value)})}/><small>200–1500 ms</small></label><label>延遲時間<input type="number" min="0" max="2000" step="100" list="product-animation-delay-presets" value={animation.delayMs} onChange={e=>updateAnimation(row.key,{delayMs:Number(e.target.value)})}/><small>0–2000 ms</small></label>{animation.trigger==="viewport"?<label>進入畫面程度<select value={animation.threshold} onChange={e=>updateAnimation(row.key,{threshold:e.target.value as ProductSectionAnimationConfig["threshold"]})}>{PRODUCT_ANIMATION_THRESHOLDS.map(threshold=><option key={threshold} value={threshold}>{animationThresholdLabels[threshold]}</option>)}</select></label>:null}<label>播放方式<select value={animation.once===false?"repeat":"once"} onChange={e=>updateAnimation(row.key,{once:e.target.value!=="repeat"})}><option value="once">只播放一次</option><option value="repeat">每次重新進入區塊</option></select></label></div>{row.key==="product-hero"?<p className="product-animation-safety-note">Hero 採 enhancement-only：原始 Hero、Product Identity 與購買內容永遠先保持可見、可操作。</p>:null}{row.key==="select-your-coffee"?<div className="product-animation-child-grid"><AnimationChildControls label="LEFT content／標題" config={animation.children?.left} onChange={change=>updateChildAnimation(row.key,"left",change)}/><AnimationChildControls label="RIGHT content／購買控制" config={animation.children?.right} onChange={change=>updateChildAnimation(row.key,"right",change)}/></div>:null}{row.key==="clean-roasting"?<div className="clean-animation-sequence"><strong>章節順序延遲</strong>{([["heading","Heading"],["media-stage","Media Stage"],["proof-1","01"],["proof-2","02"],["proof-3","03"]] as Array<[ProductAnimationChildKey,string]>).map(([childKey,label])=><label key={childKey}>{label}<input type="number" min="0" max="2000" step="50" list="product-animation-delay-presets" value={animation.children?.[childKey]?.delayMs??0} onChange={e=>updateChildAnimation(row.key,childKey,{delayMs:Number(e.target.value)})}/><small>ms</small></label>)}</div>:null}</div></article>})}</div><p className="product-section-layout-note">未設定資料不需 migration：Giotto 保留目前 accepted motion；其他商品保留各自現況。Campaigns 與 Related Products 的版位相容預設仍在頁面底部。</p></section>;
-}
-
-function AnimationChildControls({label,config,onChange}:{label:string;config?:ProductAnimationChildConfig;onChange:(change:Record<string,unknown>)=>void}){
- const child=config||{};
- return <fieldset><legend>{label}</legend><label>動畫效果<select value={child.effect||"none"} onChange={e=>onChange({effect:e.target.value})}>{PRODUCT_ANIMATION_EFFECTS.map(effect=><option key={effect} value={effect}>{animationEffectLabels[effect]}</option>)}</select></label><label>動畫時間<input type="number" min="200" max="1500" step="100" value={child.durationMs??500} onChange={e=>onChange({durationMs:Number(e.target.value)})}/></label><label>延遲時間<input type="number" min="0" max="2000" step="100" value={child.delayMs??0} onChange={e=>onChange({delayMs:Number(e.target.value)})}/></label></fieldset>;
 }
 
 function CleanRoastingMediaAdmin({selected,patch,setMessage}:{selected:Artwork;patch:(change:Record<string,unknown>)=>void;setMessage:(message:string)=>void}){
