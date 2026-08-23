@@ -30,6 +30,17 @@ assert.equal(headingOverride["clean-roasting"].heading, "Override heading");
 const emptyOverride = resolveProductPageContent({ ...baseProduct, productPageContent: { "clean-roasting": { heading: "   " } } });
 assert.equal(emptyOverride["clean-roasting"].heading, "乾淨的烘焙");
 
+const purchaseHeadingOverride = normalizeProductPageContent({
+  "select-your-coffee": { heading: "選擇你的咖啡", unknown: "discard" },
+});
+assert.deepEqual(purchaseHeadingOverride, { "select-your-coffee": { heading: "選擇你的咖啡" } });
+assert.equal(resolveProductPageContent({ ...baseProduct, productPageContent: purchaseHeadingOverride })["select-your-coffee"].heading, "選擇你的咖啡");
+
+const blankPurchaseHeading = normalizeProductPageContent({ "select-your-coffee": { heading: "   " } });
+assert.deepEqual(blankPurchaseHeading, {});
+assert.equal(resolveProductPageContent({ ...baseProduct, productPageContent: blankPurchaseHeading })["select-your-coffee"].heading, "");
+assert.equal(resolveProductPageContent(baseProduct)["select-your-coffee"].heading, "");
+
 const proofOverride: Array<{ id: string; icon: "air" | "heat" | "cupping"; title: string; body: string }> = LEGACY_CLEAN_ROASTING_PROOFS.map((proof) => ({ ...proof }));
 proofOverride[1] = { ...proofOverride[1], body: "Only proof 02 changed" };
 const changedProof = resolveProductPageContent({ ...baseProduct, productPageContent: { "clean-roasting": { proofs: proofOverride } } });

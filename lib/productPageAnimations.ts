@@ -1,4 +1,4 @@
-import type { ProductSectionKey } from "@/lib/productPageSections";
+import type { ProductSectionKey } from "./productPageSections";
 import type { CSSProperties } from "react";
 
 export const PRODUCT_ANIMATION_EFFECTS = ["none", "fade", "slide-left", "slide-right", "slide-up", "scale-fade"] as const;

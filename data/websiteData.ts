@@ -7,6 +7,7 @@ import type { ProductSectionPlacement } from "@/lib/productPageSections";
 import type { ProductPageAnimations } from "@/lib/productPageAnimations";
 import type { CleanRoastingMediaConfig } from "@/lib/cleanRoastingMedia";
 import type { ProductPageContent } from "@/lib/productPageContentValidation";
+import type { ProductCustomSection } from "@/lib/productCustomSections";
 
 /**
  * 商品購買規格
@@ -97,6 +98,7 @@ export type CoffeeArtwork = {
   productPageAnimations?: ProductPageAnimations;
   cleanRoastingMedia?: CleanRoastingMediaConfig;
   productPageContent?: ProductPageContent;
+  productCustomSections?: ProductCustomSection[];
 
   displayFields?: Record<string, boolean>;
 

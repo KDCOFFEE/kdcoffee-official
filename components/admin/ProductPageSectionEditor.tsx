@@ -3,6 +3,7 @@
 
 import ProductPageContentFields from "@/components/admin/ProductPageContentFields";
 import ProductPageContentPreview, { productSectionChineseName } from "@/components/admin/ProductPageContentPreview";
+import CustomProductSectionManager from "@/components/admin/CustomProductSectionManager";
 import {
   DEFAULT_OPTIONAL_SECTION_LAYOUT,
   PRODUCT_SECTION_PLACEMENTS,
@@ -97,6 +98,7 @@ export default function ProductPageSectionEditor({ selected, products, patch }: 
         </details>
       </article>;
     })}</div>
+    <CustomProductSectionManager selected={selected} patch={patch} />
     <p className="product-section-layout-note">未設定文案不需 migration；清除商品覆寫後會立即恢復既有商品資料或安全預設。Campaigns 與 Related Products 仍只引用既有共享資料。</p>
   </section>;
 }

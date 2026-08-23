@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Fragment } from "react";
 import { getLiveWebsiteData, type CoffeeArtwork } from "@/data/websiteData";
 import AddToCart from "@/components/commerce/AddToCart";
 import CartLink from "@/components/commerce/CartLink";
@@ -12,6 +11,7 @@ import PurchaseChapterReveal from "@/components/commerce/PurchaseChapterReveal";
 import RoastedBeanViewer from "@/components/commerce/RoastedBeanViewer";
 import ProductSectionReveals from "@/components/commerce/ProductSectionReveals";
 import ProductVisualMedia from "@/components/commerce/ProductVisualMedia";
+import CustomProductSectionSlot from "@/components/commerce/CustomProductSectionSlot";
 import KdMedia from "@/components/media/KdMedia";
 import { getHomepageData, resolveProductCampaigns } from "@/data/homepageData";
 import {
@@ -28,7 +28,6 @@ import {
   DEFAULT_OPTIONAL_SECTION_LAYOUT,
   normalizeProductSectionOrder,
   normalizeProductSectionPlacement,
-  type ProductSectionPlacement,
 } from "@/lib/productPageSections";
 import {
   getProductAnimationAttributes,
@@ -41,6 +40,7 @@ import {
   normalizeCleanRoastingMedia,
 } from "@/lib/cleanRoastingMedia";
 import { resolveProductPageContent } from "@/lib/productPageContent";
+import { resolveProductCustomSections } from "@/lib/productCustomSectionsValidation";
 
 export const dynamic = "force-dynamic";
 
@@ -137,6 +137,7 @@ export default async function WorkPage({ params }: { params: Promise<{ slug: str
   const product: any = live.menu.products.find((item: any) => item.slug === slug);
   if (!product || product.status === "hidden") notFound();
   const pageContent = resolveProductPageContent(product);
+  const customSections = resolveProductCustomSections(product.productCustomSections);
   const heroContent = pageContent["product-hero"];
   const purchaseContent = pageContent["select-your-coffee"];
   const flavorContent = pageContent["flavor-notes"];
@@ -203,22 +204,18 @@ export default async function WorkPage({ params }: { params: Promise<{ slug: str
   const relatedLayout = DEFAULT_OPTIONAL_SECTION_LAYOUT["related-products"];
   const optionalSections = [
     {
-      key: "campaigns",
+      id: "campaigns",
       placement: normalizeProductSectionPlacement(product.campaignDisplay?.placement, campaignLayout.placement),
       order: normalizeProductSectionOrder(product.campaignDisplay?.order, campaignLayout.order),
       node: productCampaigns.length ? <ProductCampaignSection campaigns={productCampaigns} eyebrow={campaignContent.eyebrow} heading={campaignContent.heading} description={campaignContent.description} animation={sectionAnimation("campaigns")} /> : null,
     },
     {
-      key: "related-products",
+      id: "related-products",
       placement: normalizeProductSectionPlacement(relatedSettings?.placement, relatedLayout.placement),
       order: normalizeProductSectionOrder(relatedSettings?.order, relatedLayout.order),
       node: showRelated && related.length ? <RelatedProductsSection products={related} eyebrow={relatedContent.eyebrow} title={relatedContent.heading} description={relatedContent.description} cardCtaLabel={relatedContent.cardCtaLabel} animation={sectionAnimation("related-products")} /> : null,
     },
   ] as const;
-  const renderOptionalSections = (placement: ProductSectionPlacement) => optionalSections
-    .filter((section) => section.node && section.placement === placement)
-    .sort((a, b) => a.order - b.order || (a.key === "campaigns" ? -1 : 1))
-    .map((section) => <Fragment key={section.key}>{section.node}</Fragment>);
   const facts = [
     ["origin", "產區", product.origin],
     ["process", "處理法", product.process],
@@ -331,7 +328,7 @@ export default async function WorkPage({ params }: { params: Promise<{ slug: str
         aria-hidden="true"
       />
 
-      {renderOptionalSections("after_purchase")}
+      <CustomProductSectionSlot placement="after_purchase" sections={customSections} systemSections={optionalSections} />
 
       <section className="revenue-proof-strip">
         {purchaseContent.trustItems.map((item) => <div key={item.id}><b>{item.title}</b><span>{item.body}</span></div>)}
@@ -354,7 +351,7 @@ export default async function WorkPage({ params }: { params: Promise<{ slug: str
         </div>
       </section>
 
-      {renderOptionalSections("after_profile")}
+      <CustomProductSectionSlot placement="after_profile" sections={customSections} systemSections={optionalSections} />
 
       {isGiottoPrototype || hasCleanRoastingMediaConfig ? (
         <CleanRoastingChapter proofs={roastingContent.proofs} eyebrow={roastingContent.eyebrow} heading={roastingContent.heading} description={roastingContent.description} animation={sectionAnimation("clean-roasting")} mediaConfig={cleanRoastingMedia} />
@@ -370,8 +367,8 @@ export default async function WorkPage({ params }: { params: Promise<{ slug: str
         </section>
       )}
 
-      {renderOptionalSections("after_clean_roasting")}
-      {renderOptionalSections("before_before_you_order")}
+      <CustomProductSectionSlot placement="after_clean_roasting" sections={customSections} systemSections={optionalSections} />
+      <CustomProductSectionSlot placement="before_before_you_order" sections={customSections} systemSections={optionalSections} />
 
       <section {...getProductAnimationAttributes(sectionAnimation("before-you-order"))} id="before-you-order" className="revenue-content-section revenue-faq">
         <div className="revenue-section-title" data-section-reveal={isGiottoPrototype ? undefined : "true"}>
@@ -386,7 +383,7 @@ export default async function WorkPage({ params }: { params: Promise<{ slug: str
 
       {layout.showGallery !== false && gallery.length ? <section className="revenue-content-section revenue-gallery"><div className="revenue-section-title"><p>{heroContent.galleryEyebrow}</p><h2>{heroContent.galleryHeading}</h2></div><div className="revenue-gallery-grid">{gallery.map((item: any) => <figure key={item.key}><img src={item.path} alt={item.alt || `${heroContent.title} ${item.key}`} />{item.caption ? <figcaption>{item.caption}</figcaption> : null}</figure>)}</div></section> : null}
 
-      {renderOptionalSections("page_bottom")}
+      <CustomProductSectionSlot placement="page_bottom" sections={customSections} systemSections={optionalSections} />
       </ProductSectionReveals>
 
       {minPrice !== null && product.purchasable !== false && product.status !== "sold_out" ? <MobilePurchaseReturnButton /> : null}

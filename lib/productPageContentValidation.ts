@@ -187,6 +187,7 @@ export function normalizeProductPageContent(value: unknown): ProductPageContent 
       if (!isRecord(rawSection)) throw new ProductPageContentValidationError("SELECT YOUR COFFEE 文案格式不正確。");
       result[sectionKey] = compact({
         eyebrow: text(rawSection.eyebrow, 60, "SELECT YOUR COFFEE 英文小標"),
+        heading: text(rawSection.heading, 120, "SELECT YOUR COFFEE 標題"),
         description: text(rawSection.description, 400, "SELECT YOUR COFFEE 說明"),
       });
     } else if (sectionKey === "coffee-profile") {

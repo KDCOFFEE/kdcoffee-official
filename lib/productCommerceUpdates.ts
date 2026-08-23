@@ -14,6 +14,10 @@ import {
   normalizeProductPageContent,
   ProductPageContentValidationError,
 } from "@/lib/productPageContentValidation";
+import {
+  normalizeProductCustomSections,
+  ProductCustomSectionsValidationError,
+} from "@/lib/productCustomSectionsValidation";
 
 export const PRODUCT_METADATA_FIELDS = [
   "name",
@@ -33,6 +37,7 @@ export const PRODUCT_METADATA_FIELDS = [
   "productPageAnimations",
   "cleanRoastingMedia",
   "productPageContent",
+  "productCustomSections",
   "displayFields",
 ] as const;
 
@@ -277,6 +282,16 @@ function normalizeMetadataField(field: ProductMetadataField, value: unknown) {
       return normalizeProductPageContent(value);
     } catch (error) {
       if (error instanceof ProductPageContentValidationError) {
+        throw new ProductCommerceUpdateError(error.message);
+      }
+      throw error;
+    }
+  }
+  if (field === "productCustomSections") {
+    try {
+      return value === undefined ? undefined : normalizeProductCustomSections(value);
+    } catch (error) {
+      if (error instanceof ProductCustomSectionsValidationError) {
         throw new ProductCommerceUpdateError(error.message);
       }
       throw error;
