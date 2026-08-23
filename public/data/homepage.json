@@ -65,7 +65,7 @@
         "imageId": "IMG0101",
         "title": "為了風味，我們打造自己的烘豆機",
         "text": "市面上找不到符合我們理想風味的設備，因此我們選擇自己設計、修改與測試，只為了讓每一支咖啡展現更乾淨、更有層次的風味。",
-        "image": "",
+        "image": "/uploads/artworks/homepage/kdcoffee-kd-coffee-img0101-v02.webp",
         "alt": "KD Coffee 自製流床式熱風烘豆機",
         "prompt": "真實攝影，KD Coffee 自製流床式熱風烘豆機局部特寫，透明烘豆室與翻滾咖啡豆，自然工作室光線，精品咖啡工坊質感，800×800，無文字。"
       },
@@ -83,7 +83,7 @@
         "imageId": "IMG0103",
         "title": "少量管理，保持最佳賞味",
         "text": "我們維持少量庫存，不大量囤貨，讓咖啡保持在理想賞味期間送到你手中。",
-        "image": "",
+        "image": "/uploads/artworks/homepage/kdcoffee-kd-coffee-img0103-v01.webp",
         "alt": "KD Coffee 少量庫存與充氮包裝",
         "prompt": "真實攝影，少量整齊排列的 KD Coffee 咖啡包裝與充氮封裝作業，精品工坊，自然光，800×800，無文字。"
       },
@@ -92,7 +92,7 @@
         "imageId": "IMG0104",
         "title": "每一包，都代表 KD Coffee",
         "text": "從烘焙、杯測、充氮包裝到出貨，每一包咖啡都由 KD Coffee 工作室親自完成。",
-        "image": "",
+        "image": "/uploads/artworks/homepage/kdcoffee-kd-coffee-img0104-v02.webp",
         "alt": "KD Coffee 工作室包裝與出貨",
         "prompt": "真實攝影，KD Coffee 工作室手工檢查咖啡包裝與準備出貨，真實人物手部即可，溫暖自然光，800×800，無文字。"
       }
@@ -193,7 +193,7 @@
         "imageId": "IMG0301",
         "title": "挑選與確認生豆",
         "text": "先確認原料狀態，建立適合這支咖啡的方向。",
-        "image": "",
+        "image": "/uploads/artworks/homepage/kdcoffee-kd-coffee-img0301-v01.webp",
         "alt": "KD Coffee 生豆挑選",
         "prompt": "真實攝影，精品咖啡生豆挑選與檢查，乾淨工作桌，自然光，800×800，無文字。"
       },
@@ -202,7 +202,7 @@
         "imageId": "IMG0302",
         "title": "流床式熱風烘焙",
         "text": "讓咖啡豆均勻翻動，呈現乾淨清楚的風味。",
-        "image": "",
+        "image": "/uploads/artworks/homepage/kdcoffee-kd-coffee-img0302-v02.webp",
         "alt": "KD Coffee 流床式熱風烘焙",
         "prompt": "真實攝影，自製流床式熱風烘豆機中咖啡豆翻滾，工作室自然光，800×800，無文字。"
       },
@@ -211,7 +211,7 @@
         "imageId": "IMG0303",
         "title": "杯測確認",
         "text": "透過實際品飲確認香氣、甜感與整體平衡。",
-        "image": "",
+        "image": "/uploads/artworks/homepage/kdcoffee-kd-coffee-img0303-v01.webp",
         "alt": "KD Coffee 職人杯測",
         "prompt": "真實攝影，精品咖啡杯測桌，多個杯測碗與湯匙，專業乾淨，800×800，無文字。"
       },
@@ -220,7 +220,7 @@
         "imageId": "IMG0304",
         "title": "充氮保鮮",
         "text": "減少氧化影響，讓風味以更好的狀態被保存。",
-        "image": "",
+        "image": "/uploads/artworks/homepage/kdcoffee-kd-coffee-img0304-v01.webp",
         "alt": "KD Coffee 充氮包裝",
         "prompt": "真實攝影，咖啡充氮包裝機與密封作業局部，整潔工作室，800×800，無文字。"
       },
@@ -229,7 +229,7 @@
         "imageId": "IMG0305",
         "title": "包裝檢查",
         "text": "確認標籤、規格與封口，再準備交付。",
-        "image": "",
+        "image": "/uploads/artworks/homepage/kdcoffee-kd-coffee-img0305-v01.webp",
         "alt": "KD Coffee 咖啡包裝檢查",
         "prompt": "真實攝影，KD Coffee 咖啡包裝標籤與封口檢查，手部操作，800×800，無文字。"
       },
@@ -238,7 +238,7 @@
         "imageId": "IMG0306",
         "title": "送到你手中",
         "text": "7-ELEVEN 取貨付款或工作室自取，簡單完成。",
-        "image": "",
+        "image": "/uploads/artworks/homepage/kdcoffee-kd-coffee-img0306-v01.webp",
         "alt": "KD Coffee 咖啡出貨",
         "prompt": "真實攝影，整齊完成的咖啡包裹準備出貨，溫暖自然光，800×800，無文字。"
       }
@@ -255,7 +255,7 @@
     "button": "查看適用作品",
     "href": "/works",
     "imageId": "IMG0601",
-    "image": "",
+    "image": "/uploads/artworks/homepage/kdcoffee-kd-coffee-img0601-v01.webp",
     "alt": "KD Coffee 專屬烘焙服務",
     "prompt": "真實攝影，咖啡烘焙師操作流床式熱風烘豆機，呈現專業客製烘焙服務，工作室自然光，1200×900，無文字。"
   },
@@ -268,7 +268,7 @@
         "imageId": "IMG0701",
         "title": "風味有自己的性格",
         "text": "不是只用產區與處理法命名，而是讓每支咖啡有容易被記住的故事。",
-        "image": "",
+        "image": "/uploads/artworks/homepage/kdcoffee-kd-coffee-img0701-v01.webp",
         "alt": "KD Coffee 咖啡藝術系列",
         "prompt": "精品咖啡藝術系列包裝與黑白主視覺，安靜藝廊氛圍，米白背景，800×1000，無新增文字。"
       },
@@ -277,7 +277,7 @@
         "imageId": "IMG0702",
         "title": "每一次品飲都是探索",
         "text": "從花香、果香到甜感與尾韻，找到屬於自己的作品。",
-        "image": "",
+        "image": "/uploads/artworks/homepage/kdcoffee-kd-coffee-img0702-v01.webp",
         "alt": "KD Coffee 精品咖啡品飲",
         "prompt": "真實攝影，手沖黑咖啡與藝術感包裝，日系藝廊留白，800×1000，無文字。"
       },
@@ -286,7 +286,7 @@
         "imageId": "IMG0703",
         "title": "讓咖啡更容易被理解",
         "text": "先用感受選擇，再慢慢認識咖啡知識。",
-        "image": "",
+        "image": "/uploads/artworks/homepage/kdcoffee-kd-coffee-img0703-v01.webp",
         "alt": "KD Coffee 第一次選精品咖啡",
         "prompt": "真實攝影，三款不同風味的精品咖啡包裝整齊展示，溫暖自然光，800×1000，無文字。"
       }
@@ -305,14 +305,25 @@
       {
         "id": "HOME008-IMG02",
         "imageId": "IMG0802",
-        "image": "",
+        "image": "/uploads/artworks/homepage/kdcoffee-kd-coffee-img0802-v01.webp",
         "alt": "KD Coffee 烘豆工作"
       },
       {
         "id": "HOME008-IMG03",
         "imageId": "IMG0803",
-        "image": "",
-        "alt": "KD Coffee 包裝作業"
+        "image": "/uploads/artworks/homepage/kdcoffee-kd-coffee-img0803-v01.webp",
+        "alt": "KD Coffee 包裝作業",
+        "media": {
+          "type": "video",
+          "url": "https://res.cloudinary.com/sd4wjx7m/video/upload/c_limit,q_auto,vc_auto,w_1920/v1/kd-coffee/videos/1919f85e-9ae5-4c7c-ba02-fdfed97b5922.mp4?_a=BAMAAAkS0",
+          "provider": "cloudinary",
+          "publicId": "kd-coffee/videos/1919f85e-9ae5-4c7c-ba02-fdfed97b5922",
+          "posterUrl": "https://res.cloudinary.com/sd4wjx7m/video/upload/c_limit,f_auto,q_auto,w_1600/v1/kd-coffee/videos/1919f85e-9ae5-4c7c-ba02-fdfed97b5922.jpg?_a=BAMAAAkS0",
+          "width": 720,
+          "height": 1032,
+          "format": "mp4",
+          "bytes": 1467497
+        }
       },
       {
         "id": "HOME008-IMG04",
