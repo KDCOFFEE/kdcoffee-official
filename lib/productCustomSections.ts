@@ -1,4 +1,5 @@
 import type { ProductSectionPlacement } from "./productPageSections";
+import type { MediaAsset } from "./media";
 import {
   getProductAnimationAttributes,
   type ProductSectionAnimationConfig,
@@ -12,6 +13,9 @@ export const PRODUCT_CUSTOM_SECTION_TYPES = ["text", "features"] as const;
 export const PRODUCT_CUSTOM_TEXT_LAYOUTS = ["standard", "narrow", "centered"] as const;
 export const PRODUCT_CUSTOM_FEATURE_LAYOUTS = ["grid", "editorial"] as const;
 export const PRODUCT_CUSTOM_FEATURE_ICONS = ["flavor", "origin", "process", "roast", "air", "heat", "cupping"] as const;
+export const PRODUCT_CUSTOM_MEDIA_POSITIONS = ["full", "media-left", "media-right", "media-top", "media-bottom"] as const;
+export const PRODUCT_CUSTOM_MEDIA_ALT_MAX_LENGTH = 240;
+export const PRODUCT_CUSTOM_MEDIA_CAPTION_MAX_LENGTH = 500;
 
 export const PRODUCT_CUSTOM_SECTION_ID_PATTERN = /^cs-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 export const PRODUCT_CUSTOM_FEATURE_ID_PATTERN = /^fi-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
@@ -20,6 +24,25 @@ export type ProductCustomSectionType = (typeof PRODUCT_CUSTOM_SECTION_TYPES)[num
 export type ProductCustomTextLayout = (typeof PRODUCT_CUSTOM_TEXT_LAYOUTS)[number];
 export type ProductCustomFeatureLayout = (typeof PRODUCT_CUSTOM_FEATURE_LAYOUTS)[number];
 export type ProductCustomFeatureIcon = (typeof PRODUCT_CUSTOM_FEATURE_ICONS)[number];
+export type ProductCustomMediaPosition = (typeof PRODUCT_CUSTOM_MEDIA_POSITIONS)[number];
+
+export type ProductCustomCloudinaryMedia = {
+  provider: "cloudinary";
+  asset: MediaAsset;
+  alt: string;
+  caption?: string;
+  position: ProductCustomMediaPosition;
+};
+
+export type ProductCustomYouTubeMedia = {
+  provider: "youtube";
+  videoId: string;
+  title: string;
+  caption?: string;
+  position: ProductCustomMediaPosition;
+};
+
+export type ProductCustomSectionMedia = ProductCustomCloudinaryMedia | ProductCustomYouTubeMedia;
 
 type ProductCustomSectionBase = {
   id: string;
@@ -28,6 +51,7 @@ type ProductCustomSectionBase = {
   placement: ProductSectionPlacement;
   order: number;
   animation?: ProductSectionAnimationConfig;
+  media?: ProductCustomSectionMedia;
 };
 
 export type ProductCustomTextSection = ProductCustomSectionBase & {

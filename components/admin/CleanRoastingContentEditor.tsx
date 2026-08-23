@@ -33,6 +33,6 @@ export default function CleanRoastingContentEditor({ product, patch }: Props) {
       <label>說明內容<textarea value={proof.body} maxLength={1200} onChange={(event) => updateProofs(proofs.map((item) => item.id === proof.id ? { ...item, body: event.target.value } : item))} /></label>
       <button type="button" disabled={proofs.length <= 1} onClick={() => updateProofs(proofs.filter((item) => item.id !== proof.id))}>移除</button>
     </article>)}</div>
-    <div className="product-content-locked-note"><strong>【媒體】</strong><span>CLEAN ROASTING 影片、照片、Slider 與 Cloudinary 設定仍由下方既有「媒體內容」管理。</span></div>
+    <div className="product-content-locked-note"><strong>【媒體】</strong><span>CLEAN ROASTING 影片、照片、Slider 與 Cloudinary 設定由下方「B｜媒體與播放設定」管理。</span></div>
   </div>;
 }

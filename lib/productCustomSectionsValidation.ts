@@ -3,6 +3,9 @@ import {
   PRODUCT_CUSTOM_FEATURE_ICONS,
   PRODUCT_CUSTOM_FEATURE_LAYOUTS,
   PRODUCT_CUSTOM_FEATURE_MAX_ITEMS,
+  PRODUCT_CUSTOM_MEDIA_ALT_MAX_LENGTH,
+  PRODUCT_CUSTOM_MEDIA_CAPTION_MAX_LENGTH,
+  PRODUCT_CUSTOM_MEDIA_POSITIONS,
   PRODUCT_CUSTOM_SECTION_ID_PATTERN,
   PRODUCT_CUSTOM_SECTION_MAX_BYTES,
   PRODUCT_CUSTOM_SECTION_MAX_COUNT,
@@ -10,7 +13,21 @@ import {
   type ProductCustomFeatureIcon,
   type ProductCustomFeatureItem,
   type ProductCustomSection,
+  type ProductCustomSectionMedia,
 } from "./productCustomSections";
+import { normalizeYouTubeVideoId, YouTubeUrlValidationError } from "./youtubeMedia";
+import {
+  isAnyCustomSectionMediaPublicId,
+} from "./customSectionMediaNaming";
+import {
+  ALLOWED_IMAGE_EXTENSIONS,
+  ALLOWED_VIDEO_EXTENSIONS,
+  CLOUDINARY_IMAGE_FOLDER,
+  CLOUDINARY_VIDEO_FOLDER,
+  CUSTOM_SECTION_IMAGE_LIMITS,
+  CUSTOM_SECTION_VIDEO_LIMITS,
+  type MediaAsset,
+} from "./media";
 import { normalizeProductSectionAnimation, type ProductSectionAnimationConfig } from "./productPageAnimations";
 import { isProductSectionPlacement } from "./productPageSections";
 
@@ -69,6 +86,122 @@ function normalizedAnimation(value: unknown): ProductSectionAnimationConfig | un
   };
 }
 
+function positiveInteger(value: unknown, maximum: number, label: string) {
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value <= 0 || value > maximum) {
+    throw new ProductCustomSectionsValidationError(`${label}格式不正確。`);
+  }
+  return value;
+}
+
+function optionalPositiveNumber(value: unknown, maximum: number, label: string) {
+  if (value === undefined) return undefined;
+  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0 || value > maximum) {
+    throw new ProductCustomSectionsValidationError(`${label}格式不正確。`);
+  }
+  return value;
+}
+
+function isExpectedCloudinaryUrl(value: string, mediaType: "image" | "video", publicId: string) {
+  try {
+    const url = new URL(value);
+    const resourcePath = `/${mediaType}/upload/`;
+    return url.protocol === "https:" &&
+      url.hostname === "res.cloudinary.com" &&
+      url.pathname.includes(resourcePath) &&
+      url.pathname.includes(`/${publicId}`);
+  } catch {
+    return false;
+  }
+}
+
+function normalizedMediaAsset(value: unknown, sectionId: string): MediaAsset {
+  if (!isRecord(value) || (value.type !== "image" && value.type !== "video")) {
+    throw new ProductCustomSectionsValidationError("自訂 Section 媒體格式不正確。");
+  }
+  const type = value.type;
+  const publicId = typeof value.publicId === "string" ? value.publicId.trim() : "";
+  const expectedFolder = type === "image" ? CLOUDINARY_IMAGE_FOLDER : CLOUDINARY_VIDEO_FOLDER;
+  if (
+    value.provider !== "cloudinary" ||
+    !publicId.startsWith(`${expectedFolder}/`) ||
+    !isAnyCustomSectionMediaPublicId({ publicId, sectionId, mediaType: type })
+  ) {
+    throw new ProductCustomSectionsValidationError("自訂 Section 媒體識別資料不正確。");
+  }
+  const url = typeof value.url === "string" ? value.url.trim() : "";
+  if (!isExpectedCloudinaryUrl(url, type, publicId)) {
+    throw new ProductCustomSectionsValidationError("自訂 Section 媒體網址不正確。");
+  }
+  const limits = type === "image" ? CUSTOM_SECTION_IMAGE_LIMITS : CUSTOM_SECTION_VIDEO_LIMITS;
+  const width = positiveInteger(value.width, limits.maxDimension, "自訂 Section 媒體寬度");
+  const height = positiveInteger(value.height, limits.maxDimension, "自訂 Section 媒體高度");
+  if (width * height > limits.maxPixels) throw new ProductCustomSectionsValidationError("自訂 Section 媒體尺寸過大。");
+  const bytes = positiveInteger(value.bytes, limits.maxBytes, "自訂 Section 媒體檔案大小");
+  const format = typeof value.format === "string" ? value.format.trim().toLowerCase() : "";
+  const allowedFormats = type === "image" ? ALLOWED_IMAGE_EXTENSIONS : ALLOWED_VIDEO_EXTENSIONS;
+  if (!(allowedFormats as readonly string[]).includes(format)) {
+    throw new ProductCustomSectionsValidationError("自訂 Section 媒體格式不支援。");
+  }
+  const duration = type === "video"
+    ? optionalPositiveNumber(value.duration, CUSTOM_SECTION_VIDEO_LIMITS.maxDurationSeconds, "自訂 Section 影片長度")
+    : undefined;
+  if (type === "video" && duration === undefined) {
+    throw new ProductCustomSectionsValidationError("自訂 Section 影片缺少長度資料。");
+  }
+  const posterUrl = type === "video" && typeof value.posterUrl === "string" ? value.posterUrl.trim() : "";
+  if (type === "video" && !isExpectedCloudinaryUrl(posterUrl, "video", publicId)) {
+    throw new ProductCustomSectionsValidationError("自訂 Section 影片預覽圖不正確。");
+  }
+  return {
+    type,
+    url,
+    provider: "cloudinary",
+    publicId,
+    width,
+    height,
+    bytes,
+    format,
+    ...(duration === undefined ? {} : { duration }),
+    ...(posterUrl ? { posterUrl } : {}),
+  };
+}
+
+function normalizedMedia(value: unknown, sectionId: string): ProductCustomSectionMedia | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (!isRecord(value)) throw new ProductCustomSectionsValidationError("自訂 Section 媒體設定格式不正確。");
+  if (!PRODUCT_CUSTOM_MEDIA_POSITIONS.includes(value.position as (typeof PRODUCT_CUSTOM_MEDIA_POSITIONS)[number])) {
+    throw new ProductCustomSectionsValidationError("自訂 Section 媒體位置不正確。");
+  }
+  const caption = safeText(value.caption, PRODUCT_CUSTOM_MEDIA_CAPTION_MAX_LENGTH, "自訂 Section 媒體說明");
+  const position = value.position as ProductCustomSectionMedia["position"];
+  if (value.provider === "youtube") {
+    let videoId: string;
+    try {
+      videoId = normalizeYouTubeVideoId(value.videoId);
+    } catch (error) {
+      if (error instanceof YouTubeUrlValidationError) throw new ProductCustomSectionsValidationError(error.message);
+      throw error;
+    }
+    return {
+      provider: "youtube",
+      videoId,
+      title: safeText(value.title, PRODUCT_CUSTOM_MEDIA_ALT_MAX_LENGTH, "YouTube 影片標題／替代說明", true) as string,
+      ...(caption ? { caption } : {}),
+      position,
+    };
+  }
+  if (value.provider !== undefined && value.provider !== "cloudinary") {
+    throw new ProductCustomSectionsValidationError("自訂 Section 媒體來源不支援。");
+  }
+  return {
+    provider: "cloudinary",
+    asset: normalizedMediaAsset(value.asset, sectionId),
+    alt: safeText(value.alt, PRODUCT_CUSTOM_MEDIA_ALT_MAX_LENGTH, "自訂 Section 媒體替代文字", true) as string,
+    ...(caption ? { caption } : {}),
+    position,
+  };
+}
+
 function normalizedBase(value: UnknownRecord, index: number) {
   if (value.enabled !== undefined && typeof value.enabled !== "boolean") {
     throw new ProductCustomSectionsValidationError(`自訂 Section ${index + 1}顯示狀態格式不正確。`);
@@ -86,6 +219,7 @@ function normalizedBase(value: UnknownRecord, index: number) {
     placement: value.placement,
     order: value.order,
     ...(value.animation === undefined ? {} : { animation: normalizedAnimation(value.animation) }),
+    ...(value.media === undefined || value.media === null ? {} : { media: normalizedMedia(value.media, String(value.id)) }),
   };
 }
 
@@ -179,6 +313,21 @@ export function resolveProductCustomSections(value: unknown) {
   try {
     return normalizeProductCustomSections(value);
   } catch {
-    return [];
+    if (!Array.isArray(value)) return [];
+    return value.flatMap((section) => {
+      if (!isRecord(section)) return [];
+      try {
+        return normalizeProductCustomSections([section]);
+      } catch {
+        if (section.media === undefined) return [];
+        const withoutInvalidMedia = { ...section };
+        delete withoutInvalidMedia.media;
+        try {
+          return normalizeProductCustomSections([withoutInvalidMedia]);
+        } catch {
+          return [];
+        }
+      }
+    });
   }
 }

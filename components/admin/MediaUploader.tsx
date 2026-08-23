@@ -2,11 +2,14 @@
 
 import { ChangeEvent, useRef, useState } from "react";
 import {
+  CUSTOM_SECTION_IMAGE_LIMITS,
+  isAllowedImageUpload,
   isAllowedVideoUpload,
   type CloudinaryMediaUsage,
   type MediaAsset,
   VIDEO_UPLOAD_LIMITS,
 } from "@/lib/media";
+import { filterCustomSectionMediaReservedPublicIds } from "@/lib/customSectionMediaNaming";
 
 type MediaUploaderProps = {
   label?: string;
@@ -18,7 +21,8 @@ type MediaUploaderProps = {
   videoActionLabel?: string;
   productMediaNaming?: {
     productSlug: string;
-    mediaPurpose: "clean-roasting";
+    mediaPurpose: "clean-roasting" | "custom-section";
+    sectionId?: string;
     reservedPublicIds?: string[];
   };
   onChange: (media: MediaAsset) => void;
@@ -41,7 +45,7 @@ const CHUNK_SIZE = 10 * 1024 * 1024;
 const SINGLE_UPLOAD_LIMIT = 95 * 1024 * 1024;
 
 function errorMessage(error: unknown) {
-  return error instanceof Error ? error.message : "影片上傳失敗，請稍後再試。";
+  return error instanceof Error ? error.message : "媒體上傳失敗，請稍後再試。";
 }
 
 function uploadRequest({
@@ -86,13 +90,13 @@ function uploadRequest({
     request.onload = () => {
       onRequest(null);
       if (request.status < 200 || request.status >= 300) {
-        reject(new Error("Cloudinary 無法接收影片，請確認格式與大小後重試。"));
+        reject(new Error("Cloudinary 無法接收媒體，請確認格式與大小後重試。"));
         return;
       }
       try {
         resolve(JSON.parse(request.responseText) as CloudinaryUploadResponse);
       } catch {
-        reject(new Error("影片上傳回應格式錯誤。"));
+        reject(new Error("媒體上傳回應格式錯誤。"));
       }
     };
     onRequest(request);
@@ -170,24 +174,38 @@ export default function MediaUploader({
   const activeRequest = useRef<XMLHttpRequest | null>(null);
   const cancelled = useRef(false);
 
-  async function uploadVideo(file: File) {
-    const limits = VIDEO_UPLOAD_LIMITS[usage];
-    if (!isAllowedVideoUpload(file.name, file.type)) {
-      setMessage("影片格式僅支援 MP4、MOV 或 WebM。");
+  async function uploadCloudinary(file: File, mediaType: "image" | "video") {
+    const limits = mediaType === "image" ? CUSTOM_SECTION_IMAGE_LIMITS : VIDEO_UPLOAD_LIMITS[usage];
+    const allowed = mediaType === "image"
+      ? isAllowedImageUpload(file.name, file.type)
+      : isAllowedVideoUpload(file.name, file.type);
+    if (!allowed) {
+      setMessage(mediaType === "image" ? "圖片格式僅支援 JPG、PNG 或 WebP。" : "影片格式僅支援 MP4、MOV 或 WebM。");
       return;
     }
     if (file.size <= 0 || file.size > limits.maxBytes) {
-      setMessage(`影片大小不得超過 ${Math.round(limits.maxBytes / 1024 / 1024)} MB。`);
+      setMessage(`${mediaType === "image" ? "圖片" : "影片"}大小不得超過 ${Math.round(limits.maxBytes / 1024 / 1024)} MB。`);
       return;
     }
 
-    setLastVideo(file);
+    if (mediaType === "video") setLastVideo(file);
     setUploading(true);
     setProgress(0);
     setMessage("準備安全上傳授權…");
     cancelled.current = false;
 
     try {
+      const namingContext = productMediaNaming?.mediaPurpose === "custom-section" && productMediaNaming.sectionId
+        ? {
+            ...productMediaNaming,
+            reservedPublicIds: filterCustomSectionMediaReservedPublicIds({
+              publicIds: productMediaNaming.reservedPublicIds || [],
+              productSlug: productMediaNaming.productSlug,
+              sectionId: productMediaNaming.sectionId,
+              mediaType,
+            }),
+          }
+        : productMediaNaming;
       const signResponse = await fetch("/api/admin/media/sign", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -196,14 +214,15 @@ export default function MediaUploader({
           fileName: file.name,
           fileSize: file.size,
           mimeType: file.type,
-          ...(productMediaNaming || {}),
+          mediaType,
+          ...(namingContext || {}),
         }),
       });
       const signed = (await signResponse.json()) as SignedUploadResponse & { error?: string };
       if (!signResponse.ok) throw new Error(signed.error || "無法取得影片上傳授權。");
       if (cancelled.current) throw new Error("已取消影片上傳。");
 
-      setMessage("影片正直接上傳至 Cloudinary…");
+      setMessage(`${mediaType === "image" ? "圖片" : "影片"}正直接上傳至 Cloudinary…`);
       const uploaded = await directUpload(
         file,
         signed,
@@ -211,22 +230,22 @@ export default function MediaUploader({
         (request) => { activeRequest.current = request; },
         () => cancelled.current,
       );
-      if (!uploaded.public_id) throw new Error("Cloudinary 未回傳完整影片資料。");
+      if (!uploaded.public_id) throw new Error("Cloudinary 未回傳完整媒體資料。");
 
-      setMessage("正在驗證影片資料…");
+      setMessage("正在驗證媒體資料…");
       const finalizeResponse = await fetch("/api/admin/media/finalize", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ publicId: uploaded.public_id, usage }),
+        body: JSON.stringify({ publicId: uploaded.public_id, usage, mediaType, ...(namingContext || {}) }),
       });
       const finalized = (await finalizeResponse.json()) as { error?: string; media?: MediaAsset };
       if (!finalizeResponse.ok || !finalized.media) {
-        throw new Error(finalized.error || "影片驗證失敗，請稍後再試。");
+        throw new Error(finalized.error || "媒體驗證失敗，請稍後再試。");
       }
 
       onChange(finalized.media);
       setProgress(100);
-      setMessage("影片已上傳並完成驗證。請儲存頁面變更。");
+      setMessage(`${mediaType === "image" ? "圖片" : "影片"}已上傳並完成驗證。請儲存頁面變更。`);
     } catch (error) {
       setMessage(errorMessage(error));
     } finally {
@@ -235,12 +254,20 @@ export default function MediaUploader({
     }
   }
 
+  async function uploadVideo(file: File) {
+    await uploadCloudinary(file, "video");
+  }
+
   async function chooseImage(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file) return;
     if (onImageSelect) {
       onImageSelect(file);
+      return;
+    }
+    if (!onImageUpload && productMediaNaming?.mediaPurpose === "custom-section") {
+      await uploadCloudinary(file, "image");
       return;
     }
     if (!onImageUpload) {
@@ -273,7 +300,7 @@ export default function MediaUploader({
   return (
     <section className="kd-media-uploader" aria-busy={uploading}>
       <header>
-        <div><strong>{label}</strong><small>圖片沿用既有上傳；影片直接上傳 Cloudinary。</small></div>
+        <div><strong>{label}</strong><small>{productMediaNaming?.mediaPurpose === "custom-section" ? "圖片與影片皆使用 Cloudinary 安全上傳並完成伺服器驗證。" : "圖片沿用既有上傳；影片直接上傳 Cloudinary。"}</small></div>
         {value && onRemove ? (
           <button type="button" className="kd-media-remove" onClick={onRemove} disabled={uploading || disabled}>移除目前媒體</button>
         ) : null}

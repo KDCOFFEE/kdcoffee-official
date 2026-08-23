@@ -4,22 +4,31 @@ import { isAdminAuthenticated } from "@/lib/adminAuth";
 import {
   CloudinaryFinalizeError,
   safeCloudinaryErrorMessage,
+  verifyCloudinaryCustomSectionMedia,
   verifyCloudinaryVideo,
 } from "@/lib/cloudinary";
 import {
+  CLOUDINARY_IMAGE_FOLDER,
   CLOUDINARY_VIDEO_FOLDER,
   isCloudinaryMediaUsage,
 } from "@/lib/media";
 import { isProductMediaPublicId } from "@/lib/productMediaNaming";
+import {
+  CUSTOM_SECTION_MEDIA_PURPOSE,
+  isCustomSectionMediaPublicId,
+  isCustomSectionMediaType,
+  isCustomSectionStableId,
+} from "@/lib/customSectionMediaNaming";
+import { isCanonicalProductSlug } from "@/lib/productMediaNaming";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 const noStoreHeaders = { "Cache-Control": "no-store" };
 
-function finalizeResponse(code: string, status: number) {
+function finalizeResponse(code: string, status: number, error = "影片驗證尚未完成，請稍後再試。") {
   return NextResponse.json(
-    { error: "影片驗證尚未完成，請稍後再試。", code },
+    { error, code },
     { status, headers: noStoreHeaders },
   );
 }
@@ -37,10 +46,29 @@ export async function POST(request: Request) {
     );
   }
 
+  let customSectionRequest = false;
+  let customSectionMediaType: "image" | "video" | undefined;
   try {
     const body = (await request.json()) as Record<string, unknown>;
     const publicId = String(body.publicId || "").trim();
     const usage = isCloudinaryMediaUsage(body.usage) ? body.usage : "content";
+    const mediaPurpose = typeof body.mediaPurpose === "string" ? body.mediaPurpose : "";
+    if (mediaPurpose === CUSTOM_SECTION_MEDIA_PURPOSE) {
+      customSectionRequest = true;
+      const productSlug = typeof body.productSlug === "string" ? body.productSlug.trim() : "";
+      const sectionId = typeof body.sectionId === "string" ? body.sectionId : "";
+      const mediaType = body.mediaType;
+      if (isCustomSectionMediaType(mediaType)) customSectionMediaType = mediaType;
+      const valid =
+        isCanonicalProductSlug(productSlug) &&
+        isCustomSectionStableId(sectionId) &&
+        isCustomSectionMediaType(mediaType) &&
+        publicId.startsWith(`${mediaType === "image" ? CLOUDINARY_IMAGE_FOLDER : CLOUDINARY_VIDEO_FOLDER}/`) &&
+        isCustomSectionMediaPublicId({ publicId, productSlug, sectionId, mediaType });
+      if (!valid) return finalizeResponse("FINALIZE_RESOURCE_INVALID", 400, "自訂 Section 媒體命名資料不正確。");
+      const media = await verifyCloudinaryCustomSectionMedia(publicId, mediaType);
+      return NextResponse.json({ ok: true, media }, { headers: noStoreHeaders });
+    }
     const legacyPublicId = new RegExp(
       `^${CLOUDINARY_VIDEO_FOLDER.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}/[a-f0-9-]{36}$`,
     );
@@ -88,7 +116,12 @@ export async function POST(request: Request) {
       ...(known?.resource.duration !== undefined ? { duration: known.resource.duration } : {}),
     }));
     const code = known?.errorCode || "FINALIZE_UNKNOWN";
-    const status = code === "FINALIZE_LOOKUP_FAILED" ? 502 : 422;
-    return finalizeResponse(code, status);
+    const status = code === "FINALIZE_LOOKUP_FAILED" ? 502 : code === "FINALIZE_PROCESSING" ? 425 : 422;
+    if (code === "FINALIZE_PROCESSING") {
+      return finalizeResponse(code, status, "影片仍在 Cloudinary 處理中，請稍後重新選擇影片再試。");
+    }
+    return customSectionRequest
+      ? finalizeResponse(code, status, customSectionMediaType === "image" ? "圖片驗證失敗，請確認格式後重新上傳。" : "影片驗證失敗，請確認格式後重新上傳。")
+      : finalizeResponse(code, status);
   }
 }

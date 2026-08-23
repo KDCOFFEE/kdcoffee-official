@@ -127,6 +127,18 @@ function collectProductUsage(
         ...(slug ? { slug } : {}),
       }, snapshot);
     });
+    recordArray(product.productCustomSections).forEach((section, index) => {
+      const mediaPlacement = isRecord(section.media) ? section.media : {};
+      const asset = isRecord(mediaPlacement.asset) ? mediaPlacement.asset : null;
+      if (!asset) return;
+      addReferencedVideo({ media: asset }, {
+        sourceType: "product",
+        sourceLabel,
+        section: cleanLabel(section.adminName, `Custom Section ${index + 1}`),
+        field: "Custom Section Media",
+        ...(slug ? { slug } : {}),
+      }, snapshot);
+    });
   }
 }
 

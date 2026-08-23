@@ -3,12 +3,26 @@ import "server-only";
 import { v2 as cloudinary } from "cloudinary";
 
 import {
+  ALLOWED_IMAGE_EXTENSIONS,
   ALLOWED_VIDEO_EXTENSIONS,
+  CLOUDINARY_IMAGE_FOLDER,
   CLOUDINARY_VIDEO_FOLDER,
+  CUSTOM_SECTION_IMAGE_LIMITS,
   type CloudinaryMediaUsage,
   type MediaAsset,
   VIDEO_UPLOAD_LIMITS,
 } from "@/lib/media";
+import {
+  buildCustomSectionMediaPublicId,
+  customSectionMediaPublicIdPrefix,
+  nextAvailableCustomSectionMediaSequence,
+  type CustomSectionMediaType,
+} from "@/lib/customSectionMediaNaming";
+import {
+  CustomSectionVideoProcessingError,
+  CustomSectionVideoResourceValidationError,
+  waitForCustomSectionVideoReadiness,
+} from "@/lib/cloudinaryVideoReadiness";
 import {
   buildProductMediaPublicId,
   nextAvailableProductMediaSequence,
@@ -33,6 +47,7 @@ type CloudinaryVideoResource = {
   height?: unknown;
   duration?: unknown;
   created_at?: unknown;
+  derived?: unknown;
 };
 
 const WEB_VIDEO_TRANSFORMATION = {
@@ -65,6 +80,7 @@ export type CloudinaryCleanupVideoPage = {
 
 export type CloudinaryFinalizeStage =
   | "admin_api_lookup"
+  | "processing"
   | "resource_validation"
   | "delivery_url"
   | "poster_url"
@@ -73,6 +89,7 @@ export type CloudinaryFinalizeStage =
 export type CloudinaryFinalizeErrorCode =
   | "FINALIZE_LOOKUP_FAILED"
   | "FINALIZE_RESOURCE_INVALID"
+  | "FINALIZE_PROCESSING"
   | "FINALIZE_DELIVERY_URL_FAILED"
   | "FINALIZE_POSTER_URL_FAILED"
   | "FINALIZE_UNKNOWN";
@@ -135,6 +152,8 @@ export type SignedVideoUpload = {
   };
 };
 
+export type SignedMediaUpload = SignedVideoUpload;
+
 function requiredEnvironmentValue(name: string) {
   const value = process.env[name]?.trim();
   if (!value) {
@@ -179,6 +198,27 @@ function signedVideoUpload(
     cloudName,
     apiKey,
     uploadUrl: `https://api.cloudinary.com/v1_1/${encodeURIComponent(cloudName)}/video/upload`,
+    timestamp,
+    signature: cloudinary.utils.api_sign_request(params, apiSecret),
+    params,
+  };
+}
+
+function signedImageUpload(
+  publicId: string,
+  { cloudName, apiKey, apiSecret }: CloudinaryCredentials,
+): SignedMediaUpload {
+  const timestamp = Math.floor(Date.now() / 1000);
+  const params = {
+    public_id: `${CLOUDINARY_IMAGE_FOLDER}/${publicId}`,
+    allowed_formats: ALLOWED_IMAGE_EXTENSIONS.join(","),
+    overwrite: "false",
+    timestamp,
+  };
+  return {
+    cloudName,
+    apiKey,
+    uploadUrl: `https://api.cloudinary.com/v1_1/${encodeURIComponent(cloudName)}/image/upload`,
     timestamp,
     signature: cloudinary.utils.api_sign_request(params, apiSecret),
     params,
@@ -230,6 +270,53 @@ export async function createSignedProductVideoUpload({
   });
   const publicId = buildProductMediaPublicId({ productSlug, mediaPurpose, sequence });
   return signedVideoUpload(publicId, credentials, true);
+}
+
+export async function createSignedCustomSectionMediaUpload({
+  productSlug,
+  sectionId,
+  mediaType,
+  reservedPublicIds = [],
+}: {
+  productSlug: string;
+  sectionId: string;
+  mediaType: CustomSectionMediaType;
+  reservedPublicIds?: string[];
+}): Promise<SignedMediaUpload> {
+  const credentials = configureCloudinary();
+  const folder = mediaType === "image" ? CLOUDINARY_IMAGE_FOLDER : CLOUDINARY_VIDEO_FOLDER;
+  const prefix = `${folder}/${customSectionMediaPublicIdPrefix({ productSlug, sectionId, mediaType })}`;
+  const existingPublicIds = new Set(reservedPublicIds);
+  let nextCursor: string | undefined;
+  do {
+    const result = await cloudinary.api.resources({
+      resource_type: mediaType,
+      type: "upload",
+      prefix,
+      max_results: 100,
+      ...(nextCursor ? { next_cursor: nextCursor } : {}),
+    }) as Record<string, unknown>;
+    if (Array.isArray(result.resources)) {
+      for (const resource of result.resources) {
+        if (!resource || typeof resource !== "object" || Array.isArray(resource)) continue;
+        const publicId = String((resource as CloudinaryVideoResource).public_id || "").trim();
+        if (publicId.startsWith(prefix)) existingPublicIds.add(publicId);
+      }
+    }
+    nextCursor = typeof result.next_cursor === "string" && result.next_cursor.trim()
+      ? result.next_cursor.trim()
+      : undefined;
+  } while (nextCursor);
+  const sequence = nextAvailableCustomSectionMediaSequence({
+    productSlug,
+    sectionId,
+    mediaType,
+    existingPublicIds,
+  });
+  const publicId = buildCustomSectionMediaPublicId({ productSlug, sectionId, mediaType, sequence });
+  return mediaType === "image"
+    ? signedImageUpload(publicId, credentials)
+    : signedVideoUpload(publicId, credentials, true);
 }
 
 function cleanNumber(value: unknown) {
@@ -324,6 +411,139 @@ function isExpectedSecureVideoUrl(value: string, cloudName: string) {
   } catch {
     return false;
   }
+}
+
+function isExpectedSecureImageUrl(value: string, cloudName: string) {
+  try {
+    const url = new URL(value);
+    return (
+      url.protocol === "https:" &&
+      url.hostname === "res.cloudinary.com" &&
+      url.pathname.startsWith(`/${cloudName}/image/upload/`)
+    );
+  } catch {
+    return false;
+  }
+}
+
+export async function verifyCloudinaryImage(publicId: string): Promise<MediaAsset> {
+  const { cloudName } = configureCloudinary();
+  let resource: CloudinaryVideoResource;
+  try {
+    resource = (await cloudinary.api.resource(publicId, {
+      resource_type: "image",
+      type: "upload",
+    })) as CloudinaryVideoResource;
+  } catch (error) {
+    throw lookupFailure(error, publicId);
+  }
+  const verifiedPublicId = String(resource.public_id || "");
+  const format = String(resource.format || "").toLowerCase();
+  const bytes = cleanNumber(resource.bytes);
+  const width = cleanNumber(resource.width);
+  const height = cleanNumber(resource.height);
+  const valid =
+    verifiedPublicId === publicId &&
+    verifiedPublicId.startsWith(`${CLOUDINARY_IMAGE_FOLDER}/`) &&
+    resource.resource_type === "image" &&
+    resource.type === "upload" &&
+    ALLOWED_IMAGE_EXTENSIONS.includes(format as (typeof ALLOWED_IMAGE_EXTENSIONS)[number]) &&
+    bytes > 0 && bytes <= CUSTOM_SECTION_IMAGE_LIMITS.maxBytes &&
+    width > 0 && height > 0 &&
+    width <= CUSTOM_SECTION_IMAGE_LIMITS.maxDimension &&
+    height <= CUSTOM_SECTION_IMAGE_LIMITS.maxDimension &&
+    width * height <= CUSTOM_SECTION_IMAGE_LIMITS.maxPixels;
+  if (!valid) {
+    throw new CloudinaryFinalizeError({
+      stage: "resource_validation",
+      errorCode: "FINALIZE_RESOURCE_INVALID",
+      message: "Cloudinary resource did not pass image validation",
+      sourceErrorName: "CloudinaryResourceValidationError",
+      cloudinaryErrorCode: "IMAGE_RESOURCE_INVALID",
+      resource: safeResourceDetails(resource),
+    });
+  }
+  let deliveryUrl: string;
+  try {
+    deliveryUrl = cloudinary.url(publicId, {
+      resource_type: "image",
+      type: "upload",
+      secure: true,
+      transformation: [{ width: 2400, crop: "limit", quality: "auto", fetch_format: "auto" }],
+    });
+    if (!isExpectedSecureImageUrl(deliveryUrl, cloudName)) throw new Error("Generated Cloudinary image URL was invalid");
+  } catch (error) {
+    throw new CloudinaryFinalizeError({
+      stage: "delivery_url",
+      errorCode: "FINALIZE_DELIVERY_URL_FAILED",
+      message: safeCloudinaryErrorMessage(error, publicId),
+      sourceErrorName: safeCode(error instanceof Error ? error.name : "") || "Error",
+      resource: safeResourceDetails(resource),
+    });
+  }
+  return {
+    type: "image",
+    url: deliveryUrl,
+    provider: "cloudinary",
+    publicId: verifiedPublicId,
+    width,
+    height,
+    format,
+    bytes,
+  };
+}
+
+export async function verifyCloudinaryCustomSectionMedia(
+  publicId: string,
+  mediaType: CustomSectionMediaType,
+) {
+  if (mediaType === "image") return verifyCloudinaryImage(publicId);
+  configureCloudinary();
+  let readiness;
+  try {
+    readiness = await waitForCustomSectionVideoReadiness({
+      publicId,
+      lookup: async () => await cloudinary.api.resource(publicId, {
+        resource_type: "video",
+        type: "upload",
+        media_metadata: true,
+      }) as CloudinaryVideoResource,
+    });
+  } catch (error) {
+    if (error instanceof CustomSectionVideoProcessingError) {
+      throw new CloudinaryFinalizeError({
+        stage: "processing",
+        errorCode: "FINALIZE_PROCESSING",
+        message: "Cloudinary video processing did not finish within the bounded verification window",
+        sourceErrorName: error.name,
+        cloudinaryErrorCode: `PROCESSING_${error.reason.toUpperCase()}`,
+      });
+    }
+    if (error instanceof CustomSectionVideoResourceValidationError) {
+      throw new CloudinaryFinalizeError({
+        stage: "resource_validation",
+        errorCode: "FINALIZE_RESOURCE_INVALID",
+        message: error.message,
+        sourceErrorName: error.name,
+        cloudinaryErrorCode: "CUSTOM_SECTION_VIDEO_INVALID",
+      });
+    }
+    throw error;
+  }
+  const media = await verifyCloudinaryVideo(publicId, "product");
+  if (
+    media.width !== readiness.width ||
+    media.height !== readiness.height
+  ) {
+    throw new CloudinaryFinalizeError({
+      stage: "resource_validation",
+      errorCode: "FINALIZE_RESOURCE_INVALID",
+      message: "Cloudinary video metadata changed during verification",
+      sourceErrorName: "CloudinaryResourceValidationError",
+      cloudinaryErrorCode: "RESOURCE_METADATA_MISMATCH",
+    });
+  }
+  return { ...media, duration: readiness.duration };
 }
 
 function cleanupVideoResource(

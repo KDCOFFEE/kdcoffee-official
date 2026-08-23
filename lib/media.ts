@@ -13,7 +13,21 @@ export type MediaAsset = {
 
 export type CloudinaryMediaUsage = "hero" | "content" | "product";
 
+export const CLOUDINARY_IMAGE_FOLDER = "kd-coffee/images";
 export const CLOUDINARY_VIDEO_FOLDER = "kd-coffee/videos";
+
+export const ALLOWED_IMAGE_EXTENSIONS = ["jpg", "jpeg", "png", "webp"] as const;
+export const ALLOWED_IMAGE_MIME_TYPES = [
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+] as const;
+
+export const CUSTOM_SECTION_IMAGE_LIMITS = {
+  maxBytes: 15 * 1024 * 1024,
+  maxDimension: 12_000,
+  maxPixels: 40_000_000,
+} as const;
 
 export const ALLOWED_VIDEO_EXTENSIONS = ["mp4", "mov", "webm"] as const;
 
@@ -41,6 +55,12 @@ export const VIDEO_UPLOAD_LIMITS: Record<
   },
 };
 
+export const CUSTOM_SECTION_VIDEO_LIMITS = {
+  ...VIDEO_UPLOAD_LIMITS.product,
+  maxDimension: 8192,
+  maxPixels: 40_000_000,
+} as const;
+
 export function isCloudinaryMediaUsage(
   value: unknown,
 ): value is CloudinaryMediaUsage {
@@ -50,6 +70,24 @@ export function isCloudinaryMediaUsage(
 export function videoExtension(fileName: string) {
   const match = fileName.trim().toLowerCase().match(/\.([a-z0-9]+)$/);
   return match?.[1] || "";
+}
+
+export function imageExtension(fileName: string) {
+  const match = fileName.trim().toLowerCase().match(/\.([a-z0-9]+)$/);
+  return match?.[1] || "";
+}
+
+export function isAllowedImageUpload(fileName: string, mimeType: string) {
+  const extension = imageExtension(fileName);
+  const cleanMimeType = mimeType.trim().toLowerCase();
+  return (
+    ALLOWED_IMAGE_EXTENSIONS.includes(
+      extension as (typeof ALLOWED_IMAGE_EXTENSIONS)[number],
+    ) &&
+    ALLOWED_IMAGE_MIME_TYPES.includes(
+      cleanMimeType as (typeof ALLOWED_IMAGE_MIME_TYPES)[number],
+    )
+  );
 }
 
 export function isAllowedVideoUpload(fileName: string, mimeType: string) {

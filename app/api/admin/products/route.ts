@@ -16,6 +16,10 @@ import {
   ProductMediaValidationError,
   verifyProductAssetUpdates,
 } from "@/lib/productMedia";
+import {
+  ProductCustomSectionMediaVerificationError,
+  verifyProductCustomSectionMediaChanges,
+} from "@/lib/productCustomSectionMediaVerification";
 
 import {
   getWebsiteDataFile,
@@ -444,10 +448,11 @@ export async function PUT(request: Request) {
          * SKU / stock / price 等規則
          * 都仍然由 applyProductChanges() 負責。
          */
+        const verifiedChanges = await verifyProductCustomSectionMediaChanges(current, body.changes);
         const products =
           applyProductChanges(
             current,
-            body.changes,
+            verifiedChanges,
           );
 
         // 修改前建立備份。
@@ -501,7 +506,8 @@ export async function PUT(request: Request) {
       error instanceof ProductCommerceUpdateError
         ? error.status
         : error instanceof ProductAssetUpdateError ||
-            error instanceof ProductMediaValidationError
+            error instanceof ProductMediaValidationError ||
+            error instanceof ProductCustomSectionMediaVerificationError
           ? 400
           : 500;
 

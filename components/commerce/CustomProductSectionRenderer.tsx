@@ -3,7 +3,9 @@ import {
   productCustomSectionAnchor,
   type ProductCustomFeatureIcon,
   type ProductCustomSection,
+  type ProductCustomSectionMedia,
 } from "@/lib/productCustomSections";
+import { youtubeEmbedUrl } from "@/lib/youtubeMedia";
 
 const iconPaths: Record<ProductCustomFeatureIcon, string> = {
   flavor: "M12 3c3 3 5 6 5 9a5 5 0 0 1-10 0c0-3 2-6 5-9Zm-3 9c1 0 2-.5 3-1.5 1 1 2 1.5 3 1.5",
@@ -19,25 +21,42 @@ function FeatureIcon({ name }: { name: ProductCustomFeatureIcon }) {
   return <svg viewBox="0 0 24 24" aria-hidden="true"><path d={iconPaths[name]} /></svg>;
 }
 
+function SectionMedia({ media }: { media?: ProductCustomSectionMedia }) {
+  if (!media) return null;
+  if (media.provider === "youtube") {
+    return <figure className="custom-product-media custom-product-media--youtube">
+      <div className="custom-product-youtube-frame"><iframe src={youtubeEmbedUrl(media.videoId)} title={media.title} loading="lazy" allow="encrypted-media; picture-in-picture" referrerPolicy="strict-origin-when-cross-origin" allowFullScreen /></div>
+      {media.caption ? <figcaption>{media.caption}</figcaption> : null}
+    </figure>;
+  }
+  const asset = media.asset;
+  return <figure className="custom-product-media">
+    {asset.type === "image"
+      ? <img src={asset.url} alt={media.alt} width={asset.width} height={asset.height} loading="lazy" decoding="async" />
+      : <video src={asset.url} poster={asset.posterUrl} aria-label={media.alt} width={asset.width} height={asset.height} controls muted playsInline preload="metadata" />}
+    {media.caption ? <figcaption>{media.caption}</figcaption> : null}
+  </figure>;
+}
+
 export default function CustomProductSectionRenderer({ section }: { section: ProductCustomSection }) {
   const anchor = productCustomSectionAnchor(section.id);
   const headingId = section.content.heading ? `${anchor}-title` : undefined;
   const label = section.content.heading || section.content.eyebrow || section.adminName;
-  const className = `revenue-content-section custom-product-section custom-product-section--${section.type} custom-product-layout--${section.layout}`;
+  const className = `revenue-content-section custom-product-section custom-product-section--${section.type} custom-product-layout--${section.layout}${section.media ? ` custom-product-media-position--${section.media.position}` : ""}`;
   const animationAttributes = getProductCustomSectionAnimationAttributes(section);
 
   if (section.type === "text") {
     return <section {...animationAttributes} id={anchor} className={className} aria-labelledby={headingId} aria-label={headingId ? undefined : label}>
-      <div className="custom-product-copy">
+      <div className="custom-product-section-inner"><SectionMedia media={section.media} /><div className="custom-product-copy">
         {section.content.eyebrow ? <p className="custom-product-eyebrow">{section.content.eyebrow}</p> : null}
         {section.content.heading ? <h2 id={headingId}>{section.content.heading}</h2> : null}
         {section.content.body ? <div className="custom-product-body">{section.content.body.split(/\n{2,}/u).map((paragraph, index) => <p key={`${section.id}-paragraph-${index}`}>{paragraph}</p>)}</div> : null}
-      </div>
+      </div></div>
     </section>;
   }
 
   return <section {...animationAttributes} id={anchor} className={className} aria-labelledby={headingId} aria-label={headingId ? undefined : label}>
-    {(section.content.eyebrow || section.content.heading || section.content.description) ? <div className="custom-product-heading">
+    <div className="custom-product-section-inner"><SectionMedia media={section.media} /><div className="custom-product-content">{(section.content.eyebrow || section.content.heading || section.content.description) ? <div className="custom-product-heading">
       {section.content.eyebrow ? <p className="custom-product-eyebrow">{section.content.eyebrow}</p> : null}
       {section.content.heading ? <h2 id={headingId}>{section.content.heading}</h2> : null}
       {section.content.description ? <span>{section.content.description}</span> : null}
@@ -47,6 +66,6 @@ export default function CustomProductSectionRenderer({ section }: { section: Pro
         {item.icon ? <FeatureIcon name={item.icon} /> : null}
         <div><h3>{item.title}</h3><p>{item.body}</p></div>
       </article>)}
-    </div>
+    </div></div></div>
   </section>;
 }
