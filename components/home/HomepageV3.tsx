@@ -1,14 +1,21 @@
 import Link from "next/link";
+import type { CSSProperties } from "react";
 
 import type {
   HomepageData,
 } from "@/data/homepageData";
 
 import HomepageSceneMedia from "@/components/home/HomepageSceneMedia";
+import CmsLink from "@/components/CmsLink";
+import HomepageMotion from "@/components/home/HomepageMotion";
+import HomepageMediaCollection, { resolveHomepageMediaCollection } from "@/components/home/HomepageMediaCollection";
+import HomepageStudioGallery from "@/components/home/HomepageStudioGallery";
 import MonthlyCampaign from "@/components/home/MonthlyCampaign";
 import Home004ProductMedia from "@/components/home/Home004ProductMedia";
 import KdMedia from "@/components/media/KdMedia";
 import { resolveMediaAsset, type MediaAsset } from "@/lib/media";
+import { homepageMotionCssVariables, orderedEnabledItems, resolveHeroTiming, resolveHomepageMotion, sectionIsEnabled, type HomepageMotionSectionKey } from "@/lib/homepageCms";
+import type { CmsLinkValue, PublishedCmsPage } from "@/lib/cmsLinks";
 
 import {
   hasAvailableHome004Sku,
@@ -47,6 +54,75 @@ type Product = {
   }>;
 };
 
+type HomepageContentItem = {
+  id?: string;
+  imageId: string;
+  image?: string;
+  media?: MediaAsset;
+  mediaItems?: unknown;
+  enabled?: boolean;
+  alt?: string;
+  title: string;
+  text: string;
+  eyebrow?: string;
+  button?: string;
+  href?: CmsLinkValue;
+  ctaEnabled?: boolean;
+  recommendedSize?: string;
+};
+
+type HomepageStudioItem = Pick<
+  HomepageContentItem,
+  "id" | "imageId" | "image" | "media" | "mediaItems" | "enabled" | "alt"
+>;
+
+type HomepageReviewItem = {
+  id: string;
+  text: string;
+  name: string;
+  source: string;
+};
+
+type MotionOwner = { motion?: unknown };
+
+function sectionMotionProps(owner: MotionOwner, sectionKey: HomepageMotionSectionKey) {
+  if (!("motion" in owner) || owner.motion === undefined) return {};
+  const motion = resolveHomepageMotion(owner.motion, sectionKey);
+  return {
+    "data-home-motion": motion.activePreset,
+    style: homepageMotionCssVariables(motion) as CSSProperties,
+  };
+}
+
+function motionItemStyle(index: number) {
+  return { "--home-motion-index": index } as CSSProperties;
+}
+
+export type HomepageViewData = HomepageData & {
+  hero: HomepageData["hero"] & {
+    secondaryLabel?: string;
+    secondaryHref?: CmsLinkValue;
+  };
+  home002: { title: string; intro: string; cards: HomepageContentItem[] } & MotionOwner;
+  home003: { title: string; intro: string; cards: HomepageContentItem[] } & MotionOwner;
+  home004: { title: string; intro: string; productSlugs?: unknown } & MotionOwner;
+  home005: { title: string; intro: string; steps: HomepageContentItem[] } & MotionOwner;
+  home006: HomepageContentItem & {
+    points: string[];
+    button?: string;
+    href?: CmsLinkValue;
+  } & MotionOwner;
+  home007: { title: string; text: string; cards: HomepageContentItem[] } & MotionOwner;
+  home008: { title: string; text: string; images: HomepageStudioItem[]; mediaItems?: HomepageStudioItem[]; enabled?: boolean } & MotionOwner;
+  home009: {
+    enabled?: boolean;
+    title: string;
+    intro: string;
+    items: HomepageReviewItem[];
+  } & MotionOwner;
+  home010: { title: string; text: string; button?: string; href?: CmsLinkValue; ctaEnabled?: boolean } & MotionOwner;
+};
+
 /**
  * ============================================================
  * 首頁一般圖片 Media
@@ -65,46 +141,31 @@ type Product = {
 function Media({
   src,
   media,
+  mediaItems,
   alt,
-  id,
 }: {
   src?: string;
   media?: MediaAsset;
+  mediaItems?: unknown;
   alt: string;
   id: string;
 }) {
-  const resolvedMedia = resolveMediaAsset(media, src);
   return (
-    <div className="v3-media">
-      <KdMedia
-        media={resolvedMedia}
-        alt={alt}
-        fallback={(
-        <div className="v3-media-placeholder">
-          <b>{id}</b>
-
-          <span>
-            請至後台上傳圖片
-          </span>
-        </div>
-        )}
-      />
-    </div>
+    <HomepageMediaCollection alt={alt} className="v3-media" media={media} mediaItems={mediaItems} src={src} />
   );
 }
 
 export default function HomepageV3({
   homepageData,
   products,
+  pages,
 }: {
-  homepageData:
-    HomepageData & any;
+  homepageData: HomepageViewData;
 
   products: Product[];
+  pages: PublishedCmsPage[];
 }) {
-  const h:
-    any =
-    homepageData;
+  const h = homepageData;
 
   const hero =
     h.hero || {};
@@ -145,9 +206,32 @@ export default function HomepageV3({
   const selected =
     home004Resolution
       .recommendations;
+  const whyCards = orderedEnabledItems<HomepageContentItem>(why.cards);
+  const entryCards = orderedEnabledItems<HomepageContentItem>(entries.cards);
+  const processSteps = orderedEnabledItems<HomepageContentItem>(process.steps);
+  const artCards = orderedEnabledItems<HomepageContentItem>(art.cards);
+  const studioSource = Array.isArray(studio.mediaItems) ? studio.mediaItems : studio.images || [];
+  const studioMedia = orderedEnabledItems<HomepageStudioItem>(studioSource).flatMap((item) =>
+    resolveHomepageMediaCollection({
+      alt: item.alt || studio.title,
+      mediaItems: Array.isArray(item.mediaItems) && item.mediaItems.length ? item.mediaItems : [item],
+    }),
+  );
+  const heroTiming = resolveHeroTiming(hero.timing);
+  const heroStyle = {
+    "--home-hero-media-duration": `${heroTiming.mediaDuration}ms`,
+    "--home-hero-eyebrow-start": `${heroTiming.eyebrowStart}ms`,
+    "--home-hero-line-1-start": `${heroTiming.headlineLine1Start}ms`,
+    "--home-hero-line-2-start": `${heroTiming.headlineLine2Start}ms`,
+    "--home-hero-lead-start": `${heroTiming.leadStart}ms`,
+    "--home-hero-primary-start": `${heroTiming.primaryCtaStart}ms`,
+    "--home-hero-secondary-start": `${heroTiming.secondaryCtaStart}ms`,
+    "--home-hero-trust-start": `${heroTiming.trustStart}ms`,
+  } as CSSProperties;
 
   return (
     <>
+      <HomepageMotion />
       {/**
        * ======================================================
        * HERO
@@ -161,9 +245,11 @@ export default function HomepageV3({
        * Hero Video 的下載策略，
        * 下一階段另外獨立檢查。
        */}
-      <section
+      {hero.enabled !== false ? <section
         id="top"
-        className="v3-hero"
+        className="v3-hero home-surface-dark home-surface-media"
+        data-hero-motion={hero.motionEnabled === false ? "off" : "on"}
+        style={heroStyle}
       >
         {resolveMediaAsset(hero.media) ? (
           <KdMedia
@@ -185,7 +271,7 @@ export default function HomepageV3({
 
         <div className="v3-hero-shade" />
 
-        <div className="v3-hero-content">
+        <div className="v3-hero-content" data-home-hero>
           <p className="v3-eyebrow">
             {hero.eyebrow}
           </p>
@@ -211,44 +297,36 @@ export default function HomepageV3({
           </p>
 
           <div className="v3-actions">
-            <Link
-              className="v3-button primary"
-              href={
+            {hero.primaryCtaEnabled !== false ? <CmsLink
+              className="v3-button primary v3-hero-primary-action"
+              value={
                 hero.buttonHref ||
                 "#home003"
               }
+              registry={{ products, pages }}
             >
               {hero.buttonLabel ||
                 "開始挑咖啡"}
-            </Link>
+            </CmsLink> : null}
 
-            <Link
-              className="v3-button ghost"
-              href={
+            {hero.secondaryCtaEnabled !== false ? <CmsLink
+              className="v3-button ghost v3-hero-secondary-action"
+              value={
                 hero.secondaryHref ||
                 "#home004"
               }
+              registry={{ products, pages }}
             >
               {hero.secondaryLabel ||
                 "本月作品"}
-            </Link>
+            </CmsLink> : null}
           </div>
 
           <div className="v3-trust">
-            <span>
-              不用登入即可購買
-            </span>
-
-            <span>
-              7-ELEVEN 取貨付款
-            </span>
-
-            <span>
-              工作室自取
-            </span>
+            {(hero.trustCues || ["不用登入即可購買", "7-ELEVEN 取貨付款", "工作室自取"]).map((cue: string) => <span key={cue}>{cue}</span>)}
           </div>
         </div>
-      </section>
+      </section> : null}
 
       {/**
        * ======================================================
@@ -259,15 +337,12 @@ export default function HomepageV3({
        *
        * 圖片改成 Lazy Loading。
        */}
-      <section
+      {sectionIsEnabled(why) && whyCards.length ? <section
         id="home002"
-        className="v3-section v3-why"
+        className="v3-section v3-why home-surface-light"
+        {...sectionMotionProps(why, "home002")}
       >
-        <div className="v3-why-heading">
-          <p className="v3-section-code">
-            HOME002 · WHY KD COFFEE
-          </p>
-
+        <div className="v3-why-heading" data-home-reveal="content" data-home-motion-part style={motionItemStyle(0)}>
           <div className="v3-why-title-row">
             <h2>
               {why.title}
@@ -279,49 +354,33 @@ export default function HomepageV3({
           </div>
         </div>
 
-        <div className="v3-value-grid">
+        <div
+          className="v3-value-grid home-mobile-rail"
+          data-home-reveal="media"
+          tabIndex={0}
+          aria-label="KD Coffee 四項特色，可左右滑動瀏覽"
+        >
           {(
-            why.cards || []
+            whyCards
           ).map(
             (
-              c: any,
+              c: HomepageContentItem,
               index: number,
-            ) => (
+            ) => {
+              const cardMedia = resolveHomepageMediaCollection({ alt: c.alt || c.title, media: c.media, mediaItems: c.mediaItems, src: c.image });
+
+              return (
               <article
                 key={c.id}
-                className="v3-value-card"
+                className={`v3-value-card ${cardMedia.length ? "" : "is-text-led"}`}
+                data-home-motion-item
+                style={motionItemStyle(index + 1)}
               >
-                <div className="v3-value-media">
-                  <KdMedia
-                    media={resolveMediaAsset(c.media, c.image)}
-                    alt={c.alt || c.title}
-                    fallback={(
-                    <div className="v3-value-placeholder">
-                      <span>
-                        {
-                          c.imageId
-                        }
-                      </span>
-
-                      <strong>
-                        {[
-                          "自製流床式熱風烘豆機",
-                          "紅外線熱顯像與杯測",
-                          "少量庫存與充氮包裝",
-                          "工作室包裝與出貨",
-                        ][
-                          index
-                        ] ||
-                          "待補品牌照片"}
-                      </strong>
-
-                      <small>
-                        請至後台 HOME002 上傳真實照片
-                      </small>
-                    </div>
-                    )}
-                  />
-                </div>
+                {cardMedia.length ? (
+                  <div className="v3-value-media">
+                    <HomepageMediaCollection alt={c.alt || c.title} media={c.media} mediaItems={c.mediaItems} src={c.image} />
+                  </div>
+                ) : null}
 
                 <div className="v3-card-copy">
                   <div className="v3-card-number">
@@ -333,10 +392,6 @@ export default function HomepageV3({
                     )}
                   </div>
 
-                  <small>
-                    {c.id}
-                  </small>
-
                   <h3>
                     {c.title}
                   </h3>
@@ -346,14 +401,15 @@ export default function HomepageV3({
                   </p>
                 </div>
               </article>
-            ),
+              );
+            },
           )}
         </div>
 
         <p className="v3-why-closing">
           你買到的不只是咖啡，還有每一個我們願意多花時間完成的細節。
         </p>
-      </section>
+      </section> : null}
 
       {/**
        * ======================================================
@@ -363,15 +419,12 @@ export default function HomepageV3({
        * 圖片 Lazy Loading
        * 由 HomepageSceneMedia 負責。
        */}
-      <section
+      {sectionIsEnabled(entries) && entryCards.length ? <section
         id="home003"
-        className="v3-section v3-entry v3-scenes"
+        className="v3-section v3-entry v3-scenes home-surface-dark"
+        {...sectionMotionProps(entries, "home003")}
       >
-        <header className="v3-section-head centered">
-          <p>
-            HOME003 · COFFEE MOMENTS
-          </p>
-
+        <header className="v3-section-head centered" data-home-reveal="content" data-home-motion-part style={motionItemStyle(0)}>
           <h2>
             {entries.title}
           </h2>
@@ -381,17 +434,25 @@ export default function HomepageV3({
           </div>
         </header>
 
-        <div className="v3-scene-grid">
+        <div
+          className="v3-scene-grid home-mobile-rail"
+          data-home-reveal="media"
+          tabIndex={0}
+          aria-label="四種咖啡時刻，可左右滑動選擇"
+        >
           {(
-            entries.cards ||
-            []
+            entryCards
           ).map(
             (
-              c: any,
+              c: HomepageContentItem,
               index: number,
-            ) => (
-              <article
+            ) => {
+              const sceneMediaItems = resolveHomepageMediaCollection({ alt: c.alt || c.title, media: c.media, mediaItems: c.mediaItems, src: c.image });
+              const sceneMedia = sceneMediaItems.find((item) => item.primary) || sceneMediaItems[0];
+              return <article
                 key={c.id}
+                data-home-motion-item
+                style={motionItemStyle(index + 1)}
                 className={`v3-scene-card ${
                   index === 0
                     ? "featured"
@@ -399,11 +460,9 @@ export default function HomepageV3({
                 }`}
               >
                 <HomepageSceneMedia
-                  src={
-                    c.image
-                  }
+                  src={sceneMedia ? undefined : c.image}
 
-                  media={c.media}
+                  media={sceneMedia?.media || c.media}
 
                   alt={
                     c.alt ||
@@ -424,12 +483,11 @@ export default function HomepageV3({
                   }
                 />
 
-                <Link className="v3-scene-navigation" href={c.href || "/works"}>
-                  {c.media?.type === "video" ? null : <span className="v3-scene-hitarea" aria-hidden="true" />}
+                {c.ctaEnabled !== false ? <CmsLink className="v3-scene-navigation" value={c.href || "/works"} registry={{ products, pages }}>
+                  {sceneMedia?.media.type === "video" || sceneMedia?.media.type === "youtube" ? null : <span className="v3-scene-hitarea" aria-hidden="true" />}
                   <div className="v3-scene-copy">
                   <small>
-                    {c.eyebrow ||
-                      c.id}
+                    {c.eyebrow || ""}
                   </small>
 
                   <h3>
@@ -449,12 +507,12 @@ export default function HomepageV3({
                     </span>
                   </b>
                   </div>
-                </Link>
-              </article>
-            ),
+                </CmsLink> : <div className="v3-scene-navigation is-disabled"><div className="v3-scene-copy"><small>{c.eyebrow || ""}</small><h3>{c.title}</h3><p>{c.text}</p></div></div>}
+              </article>;
+            },
           )}
         </div>
-      </section>
+      </section> : null}
 
       {/**
        * Campaign 圖片 Lazy Loading
@@ -464,6 +522,8 @@ export default function HomepageV3({
         homepageData={
           homepageData
         }
+        products={products}
+        pages={pages}
       />
 
       {/**
@@ -476,15 +536,12 @@ export default function HomepageV3({
        *
        * 不影響 /works 或商品詳細頁。
        */}
-      <section
+      {sectionIsEnabled(starter) && selected.length ? <section
         id="home004"
-        className="v3-section v3-starter"
+        className="v3-section v3-starter home-surface-light"
+        {...sectionMotionProps(starter, "home004")}
       >
-        <header className="v3-section-head">
-          <p>
-            HOME004 · FIRST ORDER
-          </p>
-
+        <header className="v3-section-head" data-home-reveal="content" data-home-motion-part style={motionItemStyle(0)}>
           <h2>
             {starter.title}
           </h2>
@@ -494,15 +551,14 @@ export default function HomepageV3({
           </div>
         </header>
 
-        {!home004Resolution.valid ? (
-          <p className="v3-home004-notice">
-            部分推薦作品目前暫時無法顯示，請由後台重新確認推薦設定。
-          </p>
-        ) : null}
-
-        <div className="v3-product-grid">
+        <div
+          className="v3-product-grid home-mobile-rail"
+          data-home-reveal="media"
+          tabIndex={0}
+          aria-label="三款入門咖啡，可左右滑動比較"
+        >
           {selected.map(
-            (p) => {
+            (p, index) => {
               const listAsset =
                 resolveListAsset(
                   p,
@@ -512,6 +568,8 @@ export default function HomepageV3({
                 <article
                   className="v3-product"
                   key={p.slug}
+                  data-home-motion-item
+                  style={motionItemStyle(index + 1)}
                 >
                   <Link
                     href={`/works/${p.slug}`}
@@ -528,7 +586,6 @@ export default function HomepageV3({
                         p.name
                       }
 
-                      imageId={`ART-${p.slug}`}
                     />
                   </Link>
 
@@ -593,20 +650,17 @@ export default function HomepageV3({
             },
           )}
         </div>
-      </section>
+      </section> : null}
 
       {/**
        * HOME005
        */}
-      <section
+      {sectionIsEnabled(process) && processSteps.length ? <section
         id="home005"
-        className="v3-section v3-process"
+        className="v3-section v3-process home-surface-light"
+        {...sectionMotionProps(process, "home005")}
       >
-        <header className="v3-section-head centered">
-          <p>
-            HOME005 · FROM BEAN TO CUP
-          </p>
-
+        <header className="v3-section-head centered" data-home-reveal="editorial" data-home-motion-part style={motionItemStyle(0)}>
           <h2>
             {process.title}
           </h2>
@@ -616,66 +670,31 @@ export default function HomepageV3({
           </div>
         </header>
 
-        <div className="v3-process-grid">
-          {(
-            process.steps ||
-            []
-          ).map(
-            (
-              s: any,
-              i: number,
-            ) => (
-              <article
-                key={s.id}
-              >
-                <Media
-                  src={
-                    s.image
-                  }
-                  media={s.media}
-                  alt={
-                    s.alt ||
-                    s.title
-                  }
-                  id={
-                    s.imageId
-                  }
-                />
+        {processSteps.length ? <div className="v3-process-progress" data-home-reveal="editorial-detail" data-home-motion-part style={motionItemStyle(1)} aria-label={`共 ${processSteps.length} 個咖啡製作步驟`}>
+          <span aria-hidden="true" />
+          <b>01 / {String(processSteps.length).padStart(2, "0")}</b>
+        </div> : null}
 
-                <span>
-                  {String(
-                    i + 1,
-                  ).padStart(
-                    2,
-                    "0",
-                  )}
-                </span>
-
-                <h3>
-                  {s.title}
-                </h3>
-
-                <p>
-                  {s.text}
-                </p>
-              </article>
-            ),
-          )}
+        <div className="v3-process-grid v3-process-journey home-mobile-rail" data-home-reveal="editorial-media" tabIndex={processSteps.length > 1 ? 0 : undefined} aria-label="KD Coffee 咖啡製作旅程，可左右滑動瀏覽">
+          {processSteps.map((s: HomepageContentItem, i: number) => {
+            const hasMedia = resolveHomepageMediaCollection({ alt: s.alt || s.title, media: s.media, mediaItems: s.mediaItems, src: s.image }).length > 0;
+            return <article key={s.id} className={hasMedia ? "" : "is-text-led"} data-home-motion-item style={motionItemStyle(i + 2)}>
+              {hasMedia ? <Media src={s.image} media={s.media} mediaItems={s.mediaItems} alt={s.alt || s.title} id={s.imageId} /> : null}
+              <div className="v3-process-copy"><span>{String(i + 1).padStart(2, "0")}</span><h3>{s.title}</h3><p>{s.text}</p></div>
+            </article>;
+          })}
         </div>
-      </section>
+      </section> : null}
 
       {/**
        * HOME006
        */}
-      <section
+      {sectionIsEnabled(roast) ? <section
         id="home006"
-        className="v3-section v3-roast-service"
+        className="v3-section v3-roast-service home-surface-dark"
+        {...sectionMotionProps(roast, "home006")}
       >
-        <div className="v3-roast-copy">
-          <p>
-            HOME006 · PERSONAL ROAST SERVICE
-          </p>
-
+        <div className="v3-roast-copy" data-home-reveal="content" data-home-motion-part style={motionItemStyle(0)}>
           <h2>
             {roast.title}
           </h2>
@@ -684,7 +703,7 @@ export default function HomepageV3({
             {roast.text}
           </div>
 
-          <ul>
+          <ul className="v3-roast-facts">
             {(
               roast.points ||
               []
@@ -697,44 +716,33 @@ export default function HomepageV3({
             )}
           </ul>
 
-          <Link
+          {roast.ctaEnabled !== false ? <CmsLink
             className="v3-button primary"
-            href={
+            value={
               roast.href ||
               "/works"
             }
+            registry={{ products, pages }}
           >
             {roast.button ||
               "查看適用作品"}
-          </Link>
+          </CmsLink> : null}
         </div>
 
-        <Media
-          src={roast.image}
-          media={roast.media}
-          alt={
-            roast.alt ||
-            roast.title
-          }
-          id={
-            roast.imageId ||
-            "IMG0601"
-          }
-        />
-      </section>
+        <div data-home-reveal="media" data-home-motion-part style={motionItemStyle(1)}>
+          <Media src={roast.image} media={roast.media} mediaItems={roast.mediaItems} alt={roast.alt || roast.title} id={roast.imageId || "IMG0601"} />
+        </div>
+      </section> : null}
 
       {/**
        * HOME007
        */}
-      <section
+      {sectionIsEnabled(art) && artCards.length ? <section
         id="home007"
-        className="v3-section v3-art"
+        className="v3-section v3-art home-surface-light"
+        {...sectionMotionProps(art, "home007")}
       >
-        <header className="v3-section-head">
-          <p>
-            HOME007 · COFFEE AS ART
-          </p>
-
+        <header className="v3-section-head" data-home-reveal="editorial" data-home-motion-part style={motionItemStyle(0)}>
           <h2>
             {art.title}
           </h2>
@@ -744,17 +752,18 @@ export default function HomepageV3({
           </div>
         </header>
 
-        <div className="v3-art-strip">
-          {(
-            art.cards || []
-          ).map(
-            (c: any) => (
+        <div className="v3-art-strip v3-art-gallery home-mobile-rail" data-home-reveal="editorial-media" tabIndex={artCards.length > 1 ? 0 : undefined} aria-label="KD Coffee 咖啡作品藝廊，可左右滑動瀏覽">
+          {artCards.map(
+            (c: HomepageContentItem, index: number) => (
               <article
                 key={c.id}
+                data-home-motion-item
+                style={motionItemStyle(index + 1)}
               >
                 <Media
                   src={c.image}
                   media={c.media}
+                  mediaItems={c.mediaItems}
                   alt={
                     c.alt ||
                     c.title
@@ -775,20 +784,17 @@ export default function HomepageV3({
             ),
           )}
         </div>
-      </section>
+      </section> : null}
 
       {/**
        * HOME008
        */}
-      <section
+      {sectionIsEnabled(studio) && studioMedia.length ? <section
         id="home008"
-        className="v3-section v3-studio"
+        className="v3-section v3-studio home-surface-light"
+        {...sectionMotionProps(studio, "home008")}
       >
-        <div>
-          <p>
-            HOME008 · OUR STUDIO
-          </p>
-
+        <div data-home-reveal="editorial" data-home-motion-part style={motionItemStyle(0)}>
           <h2>
             {studio.title}
           </h2>
@@ -798,42 +804,19 @@ export default function HomepageV3({
           </div>
         </div>
 
-        <div className="v3-studio-grid">
-          {(
-            studio.images ||
-            []
-          ).map(
-            (x: any) => (
-              <Media
-                key={x.id}
-                src={
-                  x.image
-                }
-                media={x.media}
-                alt={
-                  x.alt ||
-                  studio.title
-                }
-                id={
-                  x.imageId
-                }
-              />
-            ),
-          )}
+        <div data-home-reveal="editorial-media" data-home-motion-part style={motionItemStyle(1)}>
+          <HomepageStudioGallery items={studioMedia} />
         </div>
-      </section>
+      </section> : null}
 
-      {reviews.enabled !==
-      false ? (
+      {reviews.enabled !== false &&
+      (reviews.items || []).filter((review) => review.text?.trim() && review.name?.trim() && review.source?.trim()).length > 0 ? (
         <section
           id="home009"
-          className="v3-section v3-reviews"
+          className="v3-section v3-reviews home-surface-light"
+          {...sectionMotionProps(reviews, "home009")}
         >
-          <header className="v3-section-head centered">
-            <p>
-              HOME009 · REAL VOICES
-            </p>
-
+          <header className="v3-section-head centered" data-home-motion-part style={motionItemStyle(0)}>
             <h2>
               {reviews.title}
             </h2>
@@ -844,70 +827,59 @@ export default function HomepageV3({
           </header>
 
           <div className="v3-review-grid">
-            {(
-              reviews.items ||
-              []
-            ).length ? (
-              (
-                reviews.items ||
-                []
-              ).map(
-                (r: any) => (
-                  <blockquote
-                    key={r.id}
-                  >
-                    <p>
-                      「{r.text}」
-                    </p>
+            {(reviews.items || []).filter((review) => review.text?.trim() && review.name?.trim() && review.source?.trim()).map(
+              (r: HomepageReviewItem, index: number) => (
+                <blockquote
+                  key={r.id}
+                  data-home-motion-item
+                  style={motionItemStyle(index + 1)}
+                >
+                  <p>
+                    「{r.text}」
+                  </p>
 
-                    <footer>
-                      {r.name}
+                  <footer>
+                    {r.name}
 
-                      <span>
-                        {
-                          r.source
-                        }
-                      </span>
-                    </footer>
-                  </blockquote>
-                ),
-              )
-            ) : (
-              <div className="v3-review-empty">
-                尚未新增真實評價。後台可新增 Google、Facebook 或 LINE 的真實回饋。
-              </div>
+                    <span>
+                      {r.source}
+                    </span>
+                  </footer>
+                </blockquote>
+              ),
             )}
           </div>
         </section>
       ) : null}
 
-      <section
+      {sectionIsEnabled(cta) ? <section
         id="home010"
-        className="v3-final"
+        className="v3-final home-surface-dark"
+        {...sectionMotionProps(cta, "home010")}
       >
-        <p>
-          HOME010
-        </p>
-
-        <h2>
+        <h2 data-home-reveal="content" data-home-motion-part style={motionItemStyle(0)}>
           {cta.title}
         </h2>
 
-        <div>
+        <div data-home-reveal="content" data-home-motion-part style={motionItemStyle(1)}>
           {cta.text}
         </div>
 
-        <Link
+        {cta.ctaEnabled !== false ? <CmsLink
           className="v3-button light"
-          href={
+          data-home-reveal="media"
+          data-home-motion-part
+          style={motionItemStyle(2)}
+          value={
             cta.href ||
             "/works"
           }
+          registry={{ products, pages }}
         >
           {cta.button ||
             "開始挑咖啡"}
-        </Link>
-      </section>
+        </CmsLink> : null}
+      </section> : null}
     </>
   );
 }

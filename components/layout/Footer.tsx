@@ -3,7 +3,7 @@ const year = new Date().getFullYear();
 
 export default async function Footer() {
   const logo = await getAsset("LOGO002");
-  return <footer className="v2-footer">
+  return <footer className="v2-footer home-surface-dark" data-home-reveal="footer">
     <div className="footer-main">
       <a className={`footer-brand ${logo?.path ? "footer-brand-image" : ""}`} href="#top" aria-label="回到首頁頂端">
         {logo?.path ? <img src={logo.path} alt={logo.alt || "KD Coffee 咖啡藝術工坊"}/> : "KD COFFEE"}

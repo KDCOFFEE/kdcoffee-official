@@ -2,15 +2,28 @@ import { promises as fs } from "fs";
 
 import { getHomepageDataFile } from "@/lib/storagePaths";
 import type { MediaAsset } from "@/lib/media";
+import type { CmsLinkValue } from "@/lib/cmsLinks";
+import {
+  PREMIUM_HERO_TIMING,
+  resolveHeroTiming,
+  type HeroTiming,
+} from "@/lib/homepageCms";
+
+export { PREMIUM_HERO_TIMING, resolveHeroTiming };
+export type { HeroTiming };
 
 export type HomepageMediaItem = {
   id?: string;
+  enabled?: boolean;
+  order?: number;
+  primary?: boolean;
   imageId?: string;
   image?: string;
   alt?: string;
   title?: string;
   text?: string;
   media?: MediaAsset;
+  mediaItems?: HomepageMediaItem[];
   [key: string]: unknown;
 };
 
@@ -28,7 +41,8 @@ export type HeroSettings = {
   titleLines: string[];
   lead: string;
   buttonLabel: string;
-  buttonHref: string;
+  buttonHref: CmsLinkValue;
+  primaryCtaEnabled?: boolean;
   poster: string;
   videoWebm: string;
   videoMp4: string;
@@ -37,7 +51,14 @@ export type HeroSettings = {
   monthNumber: string;
   monthLabel: string;
   media?: MediaAsset;
+  secondaryLabel?: string;
+  secondaryHref?: CmsLinkValue;
+  secondaryCtaEnabled?: boolean;
+  trustCues?: string[];
+  motionEnabled?: boolean;
+  timing?: Partial<HeroTiming>;
 };
+
 
 /**
  * ============================================================
@@ -56,9 +77,11 @@ export type HomepageCampaign = {
   description: string;
   details: string[];
   ctaLabel: string;
-  ctaHref: string;
+  ctaHref: CmsLinkValue;
+  ctaEnabled?: boolean;
   secondaryLabel?: string;
-  secondaryHref?: string;
+  secondaryHref?: CmsLinkValue;
+  secondaryCtaEnabled?: boolean;
   note?: string;
   image?: string;
   media?: MediaAsset;
@@ -100,7 +123,7 @@ export type HomepageData = {
   home005?: { steps?: HomepageMediaItem[]; [key: string]: unknown };
   home006?: HomepageMediaItem;
   home007?: { cards?: HomepageMediaItem[]; [key: string]: unknown };
-  home008?: { images?: HomepageMediaItem[]; [key: string]: unknown };
+  home008?: { images?: HomepageMediaItem[]; mediaItems?: HomepageMediaItem[]; [key: string]: unknown };
   home009?: Record<string, unknown>;
   home010?: Record<string, unknown>;
 };

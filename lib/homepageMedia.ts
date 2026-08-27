@@ -6,6 +6,7 @@ import {
   localImageMedia,
   type CloudinaryMediaUsage,
 } from "@/lib/media";
+import { normalizeYouTubeVideoId, parseYouTubeUrl, youtubeWatchUrl } from "@/lib/youtubeMedia";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -34,6 +35,22 @@ async function verifyOwnerMedia(
   }
   if (!isMediaAsset(candidate)) {
     throw new Error("首頁媒體資料格式不正確。");
+  }
+
+  if (candidate.type === "youtube") {
+    try {
+      const videoId = candidate.videoId
+        ? normalizeYouTubeVideoId(candidate.videoId)
+        : parseYouTubeUrl(candidate.url);
+      owner.media = {
+        type: "youtube",
+        videoId,
+        url: youtubeWatchUrl(videoId),
+      };
+      return;
+    } catch {
+      throw new Error("YouTube 影片網址無效，請重新貼上完整網址。");
+    }
   }
 
   if (candidate.type === "image") {
@@ -74,15 +91,21 @@ function recordArray(value: unknown) {
 export async function verifyHomepageMedia(homepage: JsonRecord) {
   const checks: Promise<void>[] = [];
   const allowedOwners = new Set<JsonRecord>();
+  const addOwner = (owner: JsonRecord, legacyImageField: "image" | "poster", usage: CloudinaryMediaUsage) => {
+    allowedOwners.add(owner);
+    checks.push(verifyOwnerMedia(owner, legacyImageField, usage));
+    for (const mediaItem of recordArray(owner.mediaItems)) {
+      allowedOwners.add(mediaItem);
+      checks.push(verifyOwnerMedia(mediaItem, "image", usage));
+    }
+  };
   const hero = isRecord(homepage.hero) ? homepage.hero : null;
   if (hero) {
-    allowedOwners.add(hero);
-    checks.push(verifyOwnerMedia(hero, "poster", "hero"));
+    addOwner(hero, "poster", "hero");
   }
 
   for (const campaign of recordArray(homepage.campaigns)) {
-    allowedOwners.add(campaign);
-    checks.push(verifyOwnerMedia(campaign, "image", "content"));
+    addOwner(campaign, "image", "content");
   }
 
   const collectionFields: Array<[string, string]> = [
@@ -91,20 +114,19 @@ export async function verifyHomepageMedia(homepage: JsonRecord) {
     ["home005", "steps"],
     ["home007", "cards"],
     ["home008", "images"],
+    ["home008", "mediaItems"],
   ];
   for (const [sectionKey, collectionKey] of collectionFields) {
     const section = homepage[sectionKey];
     if (!isRecord(section)) continue;
     for (const item of recordArray(section[collectionKey])) {
-      allowedOwners.add(item);
-      checks.push(verifyOwnerMedia(item, "image", "content"));
+      addOwner(item, "image", "content");
     }
   }
 
   const home006 = homepage.home006;
   if (isRecord(home006)) {
-    allowedOwners.add(home006);
-    checks.push(verifyOwnerMedia(home006, "image", "content"));
+    addOwner(home006, "image", "content");
   }
 
   const rejectUnexpectedMedia = (value: unknown) => {

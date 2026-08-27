@@ -1,19 +1,21 @@
 {
-  "version": 1,
-  "updatedAt": "2026-08-05T00:00:00.000Z",
+  "version": 8,
+  "updatedAt": "2026-08-26T03:16:20.032Z",
   "assets": [
     {
       "id": "LOGO001",
       "category": "logo",
       "name": "Header 主 Logo",
       "usage": "全站 Header｜淺色背景",
-      "path": "",
+      "path": "/uploads/assets/logo/kd-coffee-logo-primary-v05.png",
       "recommendedSize": "SVG 優先；若 PNG，建議 640×160 px",
       "displaySize": "桌面高度 40 px；手機高度 32 px",
       "format": "SVG／透明 PNG",
       "alt": "KD Coffee 咖啡藝術工坊",
       "seoStem": "kd-coffee-logo-primary",
-      "status": "missing"
+      "status": "active",
+      "originalFileName": "1000043224.png",
+      "updatedAt": "2026-08-25T11:05:33.731Z"
     },
     {
       "id": "LOGO002",
@@ -33,13 +35,15 @@
       "category": "logo",
       "name": "品牌圖章／方形標誌",
       "usage": "手機捷徑、社群頭像、網站小尺寸識別",
-      "path": "",
+      "path": "/uploads/assets/logo/kd-coffee-logo-mark-square-v01.svg",
       "recommendedSize": "1024×1024 px",
       "displaySize": "依平台自動縮放",
       "format": "PNG／WebP",
       "alt": "KD Coffee 品牌標誌",
       "seoStem": "kd-coffee-logo-mark-square",
-      "status": "missing"
+      "status": "active",
+      "originalFileName": "1000044743.svg",
+      "updatedAt": "2026-08-25T11:05:51.935Z"
     },
     {
       "id": "LOGO004",
@@ -118,6 +122,21 @@
       "alt": "KD Coffee 精品咖啡杯測與風味驗證",
       "seoStem": "kd-coffee-cupping-flavor-quality-control",
       "status": "missing"
+    },
+    {
+      "id": "PAGEIMG-4F143B765BFA",
+      "category": "page-builder",
+      "name": "S__5546120_0",
+      "usage": "Page Builder 活動／專題頁",
+      "path": "/uploads/assets/page-builder/kd-coffee-page-s-5546120-0-4f143b765bfa-v01.webp",
+      "recommendedSize": "最長邊 1800 px；系統自動最佳化",
+      "displaySize": "依頁面區塊與裝置自適應",
+      "format": "WebP",
+      "alt": "S__5546120_0",
+      "seoStem": "kd-coffee-page-s-5546120-0-4f143b765bfa",
+      "status": "active",
+      "originalFileName": "S__5546120_0.jpg",
+      "updatedAt": "2026-08-26T03:16:20.032Z"
     }
   ]
 }

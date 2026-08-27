@@ -1,6 +1,6 @@
 {
-  "version": 1526,
-  "updatedAt": "2026-08-07T14:47:25.513Z",
+  "version": 1547,
+  "updatedAt": "2026-08-25T10:15:48.405Z",
   "hero": {
     "enabled": true,
     "eyebrow": "KD COFFEE · 咖啡藝術工坊",
@@ -10,7 +10,10 @@
     ],
     "lead": "我們相信，一杯好的咖啡，不是靠運氣，而是靠每一個細節累積出來。",
     "buttonLabel": "開始挑咖啡",
-    "buttonHref": "#home003",
+    "buttonHref": {
+      "type": "internal",
+      "target": "works"
+    },
     "poster": "/images/kd-fluid-bed-poster.webp",
     "videoWebm": "/videos/kd-fluid-bed-roasting.webm",
     "videoMp4": "/videos/kd-fluid-bed-roasting.mp4",
@@ -19,20 +22,38 @@
     "monthNumber": "08",
     "monthLabel": "2026\nMONTHLY SELECTION",
     "secondaryLabel": "本月作品",
-    "secondaryHref": "#home004"
+    "secondaryHref": "#home004",
+    "timing": {
+      "mediaDuration": 1600,
+      "eyebrowStart": 1420,
+      "headlineLine1Start": 1740,
+      "headlineLine2Start": 1880,
+      "leadStart": 2110,
+      "primaryCtaStart": 2390,
+      "secondaryCtaStart": 2500,
+      "trustStart": 2600
+    }
   },
   "campaignSection": {
     "enabled": true,
     "eyebrow": "THIS MONTH AT KD COFFEE",
     "title": "本月活動",
     "intro": "新品、節慶禮盒與期間限定組合，都集中在這裡。",
-    "displayLimit": 0
+    "displayLimit": 1,
+    "motion": {
+      "enabled": true,
+      "preset": "fade-up",
+      "delayMs": 0,
+      "durationMs": 800,
+      "distancePx": 18,
+      "staggerMs": 100
+    }
   },
   "campaigns": [
     {
       "id": "drip-trial-202608",
       "enabled": true,
-      "sort": 1,
+      "sort": 9,
       "eyebrow": "MONTHLY FEATURE",
       "title": "耳掛咖啡試喝組",
       "description": "把本月精選作品，一次帶回家慢慢品嚐。從花香、果香到柔和甜感，用最輕鬆的方式找到自己喜歡的那一杯。",
@@ -96,7 +117,15 @@
         "alt": "KD Coffee 工作室包裝與出貨",
         "prompt": "真實攝影，KD Coffee 工作室手工檢查咖啡包裝與準備出貨，真實人物手部即可，溫暖自然光，800×800，無文字。"
       }
-    ]
+    ],
+    "motion": {
+      "enabled": true,
+      "preset": "slide-right",
+      "delayMs": 1000,
+      "durationMs": 1700,
+      "distancePx": 18,
+      "staggerMs": 500
+    }
   },
   "home003": {
     "title": "今天，你的咖啡時刻是什麼？",
@@ -171,17 +200,37 @@
         "prompt": "KD Coffee Homepage Scene Photography\n\nPremium Specialty Coffee Brand\nHomepage HOME003 Scene 004\nQuick Reorder and Familiar Flavor\n\nPurpose\nCreate a calm repeat-purchase scene that communicates familiarity, trust, and an easy return to a favorite coffee.\n\nComposition\nVertical 4:5 composition, 1200 × 1500 px. A tidy home or studio work table with three upright matte coffee bags in charcoal tones, deliberately shown without readable labels or logos. One opened bag and a simple hand-brewing setup nearby: a ceramic dripper, glass server, and black coffee cup. The arrangement should feel like a loyal customer preparing to restock a familiar favorite. Keep the upper-right area quiet for website text.\n\nVisual Direction\nPremium Japanese coffee workshop aesthetic, understated, mature, dependable, real-life product photography, warm neutral color palette, clean and organized, subtle sense of routine and familiarity.\n\nCamera and Lighting\nEye-level to slightly elevated angle, 50 mm lens look, soft natural side light, realistic material textures, moderate depth of field.\n\nImportant\nNo person required. Packaging remains generic until real KD Coffee product photos replace it. Black coffee only. Ultra-high resolution and photorealistic.",
         "negativePrompt": "No readable branding, no fake logo, no text, no watermark, no people posing, no laptop dominating the scene, no smartphone, no latte art, no milk, no scattered coffee beans, no messy table, no colorful commercial packaging, no illustration, no cartoon, no CGI, no dramatic spotlight, no excessive props."
       }
-    ]
+    ],
+    "motion": {
+      "enabled": true,
+      "preset": "slide-left",
+      "delayMs": 2000,
+      "durationMs": 1200,
+      "distancePx": 36,
+      "staggerMs": 1000,
+      "activePreset": "slide-left",
+      "initialX": -36,
+      "initialY": 0,
+      "initialScale": 1
+    }
   },
   "home004": {
     "title": "很多人，就是從這三款開始。",
     "intro": "第一次買不用一次看完所有作品，先從接受度高、風味清楚的三款開始。",
     "purpose": "促成第一次購買。",
     "productSlugs": [
-      "monet-floral",
+      "turner-sunset",
       "davinci-feast",
       "raphael-kiss"
-    ]
+    ],
+    "motion": {
+      "enabled": true,
+      "preset": "slide-right",
+      "delayMs": 0,
+      "durationMs": 800,
+      "distancePx": 18,
+      "staggerMs": 100
+    }
   },
   "home005": {
     "title": "一包咖啡，經過哪些事情？",
@@ -189,22 +238,24 @@
     "purpose": "讓價格背後的用心被看見。",
     "steps": [
       {
-        "id": "HOME005-STEP01",
-        "imageId": "IMG0301",
-        "title": "挑選與確認生豆",
-        "text": "先確認原料狀態，建立適合這支咖啡的方向。",
-        "image": "/uploads/artworks/homepage/kdcoffee-kd-coffee-img0301-v01.webp",
-        "alt": "KD Coffee 生豆挑選",
-        "prompt": "真實攝影，精品咖啡生豆挑選與檢查，乾淨工作桌，自然光，800×800，無文字。"
-      },
-      {
         "id": "HOME005-STEP02",
         "imageId": "IMG0302",
         "title": "流床式熱風烘焙",
         "text": "讓咖啡豆均勻翻動，呈現乾淨清楚的風味。",
         "image": "/uploads/artworks/homepage/kdcoffee-kd-coffee-img0302-v02.webp",
         "alt": "KD Coffee 流床式熱風烘焙",
-        "prompt": "真實攝影，自製流床式熱風烘豆機中咖啡豆翻滾，工作室自然光，800×800，無文字。"
+        "prompt": "真實攝影，自製流床式熱風烘豆機中咖啡豆翻滾，工作室自然光，800×800，無文字。",
+        "order": 0
+      },
+      {
+        "id": "HOME005-STEP01",
+        "imageId": "IMG0301",
+        "title": "挑選與確認",
+        "text": "先確認原料狀態，建立適合這支咖啡的方向。",
+        "image": "/uploads/artworks/homepage/kdcoffee-kd-coffee-img0301-v01.webp",
+        "alt": "KD Coffee 生豆挑選",
+        "prompt": "真實攝影，精品咖啡生豆挑選與檢查，乾淨工作桌，自然光，800×800，無文字。",
+        "order": 1
       },
       {
         "id": "HOME005-STEP03",
@@ -213,7 +264,8 @@
         "text": "透過實際品飲確認香氣、甜感與整體平衡。",
         "image": "/uploads/artworks/homepage/kdcoffee-kd-coffee-img0303-v01.webp",
         "alt": "KD Coffee 職人杯測",
-        "prompt": "真實攝影，精品咖啡杯測桌，多個杯測碗與湯匙，專業乾淨，800×800，無文字。"
+        "prompt": "真實攝影，精品咖啡杯測桌，多個杯測碗與湯匙，專業乾淨，800×800，無文字。",
+        "order": 2
       },
       {
         "id": "HOME005-STEP04",
@@ -222,7 +274,8 @@
         "text": "減少氧化影響，讓風味以更好的狀態被保存。",
         "image": "/uploads/artworks/homepage/kdcoffee-kd-coffee-img0304-v01.webp",
         "alt": "KD Coffee 充氮包裝",
-        "prompt": "真實攝影，咖啡充氮包裝機與密封作業局部，整潔工作室，800×800，無文字。"
+        "prompt": "真實攝影，咖啡充氮包裝機與密封作業局部，整潔工作室，800×800，無文字。",
+        "order": 3
       },
       {
         "id": "HOME005-STEP05",
@@ -231,7 +284,8 @@
         "text": "確認標籤、規格與封口，再準備交付。",
         "image": "/uploads/artworks/homepage/kdcoffee-kd-coffee-img0305-v01.webp",
         "alt": "KD Coffee 咖啡包裝檢查",
-        "prompt": "真實攝影，KD Coffee 咖啡包裝標籤與封口檢查，手部操作，800×800，無文字。"
+        "prompt": "真實攝影，KD Coffee 咖啡包裝標籤與封口檢查，手部操作，800×800，無文字。",
+        "order": 4
       },
       {
         "id": "HOME005-STEP06",
@@ -240,7 +294,8 @@
         "text": "7-ELEVEN 取貨付款或工作室自取，簡單完成。",
         "image": "/uploads/artworks/homepage/kdcoffee-kd-coffee-img0306-v01.webp",
         "alt": "KD Coffee 咖啡出貨",
-        "prompt": "真實攝影，整齊完成的咖啡包裹準備出貨，溫暖自然光，800×800，無文字。"
+        "prompt": "真實攝影，整齊完成的咖啡包裹準備出貨，溫暖自然光，800×800，無文字。",
+        "order": 5
       }
     ]
   },
@@ -270,7 +325,8 @@
         "text": "不是只用產區與處理法命名，而是讓每支咖啡有容易被記住的故事。",
         "image": "/uploads/artworks/homepage/kdcoffee-kd-coffee-img0701-v01.webp",
         "alt": "KD Coffee 咖啡藝術系列",
-        "prompt": "精品咖啡藝術系列包裝與黑白主視覺，安靜藝廊氛圍，米白背景，800×1000，無新增文字。"
+        "prompt": "精品咖啡藝術系列包裝與黑白主視覺，安靜藝廊氛圍，米白背景，800×1000，無新增文字。",
+        "enabled": true
       },
       {
         "id": "HOME007-CARD02",
@@ -279,7 +335,8 @@
         "text": "從花香、果香到甜感與尾韻，找到屬於自己的作品。",
         "image": "/uploads/artworks/homepage/kdcoffee-kd-coffee-img0702-v01.webp",
         "alt": "KD Coffee 精品咖啡品飲",
-        "prompt": "真實攝影，手沖黑咖啡與藝術感包裝，日系藝廊留白，800×1000，無文字。"
+        "prompt": "真實攝影，手沖黑咖啡與藝術感包裝，日系藝廊留白，800×1000，無文字。",
+        "enabled": false
       },
       {
         "id": "HOME007-CARD03",
@@ -315,10 +372,10 @@
         "alt": "KD Coffee 包裝作業",
         "media": {
           "type": "video",
-          "url": "https://res.cloudinary.com/sd4wjx7m/video/upload/c_limit,q_auto,vc_auto,w_1920/v1/kd-coffee/videos/1919f85e-9ae5-4c7c-ba02-fdfed97b5922.mp4?_a=BAMAAAkS0",
+          "url": "https://res.cloudinary.com/sd4wjx7m/video/upload/c_limit,q_auto,vc_h264:high:4.0,w_1920/v1/kd-coffee/videos/1919f85e-9ae5-4c7c-ba02-fdfed97b5922.mp4?_a=BAMAAAcg0",
           "provider": "cloudinary",
           "publicId": "kd-coffee/videos/1919f85e-9ae5-4c7c-ba02-fdfed97b5922",
-          "posterUrl": "https://res.cloudinary.com/sd4wjx7m/video/upload/c_limit,f_auto,q_auto,w_1600/v1/kd-coffee/videos/1919f85e-9ae5-4c7c-ba02-fdfed97b5922.jpg?_a=BAMAAAkS0",
+          "posterUrl": "https://res.cloudinary.com/sd4wjx7m/video/upload/c_limit,f_auto,q_auto,w_1600/v1/kd-coffee/videos/1919f85e-9ae5-4c7c-ba02-fdfed97b5922.jpg?_a=BAMAAAcg0",
           "width": 720,
           "height": 1032,
           "format": "mp4",

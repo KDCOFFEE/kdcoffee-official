@@ -14,22 +14,13 @@ export default function HomepageSceneMedia({
   src = "",
   media,
   alt,
-  imageId,
-  label,
-  recommendedSize,
 }: Props) {
   return (
     <div className="v3-scene-media">
       <KdMedia
         media={resolveMediaAsset(media, src)}
         alt={alt}
-        fallback={(
-          <div className="v3-scene-placeholder">
-            <span>{imageId}</span>
-            <strong>{label}</strong>
-            <small>{recommendedSize || "請至後台上傳情境圖片"}</small>
-          </div>
-        )}
+        fallback={null}
       />
       <div className="v3-scene-shade" />
     </div>

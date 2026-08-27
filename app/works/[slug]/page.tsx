@@ -207,7 +207,7 @@ export default async function WorkPage({ params }: { params: Promise<{ slug: str
       id: "campaigns",
       placement: normalizeProductSectionPlacement(product.campaignDisplay?.placement, campaignLayout.placement),
       order: normalizeProductSectionOrder(product.campaignDisplay?.order, campaignLayout.order),
-      node: productCampaigns.length ? <ProductCampaignSection campaigns={productCampaigns} eyebrow={campaignContent.eyebrow} heading={campaignContent.heading} description={campaignContent.description} animation={sectionAnimation("campaigns")} /> : null,
+      node: productCampaigns.length ? <ProductCampaignSection campaigns={productCampaigns} products={live.menu.products} eyebrow={campaignContent.eyebrow} heading={campaignContent.heading} description={campaignContent.description} animation={sectionAnimation("campaigns")} /> : null,
     },
     {
       id: "related-products",

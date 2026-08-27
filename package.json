@@ -10,6 +10,11 @@
     "update:711": "node scripts/update-711-stores.mjs",
     "update:711:check": "node scripts/update-711-stores.mjs --dry-run",
     "test:711-parser": "node scripts/update-711-stores.mjs --self-test",
+    "test:smart-links": "node --experimental-strip-types scripts/test-smart-links.ts",
+    "test:page-builder": "node --experimental-strip-types scripts/test-page-builder.ts",
+    "test:page-builder-design": "node --experimental-strip-types scripts/test-page-builder-design.ts",
+    "test:page-builder-images": "node --experimental-strip-types scripts/test-page-builder-images.ts",
+    "test:page-builder-visual-style": "node --experimental-strip-types scripts/test-page-builder-visual-style.ts",
     "test:line": "node --env-file=.env.local scripts/test-line-notification.mjs",
     "health": "node scripts/health-check.mjs"
   },

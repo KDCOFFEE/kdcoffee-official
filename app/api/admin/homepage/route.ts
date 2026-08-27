@@ -5,6 +5,7 @@ import { isAdminAuthenticated } from "@/lib/adminAuth";
 import { atomicWriteJson, withFileLock } from "@/lib/jsonFileStore";
 import { validateHomepageCampaigns } from "@/lib/homepageCampaignValidation";
 import { verifyHomepageMedia } from "@/lib/homepageMedia";
+import { validateHomepageCms } from "@/lib/homepageCms";
 import {
   hasAvailableHome004Sku,
   resolveHome004Recommendations,
@@ -14,6 +15,8 @@ import {
   getHomepageDataFile,
   getWebsiteDataFile,
 } from "@/lib/storagePaths";
+import { publishedPageRegistry } from "@/lib/pageBuilder";
+import { readPageStore } from "@/lib/pageBuilderStore";
 
 export const dynamic = "force-dynamic";
 
@@ -44,6 +47,13 @@ export const dynamic = "force-dynamic";
  */
 const homepagePath = getHomepageDataFile();
 const websitePath = getWebsiteDataFile();
+
+class HomepageVersionConflictError extends Error {
+  constructor() {
+    super("首頁內容已在其他視窗更新。請重新整理確認最新內容，再套用這次修改。");
+    this.name = "HomepageVersionConflictError";
+  }
+}
 
 /**
  * 讀取 JSON 檔案。
@@ -86,9 +96,10 @@ export async function GET() {
    *
    * 兩個路徑現在都由 storagePaths.ts 統一管理。
    */
-  const [homepage, website] = await Promise.all([
+  const [homepage, website, pageStore] = await Promise.all([
     readJson(homepagePath),
     readJson(websitePath),
+    readPageStore(),
   ]);
 
   /**
@@ -141,6 +152,7 @@ export async function GET() {
   return NextResponse.json({
     homepage,
     products,
+    publishedPages: publishedPageRegistry(pageStore),
   });
 }
 
@@ -185,6 +197,15 @@ export async function PUT(request: Request) {
     ) {
       return NextResponse.json(
         { error: "首頁資料格式不完整" },
+        { status: 400 },
+      );
+    }
+
+    try {
+      validateHomepageCms(homepage);
+    } catch (error) {
+      return NextResponse.json(
+        { error: error instanceof Error ? error.message : "首頁資料格式不正確" },
         { status: 400 },
       );
     }
@@ -257,6 +278,10 @@ export async function PUT(request: Request) {
         homepagePath,
 
         async () => {
+          const currentHomepage = await readJson(homepagePath);
+          if (Number(currentHomepage.version || 0) !== Number(homepage.version || 0)) {
+            throw new HomepageVersionConflictError();
+          }
           homepage.updatedAt =
             new Date().toISOString();
 
@@ -292,7 +317,7 @@ export async function PUT(request: Request) {
             ? error.message
             : "儲存失敗",
       },
-      { status: 500 },
+      { status: error instanceof HomepageVersionConflictError ? 409 : 500 },
     );
   }
 }

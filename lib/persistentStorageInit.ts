@@ -10,6 +10,7 @@ import {
   getArtworkBackupsDir,
   getCampaignUploadDir,
   getHome003UploadDir,
+  getPagesDataFile,
 } from "@/lib/storagePaths";
 
 /**
@@ -252,6 +253,11 @@ async function initializePersistentStorage() {
         persistentStoreDir,
         "website-data.json",
       ),
+    ),
+
+    seedFileIfMissing(
+      path.join(repositoryDataDir, "pages.json"),
+      getPagesDataFile(),
     ),
 
     seedFileIfMissing(

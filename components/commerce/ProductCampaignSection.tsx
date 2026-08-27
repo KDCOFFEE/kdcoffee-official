@@ -1,13 +1,14 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
 import CampaignMedia from "@/components/home/CampaignMedia";
+import CmsLink from "@/components/CmsLink";
 import type { HomepageCampaign } from "@/data/homepageData";
+import type { CmsLinkProduct } from "@/lib/cmsLinks";
 import { getProductAnimationAttributes, type ProductSectionAnimationConfig } from "@/lib/productPageAnimations";
 
-export default function ProductCampaignSection({ campaigns, eyebrow = "LATEST ACTIVITY", heading = "最新活動", description = "", animation = null }: { campaigns: HomepageCampaign[]; eyebrow?: string; heading?: string; description?: string; animation?: ProductSectionAnimationConfig | null }) {
+export default function ProductCampaignSection({ campaigns, products, eyebrow = "LATEST ACTIVITY", heading = "最新活動", description = "", animation = null }: { campaigns: HomepageCampaign[]; products: CmsLinkProduct[]; eyebrow?: string; heading?: string; description?: string; animation?: ProductSectionAnimationConfig | null }) {
   const presentationRef = useRef<HTMLDivElement>(null);
   const [activeIndex, setActiveIndex] = useState(0);
 
@@ -40,7 +41,7 @@ export default function ProductCampaignSection({ campaigns, eyebrow = "LATEST AC
                 <h3>{campaign.title}</h3>
                 <div>{campaign.description}</div>
                 {campaign.details?.length ? <ul>{campaign.details.map((detail) => <li key={detail}>{detail}</li>)}</ul> : null}
-                {campaign.ctaHref && campaign.ctaLabel ? <Link href={campaign.ctaHref}>{campaign.ctaLabel}<span>↗</span></Link> : null}
+                {campaign.ctaHref && campaign.ctaLabel ? <CmsLink value={campaign.ctaHref} registry={{ products }}>{campaign.ctaLabel}<span>↗</span></CmsLink> : null}
               </div>
             </article>
           ))}

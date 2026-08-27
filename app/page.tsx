@@ -6,6 +6,9 @@ import { getWebsiteDataFile } from "@/lib/storagePaths";
 import Footer from "@/components/layout/Footer";
 import Header from "@/components/layout/Header";
 import HomepageV3 from "@/components/home/HomepageV3";
+import type { HomepageViewData } from "@/components/home/HomepageV3";
+import { publishedPageRegistry } from "@/lib/pageBuilder";
+import { readPageStore } from "@/lib/pageBuilderStore";
 
 export const dynamic = "force-dynamic";
 
@@ -48,7 +51,7 @@ export default async function Home() {
   /**
    * 同時讀取首頁設定與商品資料。
    */
-  const [homepageData, website] =
+  const [homepageData, website, pageStore] =
     await Promise.all([
       getHomepageData(),
 
@@ -58,6 +61,7 @@ export default async function Home() {
           "utf8",
         )
         .then(JSON.parse),
+      readPageStore(),
     ]);
 
   /**
@@ -71,10 +75,9 @@ export default async function Home() {
       <Header />
 
       <HomepageV3
-        homepageData={
-          homepageData as any
-        }
+        homepageData={homepageData as unknown as HomepageViewData}
         products={products}
+        pages={publishedPageRegistry(pageStore)}
       />
 
       <Footer />

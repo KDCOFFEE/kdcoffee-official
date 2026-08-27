@@ -23,6 +23,10 @@ export default function CleanRoastingMediaAdmin({ selected, patch, setMessage }:
   const update = (change: Partial<CleanRoastingMediaConfig>) => patch({ cleanRoastingMedia: { ...config, ...change } });
   const updateItems = (nextItems: CleanRoastingMediaItem[]) => update({ items: nextItems.map((item, index) => ({ ...item, order: index })) });
   const addMedia = (media: MediaAsset) => {
+    if (media.type === "youtube") {
+      setMessage("CLEAN ROASTING 目前只接受圖片或 Cloudinary 影片。");
+      return;
+    }
     if (items.length >= CLEAN_ROASTING_MEDIA_MAX_ITEMS) {
       setMessage(`CLEAN ROASTING 最多 ${CLEAN_ROASTING_MEDIA_MAX_ITEMS} 個媒體。`);
       return;

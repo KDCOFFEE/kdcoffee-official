@@ -14,12 +14,7 @@ export default function CampaignMedia({
     <KdMedia
       media={resolveMediaAsset(media, src)}
       alt={alt}
-      fallback={(
-        <div className="campaign-placeholder" aria-hidden="true">
-          <span>KD</span>
-          <small>COFFEE CAMPAIGN</small>
-        </div>
-      )}
+      fallback={null}
     />
   );
 }

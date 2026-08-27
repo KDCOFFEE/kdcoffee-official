@@ -1,0 +1,399 @@
+{
+  "version": 121,
+  "updatedAt": "2026-08-27T04:54:12.985Z",
+  "pages": [
+    {
+      "id": "page-75a91913-b8ee-4817-be7d-b23493eaf14a",
+      "slug": "story-20260826-c11e9d",
+      "type": "campaign",
+      "status": "draft",
+      "createdAt": "2026-08-26T00:43:57.064Z",
+      "updatedAt": "2026-08-26T00:43:57.064Z",
+      "draft": {
+        "title": "測試活動",
+        "seoTitle": "",
+        "seoDescription": "",
+        "sections": []
+      }
+    },
+    {
+      "id": "page-7feb8af4-fb1b-4229-a550-95ecb9d7e13f",
+      "slug": "story-20260826-5e00b6",
+      "type": "campaign",
+      "status": "published",
+      "createdAt": "2026-08-26T02:23:43.957Z",
+      "updatedAt": "2026-08-27T04:54:12.985Z",
+      "draft": {
+        "title": "測試功能頁",
+        "seoTitle": "",
+        "seoDescription": "",
+        "sections": [
+          {
+            "id": "section-bcad6d55-64a7-4b84-8b41-ab7ca798cd38",
+            "type": "hero",
+            "enabled": true,
+            "eyebrow": "主視覺版",
+            "title": "主視覺版面用影片",
+            "body": "98\n7654\n321",
+            "theme": "dark",
+            "layout": "media-left",
+            "ctas": [
+              {
+                "id": "cta-df447a63-c805-493e-afa4-e04989f2e74a",
+                "enabled": true,
+                "label": "立即購買",
+                "stylePreset": "primary",
+                "link": {
+                  "type": "telephone",
+                  "url": "0925623775"
+                }
+              }
+            ],
+            "media": [
+              {
+                "id": "media-26b51a84-9ceb-4cdd-9f33-0ee5ea0a2beb",
+                "enabled": true,
+                "media": {
+                  "type": "video",
+                  "url": "https://res.cloudinary.com/sd4wjx7m/video/upload/c_limit,q_auto,vc_h264:high:4.0,w_1920/v1/kd-coffee/videos/6d1982d5-167a-457b-ad6e-4001119097cf.mp4?_a=BAMAAAcg0",
+                  "provider": "cloudinary",
+                  "publicId": "kd-coffee/videos/6d1982d5-167a-457b-ad6e-4001119097cf",
+                  "posterUrl": "https://res.cloudinary.com/sd4wjx7m/video/upload/c_limit,f_auto,q_auto,w_1600/v1/kd-coffee/videos/6d1982d5-167a-457b-ad6e-4001119097cf.jpg?_a=BAMAAAcg0",
+                  "width": 720,
+                  "height": 1280,
+                  "format": "mp4",
+                  "bytes": 2203669
+                },
+                "alt": ""
+              }
+            ],
+            "items": [],
+            "products": [],
+            "motion": {
+              "enabled": true,
+              "preset": "fade",
+              "delayMs": 0,
+              "durationMs": 800,
+              "distancePx": 18,
+              "staggerMs": 100
+            },
+            "headlineLine2": "12345"
+          },
+          {
+            "id": "section-d257938e-e45c-4344-875a-8a24422adde7",
+            "type": "mediaText",
+            "enabled": true,
+            "eyebrow": "測試圖文介紹區塊",
+            "title": "圖文介紹",
+            "body": "我不知道要寫甚麼!!\n看看!!\n好不好看!!",
+            "theme": "media",
+            "layout": "media-left",
+            "presentation": "story-offset",
+            "ctas": [],
+            "media": [
+              {
+                "id": "media-426e3219-31ea-47cf-afb8-b83424d1bd15",
+                "enabled": true,
+                "media": {
+                  "type": "image",
+                  "url": "/uploads/assets/page-builder/kd-coffee-page-s-5546120-0-4f143b765bfa-v01.webp",
+                  "provider": "local"
+                },
+                "alt": ""
+              }
+            ],
+            "items": [],
+            "products": [],
+            "motion": {
+              "enabled": true,
+              "preset": "fade-up",
+              "delayMs": 0,
+              "durationMs": 800,
+              "distancePx": 18,
+              "staggerMs": 100
+            }
+          },
+          {
+            "id": "section-cedf98eb-447e-495a-b85a-b7353c2e6dce",
+            "type": "products",
+            "enabled": true,
+            "eyebrow": "商品推薦小標",
+            "title": "商品推薦標題",
+            "body": "商品推薦內文",
+            "theme": "warm",
+            "layout": "media-left",
+            "presentation": "products-rail",
+            "ctas": [],
+            "media": [],
+            "items": [],
+            "products": [
+              {
+                "id": "product-7d45e1fd-f8ca-47bf-9071-c2a2c6ee8a78",
+                "enabled": true,
+                "productSlug": "degas-melody"
+              },
+              {
+                "id": "product-06576bad-8406-42ec-ba3f-fc4f58db1c47",
+                "enabled": true,
+                "productSlug": "rembrandt-miracle"
+              },
+              {
+                "id": "product-01a82f81-3ead-4360-bdfe-fee838ae4d63",
+                "enabled": true,
+                "productSlug": "turner-sunset"
+              }
+            ],
+            "motion": {
+              "enabled": true,
+              "preset": "fade-up",
+              "delayMs": 0,
+              "durationMs": 800,
+              "distancePx": 18,
+              "staggerMs": 100
+            }
+          },
+          {
+            "id": "section-3a6a7685-34df-449f-baf7-2b0633e17fbd",
+            "type": "cta",
+            "enabled": true,
+            "eyebrow": "行動區版面",
+            "title": "立即購買",
+            "body": "立即購買測試",
+            "theme": "warm",
+            "layout": "media-left",
+            "presentation": "cta-dark",
+            "ctas": [
+              {
+                "id": "cta-de124c3f-aadc-4e55-8512-06cc1d3fdf81",
+                "enabled": true,
+                "label": "新按鈕",
+                "stylePreset": "primary",
+                "link": {
+                  "type": "email",
+                  "url": "kdcoffee1962@gmail.com"
+                }
+              }
+            ],
+            "media": [],
+            "items": [],
+            "products": [],
+            "motion": {
+              "enabled": true,
+              "preset": "fade-up",
+              "delayMs": 0,
+              "durationMs": 800,
+              "distancePx": 18,
+              "staggerMs": 100
+            }
+          }
+        ]
+      },
+      "publishedSnapshot": {
+        "title": "測試功能頁",
+        "seoTitle": "",
+        "seoDescription": "",
+        "sections": [
+          {
+            "id": "section-bcad6d55-64a7-4b84-8b41-ab7ca798cd38",
+            "type": "hero",
+            "enabled": true,
+            "eyebrow": "主視覺版",
+            "title": "主視覺版面用影片",
+            "body": "98\n7654\n321",
+            "theme": "dark",
+            "layout": "media-left",
+            "ctas": [
+              {
+                "id": "cta-df447a63-c805-493e-afa4-e04989f2e74a",
+                "enabled": true,
+                "label": "立即購買",
+                "stylePreset": "primary",
+                "link": {
+                  "type": "telephone",
+                  "url": "0925623775"
+                }
+              }
+            ],
+            "media": [
+              {
+                "id": "media-26b51a84-9ceb-4cdd-9f33-0ee5ea0a2beb",
+                "enabled": true,
+                "media": {
+                  "type": "video",
+                  "url": "https://res.cloudinary.com/sd4wjx7m/video/upload/c_limit,q_auto,vc_h264:high:4.0,w_1920/v1/kd-coffee/videos/6d1982d5-167a-457b-ad6e-4001119097cf.mp4?_a=BAMAAAcg0",
+                  "provider": "cloudinary",
+                  "publicId": "kd-coffee/videos/6d1982d5-167a-457b-ad6e-4001119097cf",
+                  "posterUrl": "https://res.cloudinary.com/sd4wjx7m/video/upload/c_limit,f_auto,q_auto,w_1600/v1/kd-coffee/videos/6d1982d5-167a-457b-ad6e-4001119097cf.jpg?_a=BAMAAAcg0",
+                  "width": 720,
+                  "height": 1280,
+                  "format": "mp4",
+                  "bytes": 2203669
+                },
+                "alt": ""
+              }
+            ],
+            "items": [],
+            "products": [],
+            "motion": {
+              "enabled": true,
+              "preset": "fade",
+              "delayMs": 0,
+              "durationMs": 800,
+              "distancePx": 18,
+              "staggerMs": 100
+            },
+            "headlineLine2": "12345"
+          },
+          {
+            "id": "section-d257938e-e45c-4344-875a-8a24422adde7",
+            "type": "mediaText",
+            "enabled": true,
+            "eyebrow": "測試圖文介紹區塊",
+            "title": "圖文介紹",
+            "body": "我不知道要寫甚麼!!\n看看!!\n好不好看!!",
+            "theme": "media",
+            "layout": "media-left",
+            "presentation": "story-offset",
+            "ctas": [],
+            "media": [
+              {
+                "id": "media-426e3219-31ea-47cf-afb8-b83424d1bd15",
+                "enabled": true,
+                "media": {
+                  "type": "image",
+                  "url": "/uploads/assets/page-builder/kd-coffee-page-s-5546120-0-4f143b765bfa-v01.webp",
+                  "provider": "local"
+                },
+                "alt": ""
+              }
+            ],
+            "items": [],
+            "products": [],
+            "motion": {
+              "enabled": true,
+              "preset": "fade-up",
+              "delayMs": 0,
+              "durationMs": 800,
+              "distancePx": 18,
+              "staggerMs": 100
+            }
+          },
+          {
+            "id": "section-cedf98eb-447e-495a-b85a-b7353c2e6dce",
+            "type": "products",
+            "enabled": true,
+            "eyebrow": "商品推薦小標",
+            "title": "商品推薦標題",
+            "body": "商品推薦內文",
+            "theme": "warm",
+            "layout": "media-left",
+            "presentation": "products-rail",
+            "ctas": [],
+            "media": [],
+            "items": [],
+            "products": [
+              {
+                "id": "product-7d45e1fd-f8ca-47bf-9071-c2a2c6ee8a78",
+                "enabled": true,
+                "productSlug": "degas-melody"
+              },
+              {
+                "id": "product-06576bad-8406-42ec-ba3f-fc4f58db1c47",
+                "enabled": true,
+                "productSlug": "rembrandt-miracle"
+              },
+              {
+                "id": "product-01a82f81-3ead-4360-bdfe-fee838ae4d63",
+                "enabled": true,
+                "productSlug": "turner-sunset"
+              }
+            ],
+            "motion": {
+              "enabled": true,
+              "preset": "fade-up",
+              "delayMs": 0,
+              "durationMs": 800,
+              "distancePx": 18,
+              "staggerMs": 100
+            }
+          },
+          {
+            "id": "section-3a6a7685-34df-449f-baf7-2b0633e17fbd",
+            "type": "cta",
+            "enabled": true,
+            "eyebrow": "行動區版面",
+            "title": "立即購買",
+            "body": "立即購買測試",
+            "theme": "warm",
+            "layout": "media-left",
+            "presentation": "cta-dark",
+            "ctas": [
+              {
+                "id": "cta-de124c3f-aadc-4e55-8512-06cc1d3fdf81",
+                "enabled": true,
+                "label": "新按鈕",
+                "stylePreset": "primary",
+                "link": {
+                  "type": "email",
+                  "url": "kdcoffee1962@gmail.com"
+                }
+              }
+            ],
+            "media": [],
+            "items": [],
+            "products": [],
+            "motion": {
+              "enabled": true,
+              "preset": "fade-up",
+              "delayMs": 0,
+              "durationMs": 800,
+              "distancePx": 18,
+              "staggerMs": 100
+            }
+          }
+        ]
+      },
+      "publishedAt": "2026-08-27T04:54:12.985Z"
+    }
+  ],
+  "visualStyle": {
+    "version": 1,
+    "headingFont": "premium",
+    "bodyFont": "clean",
+    "englishHeadingFont": "premium",
+    "headingScale": "small",
+    "secondaryHeadingScale": "large",
+    "bodyScale": "small",
+    "eyebrowScale": "medium",
+    "headingWeight": "light",
+    "letterSpacing": "tight",
+    "lineHeight": "normal",
+    "autoResponsive": true,
+    "desktopHeadingScale": "large",
+    "mobileHeadingScale": "medium",
+    "headingDesktopPx": 48,
+    "headingMobilePx": 30,
+    "secondaryHeadingDesktopPx": 52,
+    "secondaryHeadingMobilePx": 34,
+    "bodyDesktopPx": 14,
+    "bodyMobilePx": 14,
+    "eyebrowDesktopPx": 12,
+    "eyebrowMobilePx": 11,
+    "headingWrap": "auto",
+    "headingWidth": "wide",
+    "secondaryHeadingWrap": "manual",
+    "secondaryHeadingWidth": "standard",
+    "alignment": "left",
+    "colors": {
+      "primaryText": "ink",
+      "secondaryText": "warm-gray",
+      "accent": "gold",
+      "lightSurface": "ivory",
+      "darkSurface": "ivory",
+      "onDark": "ivory",
+      "primaryButton": "gold",
+      "primaryButtonText": "white",
+      "secondaryButton": "gold"
+    }
+  }
+}

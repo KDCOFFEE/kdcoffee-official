@@ -256,6 +256,11 @@ export function getHome003UploadDir() {
       );
 }
 
+/** Owner-managed standalone pages. Kept separate from homepage and product data. */
+export function getPagesDataFile() {
+  return path.join(getStoreDir(), "pages.json");
+}
+
 export function getOrderNotificationUploadsDir() {
   const root = getPersistentDataRoot();
 

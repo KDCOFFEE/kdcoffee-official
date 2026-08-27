@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { HomepageData } from "@/data/homepageData";
+import CmsLink from "@/components/CmsLink";
 import KdMedia from "@/components/media/KdMedia";
 import { resolveMediaAsset } from "@/lib/media";
 
@@ -26,7 +27,7 @@ export default function SalesHero({ homepageData }: { homepageData: HomepageData
           <h1>{lines.map((line, index) => <span key={`${line}-${index}`}>{line}</span>)}</h1>
           <p className="sales-hero-lead">{hero.lead || "從花香、果香到溫暖甜感，我們幫你把複雜的咖啡資訊，變成一個容易做對的選擇。"}</p>
           <div className="sales-hero-actions">
-            <Link className="sales-primary" href={hero.buttonHref || "#beginner"}>{hero.buttonLabel || "幫我挑第一包咖啡"}</Link>
+            <CmsLink className="sales-primary" value={hero.buttonHref || "#beginner"}>{hero.buttonLabel || "幫我挑第一包咖啡"}</CmsLink>
             <Link className="sales-secondary" href="#products">直接看本月作品</Link>
           </div>
           <div className="sales-proof-row" aria-label="購買重點">

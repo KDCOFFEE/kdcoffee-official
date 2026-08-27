@@ -1,8 +1,9 @@
 export type MediaAsset = {
-  type: "image" | "video";
+  type: "image" | "video" | "youtube";
   url: string;
   provider?: "local" | "cloudinary";
   publicId?: string;
+  videoId?: string;
   posterUrl?: string;
   width?: number;
   height?: number;
@@ -108,10 +109,18 @@ export function isMediaAsset(value: unknown): value is MediaAsset {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const candidate = value as Record<string, unknown>;
   return (
-    (candidate.type === "image" || candidate.type === "video") &&
+    (candidate.type === "image" || candidate.type === "video" || candidate.type === "youtube") &&
     typeof candidate.url === "string" &&
     Boolean(candidate.url.trim())
   );
+}
+
+export function youtubeMedia(videoId: string, url: string): MediaAsset {
+  return {
+    type: "youtube",
+    url,
+    videoId,
+  };
 }
 
 export function localImageMedia(url: string): MediaAsset {

@@ -26,6 +26,9 @@ async function verifiedSections(productSlug: string, value: unknown) {
   for (const section of sections) {
     if (!section.media || section.media.provider === "youtube") continue;
     const { asset } = section.media;
+    if (asset.type === "youtube") {
+      throw new ProductCustomSectionMediaVerificationError("自訂 Section 媒體類型不正確。");
+    }
     if (
       !asset.publicId ||
       !isCustomSectionMediaPublicId({

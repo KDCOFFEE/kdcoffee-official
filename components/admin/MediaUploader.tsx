@@ -19,6 +19,7 @@ type MediaUploaderProps = {
   showPreview?: boolean;
   imageActionLabel?: string;
   videoActionLabel?: string;
+  allowCloudinaryImage?: boolean;
   productMediaNaming?: {
     productSlug: string;
     mediaPurpose: "clean-roasting" | "custom-section";
@@ -161,6 +162,7 @@ export default function MediaUploader({
   showPreview = true,
   imageActionLabel = "選擇圖片",
   videoActionLabel,
+  allowCloudinaryImage = false,
   productMediaNaming,
   onChange,
   onImageSelect,
@@ -266,7 +268,7 @@ export default function MediaUploader({
       onImageSelect(file);
       return;
     }
-    if (!onImageUpload && productMediaNaming?.mediaPurpose === "custom-section") {
+    if (!onImageUpload && (allowCloudinaryImage || productMediaNaming?.mediaPurpose === "custom-section")) {
       await uploadCloudinary(file, "image");
       return;
     }
@@ -308,7 +310,9 @@ export default function MediaUploader({
 
       {value && showPreview ? (
         <div className="kd-media-upload-preview">
-          {value.type === "video" ? (
+          {value.type === "youtube" && value.videoId ? (
+            <img src={`https://i.ytimg.com/vi/${value.videoId}/hqdefault.jpg`} alt={`${label} YouTube 預覽`} />
+          ) : value.type === "video" ? (
             <video src={value.url} poster={value.posterUrl} controls playsInline preload="metadata" />
           ) : (
             <img src={value.url} alt={`${label}預覽`} />
