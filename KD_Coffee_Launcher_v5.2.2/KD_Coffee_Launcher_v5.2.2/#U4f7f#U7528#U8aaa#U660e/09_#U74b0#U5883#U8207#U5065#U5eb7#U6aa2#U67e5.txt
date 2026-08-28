@@ -1,0 +1,22 @@
+﻿環境與健康檢查
+
+環境檢查：選 15
+檢查 Node、npm、Git、ngrok、PowerShell。
+
+網站健康檢查：選 16
+檢查：
+- package.json
+- app
+- components
+- .env.local
+- node_modules
+- 首頁路由
+- 作品路由
+- 購物車
+- 結帳
+- 會員 API
+- LINE 登入
+- 7-ELEVEN 資料
+
+報告位置：
+Reports\HealthCheck

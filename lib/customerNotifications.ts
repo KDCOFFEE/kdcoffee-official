@@ -19,8 +19,14 @@ export type CustomerNotificationPhoto = {
 };
 
 export type CustomerNotificationResult = {
-  status: "sent" | "failed" | "not_configured";
+  status: "sent" | "partial" | "failed" | "not_configured";
   error?: string;
+  diagnostics?: {
+    messageTypes: Array<"text" | "image">;
+    imageMimeType?: "image/jpeg" | "image/png";
+    imageHost?: string;
+    lineHttpStatus?: number;
+  };
 };
 
 export type CustomerNotificationHistoryEntry = {
@@ -41,6 +47,15 @@ export type CustomerNotificationAction = {
   historyId?: string;
   completedAt?: string;
 };
+
+export function customerNotificationDeliveryOutcome(
+  entry: Pick<CustomerNotificationHistoryEntry, "channels" | "results">,
+) {
+  const states = entry.channels.map((channel) => entry.results[channel]?.status);
+  if (states.length > 0 && states.every((state) => state === "sent")) return "sent" as const;
+  if (states.some((state) => state === "sent" || state === "partial")) return "partial" as const;
+  return "failed" as const;
+}
 
 const LINE_USER_ID_PATTERN = /^U[0-9a-f]{32}$/i;
 

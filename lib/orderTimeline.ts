@@ -10,7 +10,8 @@ export type OrderTimelineEntryType =
   | "admin_message"
   | "cancellation"
   | "inventory_warning"
-  | "inventory_return";
+  | "inventory_return"
+  | "fulfillment";
 
 export type OrderTimelineEntry = {
   id: string;
@@ -119,7 +120,7 @@ function notificationOutcome(notification: Record<string, unknown>) {
     .filter((channel): channel is "line" | "email" => channel === "line" || channel === "email")
     .map((channel) => isRecord(results[channel]) ? cleanText(results[channel].status, 40) : "");
   if (states.length > 0 && states.every((state) => state === "sent")) return "sent";
-  if (states.some((state) => state === "sent")) return "partial";
+  if (states.some((state) => state === "sent" || state === "partial")) return "partial";
   return "failed";
 }
 
@@ -177,6 +178,7 @@ export function buildOrderTimeline(
   const statusHistory = Array.isArray(order.statusHistory) ? order.statusHistory : [];
   statusHistory.forEach((value, index) => {
     if (!isRecord(value)) return;
+    if (value.source === "fulfillment") return;
     const from = statusLabel(value.from);
     const to = statusLabel(value.to);
     add({
@@ -188,6 +190,22 @@ export function buildOrderTimeline(
       ...(audience === "admin" ? { description: `訂單狀態由「${from}」更新為「${to}」。` } : {}),
       actor: "admin",
     }, value.at);
+  });
+
+  const fulfillmentEvents = Array.isArray(order.fulfillmentEvents) ? order.fulfillmentEvents : [];
+  fulfillmentEvents.forEach((value, index) => {
+    if (!isRecord(value)) return;
+    const state = cleanText(value.state, 80);
+    const labels: Record<string,string> = { order_created:"訂單成立",preparing:"準備中",shipped:"已交寄",in_transit:"配送中",arrived_at_pickup_store:"商品已到 7-ELEVEN",ready_for_store_pickup:"咖啡已準備完成，可以取貨",completed:"已完成取貨",suspected_uncollected:"取貨狀態待工作室確認",uncollected:"未完成取貨",cancelled:"已取消",exception_requires_review:"取貨狀態待確認" };
+    const source = cleanText(value.source, 80);
+    add({
+      id: `fulfillment-${cleanText(value.eventId,100)||index}`,
+      type: "fulfillment",
+      title: labels[state] || "訂單進度已更新",
+      ...(audience === "admin" ? { description: source === "admin" ? "人工確認" : source === "seven_eleven_email" ? "7-ELEVEN 通知" : "系統紀錄" } : {}),
+      actor: source === "admin" ? "admin" : "system",
+      tone: ["suspected_uncollected","exception_requires_review"].includes(state) ? "warning" : state === "uncollected" ? "error" : "default",
+    }, value.occurredAt);
   });
 
   const notifications = Array.isArray(order.customerNotifications)

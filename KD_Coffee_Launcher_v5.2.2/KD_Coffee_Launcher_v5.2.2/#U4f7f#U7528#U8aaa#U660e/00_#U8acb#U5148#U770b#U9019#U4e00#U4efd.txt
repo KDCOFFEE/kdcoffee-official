@@ -1,0 +1,25 @@
+﻿KD Coffee Launcher v5.1 Ultimate｜請先看這一份
+
+這套工具的目標只有五件事：
+1. 啟動得起來
+2. 更新不會亂
+3. 出錯能還原
+4. 問題查得到
+5. 操作看得懂
+
+第一次請直接雙擊：
+KD_COFFEE_LAUNCHER_v5_1.bat
+
+第一次會要求選擇網站專案資料夾。
+請選擇最外層有 package.json 的資料夾，例如：
+F:\AI網站\kdcoffee-studio-v13.0-stable-commerce
+
+不要選：
+- ZIP 檔案
+- Launcher 資料夾
+- PATCH 解壓資料夾
+- node_modules
+- app
+
+Launcher 會把設定記在：
+KD_LAUNCHER_CONFIG.json

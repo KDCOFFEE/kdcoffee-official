@@ -1,0 +1,337 @@
+{
+  "version": 1526,
+  "updatedAt": "2026-08-07T14:47:25.513Z",
+  "hero": {
+    "enabled": true,
+    "eyebrow": "KD COFFEE · 咖啡藝術工坊",
+    "titleLines": [
+      "為了理想的風味，",
+      "我們打造了自己的烘豆機。"
+    ],
+    "lead": "我們相信，一杯好的咖啡，不是靠運氣，而是靠每一個細節累積出來。",
+    "buttonLabel": "開始挑咖啡",
+    "buttonHref": "#home003",
+    "poster": "/images/kd-fluid-bed-poster.webp",
+    "videoWebm": "/videos/kd-fluid-bed-roasting.webm",
+    "videoMp4": "/videos/kd-fluid-bed-roasting.mp4",
+    "location": "KAOHSIUNG · TAIWAN",
+    "method": "FLUID BED ROASTING",
+    "monthNumber": "08",
+    "monthLabel": "2026\nMONTHLY SELECTION",
+    "secondaryLabel": "本月作品",
+    "secondaryHref": "#home004"
+  },
+  "campaignSection": {
+    "enabled": true,
+    "eyebrow": "THIS MONTH AT KD COFFEE",
+    "title": "本月活動",
+    "intro": "新品、節慶禮盒與期間限定組合，都集中在這裡。",
+    "displayLimit": 0
+  },
+  "campaigns": [
+    {
+      "id": "drip-trial-202608",
+      "enabled": true,
+      "sort": 1,
+      "eyebrow": "MONTHLY FEATURE",
+      "title": "耳掛咖啡試喝組",
+      "description": "把本月精選作品，一次帶回家慢慢品嚐。從花香、果香到柔和甜感，用最輕鬆的方式找到自己喜歡的那一杯。",
+      "details": [
+        "每包獨立充氮保鮮",
+        "當月作品依實際供應調整"
+      ],
+      "ctaLabel": "查看本月組合",
+      "ctaHref": "/works",
+      "secondaryLabel": "瀏覽本月豆單",
+      "secondaryHref": "/#home004",
+      "note": "LIMITED SELECTION",
+      "image": "",
+      "startDate": "2026-07-01",
+      "endDate": "2026-12-31"
+    }
+  ],
+  "sectionMedia": {
+    "whyKdImage": "",
+    "contactImage": "",
+    "footerBackground": ""
+  },
+  "home002": {
+    "title": "為什麼選擇 KD Coffee？",
+    "intro": "我們相信，一杯好的咖啡，不是靠運氣，而是靠每一個細節累積出來。",
+    "purpose": "建立品牌信任，回答客人「為什麼值得買」。",
+    "cards": [
+      {
+        "id": "HOME002-CARD01",
+        "imageId": "IMG0101",
+        "title": "為了風味，我們打造自己的烘豆機",
+        "text": "市面上找不到符合我們理想風味的設備，因此我們選擇自己設計、修改與測試，只為了讓每一支咖啡展現更乾淨、更有層次的風味。",
+        "image": "",
+        "alt": "KD Coffee 自製流床式熱風烘豆機",
+        "prompt": "真實攝影，KD Coffee 自製流床式熱風烘豆機局部特寫，透明烘豆室與翻滾咖啡豆，自然工作室光線，精品咖啡工坊質感，800×800，無文字。"
+      },
+      {
+        "id": "HOME002-CARD02",
+        "imageId": "IMG0102",
+        "title": "穩定，來自每一次確認",
+        "text": "每一批咖啡都經過完整烘焙紀錄與杯測確認，讓每一次回購，都能喝到熟悉且穩定的風味。",
+        "image": "",
+        "alt": "KD Coffee 紅外線熱顯像與杯測確認",
+        "prompt": "真實攝影，咖啡烘焙紅外線熱顯像畫面與杯測桌細節，乾淨專業的工作室，自然光，800×800，無文字。"
+      },
+      {
+        "id": "HOME002-CARD03",
+        "imageId": "IMG0103",
+        "title": "少量管理，保持最佳賞味",
+        "text": "我們維持少量庫存，不大量囤貨，讓咖啡保持在理想賞味期間送到你手中。",
+        "image": "",
+        "alt": "KD Coffee 少量庫存與充氮包裝",
+        "prompt": "真實攝影，少量整齊排列的 KD Coffee 咖啡包裝與充氮封裝作業，精品工坊，自然光，800×800，無文字。"
+      },
+      {
+        "id": "HOME002-CARD04",
+        "imageId": "IMG0104",
+        "title": "每一包，都代表 KD Coffee",
+        "text": "從烘焙、杯測、充氮包裝到出貨，每一包咖啡都由 KD Coffee 工作室親自完成。",
+        "image": "",
+        "alt": "KD Coffee 工作室包裝與出貨",
+        "prompt": "真實攝影，KD Coffee 工作室手工檢查咖啡包裝與準備出貨，真實人物手部即可，溫暖自然光，800×800，無文字。"
+      }
+    ]
+  },
+  "home003": {
+    "title": "今天，你的咖啡時刻是什麼？",
+    "intro": "不用先懂咖啡。每一個選擇，都從一個生活情境開始。",
+    "purpose": "用生活情境降低第一次購買門檻，讓客人一眼看見自己的需求。",
+    "cards": [
+      {
+        "id": "HOME003-SCENE001",
+        "imageId": "IMG0201",
+        "eyebrow": "FOR BEGINNERS",
+        "title": "今天，想開始認識精品咖啡。",
+        "text": "從耳掛開始，不用準備器具，也能輕鬆找到第一杯喜歡的風味。",
+        "button": "開始第一杯",
+        "href": "/works",
+        "image": "/images/home003/kd-coffee-first-specialty-coffee-drip-bag-v01.png",
+        "alt": "KD Coffee 耳掛咖啡在晨光木桌上的第一次精品咖啡沖泡情境",
+        "seoFilename": "kd-coffee-first-specialty-coffee-drip-bag",
+        "ratio": "4:5",
+        "recommendedSize": "1600 × 2000 px",
+        "imageType": "AI 品牌情境攝影（未來可替換真實照片）",
+        "prompt": "KD Coffee Homepage Scene Photography\n\nPremium Specialty Coffee Brand\nHomepage HOME003 Scene 001\nFirst Specialty Coffee Experience\n\nPurpose\nCreate a premium lifestyle photograph for a homepage scene that welcomes people trying specialty coffee for the first time. The image must communicate warmth, simplicity, ease, and quiet confidence.\n\nComposition\nVertical 4:5 composition, 1600 × 2000 px. A warm wooden table beside a large window. Soft morning sunlight. A simple white ceramic mug with one unbranded drip coffee bag hanging naturally on the rim. Fresh black coffee slowly dripping into the mug. A closed paperback book and a softly folded natural linen cloth nearby. Main subject placed slightly left of center. Keep the upper-right and lower-right areas visually calm for website text overlay.\n\nVisual Direction\nJapanese minimalism, premium specialty coffee brand, authentic lifestyle photography, quiet morning atmosphere, warm neutral tones, natural wood, soft cream and ivory, subtle shadows, timeless and refined. Realistic commercial photography, not an illustration.\n\nCamera and Lighting\n50 mm lens look, eye-level viewpoint, shallow depth of field, natural window light, warm white balance, soft realistic shadows, no dramatic spotlight.\n\nImportant\nNo visible brand logo, no readable packaging text, no people, no hands, no milk foam. Coffee must be black. Large negative space for website typography. Ultra-high resolution, photorealistic, clean and premium.",
+        "negativePrompt": "No people, no hands, no face, no smartphone, no laptop, no office desk, no café interior, no latte art, no milk, no coffee beans scattered on the table, no flowers, no excessive props, no bright saturated colors, no text, no logo, no watermark, no illustration, no cartoon, no CGI, no fake HDR, no distorted drip bag, no duplicated objects."
+      },
+      {
+        "id": "HOME003-SCENE002",
+        "imageId": "IMG0202",
+        "eyebrow": "BY FLAVOR",
+        "title": "今天，想喝喜歡的味道。",
+        "text": "從花香、果香到溫暖甜感，直接依照你喜歡的風味開始挑選。",
+        "button": "依風味挑選",
+        "href": "/works",
+        "image": "/images/home003/kd-coffee-choose-coffee-by-flavor-v01.png",
+        "alt": "花香水果與黑咖啡構成的 KD Coffee 依風味挑選情境",
+        "seoFilename": "kd-coffee-choose-coffee-by-flavor",
+        "ratio": "4:5",
+        "recommendedSize": "1200 × 1500 px",
+        "imageType": "AI 品牌情境攝影（未來可替換真實照片）",
+        "prompt": "KD Coffee Homepage Scene Photography\n\nPremium Specialty Coffee Brand\nHomepage HOME003 Scene 002\nChoose Coffee by Flavor\n\nPurpose\nCreate a refined still-life photograph that helps a customer intuitively understand floral, fruity, and sweet coffee flavor directions without looking like a fruit advertisement.\n\nComposition\nVertical 4:5 composition, 1200 × 1500 px. One elegant cup of black pour-over coffee on a warm stone or light wood surface. Arrange only a few carefully selected natural ingredients around it: one pale peach, a small cut citrus, two or three dark berries, and one delicate white flower. Keep every object separated with generous negative space. Place the coffee cup in the lower-left third. Preserve a calm dark-to-neutral area in the upper half for website text overlay.\n\nVisual Direction\nJapanese editorial still life, premium coffee brand, art-gallery calmness, warm muted natural palette, sophisticated but approachable, authentic food photography, restrained styling. The ingredients should suggest flavor notes, not become a fruit basket.\n\nCamera and Lighting\nTop-front 45-degree camera angle, 50 mm lens look, soft side window light, realistic shadows, moderate depth of field, accurate natural textures.\n\nImportant\nBlack coffee only. No packaging, no labels, no people. No floating ingredients. No excessive decoration. Ultra-high resolution, photorealistic, refined commercial photography.",
+        "negativePrompt": "No fruit explosion, no fruit basket, no dozens of berries, no latte art, no milk, no coffee beans scattered, no artificial flowers, no hands, no people, no text, no logo, no watermark, no illustration, no cartoon, no surreal floating objects, no oversaturated colors, no glossy CGI, no cluttered composition."
+      },
+      {
+        "id": "HOME003-SCENE003",
+        "imageId": "IMG0203",
+        "eyebrow": "FOR GIFT",
+        "title": "今天，想送一份會被記住的禮物。",
+        "text": "讓對方真正喝得到你的心意，適合節日、朋友與重要的人。",
+        "button": "挑選送禮",
+        "href": "/works",
+        "image": "/images/home003/kd-coffee-specialty-coffee-gift-v01.png",
+        "alt": "KD Coffee 精品耳掛咖啡禮盒與提袋的送禮情境",
+        "seoFilename": "kd-coffee-specialty-coffee-gift",
+        "ratio": "4:5",
+        "recommendedSize": "1200 × 1500 px",
+        "imageType": "AI 品牌情境攝影（之後替換實際禮盒照片）",
+        "prompt": "KD Coffee Homepage Scene Photography\n\nPremium Specialty Coffee Brand\nHomepage HOME003 Scene 003\nMemorable Coffee Gift\n\nPurpose\nCreate a premium gifting scene for KD Coffee that feels sincere, tasteful, and suitable for Taiwanese seasonal gifting. This is a temporary concept image before real KD Coffee packaging photography is available.\n\nComposition\nVertical 4:5 composition, 1200 × 1500 px. A minimalist matte gift box in deep charcoal or warm ivory placed on a clean wooden table. Beside it, a simple premium paper carry bag and several neatly arranged individual drip coffee sachets with no readable branding. A narrow fabric ribbon or paper band adds a restrained gifting detail. Keep the left or upper-left area calm for website text.\n\nVisual Direction\nJapanese minimalism, premium handmade coffee workshop, understated luxury, warm and sincere, Taiwanese boutique gift aesthetic, natural paper textures, muted cream, charcoal and soft brown palette. Realistic commercial product photography.\n\nLighting\nSoft afternoon window light, gentle shadow, warm neutral white balance, clean studio-home environment, sharp packaging details with soft background falloff.\n\nImportant\nThe packaging must remain generic and unbranded so it does not falsely reproduce the final KD Coffee package. No festive clichés, no excessive ribbons, no red-and-gold luxury styling. Ultra-high resolution, photorealistic.",
+        "negativePrompt": "No readable logo, no fake KD Coffee logo, no text, no watermark, no Christmas decorations, no red envelopes, no excessive gold, no huge bow, no flowers everywhere, no people, no hands, no coffee beans scattered, no plastic-looking packaging, no CGI mockup look, no cartoon, no illustration, no crowded background."
+      },
+      {
+        "id": "HOME003-SCENE004",
+        "imageId": "IMG0204",
+        "eyebrow": "QUICK REORDER",
+        "title": "今天，想補充熟悉的味道。",
+        "text": "直接回到完整作品列表，快速找到你已經喜歡、想再次回購的咖啡。",
+        "button": "快速回購",
+        "href": "/works",
+        "image": "/images/home003/kd-coffee-quick-reorder-favorite-coffee-v01.png",
+        "alt": "KD Coffee 熟客在工作桌上準備再次購買精品咖啡的情境",
+        "seoFilename": "kd-coffee-quick-reorder-favorite-coffee",
+        "ratio": "4:5",
+        "recommendedSize": "1200 × 1500 px",
+        "imageType": "AI 品牌情境攝影（未來可替換真實產品組合照）",
+        "prompt": "KD Coffee Homepage Scene Photography\n\nPremium Specialty Coffee Brand\nHomepage HOME003 Scene 004\nQuick Reorder and Familiar Flavor\n\nPurpose\nCreate a calm repeat-purchase scene that communicates familiarity, trust, and an easy return to a favorite coffee.\n\nComposition\nVertical 4:5 composition, 1200 × 1500 px. A tidy home or studio work table with three upright matte coffee bags in charcoal tones, deliberately shown without readable labels or logos. One opened bag and a simple hand-brewing setup nearby: a ceramic dripper, glass server, and black coffee cup. The arrangement should feel like a loyal customer preparing to restock a familiar favorite. Keep the upper-right area quiet for website text.\n\nVisual Direction\nPremium Japanese coffee workshop aesthetic, understated, mature, dependable, real-life product photography, warm neutral color palette, clean and organized, subtle sense of routine and familiarity.\n\nCamera and Lighting\nEye-level to slightly elevated angle, 50 mm lens look, soft natural side light, realistic material textures, moderate depth of field.\n\nImportant\nNo person required. Packaging remains generic until real KD Coffee product photos replace it. Black coffee only. Ultra-high resolution and photorealistic.",
+        "negativePrompt": "No readable branding, no fake logo, no text, no watermark, no people posing, no laptop dominating the scene, no smartphone, no latte art, no milk, no scattered coffee beans, no messy table, no colorful commercial packaging, no illustration, no cartoon, no CGI, no dramatic spotlight, no excessive props."
+      }
+    ]
+  },
+  "home004": {
+    "title": "很多人，就是從這三款開始。",
+    "intro": "第一次買不用一次看完所有作品，先從接受度高、風味清楚的三款開始。",
+    "purpose": "促成第一次購買。",
+    "productSlugs": [
+      "monet-floral",
+      "davinci-feast",
+      "raphael-kiss"
+    ]
+  },
+  "home005": {
+    "title": "一包咖啡，經過哪些事情？",
+    "intro": "從生豆到出貨，每一個步驟都在工作室完成。",
+    "purpose": "讓價格背後的用心被看見。",
+    "steps": [
+      {
+        "id": "HOME005-STEP01",
+        "imageId": "IMG0301",
+        "title": "挑選與確認生豆",
+        "text": "先確認原料狀態，建立適合這支咖啡的方向。",
+        "image": "",
+        "alt": "KD Coffee 生豆挑選",
+        "prompt": "真實攝影，精品咖啡生豆挑選與檢查，乾淨工作桌，自然光，800×800，無文字。"
+      },
+      {
+        "id": "HOME005-STEP02",
+        "imageId": "IMG0302",
+        "title": "流床式熱風烘焙",
+        "text": "讓咖啡豆均勻翻動，呈現乾淨清楚的風味。",
+        "image": "",
+        "alt": "KD Coffee 流床式熱風烘焙",
+        "prompt": "真實攝影，自製流床式熱風烘豆機中咖啡豆翻滾，工作室自然光，800×800，無文字。"
+      },
+      {
+        "id": "HOME005-STEP03",
+        "imageId": "IMG0303",
+        "title": "杯測確認",
+        "text": "透過實際品飲確認香氣、甜感與整體平衡。",
+        "image": "",
+        "alt": "KD Coffee 職人杯測",
+        "prompt": "真實攝影，精品咖啡杯測桌，多個杯測碗與湯匙，專業乾淨，800×800，無文字。"
+      },
+      {
+        "id": "HOME005-STEP04",
+        "imageId": "IMG0304",
+        "title": "充氮保鮮",
+        "text": "減少氧化影響，讓風味以更好的狀態被保存。",
+        "image": "",
+        "alt": "KD Coffee 充氮包裝",
+        "prompt": "真實攝影，咖啡充氮包裝機與密封作業局部，整潔工作室，800×800，無文字。"
+      },
+      {
+        "id": "HOME005-STEP05",
+        "imageId": "IMG0305",
+        "title": "包裝檢查",
+        "text": "確認標籤、規格與封口，再準備交付。",
+        "image": "",
+        "alt": "KD Coffee 咖啡包裝檢查",
+        "prompt": "真實攝影，KD Coffee 咖啡包裝標籤與封口檢查，手部操作，800×800，無文字。"
+      },
+      {
+        "id": "HOME005-STEP06",
+        "imageId": "IMG0306",
+        "title": "送到你手中",
+        "text": "7-ELEVEN 取貨付款或工作室自取，簡單完成。",
+        "image": "",
+        "alt": "KD Coffee 咖啡出貨",
+        "prompt": "真實攝影，整齊完成的咖啡包裹準備出貨，溫暖自然光，800×800，無文字。"
+      }
+    ]
+  },
+  "home006": {
+    "title": "KD Coffee 專屬烘焙服務",
+    "text": "單一品項訂購 2 磅以上，可依需求討論適合的烘焙程度。一般耳掛咖啡不提供此服務；客製化禮盒請直接與我們聯繫。",
+    "points": [
+      "適用於同一款半磅咖啡豆或咖啡粉累計 4 包以上",
+      "可選擇商品允許的烘焙度",
+      "工作室確認需求後再安排烘焙"
+    ],
+    "button": "查看適用作品",
+    "href": "/works",
+    "imageId": "IMG0601",
+    "image": "",
+    "alt": "KD Coffee 專屬烘焙服務",
+    "prompt": "真實攝影，咖啡烘焙師操作流床式熱風烘豆機，呈現專業客製烘焙服務，工作室自然光，1200×900，無文字。"
+  },
+  "home007": {
+    "title": "每一支咖啡，都是一件作品。",
+    "text": "我們用藝術作品的語言，記住每一支咖啡獨特的風味與情緒。",
+    "cards": [
+      {
+        "id": "HOME007-CARD01",
+        "imageId": "IMG0701",
+        "title": "風味有自己的性格",
+        "text": "不是只用產區與處理法命名，而是讓每支咖啡有容易被記住的故事。",
+        "image": "",
+        "alt": "KD Coffee 咖啡藝術系列",
+        "prompt": "精品咖啡藝術系列包裝與黑白主視覺，安靜藝廊氛圍，米白背景，800×1000，無新增文字。"
+      },
+      {
+        "id": "HOME007-CARD02",
+        "imageId": "IMG0702",
+        "title": "每一次品飲都是探索",
+        "text": "從花香、果香到甜感與尾韻，找到屬於自己的作品。",
+        "image": "",
+        "alt": "KD Coffee 精品咖啡品飲",
+        "prompt": "真實攝影，手沖黑咖啡與藝術感包裝，日系藝廊留白，800×1000，無文字。"
+      },
+      {
+        "id": "HOME007-CARD03",
+        "imageId": "IMG0703",
+        "title": "讓咖啡更容易被理解",
+        "text": "先用感受選擇，再慢慢認識咖啡知識。",
+        "image": "",
+        "alt": "KD Coffee 第一次選精品咖啡",
+        "prompt": "真實攝影，三款不同風味的精品咖啡包裝整齊展示，溫暖自然光，800×1000，無文字。"
+      }
+    ]
+  },
+  "home008": {
+    "title": "真正完成每一包咖啡的地方。",
+    "text": "這不是素材庫裡的咖啡工坊。你看到的烘焙、杯測、包裝與出貨，都發生在 KD Coffee 的日常。",
+    "images": [
+      {
+        "id": "HOME008-IMG01",
+        "imageId": "IMG0801",
+        "image": "",
+        "alt": "KD Coffee 工作室全景"
+      },
+      {
+        "id": "HOME008-IMG02",
+        "imageId": "IMG0802",
+        "image": "",
+        "alt": "KD Coffee 烘豆工作"
+      },
+      {
+        "id": "HOME008-IMG03",
+        "imageId": "IMG0803",
+        "image": "",
+        "alt": "KD Coffee 包裝作業"
+      },
+      {
+        "id": "HOME008-IMG04",
+        "imageId": "IMG0804",
+        "image": "",
+        "alt": "KD Coffee 杯測作業"
+      }
+    ]
+  },
+  "home009": {
+    "enabled": true,
+    "title": "喝過的人，怎麼說？",
+    "intro": "只放真實的 Google、Facebook 或 LINE 回饋，不使用虛構評論。",
+    "items": []
+  },
+  "home010": {
+    "title": "今天，想從哪一杯開始？",
+    "text": "不用加入會員，也能直接選咖啡、加入購物車並完成訂單。",
+    "button": "開始挑咖啡",
+    "href": "/works"
+  }
+}

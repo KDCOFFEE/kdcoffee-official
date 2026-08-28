@@ -1,0 +1,7 @@
+﻿KD Coffee Launcher v5.2.2
+
+2026-08-25
+- 修正 PowerShell Execution Policy 阻擋 ngrok.ps1：固定優先使用 ngrok.cmd / ngrok.exe。
+- 新增功能 25：手機測試，一鍵確認/啟動 localhost:3000 並啟動 ngrok。
+- 手機公開網址會顯示於 Launcher，並嘗試複製到剪貼簿。
+- 預設專案更新為 F:\KD_Coffee_Studio_v15.6.0_UIUX_DEV_20260814。

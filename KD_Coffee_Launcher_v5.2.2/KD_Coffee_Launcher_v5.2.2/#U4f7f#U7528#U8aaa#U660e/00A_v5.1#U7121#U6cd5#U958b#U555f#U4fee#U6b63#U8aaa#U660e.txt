@@ -1,0 +1,17 @@
+﻿v5.1 無法開啟的原因與修正
+
+錯誤症狀：
+- 出現「不是內部或外部命令」
+- 中文變成亂碼
+- echo、ExecutionPolicy、install 等文字被拆成指令
+
+原因：
+舊版主 BAT 使用 UTF-8 BOM 儲存，Windows CMD 在部分環境無法正確解析。
+
+v5.1.1 修正：
+- 主 BAT 改為純 ASCII
+- 中文選單改由 PowerShell 執行
+- 不再讓 CMD 直接解析中文選單
+
+請雙擊：
+KD_COFFEE_LAUNCHER_v5_1_1.bat

@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
   createSessionToken,
+  getCurrentMember,
+  linkLineIdentityToMember,
+  loginLineMember,
   MEMBER_SESSION_COOKIE,
   memberSessionCookieOptions,
-  upsertLineMember,
   safeReturnPath,
 } from "@/lib/memberAuth";
 
@@ -42,6 +44,8 @@ function clearOAuthCookies(response: NextResponse) {
   response.cookies.delete("line_oauth_nonce");
   response.cookies.delete("line_oauth_return");
   response.cookies.delete("line_oauth_base");
+  response.cookies.delete("line_oauth_mode");
+  response.cookies.delete("line_link_transaction");
 }
 
 export async function GET(request: NextRequest) {
@@ -51,6 +55,8 @@ export async function GET(request: NextRequest) {
   const savedState = request.cookies.get("line_oauth_state")?.value;
   const nonce = request.cookies.get("line_oauth_nonce")?.value;
   const returnTo = safeReturnPath(request.cookies.get("line_oauth_return")?.value);
+  const mode = request.cookies.get("line_oauth_mode")?.value === "link" ? "link" : "login";
+  const linkTransactionId = request.cookies.get("line_link_transaction")?.value;
   const channelId = env("LINE_LOGIN_CHANNEL_ID");
   const channelSecret = env("LINE_LOGIN_CHANNEL_SECRET");
   const baseUrl = resolveBaseUrl(request);
@@ -104,7 +110,6 @@ export async function GET(request: NextRequest) {
         status: tokenResponse.status,
         redirectUri,
         channelId,
-        response: tokenText,
         requestId: tokenResponse.headers.get("x-line-request-id"),
       });
       throw new Error(`LINE token exchange failed: ${tokenResponse.status}`);
@@ -130,7 +135,6 @@ export async function GET(request: NextRequest) {
     if (!verifyResponse.ok) {
       console.error("LINE ID token verification rejected", {
         status: verifyResponse.status,
-        response: verifyText,
         requestId: verifyResponse.headers.get("x-line-request-id"),
       });
       throw new Error(`LINE ID token verify failed: ${verifyResponse.status}`);
@@ -148,12 +152,40 @@ export async function GET(request: NextRequest) {
       throw new Error("LINE nonce verification failed");
     }
 
-    const member = await upsertLineMember({
+    if (mode === "link") {
+      const member = await getCurrentMember();
+      if (!member || !linkTransactionId) throw new Error("LINE linking session is invalid");
+
+      await linkLineIdentityToMember({
+        transactionId: linkTransactionId,
+        member,
+        state,
+        profile: {
+          sub: verified.sub,
+          name: verified.name,
+          picture: verified.picture,
+        },
+      });
+
+      const linked = NextResponse.redirect(`${baseUrl}/member?linked=line`);
+      clearOAuthCookies(linked);
+      return linked;
+    }
+
+    const login = await loginLineMember({
       sub: verified.sub,
       name: verified.name,
       picture: verified.picture,
       email: verified.email,
     });
+
+    if (login.status === "link-required") {
+      const linkRequired = NextResponse.redirect(`${baseUrl}/member?error=account_link_required`);
+      clearOAuthCookies(linkRequired);
+      return linkRequired;
+    }
+
+    const member = login.member;
 
     const response = NextResponse.redirect(`${baseUrl}${returnTo}`);
     response.cookies.set(
@@ -164,8 +196,12 @@ export async function GET(request: NextRequest) {
     clearOAuthCookies(response);
     return response;
   } catch (err) {
-    console.error("LINE login callback failed", err);
-    const failed = NextResponse.redirect(`${baseUrl}/member?error=line_login_failed`);
+    console.error("LINE login callback failed", {
+      reason: err instanceof Error ? err.name : "unknown",
+      mode,
+    });
+    const errorCode = mode === "link" ? "line_link_failed" : "line_login_failed";
+    const failed = NextResponse.redirect(`${baseUrl}/member?error=${errorCode}`);
     clearOAuthCookies(failed);
     return failed;
   }

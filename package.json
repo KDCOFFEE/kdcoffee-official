@@ -16,6 +16,13 @@
     "test:page-builder-images": "node --experimental-strip-types scripts/test-page-builder-images.ts",
     "test:page-builder-visual-style": "node --experimental-strip-types scripts/test-page-builder-visual-style.ts",
     "test:line": "node --env-file=.env.local scripts/test-line-notification.mjs",
+    "test:member-identity": "node --experimental-strip-types scripts/test-member-identity.ts",
+    "test:member-auth": "node --experimental-strip-types --import ./scripts/member-auth-test-bootstrap.mjs scripts/test-member-auth.ts",
+    "test:membership-commerce": "node --experimental-strip-types --import ./scripts/member-auth-test-bootstrap.mjs scripts/test-membership-commerce.ts",
+    "test:membership-experience": "node --experimental-strip-types --import ./scripts/member-auth-test-bootstrap.mjs scripts/test-membership-experience.ts",
+    "test:order-checkout-regression": "jiti scripts/test-order-checkout-regression.ts",
+    "test:fulfillment": "node --experimental-strip-types --import ./scripts/member-auth-test-bootstrap.mjs scripts/test-fulfillment.ts",
+    "test:line-order-image": "node --experimental-strip-types --import ./scripts/member-auth-test-bootstrap.mjs scripts/test-line-order-notification-image.ts",
     "health": "node scripts/health-check.mjs"
   },
   "dependencies": {

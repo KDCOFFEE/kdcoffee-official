@@ -256,6 +256,59 @@ export function getHome003UploadDir() {
       );
 }
 
+/**
+ * 會員身份註冊表。
+ *
+ * 登入方式與會員本體分開保存；既有會員 JSON 與歷史訂單不需搬移。
+ */
+export function getMemberIdentityDir() {
+  const root = getPersistentDataRoot();
+
+  return root
+    ? path.join(root, "member-identity")
+    : path.join(process.cwd(), "data", "member-identity");
+}
+
+export function getMemberIdentityRegistryFile() {
+  return path.join(getMemberIdentityDir(), "registry.json");
+}
+
+/**
+ * 會員商務資料。規則歷史與交易狀態分檔，交易狀態則共用單一鎖，
+ * 讓推薦獎勵、抵用金與定期購事件可以原子完成。
+ */
+export function getMembershipCommerceDir() {
+  const root = getPersistentDataRoot();
+
+  return root
+    ? path.join(root, "membership-commerce")
+    : path.join(process.cwd(), "data", "membership-commerce");
+}
+
+export function getMembershipRulesFile() {
+  return path.join(getMembershipCommerceDir(), "business-rules.json");
+}
+
+export function getMembershipCommerceStateFile() {
+  return path.join(getMembershipCommerceDir(), "commerce-state.json");
+}
+
+/** Canonical order-fulfillment records and Owner logistics settings. */
+export function getFulfillmentDir() {
+  const root = getPersistentDataRoot();
+  return root
+    ? path.join(root, "fulfillment")
+    : path.join(process.cwd(), "data", "fulfillment");
+}
+
+export function getFulfillmentStateFile() {
+  return path.join(getFulfillmentDir(), "state.json");
+}
+
+export function getFulfillmentSettingsFile() {
+  return path.join(getFulfillmentDir(), "settings.json");
+}
+
 /** Owner-managed standalone pages. Kept separate from homepage and product data. */
 export function getPagesDataFile() {
   return path.join(getStoreDir(), "pages.json");

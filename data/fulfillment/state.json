@@ -1,0 +1,128 @@
+{
+  "schemaVersion": 1,
+  "revision": 18,
+  "records": {
+    "KD20260810-6103": {
+      "orderId": "KD20260810-6103",
+      "currentState": "completed",
+      "revision": 3,
+      "events": [
+        {
+          "eventId": "ful_a96d11ef-2937-459d-b2d6-b11763271122",
+          "orderId": "KD20260810-6103",
+          "state": "preparing",
+          "source": "admin",
+          "sourceFingerprint": "010cfb1cca3570124929422dfd7eeed7bcd6ecbafead9a2f8b8406f6f5c30262",
+          "occurredAt": "2026-08-28T05:33:09.949Z",
+          "recordedAt": "2026-08-28T05:33:09.949Z",
+          "actor": "後台管理員",
+          "note": "",
+          "revision": 1
+        },
+        {
+          "eventId": "ful_553c3b95-0195-496f-b7b3-119e62b11659",
+          "orderId": "KD20260810-6103",
+          "state": "ready_for_store_pickup",
+          "source": "admin",
+          "sourceFingerprint": "ded44bff100606a87520f31452dc989108bfe09656f644c635f4756efcadcc8a",
+          "occurredAt": "2026-08-28T05:33:13.916Z",
+          "recordedAt": "2026-08-28T05:33:13.916Z",
+          "actor": "後台管理員",
+          "note": "",
+          "revision": 2
+        },
+        {
+          "eventId": "ful_4b9d830b-d977-441f-9224-004dafa100e7",
+          "orderId": "KD20260810-6103",
+          "state": "completed",
+          "source": "admin",
+          "sourceFingerprint": "5c8e192e6b40b9b56c565474f8ba944b0c3d78e9908e00b596fb5f29f25ddc8a",
+          "occurredAt": "2026-08-28T05:33:38.207Z",
+          "recordedAt": "2026-08-28T05:33:38.207Z",
+          "actor": "後台管理員",
+          "note": "",
+          "revision": 3
+        }
+      ],
+      "createdAt": "2026-08-28T05:33:09.949Z",
+      "updatedAt": "2026-08-28T05:33:38.207Z"
+    },
+    "KD20260807-7209": {
+      "orderId": "KD20260807-7209",
+      "currentState": "ready_for_store_pickup",
+      "revision": 2,
+      "events": [
+        {
+          "eventId": "ful_975cce8c-8e8b-4e0c-89cb-0f8c687ed21b",
+          "orderId": "KD20260807-7209",
+          "state": "preparing",
+          "source": "admin",
+          "sourceFingerprint": "54dc22038f5fbe43df17bae2789fb40eb9f5eaa1270e2498c1a8d6e612170814",
+          "occurredAt": "2026-08-28T05:36:12.718Z",
+          "recordedAt": "2026-08-28T05:36:12.718Z",
+          "actor": "後台管理員",
+          "note": "",
+          "revision": 1
+        },
+        {
+          "eventId": "ful_d8556123-7be9-45dc-829b-b20b20fa6be8",
+          "orderId": "KD20260807-7209",
+          "state": "ready_for_store_pickup",
+          "source": "admin",
+          "sourceFingerprint": "dbc14aff233c3375dd5e2ad158dbdcc20bdd8270352661820cd9b649f003140a",
+          "occurredAt": "2026-08-28T05:36:19.880Z",
+          "recordedAt": "2026-08-28T05:36:19.880Z",
+          "actor": "後台管理員",
+          "note": "",
+          "revision": 2
+        }
+      ],
+      "createdAt": "2026-08-28T05:36:12.718Z",
+      "updatedAt": "2026-08-28T05:36:19.880Z"
+    }
+  },
+  "reviews": [],
+  "processedFingerprints": {
+    "010cfb1cca3570124929422dfd7eeed7bcd6ecbafead9a2f8b8406f6f5c30262": {
+      "eventId": "ful_a96d11ef-2937-459d-b2d6-b11763271122",
+      "orderId": "KD20260810-6103"
+    },
+    "ded44bff100606a87520f31452dc989108bfe09656f644c635f4756efcadcc8a": {
+      "eventId": "ful_553c3b95-0195-496f-b7b3-119e62b11659",
+      "orderId": "KD20260810-6103"
+    },
+    "5c8e192e6b40b9b56c565474f8ba944b0c3d78e9908e00b596fb5f29f25ddc8a": {
+      "eventId": "ful_4b9d830b-d977-441f-9224-004dafa100e7",
+      "orderId": "KD20260810-6103"
+    },
+    "54b58f17a731fe01a8452ac86449867e02cdc1189d1ed36518731a0157ee333b": {
+      "orderId": "KD20260810-6103"
+    },
+    "54dc22038f5fbe43df17bae2789fb40eb9f5eaa1270e2498c1a8d6e612170814": {
+      "eventId": "ful_975cce8c-8e8b-4e0c-89cb-0f8c687ed21b",
+      "orderId": "KD20260807-7209"
+    },
+    "51619d49bb38144b57bec25a5cf59ccaeffb737d139362c7d5a17c03e45cfb74": {
+      "orderId": "KD20260807-7209"
+    },
+    "dbc14aff233c3375dd5e2ad158dbdcc20bdd8270352661820cd9b649f003140a": {
+      "eventId": "ful_d8556123-7be9-45dc-829b-b20b20fa6be8",
+      "orderId": "KD20260807-7209"
+    },
+    "752ed8bd40050e1d94d18356afd9d8235809f8a61724fbe9bd38737472ecc052": {
+      "orderId": "KD20260807-7209"
+    },
+    "85c34b4d1dd2a07796d06d7a28e8c5a4d71668978eb4c6bf7b97b6a8185e8e43": {
+      "orderId": "KD20260807-7209"
+    }
+  },
+  "consequenceStatus": {
+    "ful_a96d11ef-2937-459d-b2d6-b11763271122": "completed",
+    "ful_553c3b95-0195-496f-b7b3-119e62b11659": "completed",
+    "ful_4b9d830b-d977-441f-9224-004dafa100e7": "completed",
+    "ful_975cce8c-8e8b-4e0c-89cb-0f8c687ed21b": "completed",
+    "ful_d8556123-7be9-45dc-829b-b20b20fa6be8": "completed"
+  },
+  "createdAt": "2026-08-28T05:33:09.956Z",
+  "updatedAt": "2026-08-28T05:36:48.218Z"
+}

@@ -1,0 +1,17 @@
+﻿v5.1.2 路徑修正說明
+
+v5.1.1 錯誤：
+New-Item：路徑中有不合法的字元。
+
+原因：
+BAT 傳入的 Launcher 路徑以反斜線結尾，
+在部分 Windows 環境中，尾端引號被當成路徑內容。
+
+v5.1.2：
+- BAT 不再傳路徑
+- PowerShell 自己從 $PSScriptRoot 找位置
+- 支援中文資料夾名稱
+- 支援 Launcher 放在 F:\AI網站 等中文路徑
+
+正確啟動檔：
+KD_COFFEE_LAUNCHER_v5_1_2.bat

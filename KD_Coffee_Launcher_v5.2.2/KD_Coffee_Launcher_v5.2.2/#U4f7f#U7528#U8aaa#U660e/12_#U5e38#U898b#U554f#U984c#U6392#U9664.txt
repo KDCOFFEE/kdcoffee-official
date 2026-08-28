@@ -1,0 +1,28 @@
+﻿常見問題排除
+
+Q：網站打不開
+A：先確認選 1 後 Next.js 顯示 Ready。再開 localhost:3000。
+
+Q：看到舊畫面
+A：選 9 清除 .next，再重啟。
+
+Q：npm 找不到
+A：重新安裝 Node.js，重新開機。
+
+Q：LINE 400 redirect_uri 無效
+A：選 14 診斷，確認 NEXT_PUBLIC_SITE_URL 與 LINE Developers Callback 完全一致。
+
+Q：手機不能開 localhost
+A：手機要用 ngrok HTTPS 網址。
+
+Q：更新 ZIP 報路徑錯誤
+A：v5.1 使用安全逐檔解壓。若仍失敗，建立診斷包傳回檢查。
+
+Q：更新後網站壞掉
+A：先選 5 還原。更新流程也會在嚴重健康檢查失敗時嘗試自動回復。
+
+Q：Port 3000 已被占用
+A：選 21 關閉開發環境，再重新啟動。
+
+Q：切換到錯的專案
+A：選 17，重新選有 package.json 的網站根目錄。

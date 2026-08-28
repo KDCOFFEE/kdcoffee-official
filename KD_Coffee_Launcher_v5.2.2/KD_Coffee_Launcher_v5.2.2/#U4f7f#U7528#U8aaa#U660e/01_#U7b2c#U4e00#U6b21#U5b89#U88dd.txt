@@ -1,0 +1,23 @@
+﻿第一次安裝
+
+一、準備
+- Windows 10 或 11
+- Node.js
+- npm
+- KD Coffee 網站完整專案
+- ngrok（需要手機或 LINE 測試時）
+
+二、解壓縮
+建議放在：
+F:\AI網站\KD_Coffee_Launcher_v5.1
+
+三、第一次啟動
+雙擊 KD_COFFEE_LAUNCHER_v5_1.bat
+選擇真正網站專案。
+
+四、第一次安裝套件
+主選單選 7：npm install
+
+五、啟動網站
+主選單選 1：啟動網站
+瀏覽器會開啟 http://localhost:3000

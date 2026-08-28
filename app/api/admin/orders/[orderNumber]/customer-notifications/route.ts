@@ -120,11 +120,16 @@ export async function POST(
     });
 
     const allSent = channels.every((channel) => results[channel]?.status === "sent");
+    const lineImagePartial = results.line?.status === "partial";
     return NextResponse.json({
       ok: allSent,
       saved: true,
       notification: historyEntry,
-      warning: allSent ? undefined : "訂單狀態已更新，但部分顧客通知發送失敗。",
+      warning: allSent
+        ? undefined
+        : lineImagePartial
+          ? "通知文字已送出，但圖片傳送失敗；請確認公開網址後再試。"
+          : "訂單狀態已更新，但部分顧客通知發送失敗。",
     }, { status: allSent ? 200 : 502 });
   } catch (error) {
     const status = error instanceof OrderNotificationPhotoError ? error.status : 500;

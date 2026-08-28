@@ -1,0 +1,12 @@
+{
+  "product": "KD Coffee Studio",
+  "version": "13.1.0",
+  "packageType": "PATCH",
+  "minimumBaseVersion": "13.0.0",
+  "includes": [
+    "commerce",
+    "cart",
+    "checkout"
+  ],
+  "notes": "範例：每個未來更新包建議放入此檔案。"
+}

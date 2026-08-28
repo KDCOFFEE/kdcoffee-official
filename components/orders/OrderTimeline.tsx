@@ -17,6 +17,7 @@ const ENTRY_LABELS: Record<OrderTimelineEntryType, string> = {
   cancellation: "取消",
   inventory_warning: "庫存警告",
   inventory_return: "庫存回補",
+  fulfillment: "取貨",
 };
 
 const ENTRY_MARKERS: Record<OrderTimelineEntryType, string> = {
@@ -28,6 +29,7 @@ const ENTRY_MARKERS: Record<OrderTimelineEntryType, string> = {
   cancellation: "×",
   inventory_warning: "!",
   inventory_return: "↺",
+  fulfillment: "✓",
 };
 
 const CONVERSATION_ENTRY_TYPES = new Set<OrderTimelineEntryType>([
@@ -41,6 +43,7 @@ const DETAIL_ENTRY_TYPES = new Set<OrderTimelineEntryType>([
   "cancellation",
   "inventory_warning",
   "inventory_return",
+  "fulfillment",
 ]);
 
 function displayTime(entry: OrderTimelineEntry) {

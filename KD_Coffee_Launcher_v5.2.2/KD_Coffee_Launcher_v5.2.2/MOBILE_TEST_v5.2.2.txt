@@ -1,0 +1,14 @@
+﻿KD Coffee Launcher v5.2.2 手機測試
+
+1. 雙擊 KD_COFFEE_LAUNCHER_v5_2_2.bat
+2. 主選單輸入 25
+3. Launcher 會：
+   - 若 Port 3000 尚未啟動，自動開啟 Next.js dev server
+   - 若網站已在 3000 執行，直接沿用
+   - 關閉舊 ngrok process
+   - 固定使用 ngrok.cmd / ngrok.exe，避開 PowerShell ngrok.ps1 Execution Policy 問題
+   - 啟動 ngrok tunnel
+   - 顯示手機可開啟的 https 公開網址
+   - 嘗試將網址複製到電腦剪貼簿
+
+注意：網站與 ngrok 的 CMD 視窗都要保持開啟。

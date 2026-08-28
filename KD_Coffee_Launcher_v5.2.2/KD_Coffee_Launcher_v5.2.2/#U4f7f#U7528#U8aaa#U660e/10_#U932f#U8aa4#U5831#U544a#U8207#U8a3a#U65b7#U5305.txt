@@ -1,0 +1,23 @@
+﻿錯誤報告與客服診斷包
+
+錯誤報告：
+Reports\Update
+Reports\HealthCheck
+Reports\LINE
+
+建立客服診斷包：
+選 20。
+
+診斷包包含：
+- package.json
+- VERSION.md
+- 根目錄檔案清單
+- 健康檢查
+- 已遮蔽的環境設定狀態
+
+不包含：
+- LINE Secret
+- 管理員密碼
+- Session Secret
+- 會員個資
+- 訂單個資

@@ -3,6 +3,8 @@ import { getCurrentMember, updateMemberProfile } from "@/lib/memberAuth";
 
 function clean(value: unknown, max: number) { return String(value ?? "").trim().slice(0, max); }
 function publicMember<T extends {
+  lineUserId?: string;
+  loginEmail?: string;
   passwordHash?: string;
   passwordSalt?: string;
   passwordResetTokenHash?: string;
@@ -11,6 +13,8 @@ function publicMember<T extends {
 } | null>(member: T) {
   if (!member) return null;
   const safe = { ...member };
+  delete safe.lineUserId;
+  delete safe.loginEmail;
   delete safe.passwordHash;
   delete safe.passwordSalt;
   delete safe.passwordResetTokenHash;

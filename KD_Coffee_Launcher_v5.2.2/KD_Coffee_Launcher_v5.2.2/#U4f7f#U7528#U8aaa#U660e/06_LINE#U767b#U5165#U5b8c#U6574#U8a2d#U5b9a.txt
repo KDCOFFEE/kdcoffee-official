@@ -1,0 +1,25 @@
+﻿LINE 登入完整設定
+
+本機開發：
+NEXT_PUBLIC_SITE_URL=http://localhost:3000
+
+ngrok 測試：
+NEXT_PUBLIC_SITE_URL=https://目前-ngrok網址
+
+LINE Developers Callback URL：
+https://目前-ngrok網址/api/auth/line/callback
+
+正式網站未來使用：
+NEXT_PUBLIC_SITE_URL=https://kdcoffee1962.com
+Callback：
+https://kdcoffee1962.com/api/auth/line/callback
+
+診斷：
+主選單選 14。
+Launcher 會檢查：
+- NEXT_PUBLIC_SITE_URL
+- LINE_LOGIN_CHANNEL_ID
+- LINE_LOGIN_CHANNEL_SECRET 是否已設定
+- ngrok 與 .env.local 是否一致
+
+任何 Secret 都只顯示「已設定」，不會印出內容。

@@ -21,6 +21,8 @@ import { getCurrentMember, updateMemberProfile } from "@/lib/memberAuth";
 import { updateStoredOrderSafely } from "@/lib/adminOrders";
 import { createGuestOrderAccess } from "@/lib/orderConversation";
 import { sendInternalLineNotification } from "@/lib/internalLineNotifications";
+import { createSubscription } from "@/lib/membershipCommerce";
+import { getActiveMembershipRules } from "@/lib/membershipBusinessRules";
 import {
   addDateOnlyDays,
   getDateOnlyInTimeZone,
@@ -53,6 +55,9 @@ export async function POST(request: Request) {
     if (!validPhone(customer.phone)) throw new Error("手機號碼格式不正確");
     if (!validEmail(customer.email)) throw new Error("Email 格式不正確");
     const memberInfo = member ? { memberId: member.id, lineUserId: member.lineUserId, lineDisplayName: member.displayName } : null;
+    const rulesVersion = await getActiveMembershipRules();
+    const subscriptionIntent = member && body.subscriptionIntent?.consent === true ? { consent: true, intervalDays: Number(body.subscriptionIntent.intervalDays), firstRenewalDate: clean(body.subscriptionIntent.firstRenewalDate, 10) } : null;
+    if (subscriptionIntent && (!rulesVersion.rules.subscription.intervalsDays.includes(subscriptionIntent.intervalDays) || !/^\d{4}-\d{2}-\d{2}$/.test(subscriptionIntent.firstRenewalDate))) throw new Error("定期配送日期或週期不正確");
     const requestHash = createIdempotencyRequestHash({
       orderMode,
       customer,
@@ -60,6 +65,7 @@ export async function POST(request: Request) {
       studioPickup: body.studioPickup ?? null,
       corporateGift: body.corporateGift ?? null,
       items: body.items ?? null,
+      ...(subscriptionIntent ? { subscriptionIntent } : {}),
     });
 
     const core = await withOrderIdempotencyLock(orderDir(), idempotencyKey, async () => {
@@ -99,7 +105,7 @@ export async function POST(request: Request) {
               if (!validStoreId(store.id) || !store.name || !store.address) throw new Error("請選擇正確且完整的 7-ELEVEN 門市");
               favoriteStore = store;
               return {
-                order: { orderNumber: candidateOrderNumber, createdAt, status: "waiting_merchant_create_cod_shipment", orderMode, customer, member: memberInfo, guestOrderAccess, store, payment: "cash_on_delivery", delivery: "7-ELEVEN 門市取貨付款", lineNotification: { sent: false, status: "pending" }, idempotencyKey, idempotencyRequestHash: requestHash, ...priced },
+                order: { orderNumber: candidateOrderNumber, createdAt, status: "waiting_merchant_create_cod_shipment", orderMode, customer, member: memberInfo, guestOrderAccess, store, subscriptionIntent, payment: "cash_on_delivery", delivery: "7-ELEVEN 門市取貨付款", lineNotification: { sent: false, status: "pending" }, idempotencyKey, idempotencyRequestHash: requestHash, ...priced },
                 lineText: `【KD Coffee 新訂單｜7-ELEVEN 取貨付款】\n\n訂單編號：${candidateOrderNumber}\n會員：${member ? `${member.displayName}（LINE 會員）` : "訪客"}\n姓名：${customer.name}\n手機：${customer.phone}\nEmail：${customer.email || "未提供"}\n\n門市店號：${store.id}\n門市名稱：${store.name}\n門市地址：${store.address}\n\n訂購內容：\n${itemLines}\n\n商品小計：NT$ ${priced.subtotal.toLocaleString("zh-TW")}\n運費：${priced.shipping ? `NT$ ${priced.shipping}` : "免運"}\n取貨付款總額：NT$ ${priced.total.toLocaleString("zh-TW")}\n\n備註：${customer.note || "無"}\n\n下一步：請核對門市資料後，建立 7-ELEVEN 取貨付款寄件單。`,
               };
             }
@@ -111,7 +117,7 @@ export async function POST(request: Request) {
             if (!isDateOnlyOnOrAfter(pickup.preferredDate, earliestPickupDate)) throw new Error(hasCustomRoast ? `訂單含專屬烘焙，工作室自取最早為 ${earliestPickupDate}` : "工作室自取日期不正確或早於今天");
             if (!allowedPickupTimes.has(pickup.preferredTime)) throw new Error("工作室自取時間僅開放下午 2:00 至晚上 8:00");
             return {
-              order: { orderNumber: candidateOrderNumber, createdAt, status: "waiting_studio_pickup_confirmation", orderMode, customer, member: memberInfo, guestOrderAccess, studioPickup: pickup, payment: "pickup_confirmation", delivery: "KD Coffee 工作室自取", lineNotification: { sent: false, status: "pending" }, idempotencyKey, idempotencyRequestHash: requestHash, ...priced, shipping: 0, total: priced.subtotal },
+              order: { orderNumber: candidateOrderNumber, createdAt, status: "waiting_studio_pickup_confirmation", orderMode, customer, member: memberInfo, guestOrderAccess, studioPickup: pickup, subscriptionIntent, payment: "pickup_confirmation", delivery: "KD Coffee 工作室自取", lineNotification: { sent: false, status: "pending" }, idempotencyKey, idempotencyRequestHash: requestHash, ...priced, shipping: 0, total: priced.subtotal },
               lineText: `【KD Coffee 新訂單｜工作室自取】\n\n訂單編號：${candidateOrderNumber}\n會員：${member ? `${member.displayName}（LINE 會員）` : "訪客"}\n姓名：${customer.name}\n手機：${customer.phone}\nEmail：${customer.email || "未提供"}\n\n希望取貨日期：${pickup.preferredDate || "未指定"}\n希望時段：${pickup.preferredTime || "由工作室聯絡確認"}\n\n訂購內容：\n${itemLines}\n\n訂單總額：NT$ ${priced.subtotal.toLocaleString("zh-TW")}\n備註：${customer.note || "無"}`,
             };
           },
@@ -160,6 +166,15 @@ export async function POST(request: Request) {
       } catch (error) {
         warnings.push("訂單已成立，但會員資料暫時無法更新。");
         console.error(`Order ${orderNumber} saved but member update failed:`, error);
+      }
+      if (subscriptionIntent) {
+        try {
+          const storedItems = Array.isArray(core.order.items) ? core.order.items as Array<Record<string, unknown>> : [];
+          await createSubscription({ memberId: member.id, startedFromOrderId: orderNumber, anchorDate: subscriptionIntent.firstRenewalDate, intervalDays: subscriptionIntent.intervalDays, shippingMethod: orderMode, storeSelection: favoriteStore ? { storeId: favoriteStore.id, storeName: favoriteStore.name } : undefined, defaultItems: storedItems.map((item, index) => { const label = String(item.optionLabel || ""); const onePound = /一磅|1\s*lb|1磅/i.test(label); const slug = String(item.slug || `item-${index}`); return { itemId: `${slug}:${String(item.optionId || label)}`, packageWeight: onePound ? "one-pound" as const : "half-pound" as const, quantity: Number(item.quantity), roast: String(item.roastLevel || item.preparationLabel || "工作室建議"), components: onePound ? [{ productId: slug, weightHalfPounds: 1 as const }, { productId: slug, weightHalfPounds: 1 as const }] : [{ productId: slug, weightHalfPounds: 1 as const }], unitPrice: Number(item.unitPrice) }; }), idempotencyKey: `checkout:${idempotencyKey}` });
+        } catch (error) {
+          warnings.push("訂單已成立；定期配送申請已保存在訂單中，工作室將協助完成確認。");
+          console.error(`Order ${orderNumber} saved but subscription enrollment failed:`, error);
+        }
       }
     }
 

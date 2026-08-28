@@ -3,6 +3,12 @@ import type {
   CustomerNotificationResult,
   CustomerNotificationTemplate,
 } from "@/lib/customerNotifications";
+import {
+  absoluteOrderNotificationUrl,
+  LineImageAttachmentError,
+  prepareLineImageAttachment,
+  verifyPublicLineImageAttachment,
+} from "@/lib/orderNotificationPhotos";
 
 function escapeHtml(value: string) {
   return value
@@ -15,11 +21,8 @@ function escapeHtml(value: string) {
 
 function absolutePhotoUrl(photo?: CustomerNotificationPhoto) {
   if (!photo) return undefined;
-  const configured = process.env.MEMBER_SITE_URL?.trim();
-  if (!configured) return undefined;
   try {
-    const url = new URL(photo.url, configured);
-    return url.protocol === "https:" ? url.toString() : undefined;
+    return absoluteOrderNotificationUrl(photo.url);
   } catch {
     return undefined;
   }
@@ -30,13 +33,32 @@ export async function sendCustomerLineNotification(input: {
   template: CustomerNotificationTemplate;
   photo?: CustomerNotificationPhoto;
   fetcher?: typeof fetch;
+  publicImageFetcher?: typeof fetch;
 }): Promise<CustomerNotificationResult> {
   const token = process.env.LINE_CHANNEL_ACCESS_TOKEN?.trim();
   if (!token) return { status: "not_configured", error: "LINE 通知服務尚未設定" };
-  const photoUrl = absolutePhotoUrl(input.photo);
   const messages: Record<string, string>[] = [{ type: "text", text: input.template.text }];
-  if (photoUrl) {
-    messages.push({ type: "image", originalContentUrl: photoUrl, previewImageUrl: photoUrl });
+  let imageIssue: string | undefined;
+  let imageHost: string | undefined;
+  let lineHttpStatus: number | undefined;
+  if (input.photo) {
+    try {
+      const attachment = await prepareLineImageAttachment(input.photo);
+      await verifyPublicLineImageAttachment(attachment, input.publicImageFetcher ?? fetch);
+      messages.push({
+        type: "image",
+        originalContentUrl: attachment.originalContentUrl,
+        previewImageUrl: attachment.previewImageUrl,
+      });
+      imageHost = new URL(attachment.originalContentUrl).host;
+    } catch (error) {
+      imageIssue = error instanceof LineImageAttachmentError
+        ? error.message
+        : "圖片準備失敗";
+      console.error("Customer LINE image preparation failed", {
+        code: error instanceof LineImageAttachmentError ? error.code : "unexpected",
+      });
+    }
   }
   try {
     const response = await (input.fetcher ?? fetch)("https://api.line.me/v2/bot/message/push", {
@@ -45,12 +67,37 @@ export async function sendCustomerLineNotification(input: {
       body: JSON.stringify({ to: input.userId, messages }),
       signal: AbortSignal.timeout(8_000),
     });
-    if (response.ok) return { status: "sent" };
-    console.error("Customer LINE notification rejected", { status: response.status });
+    lineHttpStatus = response.status;
+    const diagnostics = {
+      messageTypes: messages.map((message) => message.type) as Array<"text" | "image">,
+      ...(messages.some((message) => message.type === "image") ? { imageMimeType: "image/jpeg" as const } : {}),
+      ...(imageHost ? { imageHost } : {}),
+      lineHttpStatus,
+    };
+    if (response.ok) {
+      return imageIssue
+        ? { status: "partial", error: `文字通知已送出，但${imageIssue}。`, diagnostics }
+        : { status: "sent", diagnostics };
+    }
+    const errorBody = await response.text().catch(() => "");
+    console.error("Customer LINE notification rejected", {
+      status: response.status,
+      messageTypes: diagnostics.messageTypes,
+      body: errorBody.slice(0, 500),
+    });
   } catch {
     console.error("Customer LINE notification request failed");
   }
-  return { status: "failed", error: "LINE 通知發送失敗" };
+  return {
+    status: "failed",
+    error: "LINE 通知發送失敗",
+    diagnostics: {
+      messageTypes: messages.map((message) => message.type) as Array<"text" | "image">,
+      ...(messages.some((message) => message.type === "image") ? { imageMimeType: "image/jpeg" as const } : {}),
+      ...(imageHost ? { imageHost } : {}),
+      ...(lineHttpStatus !== undefined ? { lineHttpStatus } : {}),
+    },
+  };
 }
 
 export async function sendCustomerOrderEmail(input: {

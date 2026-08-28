@@ -1,0 +1,24 @@
+﻿FULL 與 PATCH 更新教學
+
+PATCH：
+- 只覆蓋 ZIP 裡存在的檔案
+- 不會刪除其他檔案
+- 適合小型修正
+- 平常優先使用
+
+FULL：
+- 更換大部分程式碼
+- Launcher 會保留 .env.local、node_modules、data、public、ngrok.exe
+- 適合大版本或專案結構大改
+
+正式更新：
+1. 關閉網站與 ngrok。
+2. 選 3 先預覽更新。
+3. 確認後選 2 正式更新。
+4. Launcher 自動備份。
+5. 更新後自動清除 .next。
+6. 更新後執行健康檢查。
+7. 若健康檢查嚴重失敗，會嘗試自動還原。
+
+未來更新包建議附：
+KD_UPDATE_MANIFEST.json

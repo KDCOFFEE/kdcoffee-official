@@ -11,14 +11,15 @@ export async function GET(
   { params }: { params: Promise<{ fileName: string }> },
 ) {
   const { fileName } = await params;
-  if (!/^[0-9a-f-]{36}\.webp$/i.test(fileName) || fileName !== path.basename(fileName)) {
+  const match = fileName.match(/^[0-9a-f-]{36}(?:-line(?:-preview)?)?\.(webp|jpg)$/i);
+  if (!match || fileName !== path.basename(fileName)) {
     return new Response("Not found", { status: 404 });
   }
   try {
     const file = await fs.readFile(path.join(getOrderNotificationUploadsDir(), fileName));
     return new Response(file, {
       headers: {
-        "Content-Type": "image/webp",
+        "Content-Type": match[1].toLowerCase() === "jpg" ? "image/jpeg" : "image/webp",
         "Cache-Control": "public, max-age=86400, immutable",
         "X-Content-Type-Options": "nosniff",
       },
@@ -27,4 +28,3 @@ export async function GET(
     return new Response("Not found", { status: 404 });
   }
 }
-

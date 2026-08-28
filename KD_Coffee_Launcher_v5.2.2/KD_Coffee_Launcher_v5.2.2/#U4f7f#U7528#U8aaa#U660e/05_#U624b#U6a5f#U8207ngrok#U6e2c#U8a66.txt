@@ -1,0 +1,12 @@
+﻿手機與 ngrok 測試
+
+1. 先選 1 啟動網站。
+2. 再選 11 啟動 ngrok。
+3. 開啟 http://127.0.0.1:4040
+4. 找到 https://xxxxx.ngrok-free.dev
+5. 手機使用這個 HTTPS 網址。
+
+注意：
+- 手機不能使用 localhost:3000。
+- 免費 ngrok 網址可能每次重啟都改變。
+- Next.js 與 ngrok 視窗都不能關閉。

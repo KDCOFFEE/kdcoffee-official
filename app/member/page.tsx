@@ -2,11 +2,16 @@ import Link from "next/link";
 import { promises as fs } from "fs";
 import path from "path";
 
-import { getCurrentMember, safeReturnPath } from "@/lib/memberAuth";
-import { getOrdersDir } from "@/lib/storagePaths";
+import { getCurrentMember, getMemberLoginMethods, safeReturnPath } from "@/lib/memberAuth";
+import { getOrdersDir, getWebsiteDataFile } from "@/lib/storagePaths";
 
 import MemberProfileForm from "@/components/member/MemberProfileForm";
 import EmailAuthForms from "@/components/member/EmailAuthForms";
+import MemberSubscriptionExperience from "@/components/member/MemberSubscriptionExperience";
+import { getMemberCommerceDashboard } from "@/lib/membershipCommerce";
+import { getActiveMembershipRules } from "@/lib/membershipBusinessRules";
+import { fulfillmentRecordForOrder, readFulfillmentStore } from "@/lib/fulfillment";
+import { fulfillmentStateLabels, type FulfillmentState } from "@/lib/fulfillmentTypes";
 
 export const dynamic = "force-dynamic";
 
@@ -33,6 +38,11 @@ type OrderSummary = {
 
   store?: {
     name?: string;
+  };
+  fulfillment?: {
+    currentState: FulfillmentState;
+    pickupDeadline?: string;
+    events: Array<{ eventId:string; state:FulfillmentState; occurredAt:string }>;
   };
 };
 
@@ -73,6 +83,7 @@ async function getMemberOrders(
     getOrdersDir();
 
   try {
+    const fulfillmentStore = await readFulfillmentStore();
     /**
      * 取得所有訂單 JSON。
      */
@@ -112,9 +123,15 @@ async function getMemberOrders(
           order.member?.memberId ===
           memberId
         ) {
-          orders.push(
-            order,
-          );
+          const record = fulfillmentRecordForOrder(fulfillmentStore, order);
+          orders.push({
+            ...order,
+            fulfillment: {
+              currentState: record.currentState,
+              pickupDeadline: record.pickupDeadline,
+              events: record.events.map((event)=>({eventId:event.eventId,state:event.state,occurredAt:event.occurredAt})),
+            },
+          });
         }
       } catch {
         /**
@@ -146,6 +163,21 @@ async function getMemberOrders(
      * 訂單資料夾不存在或讀取失敗時，
      * 顯示空訂單列表。
      */
+    return [];
+  }
+}
+
+async function getSubscriptionProducts() {
+  try {
+    const website = JSON.parse(await fs.readFile(getWebsiteDataFile(), "utf8"));
+    if (!Array.isArray(website?.menu?.products)) return [];
+    return website.menu.products.flatMap((product: Record<string, unknown>) => {
+      if (product.active !== true || product.purchasable === false || product.status !== "active" || typeof product.slug !== "string" || typeof product.name !== "string") return [];
+      const options = Array.isArray(product.skus) ? product.skus : Array.isArray(product.purchase) ? product.purchase : [];
+      const beans = options.find((option: Record<string, unknown>) => option.kind === "beans" && option.enabled !== false && Number(option.stock ?? 1) > 0 && Number.isSafeInteger(Number(option.price)));
+      return beans ? [{ id: product.slug, name: product.name, price: Number(beans.price), roast: typeof product.roast === "string" ? product.roast : "工作室建議" }] : [];
+    });
+  } catch {
     return [];
   }
 }
@@ -212,6 +244,7 @@ export default async function MemberPage({
 }: {
   searchParams: Promise<{
     error?: string;
+    linked?: string;
     returnTo?: string;
   }>;
 }) {
@@ -243,7 +276,9 @@ export default async function MemberPage({
 
           {params.error && (
             <p className="form-error">
-              LINE 登入未完成，請再試一次。
+              {params.error === "account_link_required"
+                ? "此登入方式需要完成帳號連結驗證。請先登入既有帳號，再從會員中心連結 LINE。"
+                : "LINE 登入未完成，請再試一次。"}
             </p>
           )}
 
@@ -276,10 +311,21 @@ export default async function MemberPage({
       member.id,
     );
   const displayName = member.displayName?.trim() || "KD Coffee 會員";
+  const [loginMethods, commerce, rulesVersion, subscriptionProducts] = await Promise.all([getMemberLoginMethods(member), getMemberCommerceDashboard(member.id), getActiveMembershipRules(), getSubscriptionProducts()]);
 
   return (
     <main className="member-page">
       <section className="member-card">
+        {params.linked === "line" && (
+          <p className="member-notice success">LINE 登入方式已連結完成。</p>
+        )}
+        {params.error === "account_link_required" && (
+          <p className="member-notice">此登入方式需要完成帳號連結驗證。請先登入既有帳號，再從「登入方式」連結 LINE。</p>
+        )}
+        {params.error === "line_link_failed" && (
+          <p className="member-notice">LINE 連結未完成。此 LINE 可能已連結其他會員，或驗證已逾時；會員資料沒有變更。</p>
+        )}
+        <nav className="member-center-nav" aria-label="會員中心導覽"><Link href="/">首頁</Link><a href="#subscription">定期配送</a><a href="#orders">訂單</a><a href="#credit">抵用金</a><a href="#referral">推薦</a><a href="#login-methods">登入方式</a></nav>
         <div className="member-profile">
           {member.pictureUrl ? (
             <img
@@ -321,6 +367,12 @@ export default async function MemberPage({
         </div>
 
         <div className="member-info-grid">
+          <div>
+            <small>會員編號</small>
+            <strong>{loginMethods.memberNumber}</strong>
+            <span>這是您的固定 KD Coffee 會員識別。</span>
+          </div>
+
           <div>
             <small>
               常用姓名
@@ -390,6 +442,30 @@ export default async function MemberPage({
           </div>
         </div>
 
+        <MemberSubscriptionExperience {...commerce} products={subscriptionProducts} rules={{ intervalsDays: rulesVersion.rules.subscription.intervalsDays, delayQuickOptionsDays: rulesVersion.rules.subscription.delayQuickOptionsDays, preparationLeadDays: rulesVersion.rules.subscription.preparationLeadDays, discountPercent: rulesVersion.rules.subscription.discountPercent }} />
+
+        <section className="member-login-methods" id="login-methods">
+          <div className="member-section-head">
+            <div>
+              <p className="eyebrow dark">會員帳號</p>
+              <h2>登入方式</h2>
+            </div>
+          </div>
+          <div className="member-login-method-row">
+            <div><strong>電子郵件</strong><span>{loginMethods.emailLinked ? "已連結" : "尚未連結"}</span></div>
+            <b className={loginMethods.emailLinked ? "is-linked" : ""}>{loginMethods.emailLinked ? "✓ 可使用" : "信箱驗證功能準備中"}</b>
+          </div>
+          <div className="member-login-method-row">
+            <div><strong>LINE</strong><span>{loginMethods.lineLinked ? "已連結" : "尚未連結"}</span></div>
+            {loginMethods.lineLinked ? (
+              <b className="is-linked">✓ 可使用</b>
+            ) : (
+              <form action="/api/auth/line/link" method="post"><button type="submit">連結 LINE</button></form>
+            )}
+          </div>
+          <p className="member-login-method-note">登入方式只用來確認是您本人；訂單與會員紀錄都會保留在同一個會員帳號。</p>
+        </section>
+
         <MemberProfileForm
           initial={{
             pickupName:
@@ -403,7 +479,7 @@ export default async function MemberPage({
           }}
         />
 
-        <section className="member-orders">
+        <section className="member-orders" id="orders">
           <div className="member-section-head">
             <div>
               <p className="eyebrow dark">
@@ -459,13 +535,21 @@ export default async function MemberPage({
                         }
                       </small>
                     )}
+
+                    {order.fulfillment ? (
+                      <div className="member-fulfillment-summary">
+                        <strong>{fulfillmentStateLabels[order.fulfillment.currentState]}</strong>
+                        {order.fulfillment.pickupDeadline ? <span>取貨期限：{new Date(order.fulfillment.pickupDeadline).toLocaleDateString("zh-TW")}</span> : null}
+                        {order.fulfillment.events.length ? <ol>{order.fulfillment.events.slice(-4).map((event)=><li key={event.eventId}><time>{new Date(event.occurredAt).toLocaleDateString("zh-TW")}</time><span>{fulfillmentStateLabels[event.state]}</span></li>)}</ol> : null}
+                      </div>
+                    ) : null}
                   </div>
 
                   <div className="member-order-meta">
                     <span className="order-status-chip">
-                      {statusLabel(
-                        order.status,
-                      )}
+                      {order.fulfillment
+                        ? fulfillmentStateLabels[order.fulfillment.currentState]
+                        : statusLabel(order.status)}
                     </span>
 
                     <b>

@@ -120,5 +120,11 @@ export async function GET(request: Request) {
     options,
   );
 
+  response.cookies.set(
+    "line_oauth_mode",
+    "login",
+    options,
+  );
+
   return response;
 }

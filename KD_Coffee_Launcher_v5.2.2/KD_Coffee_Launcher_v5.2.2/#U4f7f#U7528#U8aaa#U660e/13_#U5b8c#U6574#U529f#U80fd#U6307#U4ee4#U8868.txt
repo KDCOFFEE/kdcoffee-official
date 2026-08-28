@@ -1,0 +1,27 @@
+﻿完整功能指令表
+
+1  啟動網站
+2  更新 FULL / PATCH
+3  預覽更新
+4  備份
+5  還原
+6  更新 7-ELEVEN
+7  npm install
+8  npm update
+9  清除 .next
+10 刪除 node_modules 並重裝
+11 啟動 ngrok
+12 開 localhost
+13 開 ngrok Dashboard
+14 LINE 診斷
+15 環境檢查
+16 健康檢查
+17 切換專案
+18 開專案資料夾
+19 開 Cursor / VS Code
+20 建立診斷包
+21 關閉 Node 與 ngrok
+22 開完整使用說明
+23 開常見問題
+24 顯示 Launcher 版本
+0  離開

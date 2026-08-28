@@ -54,6 +54,8 @@ next-env.d.ts
 /data/members/*
 !/data/members/.gitkeep
 
+/data/member-identity/*
+
 /data/backups/*
 /data/store-backups/*
 
