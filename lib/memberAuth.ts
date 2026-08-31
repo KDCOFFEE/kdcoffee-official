@@ -194,6 +194,23 @@ export async function readMember(
   }
 }
 
+/** Reads canonical member records without exposing them directly to a client response. */
+export async function listMembers(): Promise<Member[]> {
+  try {
+    const files = (await fs.readdir(membersDir())).filter((file) => file.endsWith(".json"));
+    const members = await Promise.all(files.map(async (file) => {
+      try {
+        return JSON.parse(await fs.readFile(path.join(membersDir(), file), "utf8")) as Member;
+      } catch {
+        return null;
+      }
+    }));
+    return members.filter((member): member is Member => Boolean(member?.id && member.createdAt));
+  } catch {
+    return [];
+  }
+}
+
 export async function getCurrentMember(): Promise<Member | null> {
   const jar = await cookies();
 

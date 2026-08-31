@@ -17,6 +17,8 @@ import {
 import { orderStatusLabel } from "@/lib/orderInventoryPolicy";
 import { sendInternalLineNotification } from "@/lib/internalLineNotifications";
 import { buildOrderTimeline } from "@/lib/orderTimeline";
+import { projectOrderFinancialBreakdown } from "@/lib/orderFinancialProjection";
+import { getSafeOrderCreditReservation, type SafeOrderCreditReservation } from "@/lib/membershipCommerce";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -25,8 +27,9 @@ function validOrderNumber(value: string) {
   return /^KD[0-9-]+$/.test(value);
 }
 
-function customerOrderDto(order: Awaited<ReturnType<typeof readOrder>>) {
+function customerOrderDto(order: Awaited<ReturnType<typeof readOrder>>, creditReservation: SafeOrderCreditReservation | null) {
   if (!order) return null;
+  const financialBreakdown = projectOrderFinancialBreakdown(order);
   return {
     orderNumber: order.orderNumber,
     createdAt: order.createdAt,
@@ -38,7 +41,8 @@ function customerOrderDto(order: Awaited<ReturnType<typeof readOrder>>) {
       : order.orderMode === "studio_pickup"
         ? "KD Coffee 工作室自取"
         : "企業送禮洽詢",
-    total: Number(order.total ?? order.subtotal ?? 0),
+    financialBreakdown,
+    creditReservation,
   };
 }
 
@@ -58,9 +62,11 @@ export async function GET(
   const guestToken = request.headers.get("X-Order-Access-Token") || undefined;
   const authorized = await authorizedOrder(orderNumber, guestToken);
   if (!authorized) return NextResponse.json({ error: "找不到訂單。" }, { status: 404 });
+  const memberId = typeof authorized.order.member?.memberId === "string" ? authorized.order.member.memberId : "";
+  const creditReservation = memberId ? await getSafeOrderCreditReservation({ orderId: orderNumber, memberId }) : null;
 
   return NextResponse.json({
-    order: customerOrderDto(authorized.order),
+    order: customerOrderDto(authorized.order, creditReservation),
     messages: getOrderMessages(authorized.order),
     timeline: buildOrderTimeline(authorized.order, "customer"),
   }, { headers: { "Cache-Control": "no-store" } });

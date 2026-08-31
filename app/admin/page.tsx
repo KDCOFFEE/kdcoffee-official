@@ -53,7 +53,8 @@ export default async function AdminPage() {
       <Link href="/admin/orders"><strong>訂單管理</strong><span>查看與更新所有訂單 →</span></Link>
       <Link href="/admin/fulfillment"><strong>訂單與物流</strong><span>準備、交寄、到店、取貨與人工確認 →</span></Link>
       <Link className="admin-inquiry-entry" href="/admin/orders/inquiries"><strong className="admin-inquiry-link-title">訂單詢問{pendingInquiries.length ? <b>{pendingInquiries.length}</b> : null}</strong><span>查看等待回覆的客人留言 →</span></Link>
-      <Link href="/admin/members"><strong>會員身份系統</strong><span>會員編號與登入方式安全狀態 →</span></Link>
+      <Link className="admin-members-entry" href="/admin/members"><strong>會員管理</strong><span>搜尋、查看與管理會員資料、訂單、抵用金與會員狀態 →</span></Link>
+      <Link href="/admin/member-identities"><strong>會員身份系統</strong><span>會員編號與登入方式安全狀態 →</span></Link>
       <Link href="/admin/membership"><strong>會員與定期購設定</strong><span>免運、配送、贈品、推薦與抵用金 →</span></Link>
       <Link href="/admin/referrals"><strong>推薦制度管理</strong><span>組織、獎勵明細與成本統計 →</span></Link>
       <Link href="/admin/pv"><strong>SKU PV 管理</strong><span>搜尋、篩選與集中設定 PV →</span></Link>

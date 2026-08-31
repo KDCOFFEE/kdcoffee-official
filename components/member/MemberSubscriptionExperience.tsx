@@ -4,13 +4,13 @@ import { useState } from "react";
 import Link from "next/link";
 
 import StoreSelector from "@/components/commerce/StoreSelector";
-import type { CreditEntry, Subscription, SubscriptionCycle } from "@/lib/membershipCommerce";
+import type { MemberCreditHistoryEntry, Subscription, SubscriptionCycle } from "@/lib/membershipCommerce";
 import { addDateOnlyDays, ALLOWED_ROAST_LEVELS, getDateOnlyInTimeZone } from "@/lib/checkoutRules";
 
 type Dashboard = {
   subscriptions: Subscription[];
   cycles: SubscriptionCycle[];
-  credits: CreditEntry[];
+  credits: MemberCreditHistoryEntry[];
   pendingCredit: number;
   referrals: Array<{ memberNumberReference: string; safeDisplayName: string; joined: boolean; qualifiedPurchases: number; rewards: number; status: string }>;
 };
@@ -19,6 +19,7 @@ type Props = Dashboard & { products: Array<{ id: string; name: string; price: nu
 
 const money = (value: number) => `NT$ ${value.toLocaleString("zh-TW")}`;
 const statusLabel = (value: Subscription["status"]) => ({ pending_activation: "等待首筆訂單取貨", active: "配送中", paused: "已暫停", terminated: "已停止" })[value];
+const redemptionLabel = (status: MemberCreditHistoryEntry["orderRedemptions"][number]["status"]) => status === "released" ? "訂單取消，抵用金已返還" : status === "reserved" ? "本筆已保留折抵" : "本筆已使用";
 
 export default function MemberSubscriptionExperience(initial: Props) {
   const [dashboard, setDashboard] = useState<Dashboard>(initial);
@@ -80,7 +81,7 @@ export default function MemberSubscriptionExperience(initial: Props) {
       </div>}
     </section>
 
-    <section className="member-commerce-section" id="credit"><div className="member-section-head"><div><p className="eyebrow dark">CREDIT</p><h2>我的抵用金</h2></div><strong>{money(availableCredit)}</strong></div><div className="member-credit-summary"><div><small>現在可用</small><strong>{money(availableCredit)}</strong></div><div><small>待符合資格</small><strong>{money(dashboard.pendingCredit)}</strong></div></div>{dashboard.credits.length ? <div className="member-credit-history">{dashboard.credits.map((entry) => <article key={entry.creditEntryId}><div><strong>+ {money(entry.amount)}</strong><small>{entry.sourceType === "referral" ? "推薦回饋" : "會員抵用金"}</small></div><div><span>餘額 {money(entry.remainingAmount)}</span><small>到期 {entry.expiresAt.slice(0, 10)}</small></div></article>)}</div> : <div className="member-commerce-empty compact"><strong>目前沒有抵用金紀錄</strong><p>有抵用金時，結帳會讓您自行選擇是否使用，並優先使用最快到期的額度。</p></div>}</section>
+    <section className="member-commerce-section" id="credit"><div className="member-section-head"><div><p className="eyebrow dark">CREDIT</p><h2>我的抵用金</h2></div><strong>{money(availableCredit)}</strong></div><div className="member-credit-summary"><div><small>現在可用</small><strong>{money(availableCredit)}</strong></div><div><small>待符合資格</small><strong>{money(dashboard.pendingCredit)}</strong></div></div>{dashboard.credits.length ? <div className="member-credit-history">{dashboard.credits.map((entry) => <article key={entry.creditEntryId}><div><strong>{entry.direction === "deduct" ? "−" : "+"} {money(Math.abs(entry.amount))}</strong><small>{entry.sourceLabel}</small>{entry.orderRedemptions.map((redemption) => <span className={`member-credit-redemption ${redemption.status}`} key={`${entry.creditEntryId}-${redemption.orderNumber}`}><b>{redemptionLabel(redemption.status)} {money(redemption.amount)}</b><Link href={`/orders/${encodeURIComponent(redemption.orderNumber)}`}>訂單 {redemption.orderNumber}</Link></span>)}</div><div><span>餘額 {money(entry.remainingAmount)}</span>{entry.amount > 0 ? <small>到期 {entry.expiresAt.slice(0, 10)}</small> : null}</div></article>)}</div> : <div className="member-commerce-empty compact"><strong>目前沒有抵用金紀錄</strong><p>有抵用金時，結帳會讓您自行選擇是否使用，並優先使用最快到期的額度。</p></div>}</section>
 
     <section className="member-commerce-section" id="referral-summary"><div className="member-section-head"><div><p className="eyebrow dark">REFERRAL</p><h2>推薦紀錄摘要</h2></div><span>{dashboard.referrals.length} 位</span></div>{dashboard.referrals.length ? <div className="member-referral-list">{dashboard.referrals.map((item) => <article key={item.memberNumberReference}><div><strong>{item.safeDisplayName || "KD Coffee 會員"}</strong><small>已加入會員</small></div><div><span>符合 {item.qualifiedPurchases} 次</span><strong>{money(item.rewards)}</strong></div></article>)}</div> : <div className="member-commerce-empty compact"><strong>還沒有推薦紀錄</strong><p>這裡只會顯示安全的會員稱呼、是否加入與回饋進度，不會顯示對方的聯絡資料。</p></div>}</section>
   </>;

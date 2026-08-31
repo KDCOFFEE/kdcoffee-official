@@ -12,8 +12,17 @@ type CustomerOrderSummary = {
   createdAt: string;
   statusLabel: string;
   modeLabel: string;
-  total: number;
+  financialBreakdown: {
+    subtotal: number;
+    shipping: number;
+    creditApplied: number | null;
+    totalBeforeCredit: number | null;
+    total: number;
+  };
+  creditReservation: { amount: number; status: "reserved" | "consumed" | "released" } | null;
 };
+
+const money = (value: number) => `NT$ ${value.toLocaleString("zh-TW")}`;
 
 function tokenFromBrowser(orderNumber: string) {
   const hashToken = new URLSearchParams(window.location.hash.slice(1)).get("token") || "";
@@ -106,8 +115,17 @@ export default function OrderConversation({ orderNumber }: { orderNumber: string
         <p className="eyebrow dark">ORDER DETAIL</p>
         <h1>{order.orderNumber}</h1>
         <span>{new Date(order.createdAt).toLocaleString("zh-TW")}・{order.modeLabel}</span>
-        <div><b>{order.statusLabel}</b><strong>NT$ {order.total.toLocaleString("zh-TW")}</strong></div>
+        <div><b>{order.statusLabel}</b><strong>{money(order.financialBreakdown.total)}</strong></div>
       </header>
+
+      <div className="customer-order-financials" aria-label="訂單金額明細">
+        <span>商品小計</span><b>{money(order.financialBreakdown.subtotal)}</b>
+        <span>{order.modeLabel.startsWith("7-ELEVEN") ? "7-ELEVEN 運費" : "運費"}</span><b>{order.financialBreakdown.shipping ? money(order.financialBreakdown.shipping) : "免運"}</b>
+        {order.financialBreakdown.creditApplied !== null ? <><span>會員抵用金</span><b className="credit-deduction">−{money(order.financialBreakdown.creditApplied)}</b></> : null}
+        {order.financialBreakdown.totalBeforeCredit !== null ? <><span>折抵前總額</span><b>{money(order.financialBreakdown.totalBeforeCredit)}</b></> : null}
+        <strong>訂單總計</strong><strong>{money(order.financialBreakdown.total)}</strong>
+      </div>
+      {order.creditReservation?.status === "released" ? <p className="customer-credit-returned" role="status">訂單取消，{money(order.creditReservation.amount)} 抵用金已返還。</p> : null}
 
       <OrderTimeline entries={timeline} audience="customer" />
 

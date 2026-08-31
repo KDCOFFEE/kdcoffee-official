@@ -186,6 +186,8 @@ export type CreditEntry = {
   status: "available" | "reserved" | "consumed" | "expired";
   createdAt: string;
   metadata: Record<string, string | number | boolean>;
+  /** Owner debit allocations are immutable references to the positive entries they reduce. */
+  adjustmentAllocations?: Array<{ creditEntryId: string; amount: number }>;
 };
 
 export type CreditReservation = {
@@ -198,6 +200,28 @@ export type CreditReservation = {
   status: "reserved" | "consumed" | "released";
   createdAt: string;
   updatedAt: string;
+};
+
+export type MemberCreditHistoryEntry = {
+  creditEntryId: string;
+  amount: number;
+  remainingAmount: number;
+  issuedAt: string;
+  expiresAt: string;
+  status: CreditEntry["status"];
+  direction: "grant" | "deduct";
+  sourceLabel: "推薦回饋" | "KD Coffee 贈送" | "會員抵用金" | "抵用金調整";
+  orderRedemptions: Array<{
+    orderNumber: string;
+    amount: number;
+    status: "reserved" | "consumed" | "released";
+  }>;
+};
+
+export type SafeOrderCreditReservation = {
+  orderNumber: string;
+  amount: number;
+  status: "reserved" | "consumed" | "released";
 };
 
 export type CommerceEvent = {
@@ -299,11 +323,20 @@ export function validateMembershipCommerceState(value: unknown): MembershipComme
   for (const field of ["subscriptions", "cycles", "referrals", "referralConversions", "referralRewards", "creditEntries", "creditReservations", "idempotency"] as const) if (!isObject(value[field])) throw new MembershipCommerceError("會員商務資料集合不完整");
   for (const field of ["events", "notifications", "audit"] as const) if (!Array.isArray(value[field])) throw new MembershipCommerceError("會員商務事件集合不完整");
   for (const entry of Object.values(value.creditEntries as Record<string, CreditEntry>)) {
-    if (entry.sourceReference.startsWith("referral_reward_reversal:")) {
+    const isNegativeLedgerEntry = entry.sourceReference.startsWith("referral_reward_reversal:") || entry.sourceReference.startsWith("admin_credit_adjustment:deduct:");
+    if (isNegativeLedgerEntry) {
       if (!Number.isSafeInteger(entry.amount) || entry.amount >= 0) throw new MembershipCommerceError("推薦獎勵沖回金額不正確");
     } else assertIntegerMoney(entry.amount, "抵用金");
     assertIntegerMoney(entry.remainingAmount, "抵用金餘額");
-    if (!entry.sourceReference.startsWith("referral_reward_reversal:") && entry.remainingAmount > entry.amount) throw new MembershipCommerceError("抵用金餘額超過發放金額");
+    if (!isNegativeLedgerEntry && entry.remainingAmount > entry.amount) throw new MembershipCommerceError("抵用金餘額超過發放金額");
+    if (entry.sourceReference.startsWith("admin_credit_adjustment:deduct:")) {
+      if (entry.remainingAmount !== 0 || entry.status !== "consumed" || !Array.isArray(entry.adjustmentAllocations)) throw new MembershipCommerceError("人工扣除抵用金紀錄不完整");
+      const allocated = entry.adjustmentAllocations.reduce((sum, allocation) => {
+        if (!allocation || typeof allocation.creditEntryId !== "string" || !Number.isSafeInteger(allocation.amount) || allocation.amount < 1) throw new MembershipCommerceError("人工扣除抵用金配置不正確");
+        return sum + allocation.amount;
+      }, 0);
+      if (allocated !== Math.abs(entry.amount)) throw new MembershipCommerceError("人工扣除抵用金配置總額不正確");
+    }
   }
   return value as MembershipCommerceState;
 }
@@ -1175,9 +1208,147 @@ function refreshExpiry(entry: CreditEntry, now: Date) {
   if (["available", "reserved"].includes(entry.status) && Date.parse(entry.expiresAt) <= now.getTime() && entry.remainingAmount > 0) entry.status = "expired";
 }
 
+function ownerDebitAllocated(state: MembershipCommerceState, creditEntryId: string) {
+  return Object.values(state.creditEntries)
+    .filter((entry) => entry.sourceReference.startsWith("admin_credit_adjustment:deduct:"))
+    .flatMap((entry) => entry.adjustmentAllocations ?? [])
+    .filter((allocation) => allocation.creditEntryId === creditEntryId)
+    .reduce((sum, allocation) => sum + allocation.amount, 0);
+}
+
+export function effectiveCreditRemaining(state: MembershipCommerceState, entry: CreditEntry, now: Date) {
+  if (entry.amount <= 0 || entry.remainingAmount <= 0 || !["available", "reserved"].includes(entry.status) || Date.parse(entry.expiresAt) <= now.getTime()) return 0;
+  return Math.max(0, entry.remainingAmount - ownerDebitAllocated(state, entry.creditEntryId));
+}
+
+function availableCreditTotal(state: MembershipCommerceState, memberId: string, now: Date) {
+  return Object.values(state.creditEntries)
+    .filter((entry) => entry.memberId === memberId)
+    .reduce((sum, entry) => sum + effectiveCreditRemaining(state, entry, now), 0);
+}
+
+export type AdminCreditAdjustmentInput = {
+  memberId: string;
+  direction: "grant" | "deduct";
+  amount: number;
+  reason: string;
+  note?: string;
+  idempotencyKey: string;
+  now?: Date;
+  stateFilePath?: string;
+  rulesFilePath?: string;
+};
+
+/**
+ * Appends an Owner adjustment to the canonical credit ledger under the same
+ * transaction lock used by checkout. Debits reference positive entries and do
+ * not rewrite their historical issuance rows.
+ */
+export async function adjustMemberCreditByAdmin(input: AdminCreditAdjustmentInput) {
+  await assertCanonicalMember(input.memberId);
+  if (!Number.isSafeInteger(input.amount) || input.amount < 1 || input.amount > 1_000_000) throw new MembershipCommerceError("調整金額必須是 1 至 1,000,000 元的整數");
+  const amount = input.amount;
+  if (!/^[A-Za-z0-9:_-]{8,160}$/.test(input.idempotencyKey)) throw new MembershipCommerceError("操作識別碼格式不正確");
+  const reason = input.reason.trim();
+  const note = input.note?.trim() ?? "";
+  if (reason.length < 2 || reason.length > 80) throw new MembershipCommerceError("請填寫 2 至 80 字的調整原因");
+  if (note.length > 300) throw new MembershipCommerceError("內部備註不可超過 300 字");
+  const version = await getActiveMembershipRules(input.now, input.rulesFilePath);
+  const key = `credit:admin-adjust:${input.idempotencyKey}`;
+
+  return transaction((state, now) => {
+    const existingId = remembered(state, key);
+    if (existingId) {
+      const existing = state.creditEntries[existingId];
+      if (!existing) throw new MembershipCommerceError("找不到已完成的抵用金調整紀錄");
+      return {
+        entry: structuredClone(existing),
+        balanceBefore: Number(existing.metadata.balanceBefore),
+        balanceAfter: Number(existing.metadata.balanceAfter),
+      };
+    }
+
+    const balanceBefore = availableCreditTotal(state, input.memberId, now);
+    if (input.direction === "deduct" && amount > balanceBefore) throw new MembershipCommerceError("扣除金額超過目前可用抵用金");
+    const balanceAfter = input.direction === "grant" ? balanceBefore + amount : balanceBefore - amount;
+    const commonMetadata: CreditEntry["metadata"] = {
+      adminAdjustment: true,
+      direction: input.direction,
+      reason,
+      note,
+      actor: "admin",
+      balanceBefore,
+      balanceAfter,
+    };
+
+    let entry: CreditEntry;
+    if (input.direction === "grant") {
+      entry = issueCreditInState(state, version.rules, {
+        memberId: input.memberId,
+        sourceType: "manual",
+        sourceReference: `admin_credit_adjustment:grant:${input.idempotencyKey}`,
+        amount,
+        metadata: commonMetadata,
+      }, now);
+    } else {
+      let remaining = amount;
+      const allocations: NonNullable<CreditEntry["adjustmentAllocations"]> = [];
+      const sources = Object.values(state.creditEntries)
+        .filter((candidate) => candidate.memberId === input.memberId && effectiveCreditRemaining(state, candidate, now) > 0)
+        .sort((a, b) => a.expiresAt.localeCompare(b.expiresAt) || a.issuedAt.localeCompare(b.issuedAt) || a.creditEntryId.localeCompare(b.creditEntryId));
+      for (const source of sources) {
+        if (!remaining) break;
+        const allocated = Math.min(remaining, effectiveCreditRemaining(state, source, now));
+        if (!allocated) continue;
+        allocations.push({ creditEntryId: source.creditEntryId, amount: allocated });
+        remaining -= allocated;
+      }
+      if (remaining) throw new MembershipCommerceError("可用抵用金已變更，請重新整理後再試一次");
+      const timestamp = nowIso(now);
+      const creditEntryId = id("credit_adjustment");
+      entry = {
+        creditEntryId,
+        memberId: input.memberId,
+        sourceType: "manual",
+        sourceReference: `admin_credit_adjustment:deduct:${input.idempotencyKey}`,
+        amount: -amount,
+        remainingAmount: 0,
+        issuedAt: timestamp,
+        expiresAt: timestamp,
+        status: "consumed",
+        createdAt: timestamp,
+        metadata: commonMetadata,
+        adjustmentAllocations: allocations,
+      };
+      state.creditEntries[creditEntryId] = entry;
+    }
+
+    remember(state, key, entry.creditEntryId, now);
+    const source = event(state, "admin_credit_adjusted", { direction: input.direction, amount, balanceBefore, balanceAfter }, now, { memberId: input.memberId });
+    if (input.direction === "grant") notify(state, version.rules, "credit_issued", source.eventId, now, { memberId: input.memberId, safeData: { amount } });
+    audit(state, {
+      actor: "admin",
+      action: input.direction === "grant" ? "credit-adjustment-granted" : "credit-adjustment-deducted",
+      entityType: "credit-entry",
+      entityId: entry.creditEntryId,
+      before: { availableCredit: balanceBefore },
+      after: { availableCredit: balanceAfter, amount: input.direction === "grant" ? amount : -amount },
+      reason,
+      sourceEvent: source.eventId,
+    }, now);
+    return { entry: structuredClone(entry), balanceBefore, balanceAfter };
+  }, { now: input.now, filePath: input.stateFilePath });
+}
+
 export async function getAvailableCredit(memberId: string, now = new Date(), filePath = getMembershipCommerceStateFile()) {
   const state = await readMembershipCommerceState(filePath);
-  return Object.values(state.creditEntries).filter((entry) => entry.memberId === memberId && entry.remainingAmount > 0 && ["available", "reserved"].includes(entry.status) && Date.parse(entry.expiresAt) > now.getTime()).reduce((sum, entry) => sum + entry.remainingAmount, 0);
+  return availableCreditTotal(state, memberId, now);
+}
+
+export async function getSafeOrderCreditReservation(input: { orderId: string; memberId: string; filePath?: string }): Promise<SafeOrderCreditReservation | null> {
+  const state = await readMembershipCommerceState(input.filePath);
+  const reservation = Object.values(state.creditReservations).find((item) => item.orderId === input.orderId && item.memberId === input.memberId);
+  return reservation ? { orderNumber: reservation.orderId, amount: reservation.amount, status: reservation.status } : null;
 }
 
 export async function getCheckoutCreditQuote(input: { memberId: string; merchandiseSubtotal: number; shipping: number; now?: Date; stateFilePath?: string; rulesFilePath?: string }) {
@@ -1206,15 +1377,16 @@ export async function reserveCredit(input: { memberId: string; orderId: string; 
       refreshExpiry(entry, now);
       return entry.memberId === input.memberId && entry.status === "available" && entry.remainingAmount > 0;
     }).sort((a, b) => a.expiresAt.localeCompare(b.expiresAt) || a.issuedAt.localeCompare(b.issuedAt) || a.creditEntryId.localeCompare(b.creditEntryId));
-    const available = entries.reduce((sum, entry) => sum + entry.remainingAmount, 0);
+    const available = entries.reduce((sum, entry) => sum + effectiveCreditRemaining(state, entry, now), 0);
     if (requested > available) throw new MembershipCommerceError("可用抵用金不足");
     let remaining = requested;
     const allocations: CreditReservation["allocations"] = [];
     for (const entry of entries) {
       if (!remaining) break;
-      const amount = Math.min(remaining, entry.remainingAmount);
+      const amount = Math.min(remaining, effectiveCreditRemaining(state, entry, now));
+      if (!amount) continue;
       entry.remainingAmount -= amount;
-      entry.status = entry.remainingAmount === 0 ? "reserved" : "available";
+      entry.status = effectiveCreditRemaining(state, entry, now) === 0 ? "reserved" : "available";
       allocations.push({ creditEntryId: entry.creditEntryId, amount });
       remaining -= amount;
     }
@@ -1243,7 +1415,7 @@ export async function settleCreditReservation(input: { reservationId: string; ac
       if (input.action === "release") {
         entry.remainingAmount += allocation.amount;
         entry.status = Date.parse(entry.expiresAt) <= now.getTime() ? "expired" : "available";
-      } else if (entry.remainingAmount === 0) entry.status = "consumed";
+      } else if (effectiveCreditRemaining(state, entry, now) === 0) entry.status = "consumed";
     }
     reservation.status = targetStatus;
     reservation.updatedAt = nowIso(now);
@@ -1297,7 +1469,24 @@ export async function getMemberCommerceDashboard(memberId: string, now = new Dat
   const subscriptions = Object.values(state.subscriptions).filter((item) => item.memberId === memberId);
   const subscriptionIds = new Set(subscriptions.map((item) => item.subscriptionId));
   const cycles = Object.values(state.cycles).filter((item) => subscriptionIds.has(item.subscriptionId)).sort((a, b) => a.plannedDate.localeCompare(b.plannedDate));
-  const credits = Object.values(state.creditEntries).filter((item) => item.memberId === memberId).map((item) => ({ ...item, status: Date.parse(item.expiresAt) <= now.getTime() && item.remainingAmount > 0 ? "expired" as const : item.status }));
+  const credits: MemberCreditHistoryEntry[] = Object.values(state.creditEntries).filter((item) => item.memberId === memberId).map((item) => {
+    const remainingAmount = effectiveCreditRemaining(state, item, now);
+    const status = Date.parse(item.expiresAt) <= now.getTime() && item.amount > 0 ? "expired" as const : remainingAmount === 0 && item.status === "available" ? "consumed" as const : item.status;
+    const direction = item.amount < 0 ? "deduct" as const : "grant" as const;
+    const sourceLabel = item.sourceType === "referral"
+      ? "推薦回饋" as const
+      : item.sourceReference.startsWith("admin_credit_adjustment:grant:")
+        ? "KD Coffee 贈送" as const
+        : direction === "deduct"
+          ? "抵用金調整" as const
+          : "會員抵用金" as const;
+    const orderRedemptions = Object.values(state.creditReservations)
+      .filter((reservation) => reservation.memberId === memberId)
+      .flatMap((reservation) => reservation.allocations
+        .filter((allocation) => allocation.creditEntryId === item.creditEntryId && allocation.amount > 0)
+        .map((allocation) => ({ orderNumber: reservation.orderId, amount: allocation.amount, status: reservation.status })));
+    return { creditEntryId: item.creditEntryId, amount: item.amount, remainingAmount, issuedAt: item.issuedAt, expiresAt: item.expiresAt, status, direction, sourceLabel, orderRedemptions };
+  });
   const pendingCredit = Object.values(state.referralConversions).filter((conversion) => conversion.status === "pending" && state.referrals[conversion.relationshipId]?.referrerMemberId === memberId).reduce((sum, item) => sum + item.pendingRewardAmount, 0);
   return { subscriptions: structuredClone(subscriptions), cycles: structuredClone(cycles), credits: structuredClone(credits), pendingCredit, referrals: safeReferralMemberView(state, memberId) };
 }
@@ -1365,10 +1554,11 @@ export async function enqueueScheduledMembershipNotifications(input: { today: st
     }
 
     for (const entry of Object.values(state.creditEntries)) {
-      if (entry.remainingAmount <= 0 || !["available", "reserved"].includes(entry.status)) continue;
+      const remainingAmount = effectiveCreditRemaining(state, entry, now);
+      if (remainingAmount <= 0 || !["available", "reserved"].includes(entry.status)) continue;
       const finalUsableDate = addTaipeiCalendarDays(entry.expiresAt.slice(0, 10), -1);
       if (addTaipeiCalendarDays(finalUsableDate, -version.rules.credit.expiryReminderDays) !== input.today) continue;
-      enqueueOnce(`notification:credit-expiry:${entry.creditEntryId}:${input.today}`, "credit_expiring", entry.memberId, { creditEntryId: entry.creditEntryId, amount: entry.remainingAmount, expiresOn: finalUsableDate });
+      enqueueOnce(`notification:credit-expiry:${entry.creditEntryId}:${input.today}`, "credit_expiring", entry.memberId, { creditEntryId: entry.creditEntryId, amount: remainingAmount, expiresOn: finalUsableDate });
     }
     return { queued };
   }, { now: input.now, filePath: input.stateFilePath });
