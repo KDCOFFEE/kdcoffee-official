@@ -1,7 +1,7 @@
-# KD Coffee Studio Phase I.4 — Owner Acceptance 與 Production Readiness 稽核
+﻿# KD Coffee Studio Phase I.4 — Owner Acceptance 與 Production Readiness 稽核
 
-稽核日期：2026-08-31（Asia/Taipei）  
-分支：`main`  
+稽核日期：2026-08-31（Asia/Taipei）
+分支：`main`
 正式基線：`b39793ed41161123cd46406853c2f3eadf12e238`（Complete Phase I.3 membership referral reward system）
 
 ## 1. Executive summary
