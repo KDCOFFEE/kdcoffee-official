@@ -34,7 +34,7 @@ export async function GET() {
   try {
     const member = await currentMember();
     const [dashboard, version] = await Promise.all([getMemberCommerceDashboard(member.id), getActiveMembershipRules()]);
-    return NextResponse.json({ ...dashboard, rules: { intervalsDays: version.rules.subscription.intervalsDays, delayQuickOptionsDays: version.rules.subscription.delayQuickOptionsDays, preparationLeadDays: version.rules.subscription.preparationLeadDays } });
+    return NextResponse.json({ ...dashboard, rules: { intervalsDays: version.rules.subscription.intervalOptions.filter((item) => item.enabled).map((item) => item.days), customCycleEnabled: version.rules.subscription.customCycleEnabled, customCycleMinDays: version.rules.subscription.customCycleMinDays, customCycleMaxDays: version.rules.subscription.customCycleMaxDays, delayQuickOptionsDays: version.rules.subscription.delayQuickOptionsDays, advanceQuickOptionsDays: version.rules.subscription.advanceQuickOptionsDays, preparationLeadDays: version.rules.subscription.preparationLeadDays, datePickerMode: version.rules.subscription.datePickerMode, maxModificationsPerCycle: version.rules.subscription.maxModificationsPerCycle } });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "讀取失敗" }, { status: 401 });
   }

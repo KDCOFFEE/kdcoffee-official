@@ -55,6 +55,7 @@ next-env.d.ts
 !/data/members/.gitkeep
 
 /data/member-identity/*
+/data/membership-test-lab/*
 
 /data/backups/*
 /data/store-backups/*

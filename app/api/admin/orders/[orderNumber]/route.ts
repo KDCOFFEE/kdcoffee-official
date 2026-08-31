@@ -20,6 +20,7 @@ import {
 } from "@/lib/orderInventoryReturn";
 import { getWebsiteDataFile } from "@/lib/storagePaths";
 import { sendInternalLineNotification } from "@/lib/internalLineNotifications";
+import { handleReferralQualificationOrderOutcome, settleCreditReservationForOrder } from "@/lib/membershipCommerce";
 
 /**
  * ============================================================
@@ -185,6 +186,17 @@ export async function PATCH(
       withStoredOrderUpdateLock(
         orderNumber,
         async (latestOrder, persistOrder) => {
+          // A prior attempt may have persisted cancellation and then failed while
+          // releasing credit. Allow the same admin operation to resume only the
+          // idempotent post-cancellation consequences without cancelling twice.
+          if (requestedStatus === "cancelled" && latestOrder.status === "cancelled") {
+            const warning = latestOrder.inventoryReturn?.state === "return_failed"
+              ? String(latestOrder.inventoryReturn.warning || "取消狀態已儲存，但庫存回補失敗。")
+              : undefined;
+            return warning
+              ? { ok: false as const, order: latestOrder, warning }
+              : { ok: true as const, order: latestOrder };
+          }
           assertOrderStatusTransition(
             latestOrder,
             requestedStatus,
@@ -359,6 +371,18 @@ export async function PATCH(
             { timeoutMs: 15_000 },
           )
         : await updateLockedOrder();
+
+    if (status === "cancelled") {
+      await settleCreditReservationForOrder({ orderId: orderNumber, action: "release", idempotencyKey: `admin-cancel:${orderNumber}`, reason: "Owner 取消訂單，釋放抵用金" });
+      const memberId = typeof result.order.member?.memberId === "string" ? result.order.member.memberId : undefined;
+      if (memberId) {
+        try {
+          await handleReferralQualificationOrderOutcome({ memberId, orderId: orderNumber, outcome: "cancelled", idempotencyKey: `admin-cancel:${orderNumber}` });
+        } catch (error) {
+          console.error(`Order ${orderNumber} cancelled but referral qualification sync failed:`, error);
+        }
+      }
+    }
 
     /**
      * 訂單取消狀態已寫入，

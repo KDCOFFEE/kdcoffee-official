@@ -1,0 +1,16 @@
+/* Keep checkbox sizing from collapsing the adjacent numeric interval editor. */
+.membership-intervals legend{display:flex;align-items:center;gap:8px;max-width:100%}
+.membership-intervals label{max-width:100%;white-space:nowrap}
+.membership-intervals input[type="checkbox"],.membership-checks input[type="checkbox"]{flex:0 0 20px;width:20px!important;min-width:20px;height:20px}
+.membership-intervals input[type="number"]{box-sizing:border-box;flex:0 0 6.5rem;width:6.5rem!important;min-width:6.5rem;height:42px!important;padding:8px 10px;border:1px solid #cfc1b3;background:#fff;color:#30251f;font:inherit;font-weight:850;font-variant-numeric:tabular-nums;text-align:right}
+.membership-number-field>span:last-child{min-width:0}
+.membership-number-field>span input{min-width:4.5rem}
+.membership-choice select{max-width:100%}
+.rule-field-title>span:first-child{min-width:0;overflow-wrap:anywhere}
+.rule-help-button{flex:0 0 auto}
+
+@media(max-width:620px){
+  .membership-intervals{min-width:0}
+  .membership-intervals label{width:max-content;max-width:100%}
+  .membership-intervals input[type="number"]{flex-basis:6rem;width:6rem!important;min-width:6rem}
+}

@@ -31,7 +31,7 @@ function normalizeOptions(product: CoffeeArtwork): PurchaseOption[] {
     }));
 }
 
-export default function AddToCart({ product }: { product: CoffeeArtwork }) {
+export default function AddToCart({ product, showPv = false }: { product: CoffeeArtwork; showPv?: boolean }) {
   const { addItem } = useCart();
   const options = useMemo(() => normalizeOptions(product), [product]);
   const [selectedId, setSelectedId] = useState(options[0]?.id || "");
@@ -127,7 +127,7 @@ export default function AddToCart({ product }: { product: CoffeeArtwork }) {
           const soldOut = item.stock === 0;
           const active = option?.id === item.id;
           return <button key={item.id} type="button" aria-pressed={active} className={active ? "active" : ""} onClick={() => chooseOption(item)} disabled={soldOut}>
-            <span><strong>{item.label}</strong><small>{item.detail}{soldOut ? "・暫時售完" : ""}</small></span><b>NT$ {item.price.toLocaleString("zh-TW")}</b>
+            <span><strong>{item.label}</strong><small>{item.detail}{soldOut ? "・暫時售完" : ""}{showPv && item.pvEnabled ? `・${item.pvValue ?? 0} PV` : ""}</small></span><b>NT$ {item.price.toLocaleString("zh-TW")}</b>
           </button>;
         })}
       </div>

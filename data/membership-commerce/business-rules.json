@@ -1,0 +1,1275 @@
+{
+  "schemaVersion": 1,
+  "revision": 4,
+  "activeRulesVersion": 5,
+  "versions": [
+    {
+      "rulesVersion": 1,
+      "effectiveAt": "2026-08-30T08:40:16.976Z",
+      "createdAt": "2026-08-30T08:40:16.976Z",
+      "createdBy": "system",
+      "rules": {
+        "membership": {
+          "openingYearFreeShipping": {
+            "enabled": true,
+            "startDate": "",
+            "endDate": "",
+            "shippingMethods": [
+              "711_cod"
+            ]
+          }
+        },
+        "shipping": {
+          "subscriptionFreeShipping": true,
+          "subscriptionShippingFee": 60
+        },
+        "subscription": {
+          "discountPercent": 95,
+          "intervalsDays": [
+            30,
+            45,
+            60
+          ],
+          "intervalOptions": [
+            {
+              "days": 30,
+              "enabled": true
+            },
+            {
+              "days": 45,
+              "enabled": true
+            },
+            {
+              "days": 60,
+              "enabled": true
+            }
+          ],
+          "customCycleEnabled": true,
+          "customCycleMinDays": 20,
+          "customCycleMaxDays": 120,
+          "modificationCutoffDays": 7,
+          "orderCreationLeadDays": 3,
+          "preparationLeadDays": 3,
+          "customRoastPreparationLeadDays": 7,
+          "delayQuickOptionsDays": [
+            7,
+            14,
+            30
+          ],
+          "advanceQuickOptionsDays": [
+            3,
+            5,
+            7
+          ],
+          "maxModificationsPerCycle": null,
+          "datePickerMode": "quick-and-calendar",
+          "uncollectedTerminationCount": 1,
+          "allowOtherSubscriptionProducts": true,
+          "allowHalfToOnePound": true,
+          "allowOneToHalfPound": true,
+          "allowMixedOnePound": true,
+          "allowQuantityChange": true,
+          "pauseResumeAnchorPolicy": "member-selects-date"
+        },
+        "pickup": {
+          "preparationLeadDays": 0,
+          "customRoastPreparationLeadDays": 3,
+          "blockedDates": [],
+          "datePickerMode": "calendar"
+        },
+        "gift": {
+          "startsAtFulfillment": 3,
+          "repeatEveryFulfillments": 1,
+          "halfPoundQuantity": 1,
+          "onePoundQuantity": 2,
+          "pool": []
+        },
+        "referral": {
+          "programEnabled": true,
+          "referralMaxRewardDepth": 5,
+          "levels": [
+            {
+              "level": 1,
+              "enabled": true,
+              "newReferralRewardRate": 5,
+              "subscriptionRewardRate": 5
+            },
+            {
+              "level": 2,
+              "enabled": true,
+              "newReferralRewardRate": 2,
+              "subscriptionRewardRate": 2
+            },
+            {
+              "level": 3,
+              "enabled": true,
+              "newReferralRewardRate": 1,
+              "subscriptionRewardRate": 1
+            },
+            {
+              "level": 4,
+              "enabled": true,
+              "newReferralRewardRate": 0.5,
+              "subscriptionRewardRate": 0.5
+            },
+            {
+              "level": 5,
+              "enabled": true,
+              "newReferralRewardRate": 0.5,
+              "subscriptionRewardRate": 0.5
+            }
+          ],
+          "referralRewardCalculationMode": "paid_amount",
+          "referralNewRewardReleaseDelayDays": 7,
+          "referralTotalRewardCap": 10,
+          "referralMonthlyCreditCap": 0,
+          "pvRewardMoneyValue": 1,
+          "showProductPV": false,
+          "reversalPolicy": "cancel-pending-and-reverse-released",
+          "referrerEligibility": {
+            "mode": "completed-orders",
+            "minimumOrders": 1
+          },
+          "reward": {
+            "mode": "percentage",
+            "percent": 5,
+            "repeatedRewards": true
+          }
+        },
+        "credit": {
+          "expiryCalendarMonths": 3,
+          "expiryReminderDays": 7,
+          "expiryMonthEndPolicy": "clamp-to-last-day",
+          "redemption": {
+            "mode": "unlimited"
+          },
+          "appliesToShipping": "yes",
+          "allowZeroTotal": true,
+          "uiMode": "amount-and-maximum"
+        },
+        "campaign": {
+          "eligiblePricingMode": "best-price"
+        },
+        "notification": {
+          "channels": [
+            "member_center",
+            "email",
+            "line",
+            "admin"
+          ],
+          "retryCount": 2,
+          "emailFallback": false,
+          "nextCycleReminderDays": 14,
+          "modificationCutoffReminderDays": 1,
+          "events": {
+            "next_cycle_upcoming": {
+              "enabled": true,
+              "channels": [
+                "member_center",
+                "line"
+              ]
+            },
+            "modification_cutoff_reminder": {
+              "enabled": true,
+              "channels": [
+                "member_center",
+                "line"
+              ]
+            },
+            "subscription_order_created": {
+              "enabled": true,
+              "channels": [
+                "member_center",
+                "line"
+              ]
+            },
+            "shipped": {
+              "enabled": true,
+              "channels": [
+                "member_center",
+                "line"
+              ]
+            },
+            "arrived_at_store": {
+              "enabled": true,
+              "channels": [
+                "member_center",
+                "line"
+              ]
+            },
+            "unclaimed_risk": {
+              "enabled": true,
+              "channels": [
+                "member_center",
+                "line",
+                "admin"
+              ]
+            },
+            "gift_milestone": {
+              "enabled": true,
+              "channels": [
+                "member_center",
+                "line"
+              ]
+            },
+            "referral_reward": {
+              "enabled": true,
+              "channels": [
+                "member_center",
+                "line"
+              ]
+            },
+            "credit_reward": {
+              "enabled": true,
+              "channels": [
+                "member_center",
+                "line"
+              ]
+            },
+            "credit_expiry": {
+              "enabled": true,
+              "channels": [
+                "member_center",
+                "line"
+              ]
+            }
+          }
+        },
+        "fulfillment": {
+          "arrivalReminderAfterDays": 5,
+          "unknownEmailRequiresReview": true,
+          "gmailScanLookbackDays": 14
+        },
+        "ownerExceptions": {
+          "canUnlockDate": true,
+          "canUnlockStore": true,
+          "canUnlockQuantity": false
+        },
+        "money": {
+          "unit": "TWD",
+          "integerOnly": true,
+          "roundingMode": "round-half-up"
+        },
+        "dateTime": {
+          "timeZone": "Asia/Taipei",
+          "dateOnlyPolicy": "taipei-calendar-date"
+        }
+      }
+    },
+    {
+      "rulesVersion": 2,
+      "effectiveAt": "2026-08-30T08:40:16.965Z",
+      "createdAt": "2026-08-30T08:40:16.965Z",
+      "createdBy": "owner",
+      "rules": {
+        "membership": {
+          "openingYearFreeShipping": {
+            "enabled": false,
+            "startDate": "",
+            "endDate": "",
+            "shippingMethods": [
+              "711_cod"
+            ]
+          }
+        },
+        "shipping": {
+          "subscriptionFreeShipping": true,
+          "subscriptionShippingFee": 60
+        },
+        "subscription": {
+          "discountPercent": 95,
+          "intervalsDays": [
+            30,
+            45,
+            60
+          ],
+          "intervalOptions": [
+            {
+              "days": 30,
+              "enabled": true
+            },
+            {
+              "days": 45,
+              "enabled": true
+            },
+            {
+              "days": 60,
+              "enabled": true
+            }
+          ],
+          "customCycleEnabled": true,
+          "customCycleMinDays": 20,
+          "customCycleMaxDays": 120,
+          "modificationCutoffDays": 7,
+          "orderCreationLeadDays": 3,
+          "preparationLeadDays": 3,
+          "customRoastPreparationLeadDays": 7,
+          "delayQuickOptionsDays": [
+            7,
+            14,
+            30
+          ],
+          "advanceQuickOptionsDays": [
+            3,
+            5,
+            7
+          ],
+          "maxModificationsPerCycle": null,
+          "datePickerMode": "quick-and-calendar",
+          "uncollectedTerminationCount": 1,
+          "allowOtherSubscriptionProducts": true,
+          "allowHalfToOnePound": true,
+          "allowOneToHalfPound": true,
+          "allowMixedOnePound": true,
+          "allowQuantityChange": true,
+          "pauseResumeAnchorPolicy": "member-selects-date"
+        },
+        "pickup": {
+          "preparationLeadDays": 1,
+          "customRoastPreparationLeadDays": 3,
+          "blockedDates": [],
+          "datePickerMode": "calendar"
+        },
+        "gift": {
+          "startsAtFulfillment": 3,
+          "repeatEveryFulfillments": 1,
+          "halfPoundQuantity": 1,
+          "onePoundQuantity": 2,
+          "pool": []
+        },
+        "referral": {
+          "programEnabled": true,
+          "referralMaxRewardDepth": 5,
+          "levels": [
+            {
+              "level": 1,
+              "enabled": true,
+              "newReferralRewardRate": 5,
+              "subscriptionRewardRate": 5
+            },
+            {
+              "level": 2,
+              "enabled": true,
+              "newReferralRewardRate": 2,
+              "subscriptionRewardRate": 2
+            },
+            {
+              "level": 3,
+              "enabled": true,
+              "newReferralRewardRate": 1,
+              "subscriptionRewardRate": 1
+            },
+            {
+              "level": 4,
+              "enabled": true,
+              "newReferralRewardRate": 0.5,
+              "subscriptionRewardRate": 0.5
+            },
+            {
+              "level": 5,
+              "enabled": true,
+              "newReferralRewardRate": 0.5,
+              "subscriptionRewardRate": 0.5
+            }
+          ],
+          "referralRewardCalculationMode": "paid_amount",
+          "referralNewRewardReleaseDelayDays": 7,
+          "referralTotalRewardCap": 10,
+          "referralMonthlyCreditCap": 0,
+          "pvRewardMoneyValue": 1,
+          "showProductPV": false,
+          "reversalPolicy": "cancel-pending-and-reverse-released",
+          "referrerEligibility": {
+            "mode": "recent-valid-purchase",
+            "withinDays": 30
+          },
+          "reward": {
+            "mode": "percentage",
+            "percent": 5,
+            "repeatedRewards": true
+          }
+        },
+        "credit": {
+          "expiryCalendarMonths": 6,
+          "expiryReminderDays": 30,
+          "expiryMonthEndPolicy": "clamp-to-last-day",
+          "redemption": {
+            "mode": "minimum-payable",
+            "amount": 100
+          },
+          "appliesToShipping": "yes",
+          "allowZeroTotal": false,
+          "uiMode": "amount-and-maximum"
+        },
+        "campaign": {
+          "eligiblePricingMode": "best-price"
+        },
+        "notification": {
+          "channels": [
+            "member_center",
+            "email",
+            "line",
+            "admin"
+          ],
+          "retryCount": 2,
+          "emailFallback": true,
+          "nextCycleReminderDays": 5,
+          "modificationCutoffReminderDays": 1,
+          "events": {
+            "next_cycle_upcoming": {
+              "enabled": true,
+              "channels": [
+                "member_center",
+                "line"
+              ]
+            },
+            "modification_cutoff_reminder": {
+              "enabled": true,
+              "channels": [
+                "member_center",
+                "line"
+              ]
+            },
+            "subscription_order_created": {
+              "enabled": true,
+              "channels": [
+                "member_center",
+                "line"
+              ]
+            },
+            "shipped": {
+              "enabled": true,
+              "channels": [
+                "member_center",
+                "line"
+              ]
+            },
+            "arrived_at_store": {
+              "enabled": true,
+              "channels": [
+                "member_center",
+                "line"
+              ]
+            },
+            "unclaimed_risk": {
+              "enabled": true,
+              "channels": [
+                "member_center",
+                "line",
+                "admin"
+              ]
+            },
+            "gift_milestone": {
+              "enabled": true,
+              "channels": [
+                "member_center",
+                "line"
+              ]
+            },
+            "referral_reward": {
+              "enabled": true,
+              "channels": [
+                "member_center",
+                "line"
+              ]
+            },
+            "credit_reward": {
+              "enabled": true,
+              "channels": [
+                "member_center",
+                "line"
+              ]
+            },
+            "credit_expiry": {
+              "enabled": true,
+              "channels": [
+                "member_center",
+                "line"
+              ]
+            }
+          }
+        },
+        "fulfillment": {
+          "arrivalReminderAfterDays": 7,
+          "unknownEmailRequiresReview": true,
+          "gmailScanLookbackDays": 14
+        },
+        "ownerExceptions": {
+          "canUnlockDate": true,
+          "canUnlockStore": true,
+          "canUnlockQuantity": false
+        },
+        "money": {
+          "unit": "TWD",
+          "integerOnly": true,
+          "roundingMode": "round-half-up"
+        },
+        "dateTime": {
+          "timeZone": "Asia/Taipei",
+          "dateOnlyPolicy": "taipei-calendar-date"
+        }
+      }
+    },
+    {
+      "rulesVersion": 3,
+      "effectiveAt": "2026-08-30T13:38:01.788Z",
+      "createdAt": "2026-08-30T13:38:01.788Z",
+      "createdBy": "owner",
+      "rules": {
+        "membership": {
+          "openingYearFreeShipping": {
+            "enabled": false,
+            "startDate": "",
+            "endDate": "",
+            "shippingMethods": [
+              "711_cod"
+            ]
+          }
+        },
+        "shipping": {
+          "subscriptionFreeShipping": true,
+          "subscriptionShippingFee": 60
+        },
+        "subscription": {
+          "discountPercent": 95,
+          "intervalsDays": [
+            30,
+            45,
+            60
+          ],
+          "intervalOptions": [
+            {
+              "days": 30,
+              "enabled": true
+            },
+            {
+              "days": 45,
+              "enabled": true
+            },
+            {
+              "days": 60,
+              "enabled": true
+            }
+          ],
+          "customCycleEnabled": true,
+          "customCycleMinDays": 20,
+          "customCycleMaxDays": 120,
+          "modificationCutoffDays": 7,
+          "orderCreationLeadDays": 3,
+          "preparationLeadDays": 3,
+          "customRoastPreparationLeadDays": 7,
+          "delayQuickOptionsDays": [
+            7,
+            14,
+            30
+          ],
+          "advanceQuickOptionsDays": [
+            3,
+            5,
+            7
+          ],
+          "maxModificationsPerCycle": null,
+          "datePickerMode": "quick-and-calendar",
+          "uncollectedTerminationCount": 1,
+          "allowOtherSubscriptionProducts": true,
+          "allowHalfToOnePound": true,
+          "allowOneToHalfPound": true,
+          "allowMixedOnePound": true,
+          "allowQuantityChange": true,
+          "pauseResumeAnchorPolicy": "member-selects-date"
+        },
+        "pickup": {
+          "preparationLeadDays": 1,
+          "customRoastPreparationLeadDays": 3,
+          "blockedDates": [],
+          "datePickerMode": "calendar"
+        },
+        "gift": {
+          "startsAtFulfillment": 3,
+          "repeatEveryFulfillments": 1,
+          "halfPoundQuantity": 1,
+          "onePoundQuantity": 2,
+          "pool": []
+        },
+        "referral": {
+          "programEnabled": true,
+          "referralMaxRewardDepth": 5,
+          "levels": [
+            {
+              "level": 1,
+              "enabled": true,
+              "newReferralRewardRate": 5,
+              "subscriptionRewardRate": 5
+            },
+            {
+              "level": 2,
+              "enabled": true,
+              "newReferralRewardRate": 2,
+              "subscriptionRewardRate": 2
+            },
+            {
+              "level": 3,
+              "enabled": true,
+              "newReferralRewardRate": 1,
+              "subscriptionRewardRate": 1
+            },
+            {
+              "level": 4,
+              "enabled": true,
+              "newReferralRewardRate": 0.5,
+              "subscriptionRewardRate": 0.5
+            },
+            {
+              "level": 5,
+              "enabled": true,
+              "newReferralRewardRate": 0.5,
+              "subscriptionRewardRate": 0.5
+            }
+          ],
+          "referralRewardCalculationMode": "pv",
+          "referralNewRewardReleaseDelayDays": 7,
+          "referralTotalRewardCap": 10,
+          "referralMonthlyCreditCap": 0,
+          "pvRewardMoneyValue": 1,
+          "showProductPV": false,
+          "reversalPolicy": "cancel-pending-and-reverse-released",
+          "referrerEligibility": {
+            "mode": "none"
+          },
+          "reward": {
+            "mode": "percentage",
+            "percent": 5,
+            "repeatedRewards": true
+          }
+        },
+        "credit": {
+          "expiryCalendarMonths": 6,
+          "expiryReminderDays": 30,
+          "expiryMonthEndPolicy": "clamp-to-last-day",
+          "redemption": {
+            "mode": "minimum-payable",
+            "amount": 100
+          },
+          "appliesToShipping": "yes",
+          "allowZeroTotal": false,
+          "uiMode": "amount-and-maximum"
+        },
+        "campaign": {
+          "eligiblePricingMode": "best-price"
+        },
+        "notification": {
+          "channels": [
+            "member_center",
+            "email",
+            "line",
+            "admin"
+          ],
+          "retryCount": 2,
+          "emailFallback": true,
+          "nextCycleReminderDays": 5,
+          "modificationCutoffReminderDays": 1,
+          "events": {
+            "next_cycle_upcoming": {
+              "enabled": true,
+              "channels": [
+                "member_center",
+                "line"
+              ]
+            },
+            "modification_cutoff_reminder": {
+              "enabled": true,
+              "channels": [
+                "member_center",
+                "line"
+              ]
+            },
+            "subscription_order_created": {
+              "enabled": true,
+              "channels": [
+                "member_center",
+                "line"
+              ]
+            },
+            "shipped": {
+              "enabled": true,
+              "channels": [
+                "member_center",
+                "line"
+              ]
+            },
+            "arrived_at_store": {
+              "enabled": true,
+              "channels": [
+                "member_center",
+                "line"
+              ]
+            },
+            "unclaimed_risk": {
+              "enabled": true,
+              "channels": [
+                "member_center",
+                "line",
+                "admin"
+              ]
+            },
+            "gift_milestone": {
+              "enabled": true,
+              "channels": [
+                "member_center",
+                "line"
+              ]
+            },
+            "referral_reward": {
+              "enabled": true,
+              "channels": [
+                "member_center",
+                "line"
+              ]
+            },
+            "credit_reward": {
+              "enabled": true,
+              "channels": [
+                "member_center",
+                "line"
+              ]
+            },
+            "credit_expiry": {
+              "enabled": true,
+              "channels": [
+                "member_center",
+                "line"
+              ]
+            }
+          }
+        },
+        "fulfillment": {
+          "arrivalReminderAfterDays": 7,
+          "unknownEmailRequiresReview": true,
+          "gmailScanLookbackDays": 14
+        },
+        "ownerExceptions": {
+          "canUnlockDate": true,
+          "canUnlockStore": true,
+          "canUnlockQuantity": false
+        },
+        "money": {
+          "unit": "TWD",
+          "integerOnly": true,
+          "roundingMode": "round-half-up"
+        },
+        "dateTime": {
+          "timeZone": "Asia/Taipei",
+          "dateOnlyPolicy": "taipei-calendar-date"
+        }
+      }
+    },
+    {
+      "rulesVersion": 4,
+      "effectiveAt": "2026-08-30T13:48:25.106Z",
+      "createdAt": "2026-08-30T13:48:25.106Z",
+      "createdBy": "owner",
+      "rules": {
+        "membership": {
+          "openingYearFreeShipping": {
+            "enabled": false,
+            "startDate": "",
+            "endDate": "",
+            "shippingMethods": [
+              "711_cod"
+            ]
+          }
+        },
+        "shipping": {
+          "subscriptionFreeShipping": true,
+          "subscriptionShippingFee": 60
+        },
+        "subscription": {
+          "discountPercent": 95,
+          "intervalsDays": [
+            30,
+            45,
+            60
+          ],
+          "intervalOptions": [
+            {
+              "days": 30,
+              "enabled": true
+            },
+            {
+              "days": 45,
+              "enabled": true
+            },
+            {
+              "days": 60,
+              "enabled": true
+            }
+          ],
+          "customCycleEnabled": true,
+          "customCycleMinDays": 20,
+          "customCycleMaxDays": 120,
+          "modificationCutoffDays": 7,
+          "orderCreationLeadDays": 3,
+          "preparationLeadDays": 3,
+          "customRoastPreparationLeadDays": 7,
+          "delayQuickOptionsDays": [
+            7,
+            14,
+            30
+          ],
+          "advanceQuickOptionsDays": [
+            3,
+            5,
+            7
+          ],
+          "maxModificationsPerCycle": null,
+          "datePickerMode": "quick-and-calendar",
+          "uncollectedTerminationCount": 1,
+          "allowOtherSubscriptionProducts": true,
+          "allowHalfToOnePound": true,
+          "allowOneToHalfPound": true,
+          "allowMixedOnePound": true,
+          "allowQuantityChange": true,
+          "pauseResumeAnchorPolicy": "member-selects-date"
+        },
+        "pickup": {
+          "preparationLeadDays": 1,
+          "customRoastPreparationLeadDays": 3,
+          "blockedDates": [],
+          "datePickerMode": "calendar"
+        },
+        "gift": {
+          "startsAtFulfillment": 3,
+          "repeatEveryFulfillments": 1,
+          "halfPoundQuantity": 1,
+          "onePoundQuantity": 2,
+          "pool": []
+        },
+        "referral": {
+          "programEnabled": true,
+          "referralMaxRewardDepth": 5,
+          "levels": [
+            {
+              "level": 1,
+              "enabled": true,
+              "newReferralRewardRate": 5,
+              "subscriptionRewardRate": 5
+            },
+            {
+              "level": 2,
+              "enabled": true,
+              "newReferralRewardRate": 2,
+              "subscriptionRewardRate": 2
+            },
+            {
+              "level": 3,
+              "enabled": true,
+              "newReferralRewardRate": 1,
+              "subscriptionRewardRate": 1
+            },
+            {
+              "level": 4,
+              "enabled": true,
+              "newReferralRewardRate": 0.5,
+              "subscriptionRewardRate": 0.5
+            },
+            {
+              "level": 5,
+              "enabled": true,
+              "newReferralRewardRate": 0.5,
+              "subscriptionRewardRate": 0.5
+            }
+          ],
+          "referralRewardCalculationMode": "pv",
+          "referralNewRewardReleaseDelayDays": 7,
+          "referralTotalRewardCap": 10,
+          "referralMonthlyCreditCap": 0,
+          "pvRewardMoneyValue": 1,
+          "showProductPV": true,
+          "reversalPolicy": "cancel-pending-and-reverse-released",
+          "referrerEligibility": {
+            "mode": "active-subscription"
+          },
+          "reward": {
+            "mode": "percentage",
+            "percent": 5,
+            "repeatedRewards": true
+          }
+        },
+        "credit": {
+          "expiryCalendarMonths": 6,
+          "expiryReminderDays": 30,
+          "expiryMonthEndPolicy": "clamp-to-last-day",
+          "redemption": {
+            "mode": "minimum-payable",
+            "amount": 100
+          },
+          "appliesToShipping": "yes",
+          "allowZeroTotal": false,
+          "uiMode": "amount-and-maximum"
+        },
+        "campaign": {
+          "eligiblePricingMode": "best-price"
+        },
+        "notification": {
+          "channels": [
+            "member_center",
+            "email",
+            "line",
+            "admin"
+          ],
+          "retryCount": 2,
+          "emailFallback": true,
+          "nextCycleReminderDays": 5,
+          "modificationCutoffReminderDays": 1,
+          "events": {
+            "next_cycle_upcoming": {
+              "enabled": true,
+              "channels": [
+                "member_center",
+                "line"
+              ]
+            },
+            "modification_cutoff_reminder": {
+              "enabled": true,
+              "channels": [
+                "member_center",
+                "line"
+              ]
+            },
+            "subscription_order_created": {
+              "enabled": true,
+              "channels": [
+                "member_center",
+                "line"
+              ]
+            },
+            "shipped": {
+              "enabled": true,
+              "channels": [
+                "member_center",
+                "line"
+              ]
+            },
+            "arrived_at_store": {
+              "enabled": true,
+              "channels": [
+                "member_center",
+                "line"
+              ]
+            },
+            "unclaimed_risk": {
+              "enabled": true,
+              "channels": [
+                "member_center",
+                "line",
+                "admin"
+              ]
+            },
+            "gift_milestone": {
+              "enabled": true,
+              "channels": [
+                "member_center",
+                "line"
+              ]
+            },
+            "referral_reward": {
+              "enabled": true,
+              "channels": [
+                "member_center",
+                "line"
+              ]
+            },
+            "credit_reward": {
+              "enabled": true,
+              "channels": [
+                "member_center",
+                "line"
+              ]
+            },
+            "credit_expiry": {
+              "enabled": true,
+              "channels": [
+                "member_center",
+                "line"
+              ]
+            }
+          }
+        },
+        "fulfillment": {
+          "arrivalReminderAfterDays": 7,
+          "unknownEmailRequiresReview": true,
+          "gmailScanLookbackDays": 14
+        },
+        "ownerExceptions": {
+          "canUnlockDate": true,
+          "canUnlockStore": true,
+          "canUnlockQuantity": false
+        },
+        "money": {
+          "unit": "TWD",
+          "integerOnly": true,
+          "roundingMode": "round-half-up"
+        },
+        "dateTime": {
+          "timeZone": "Asia/Taipei",
+          "dateOnlyPolicy": "taipei-calendar-date"
+        }
+      }
+    },
+    {
+      "rulesVersion": 5,
+      "effectiveAt": "2026-08-30T15:20:22.152Z",
+      "createdAt": "2026-08-30T15:20:22.152Z",
+      "createdBy": "owner",
+      "rules": {
+        "membership": {
+          "openingYearFreeShipping": {
+            "enabled": false,
+            "startDate": "",
+            "endDate": "",
+            "shippingMethods": [
+              "711_cod"
+            ]
+          }
+        },
+        "shipping": {
+          "subscriptionFreeShipping": true,
+          "subscriptionShippingFee": 60
+        },
+        "subscription": {
+          "discountPercent": 95,
+          "intervalsDays": [
+            30,
+            45,
+            60
+          ],
+          "intervalOptions": [
+            {
+              "days": 30,
+              "enabled": true
+            },
+            {
+              "days": 45,
+              "enabled": true
+            },
+            {
+              "days": 60,
+              "enabled": true
+            }
+          ],
+          "customCycleEnabled": true,
+          "customCycleMinDays": 14,
+          "customCycleMaxDays": 120,
+          "modificationCutoffDays": 7,
+          "orderCreationLeadDays": 3,
+          "preparationLeadDays": 3,
+          "customRoastPreparationLeadDays": 6,
+          "delayQuickOptionsDays": [
+            7,
+            14,
+            30
+          ],
+          "advanceQuickOptionsDays": [
+            3,
+            5,
+            7
+          ],
+          "maxModificationsPerCycle": null,
+          "datePickerMode": "quick-and-calendar",
+          "uncollectedTerminationCount": 1,
+          "allowOtherSubscriptionProducts": true,
+          "allowHalfToOnePound": true,
+          "allowOneToHalfPound": true,
+          "allowMixedOnePound": true,
+          "allowQuantityChange": true,
+          "pauseResumeAnchorPolicy": "member-selects-date"
+        },
+        "pickup": {
+          "preparationLeadDays": 1,
+          "customRoastPreparationLeadDays": 3,
+          "blockedDates": [],
+          "datePickerMode": "calendar"
+        },
+        "gift": {
+          "startsAtFulfillment": 3,
+          "repeatEveryFulfillments": 1,
+          "halfPoundQuantity": 1,
+          "onePoundQuantity": 2,
+          "pool": []
+        },
+        "referral": {
+          "programEnabled": true,
+          "referralMaxRewardDepth": 5,
+          "levels": [
+            {
+              "level": 1,
+              "enabled": true,
+              "newReferralRewardRate": 5,
+              "subscriptionRewardRate": 5
+            },
+            {
+              "level": 2,
+              "enabled": true,
+              "newReferralRewardRate": 2,
+              "subscriptionRewardRate": 2
+            },
+            {
+              "level": 3,
+              "enabled": true,
+              "newReferralRewardRate": 1,
+              "subscriptionRewardRate": 1
+            },
+            {
+              "level": 4,
+              "enabled": true,
+              "newReferralRewardRate": 0.5,
+              "subscriptionRewardRate": 0.5
+            },
+            {
+              "level": 5,
+              "enabled": true,
+              "newReferralRewardRate": 0.5,
+              "subscriptionRewardRate": 0.5
+            }
+          ],
+          "referralRewardCalculationMode": "pv",
+          "referralNewRewardReleaseDelayDays": 7,
+          "referralTotalRewardCap": 10,
+          "referralMonthlyCreditCap": 0,
+          "pvRewardMoneyValue": 1,
+          "showProductPV": true,
+          "reversalPolicy": "cancel-pending-and-reverse-released",
+          "referrerEligibility": {
+            "mode": "active-subscription"
+          },
+          "reward": {
+            "mode": "percentage",
+            "percent": 5,
+            "repeatedRewards": true
+          }
+        },
+        "credit": {
+          "expiryCalendarMonths": 6,
+          "expiryReminderDays": 30,
+          "expiryMonthEndPolicy": "clamp-to-last-day",
+          "redemption": {
+            "mode": "minimum-payable",
+            "amount": 100
+          },
+          "appliesToShipping": "yes",
+          "allowZeroTotal": false,
+          "uiMode": "amount-and-maximum"
+        },
+        "campaign": {
+          "eligiblePricingMode": "best-price"
+        },
+        "notification": {
+          "channels": [
+            "member_center",
+            "email",
+            "line",
+            "admin"
+          ],
+          "retryCount": 2,
+          "emailFallback": true,
+          "nextCycleReminderDays": 5,
+          "modificationCutoffReminderDays": 1,
+          "events": {
+            "next_cycle_upcoming": {
+              "enabled": true,
+              "channels": [
+                "member_center",
+                "line"
+              ]
+            },
+            "modification_cutoff_reminder": {
+              "enabled": true,
+              "channels": [
+                "member_center",
+                "line"
+              ]
+            },
+            "subscription_order_created": {
+              "enabled": true,
+              "channels": [
+                "member_center",
+                "line"
+              ]
+            },
+            "shipped": {
+              "enabled": true,
+              "channels": [
+                "member_center",
+                "line"
+              ]
+            },
+            "arrived_at_store": {
+              "enabled": true,
+              "channels": [
+                "member_center",
+                "line"
+              ]
+            },
+            "unclaimed_risk": {
+              "enabled": true,
+              "channels": [
+                "member_center",
+                "line",
+                "admin"
+              ]
+            },
+            "gift_milestone": {
+              "enabled": true,
+              "channels": [
+                "member_center",
+                "line"
+              ]
+            },
+            "referral_reward": {
+              "enabled": true,
+              "channels": [
+                "member_center",
+                "line"
+              ]
+            },
+            "credit_reward": {
+              "enabled": true,
+              "channels": [
+                "member_center",
+                "line"
+              ]
+            },
+            "credit_expiry": {
+              "enabled": true,
+              "channels": [
+                "member_center",
+                "line"
+              ]
+            }
+          }
+        },
+        "fulfillment": {
+          "arrivalReminderAfterDays": 7,
+          "unknownEmailRequiresReview": true,
+          "gmailScanLookbackDays": 14
+        },
+        "ownerExceptions": {
+          "canUnlockDate": true,
+          "canUnlockStore": true,
+          "canUnlockQuantity": false
+        },
+        "money": {
+          "unit": "TWD",
+          "integerOnly": true,
+          "roundingMode": "round-half-up"
+        },
+        "dateTime": {
+          "timeZone": "Asia/Taipei",
+          "dateOnlyPolicy": "taipei-calendar-date"
+        }
+      }
+    }
+  ],
+  "createdAt": "2026-08-30T08:40:16.976Z",
+  "updatedAt": "2026-08-30T15:20:22.152Z"
+}

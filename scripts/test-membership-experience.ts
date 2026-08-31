@@ -124,6 +124,10 @@ try {
   await rulesModule.saveMembershipBusinessRules({ expectedRevision: store.revision, rules: changedRules, now: new Date("2026-08-10T00:00:00Z") });
   check("AD", "新規則不改已鎖定快照", locked.rulesSnapshot?.rules.subscription.discountPercent === oldSnapshot);
 
+  const legacyStore = await rulesModule.readMembershipRulesStore();
+  const legacyRules = structuredClone(legacyStore.versions.at(-1)!.rules);
+  legacyRules.referral.referrerEligibility = { mode: "completed-orders", minimumOrders: 1 };
+  await rulesModule.saveMembershipBusinessRules({ expectedRevision: legacyStore.revision, rules: legacyRules, now: new Date("2026-08-10T01:00:00Z") });
   await commerce.assignReferralRelationship({ referrerMemberId: memberC, referredMemberId: memberB, safeDisplayName: "B 會員", idempotencyKey: "referral-i2" });
   const pendingReward = await commerce.processReferralOrderOutcome({ referredMemberId: memberB, orderId: "referral-order", outcome: "completed", orderMerchandiseAmount: 1390, referrerCompletedOrders: 0, idempotencyKey: "referral-pending" });
   check("AE", "推薦人未符合資格時獎勵待領", pendingReward?.status === "pending" && pendingReward.pendingRewardAmount === 70);

@@ -21,6 +21,8 @@ export type PurchaseOption = {
   stock?: number;
   enabled?: boolean;
   kind?: "beans" | "drip";
+  pvEnabled?: boolean;
+  pvValue?: number;
 };
 
 /**
@@ -30,6 +32,7 @@ export type PurchaseOption = {
  * 不負責修改商品、SKU、價格或庫存邏輯。
  */
 export type CoffeeArtwork = {
+  id?: string;
   active?: boolean;
   slug: string;
   name: string;

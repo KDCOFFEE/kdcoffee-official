@@ -1,4 +1,5 @@
 import Link from "next/link";
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { notFound } from "next/navigation";
 import { getLiveWebsiteData, type CoffeeArtwork } from "@/data/websiteData";
 import AddToCart from "@/components/commerce/AddToCart";
@@ -41,6 +42,7 @@ import {
 } from "@/lib/cleanRoastingMedia";
 import { resolveProductPageContent } from "@/lib/productPageContent";
 import { resolveProductCustomSections } from "@/lib/productCustomSectionsValidation";
+import { getActiveMembershipRules } from "@/lib/membershipBusinessRules";
 
 export const dynamic = "force-dynamic";
 
@@ -133,7 +135,7 @@ function EditorialIcon({ name }: { name: EditorialIconName }) {
 
 export default async function WorkPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const [live, homepageData] = await Promise.all([getLiveWebsiteData(), getHomepageData()]);
+  const [live, homepageData, membershipRules] = await Promise.all([getLiveWebsiteData(), getHomepageData(), getActiveMembershipRules()]);
   const product: any = live.menu.products.find((item: any) => item.slug === slug);
   if (!product || product.status === "hidden") notFound();
   const pageContent = resolveProductPageContent(product);
@@ -311,12 +313,12 @@ export default async function WorkPage({ params }: { params: Promise<{ slug: str
               <p className="giotto-purchase-heading">{purchaseContent.eyebrow}</p>
               {purchaseContent.heading ? <h2 className="product-purchase-title">{purchaseContent.heading}</h2> : null}
               {purchaseContent.description ? <p className="product-purchase-description">{purchaseContent.description}</p> : null}
-              <AddToCart product={product} />
+              <AddToCart product={product} showPv={membershipRules.rules.referral.showProductPV} />
             </PurchaseChapterReveal>
           ) : (
             <div {...getProductAnimationAttributes(sectionAnimation("select-your-coffee"))} id="select-your-coffee" className="product-purchase-chapter">
               {pageContent.raw["select-your-coffee"] ? <div className="product-purchase-copy"><p className="giotto-purchase-heading">{purchaseContent.eyebrow}</p>{purchaseContent.heading ? <h2 className="product-purchase-title">{purchaseContent.heading}</h2> : null}{purchaseContent.description ? <span>{purchaseContent.description}</span> : null}</div> : null}
-              <AddToCart product={product} />
+              <AddToCart product={product} showPv={membershipRules.rules.referral.showProductPV} />
             </div>
           )}
         </div>

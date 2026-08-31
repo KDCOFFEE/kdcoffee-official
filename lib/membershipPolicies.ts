@@ -33,6 +33,20 @@ export function addTaipeiCalendarDays(dateOnly: string, days: number) {
   return formatDateOnly(date);
 }
 
+/** Canonical reward release policy: Taipei business dates only; time-of-day is never compared. */
+export function referralReleaseEligibleBusinessDate(successfulPickupBusinessDate: string, baseWaitingDays: number, returnProtectionDays: number) {
+  if (!Number.isSafeInteger(baseWaitingDays) || baseWaitingDays < 0 || !Number.isSafeInteger(returnProtectionDays) || returnProtectionDays < 0) {
+    throw new MembershipPolicyError("推薦獎勵等待天數必須是非負整數");
+  }
+  return addTaipeiCalendarDays(successfulPickupBusinessDate, baseWaitingDays + returnProtectionDays);
+}
+
+export function isReferralReleaseBusinessDateDue(currentTaipeiBusinessDate: string, releaseEligibleBusinessDate: string) {
+  parseDateOnly(currentTaipeiBusinessDate);
+  parseDateOnly(releaseEligibleBusinessDate);
+  return currentTaipeiBusinessDate >= releaseEligibleBusinessDate;
+}
+
 export function addTaipeiCalendarMonths(dateOnly: string, months: number) {
   if (!Number.isSafeInteger(months)) throw new MembershipPolicyError("月份必須是整數");
   const source = parseDateOnly(dateOnly);
@@ -44,12 +58,51 @@ export function addTaipeiCalendarMonths(dateOnly: string, months: number) {
 }
 
 export function cycleDates(plannedDate: string, modificationCutoffDays: number, orderCreationLeadDays: number) {
+  parseDateOnly(plannedDate);
   if (orderCreationLeadDays > modificationCutoffDays) throw new MembershipPolicyError("建立訂單日期不可早於修改截止日期");
   return {
     plannedDate,
     modificationDeadline: addTaipeiCalendarDays(plannedDate, -modificationCutoffDays),
     orderCreationDate: addTaipeiCalendarDays(plannedDate, -orderCreationLeadDays),
   };
+}
+
+export type DateAvailability = {
+  requestedDate: string;
+  earliestDate: string;
+  allowed: boolean;
+  reason: "available" | "before-lead-time" | "blocked-date";
+};
+
+export function resolveDateAvailability(input: { requestedDate: string; today: string; leadDays: number; blockedDates?: string[] }) {
+  parseDateOnly(input.requestedDate);
+  parseDateOnly(input.today);
+  if (!Number.isSafeInteger(input.leadDays) || input.leadDays < 0) throw new MembershipPolicyError("備貨天數設定不正確");
+  const earliestDate = addTaipeiCalendarDays(input.today, input.leadDays);
+  const blocked = new Set((input.blockedDates ?? []).map((date) => formatDateOnly(parseDateOnly(date))));
+  const reason: DateAvailability["reason"] = input.requestedDate < earliestDate
+    ? "before-lead-time"
+    : blocked.has(input.requestedDate)
+      ? "blocked-date"
+      : "available";
+  return { requestedDate: input.requestedDate, earliestDate, allowed: reason === "available", reason } satisfies DateAvailability;
+}
+
+export function resolvePickupDateAvailability(input: { requestedDate: string; today: string; customRoast: boolean; rules: MembershipBusinessRules }) {
+  return resolveDateAvailability({
+    requestedDate: input.requestedDate,
+    today: input.today,
+    leadDays: input.customRoast ? input.rules.pickup.customRoastPreparationLeadDays : input.rules.pickup.preparationLeadDays,
+    blockedDates: input.rules.pickup.blockedDates,
+  });
+}
+
+export function resolveSubscriptionDateAvailability(input: { requestedDate: string; today: string; customRoast: boolean; rules: MembershipBusinessRules }) {
+  return resolveDateAvailability({
+    requestedDate: input.requestedDate,
+    today: input.today,
+    leadDays: input.customRoast ? input.rules.subscription.customRoastPreparationLeadDays : input.rules.subscription.preparationLeadDays,
+  });
 }
 
 export function assertIntegerMoney(value: number, label = "金額") {
@@ -76,10 +129,22 @@ export function maximumCreditRedemption(input: { merchandiseSubtotal: number; sh
   if (shippingScope === OWNER_DECISION_REQUIRED) throw new MembershipPolicyError("抵用金是否可折抵運費尚待 Owner 決定");
   const eligible = merchandise + (shippingScope === "yes" ? shipping : 0);
   const policy = input.rules.credit.redemption;
-  if (policy.mode === "unlimited") return eligible;
-  if (policy.mode === "maximum-fixed") return Math.min(eligible, policy.amount);
-  if (policy.mode === "minimum-payable") return Math.max(0, eligible - policy.amount);
-  return applyPercentage(merchandise, policy.percent, input.rules.money.roundingMode);
+  let maximum = eligible;
+  if (policy.mode === "maximum-fixed") maximum = Math.min(eligible, policy.amount);
+  if (policy.mode === "minimum-payable") maximum = Math.max(0, eligible - policy.amount);
+  if (policy.mode === "maximum-percentage") maximum = applyPercentage(merchandise, policy.percent, input.rules.money.roundingMode);
+  return input.rules.credit.allowZeroTotal ? maximum : Math.min(maximum, Math.max(0, merchandise + shipping - 1));
+}
+
+export function resolveCreditMemberPolicy(rules: MembershipBusinessRules) {
+  return {
+    uiMode: rules.credit.uiMode,
+    showAmountInput: ["amount-and-maximum", "custom-amount"].includes(rules.credit.uiMode),
+    showMaximumButton: rules.credit.uiMode === "amount-and-maximum",
+    automaticallyUseMaximum: rules.credit.uiMode === "automatic-maximum",
+    allowZeroTotal: rules.credit.allowZeroTotal,
+    appliesToShipping: rules.credit.appliesToShipping === "yes",
+  };
 }
 
 export type MembershipPricePreview = {
@@ -148,6 +213,17 @@ export function giftQuantityForItems(items: SubscriptionItem[], rules: Membershi
 export function giftEligibleAt(fulfillmentNumber: number, rules: MembershipBusinessRules) {
   const start = rules.gift.startsAtFulfillment;
   return fulfillmentNumber >= start && (fulfillmentNumber - start) % rules.gift.repeatEveryFulfillments === 0;
+}
+
+/** Server-authoritative subscription interval validation for presets and member custom cycles. */
+export function resolveSubscriptionInterval(days: number, rules: MembershipBusinessRules) {
+  if (!Number.isSafeInteger(days)) return { allowed: false, kind: "invalid" as const };
+  const preset = rules.subscription.intervalOptions.find((option) => option.days === days);
+  if (preset?.enabled) return { allowed: true, kind: "preset" as const };
+  const allowed = rules.subscription.customCycleEnabled
+    && days >= rules.subscription.customCycleMinDays
+    && days <= rules.subscription.customCycleMaxDays;
+  return { allowed, kind: allowed ? "custom" as const : "invalid" as const };
 }
 
 export function openingYearMemberShippingIsFree(input: { date: string; shippingMethod: string; rules: MembershipBusinessRules }) {

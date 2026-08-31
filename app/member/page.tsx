@@ -8,6 +8,7 @@ import { getOrdersDir, getWebsiteDataFile } from "@/lib/storagePaths";
 import MemberProfileForm from "@/components/member/MemberProfileForm";
 import EmailAuthForms from "@/components/member/EmailAuthForms";
 import MemberSubscriptionExperience from "@/components/member/MemberSubscriptionExperience";
+import MemberReferralCenter from "@/components/member/MemberReferralCenter";
 import { getMemberCommerceDashboard } from "@/lib/membershipCommerce";
 import { getActiveMembershipRules } from "@/lib/membershipBusinessRules";
 import { fulfillmentRecordForOrder, readFulfillmentStore } from "@/lib/fulfillment";
@@ -442,7 +443,8 @@ export default async function MemberPage({
           </div>
         </div>
 
-        <MemberSubscriptionExperience {...commerce} products={subscriptionProducts} rules={{ intervalsDays: rulesVersion.rules.subscription.intervalsDays, delayQuickOptionsDays: rulesVersion.rules.subscription.delayQuickOptionsDays, preparationLeadDays: rulesVersion.rules.subscription.preparationLeadDays, discountPercent: rulesVersion.rules.subscription.discountPercent }} />
+        <MemberSubscriptionExperience {...commerce} products={subscriptionProducts} rules={{ intervalsDays: rulesVersion.rules.subscription.intervalOptions.filter((item) => item.enabled).map((item) => item.days), customCycleEnabled: rulesVersion.rules.subscription.customCycleEnabled, customCycleMinDays: rulesVersion.rules.subscription.customCycleMinDays, customCycleMaxDays: rulesVersion.rules.subscription.customCycleMaxDays, delayQuickOptionsDays: rulesVersion.rules.subscription.delayQuickOptionsDays, advanceQuickOptionsDays: rulesVersion.rules.subscription.advanceQuickOptionsDays, preparationLeadDays: rulesVersion.rules.subscription.preparationLeadDays, discountPercent: rulesVersion.rules.subscription.discountPercent, datePickerMode: rulesVersion.rules.subscription.datePickerMode, maxModificationsPerCycle: rulesVersion.rules.subscription.maxModificationsPerCycle }} />
+        <MemberReferralCenter />
 
         <section className="member-login-methods" id="login-methods">
           <div className="member-section-head">

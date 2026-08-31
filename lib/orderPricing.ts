@@ -51,8 +51,8 @@ export function priceOrderFromWebsiteData(live: WebsiteData, items: RequestedIte
     }
     const preparationLabel = preparation.label;
     const customRoast = item.customRoast === true;
-    let roastLevel = "";
-    let roastNote = "";
+    const roastLevel = "";
+    const roastNote = "";
     subtotal += unitPrice * quantity;
     return {
       sourceItem: item,
@@ -70,6 +70,10 @@ export function priceOrderFromWebsiteData(live: WebsiteData, items: RequestedIte
         unitPrice,
         quantity,
         lineTotal: unitPrice * quantity,
+        pvEnabled: option.pvEnabled === true,
+        basePV: option.pvEnabled === true && Number.isFinite(Number(option.pvValue)) ? Math.max(0, Number(option.pvValue)) : 0,
+        discountRatio: 1,
+        effectivePV: option.pvEnabled === true && Number.isFinite(Number(option.pvValue)) ? Math.max(0, Number(option.pvValue)) : 0,
       },
       skuDemand: {
         skuId: option.id,

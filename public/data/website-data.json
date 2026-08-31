@@ -1,6 +1,6 @@
 {
-  "version": 105,
-  "updatedAt": "2026-08-10T13:40:41.015Z",
+  "version": 106,
+  "updatedAt": "2026-08-30T13:36:12.105Z",
   "campaign": {
     "enabled": true,
     "eyebrow": "THIS MONTH AT KD COFFEE",
@@ -49,14 +49,18 @@
             "detail": "227g",
             "price": 700,
             "id": "giotto-awakening-01",
-            "kind": "beans"
+            "kind": "beans",
+            "pvEnabled": true,
+            "pvValue": 100
           },
           {
             "label": "耳掛咖啡",
             "detail": "10入／每包12g",
             "price": 500,
             "id": "giotto-awakening-02",
-            "kind": "drip"
+            "kind": "drip",
+            "pvEnabled": true,
+            "pvValue": 50
           }
         ],
         "status": "active",
@@ -87,7 +91,9 @@
             "id": "giotto-awakening-01",
             "stock": 9,
             "enabled": true,
-            "kind": "beans"
+            "kind": "beans",
+            "pvEnabled": true,
+            "pvValue": 100
           },
           {
             "label": "耳掛咖啡",
@@ -96,7 +102,9 @@
             "id": "giotto-awakening-02",
             "stock": 10,
             "enabled": true,
-            "kind": "drip"
+            "kind": "drip",
+            "pvEnabled": true,
+            "pvValue": 50
           }
         ],
         "schemaVersion": "12.0",
@@ -135,6 +143,12 @@
           "showRelatedWorks": true
         },
         "history": [
+          {
+            "id": "H-1788096972095-P00001",
+            "version": 2,
+            "summary": "更新 半磅咖啡豆 pvEnabled、更新 半磅咖啡豆 pvValue、更新 耳掛咖啡 pvEnabled、更新 耳掛咖啡 pvValue",
+            "createdAt": "2026-08-30T13:36:12.095Z"
+          },
           {
             "id": "H-1786290400069-P00001",
             "version": 1,
@@ -211,14 +225,18 @@
             "detail": "227g",
             "price": 700,
             "id": "davinci-feast-01",
-            "kind": "beans"
+            "kind": "beans",
+            "pvEnabled": true,
+            "pvValue": 100
           },
           {
             "label": "耳掛咖啡",
             "detail": "10入／每包12g",
             "price": 500,
             "id": "davinci-feast-02",
-            "kind": "drip"
+            "kind": "drip",
+            "pvEnabled": true,
+            "pvValue": 51
           }
         ],
         "status": "active",
@@ -249,7 +267,9 @@
             "id": "davinci-feast-01",
             "stock": 9,
             "enabled": true,
-            "kind": "beans"
+            "kind": "beans",
+            "pvEnabled": true,
+            "pvValue": 100
           },
           {
             "label": "耳掛咖啡",
@@ -258,7 +278,9 @@
             "id": "davinci-feast-02",
             "stock": 10,
             "enabled": true,
-            "kind": "drip"
+            "kind": "drip",
+            "pvEnabled": true,
+            "pvValue": 51
           }
         ],
         "schemaVersion": "12.0",
@@ -297,6 +319,12 @@
           "showRelatedWorks": true
         },
         "history": [
+          {
+            "id": "H-1788096972095-P00002",
+            "version": 2,
+            "summary": "更新 半磅咖啡豆 pvEnabled、更新 半磅咖啡豆 pvValue、更新 耳掛咖啡 pvEnabled、更新 耳掛咖啡 pvValue",
+            "createdAt": "2026-08-30T13:36:12.095Z"
+          },
           {
             "id": "H-1786290400069-P00002",
             "version": 1,
@@ -341,14 +369,18 @@
             "detail": "227g",
             "price": 500,
             "id": "monet-floral-01",
-            "kind": "beans"
+            "kind": "beans",
+            "pvEnabled": true,
+            "pvValue": 100
           },
           {
             "label": "耳掛咖啡",
             "detail": "10入／每包12g",
             "price": 500,
             "id": "monet-floral-02",
-            "kind": "drip"
+            "kind": "drip",
+            "pvEnabled": true,
+            "pvValue": 50
           }
         ],
         "status": "active",
@@ -379,7 +411,9 @@
             "id": "monet-floral-01",
             "stock": 8,
             "enabled": true,
-            "kind": "beans"
+            "kind": "beans",
+            "pvEnabled": true,
+            "pvValue": 100
           },
           {
             "label": "耳掛咖啡",
@@ -388,7 +422,9 @@
             "id": "monet-floral-02",
             "stock": 10,
             "enabled": true,
-            "kind": "drip"
+            "kind": "drip",
+            "pvEnabled": true,
+            "pvValue": 50
           }
         ],
         "schemaVersion": "12.0",
@@ -427,6 +463,12 @@
           "showRelatedWorks": true
         },
         "history": [
+          {
+            "id": "H-1788096972096-P00003",
+            "version": 2,
+            "summary": "更新 半磅咖啡豆 pvEnabled、更新 半磅咖啡豆 pvValue、更新 耳掛咖啡 pvEnabled、更新 耳掛咖啡 pvValue",
+            "createdAt": "2026-08-30T13:36:12.096Z"
+          },
           {
             "id": "H-1786290400069-P00003",
             "version": 1,
@@ -470,14 +512,18 @@
             "detail": "227g",
             "price": 700,
             "id": "turner-sunset-01",
-            "kind": "beans"
+            "kind": "beans",
+            "pvEnabled": true,
+            "pvValue": 100
           },
           {
             "label": "耳掛咖啡",
             "detail": "10入／每包12g",
             "price": 500,
             "id": "turner-sunset-02",
-            "kind": "drip"
+            "kind": "drip",
+            "pvEnabled": true,
+            "pvValue": 50
           }
         ],
         "status": "active",
@@ -508,7 +554,9 @@
             "id": "turner-sunset-01",
             "stock": 10,
             "enabled": true,
-            "kind": "beans"
+            "kind": "beans",
+            "pvEnabled": true,
+            "pvValue": 100
           },
           {
             "label": "耳掛咖啡",
@@ -517,7 +565,9 @@
             "id": "turner-sunset-02",
             "stock": 10,
             "enabled": true,
-            "kind": "drip"
+            "kind": "drip",
+            "pvEnabled": true,
+            "pvValue": 50
           }
         ],
         "schemaVersion": "12.0",
@@ -545,6 +595,12 @@
           "showRelatedWorks": true
         },
         "history": [
+          {
+            "id": "H-1788096972096-P00004",
+            "version": 2,
+            "summary": "更新 半磅咖啡豆 pvEnabled、更新 半磅咖啡豆 pvValue、更新 耳掛咖啡 pvEnabled、更新 耳掛咖啡 pvValue",
+            "createdAt": "2026-08-30T13:36:12.096Z"
+          },
           {
             "id": "H-1786290400069-P00004",
             "version": 1,
@@ -588,14 +644,18 @@
             "detail": "227g",
             "price": 700,
             "id": "vandyck-knight-01",
-            "kind": "beans"
+            "kind": "beans",
+            "pvEnabled": true,
+            "pvValue": 100
           },
           {
             "label": "耳掛咖啡",
             "detail": "10入／每包12g",
             "price": 500,
             "id": "vandyck-knight-02",
-            "kind": "drip"
+            "kind": "drip",
+            "pvEnabled": true,
+            "pvValue": 50
           }
         ],
         "status": "active",
@@ -626,7 +686,9 @@
             "id": "vandyck-knight-01",
             "stock": 10,
             "enabled": true,
-            "kind": "beans"
+            "kind": "beans",
+            "pvEnabled": true,
+            "pvValue": 100
           },
           {
             "label": "耳掛咖啡",
@@ -635,7 +697,9 @@
             "id": "vandyck-knight-02",
             "stock": 10,
             "enabled": true,
-            "kind": "drip"
+            "kind": "drip",
+            "pvEnabled": true,
+            "pvValue": 50
           }
         ],
         "schemaVersion": "12.0",
@@ -663,6 +727,12 @@
           "showRelatedWorks": true
         },
         "history": [
+          {
+            "id": "H-1788096972096-P00005",
+            "version": 2,
+            "summary": "更新 半磅咖啡豆 pvEnabled、更新 半磅咖啡豆 pvValue、更新 耳掛咖啡 pvEnabled、更新 耳掛咖啡 pvValue",
+            "createdAt": "2026-08-30T13:36:12.096Z"
+          },
           {
             "id": "H-1786290400070-P00005",
             "version": 1,
@@ -706,14 +776,18 @@
             "detail": "227g",
             "price": 700,
             "id": "degas-melody-01",
-            "kind": "beans"
+            "kind": "beans",
+            "pvEnabled": true,
+            "pvValue": 100
           },
           {
             "label": "耳掛咖啡",
             "detail": "10入／每包12g",
             "price": 500,
             "id": "degas-melody-02",
-            "kind": "drip"
+            "kind": "drip",
+            "pvEnabled": true,
+            "pvValue": 50
           }
         ],
         "status": "active",
@@ -744,7 +818,9 @@
             "id": "degas-melody-01",
             "stock": 10,
             "enabled": true,
-            "kind": "beans"
+            "kind": "beans",
+            "pvEnabled": true,
+            "pvValue": 100
           },
           {
             "label": "耳掛咖啡",
@@ -753,7 +829,9 @@
             "id": "degas-melody-02",
             "stock": 10,
             "enabled": true,
-            "kind": "drip"
+            "kind": "drip",
+            "pvEnabled": true,
+            "pvValue": 50
           }
         ],
         "schemaVersion": "12.0",
@@ -781,6 +859,12 @@
           "showRelatedWorks": true
         },
         "history": [
+          {
+            "id": "H-1788096972096-P00006",
+            "version": 2,
+            "summary": "更新 半磅咖啡豆 pvEnabled、更新 半磅咖啡豆 pvValue、更新 耳掛咖啡 pvEnabled、更新 耳掛咖啡 pvValue",
+            "createdAt": "2026-08-30T13:36:12.096Z"
+          },
           {
             "id": "H-1786290400070-P00006",
             "version": 1,
@@ -825,14 +909,18 @@
             "detail": "227g",
             "price": 700,
             "id": "raphael-kiss-01",
-            "kind": "beans"
+            "kind": "beans",
+            "pvEnabled": true,
+            "pvValue": 100
           },
           {
             "label": "耳掛咖啡",
             "detail": "10入／每包12g",
             "price": 500,
             "id": "raphael-kiss-02",
-            "kind": "drip"
+            "kind": "drip",
+            "pvEnabled": true,
+            "pvValue": 50
           }
         ],
         "status": "active",
@@ -863,7 +951,9 @@
             "id": "raphael-kiss-01",
             "stock": 10,
             "enabled": true,
-            "kind": "beans"
+            "kind": "beans",
+            "pvEnabled": true,
+            "pvValue": 100
           },
           {
             "label": "耳掛咖啡",
@@ -872,7 +962,9 @@
             "id": "raphael-kiss-02",
             "stock": 10,
             "enabled": true,
-            "kind": "drip"
+            "kind": "drip",
+            "pvEnabled": true,
+            "pvValue": 50
           }
         ],
         "schemaVersion": "12.0",
@@ -911,6 +1003,12 @@
           "showRelatedWorks": true
         },
         "history": [
+          {
+            "id": "H-1788096972096-P00007",
+            "version": 2,
+            "summary": "更新 半磅咖啡豆 pvEnabled、更新 半磅咖啡豆 pvValue、更新 耳掛咖啡 pvEnabled、更新 耳掛咖啡 pvValue",
+            "createdAt": "2026-08-30T13:36:12.096Z"
+          },
           {
             "id": "H-1786290400070-P00007",
             "version": 1,
@@ -954,14 +1052,18 @@
             "detail": "227g",
             "price": 700,
             "id": "vangogh-enchantment-01",
-            "kind": "beans"
+            "kind": "beans",
+            "pvEnabled": true,
+            "pvValue": 100
           },
           {
             "label": "耳掛咖啡",
             "detail": "10入／每包12g",
             "price": 500,
             "id": "vangogh-enchantment-02",
-            "kind": "drip"
+            "kind": "drip",
+            "pvEnabled": true,
+            "pvValue": 50
           }
         ],
         "status": "active",
@@ -992,7 +1094,9 @@
             "id": "vangogh-enchantment-01",
             "stock": 10,
             "enabled": true,
-            "kind": "beans"
+            "kind": "beans",
+            "pvEnabled": true,
+            "pvValue": 100
           },
           {
             "label": "耳掛咖啡",
@@ -1001,7 +1105,9 @@
             "id": "vangogh-enchantment-02",
             "stock": 10,
             "enabled": true,
-            "kind": "drip"
+            "kind": "drip",
+            "pvEnabled": true,
+            "pvValue": 50
           }
         ],
         "schemaVersion": "12.0",
@@ -1029,6 +1135,12 @@
           "showRelatedWorks": true
         },
         "history": [
+          {
+            "id": "H-1788096972096-P00008",
+            "version": 2,
+            "summary": "更新 半磅咖啡豆 pvEnabled、更新 半磅咖啡豆 pvValue、更新 耳掛咖啡 pvEnabled、更新 耳掛咖啡 pvValue",
+            "createdAt": "2026-08-30T13:36:12.096Z"
+          },
           {
             "id": "H-1786290400070-P00008",
             "version": 1,
@@ -1075,14 +1187,18 @@
             "detail": "227g",
             "price": 700,
             "id": "rembrandt-miracle-01",
-            "kind": "beans"
+            "kind": "beans",
+            "pvEnabled": true,
+            "pvValue": 100
           },
           {
             "label": "耳掛咖啡",
             "detail": "10入／每包12g",
             "price": 500,
             "id": "rembrandt-miracle-02",
-            "kind": "drip"
+            "kind": "drip",
+            "pvEnabled": true,
+            "pvValue": 50
           }
         ],
         "shortCopy": "深邃香氣與溫暖甜感緩緩浮現，沉穩中藏著驚喜。",
@@ -1106,7 +1222,9 @@
             "id": "rembrandt-miracle-01",
             "stock": 10,
             "enabled": true,
-            "kind": "beans"
+            "kind": "beans",
+            "pvEnabled": true,
+            "pvValue": 100
           },
           {
             "label": "耳掛咖啡",
@@ -1115,7 +1233,9 @@
             "id": "rembrandt-miracle-02",
             "stock": 10,
             "enabled": true,
-            "kind": "drip"
+            "kind": "drip",
+            "pvEnabled": true,
+            "pvValue": 50
           }
         ],
         "schemaVersion": "12.0",
@@ -1143,6 +1263,12 @@
           "showRelatedWorks": true
         },
         "history": [
+          {
+            "id": "H-1788096972097-P00009",
+            "version": 2,
+            "summary": "更新 半磅咖啡豆 pvEnabled、更新 半磅咖啡豆 pvValue、更新 耳掛咖啡 pvEnabled、更新 耳掛咖啡 pvValue",
+            "createdAt": "2026-08-30T13:36:12.097Z"
+          },
           {
             "id": "H-1786290400070-P00009",
             "version": 1,
@@ -1189,14 +1315,18 @@
             "detail": "227g",
             "price": 700,
             "id": "daumier-craft-01",
-            "kind": "beans"
+            "kind": "beans",
+            "pvEnabled": true,
+            "pvValue": 100
           },
           {
             "label": "耳掛咖啡",
             "detail": "10入／每包12g",
             "price": 500,
             "id": "daumier-craft-02",
-            "kind": "drip"
+            "kind": "drip",
+            "pvEnabled": true,
+            "pvValue": 50
           }
         ],
         "shortCopy": "紮實、乾淨、耐喝，呈現職人反覆琢磨的風味輪廓。",
@@ -1220,7 +1350,9 @@
             "id": "daumier-craft-01",
             "stock": 10,
             "enabled": true,
-            "kind": "beans"
+            "kind": "beans",
+            "pvEnabled": true,
+            "pvValue": 100
           },
           {
             "label": "耳掛咖啡",
@@ -1229,7 +1361,9 @@
             "id": "daumier-craft-02",
             "stock": 10,
             "enabled": true,
-            "kind": "drip"
+            "kind": "drip",
+            "pvEnabled": true,
+            "pvValue": 50
           }
         ],
         "schemaVersion": "12.0",
@@ -1257,6 +1391,12 @@
           "showRelatedWorks": true
         },
         "history": [
+          {
+            "id": "H-1788096972097-P00010",
+            "version": 2,
+            "summary": "更新 半磅咖啡豆 pvEnabled、更新 半磅咖啡豆 pvValue、更新 耳掛咖啡 pvEnabled、更新 耳掛咖啡 pvValue",
+            "createdAt": "2026-08-30T13:36:12.097Z"
+          },
           {
             "id": "H-1786290400070-P00010",
             "version": 1,

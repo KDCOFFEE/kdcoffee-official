@@ -53,7 +53,7 @@ export const PRODUCT_SENSITIVE_FIELDS = [
   "featured",
 ] as const;
 
-export const SKU_SENSITIVE_FIELDS = ["label", "detail", "price", "stock", "enabled"] as const;
+export const SKU_SENSITIVE_FIELDS = ["label", "detail", "price", "stock", "enabled", "pvEnabled", "pvValue"] as const;
 
 type ProductMetadataField = (typeof PRODUCT_METADATA_FIELDS)[number];
 type ProductSensitiveField = (typeof PRODUCT_SENSITIVE_FIELDS)[number];
@@ -187,6 +187,11 @@ function normalizeNonNegativeInteger(value: unknown, label: string) {
   if (typeof value !== "number" || !Number.isInteger(value) || value < 0) {
     throw new ProductCommerceUpdateError(`${label}必須是有效的非負整數。`);
   }
+  return value;
+}
+
+function normalizeNonNegativeNumber(value: unknown, label: string) {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) throw new ProductCommerceUpdateError(`${label}必須是有效的非負數字。`);
   return value;
 }
 
@@ -335,6 +340,11 @@ function normalizeSkuField(field: SkuSensitiveField, value: unknown) {
     if (typeof value !== "boolean") throw new ProductCommerceUpdateError("SKU enabled 必須是布林值。");
     return value;
   }
+  if (field === "pvEnabled") {
+    if (typeof value !== "boolean") throw new ProductCommerceUpdateError("SKU PV 開關必須是布林值。");
+    return value;
+  }
+  if (field === "pvValue") return normalizeNonNegativeNumber(value, "SKU PV");
   return normalizeNonNegativeInteger(value, field === "price" ? "SKU 價格" : "SKU 庫存");
 }
 
@@ -350,6 +360,8 @@ function normalizeAddedSku(value: unknown) {
     price: normalizeSkuField("price", value.price),
     stock: normalizeSkuField("stock", value.stock),
     enabled: normalizeSkuField("enabled", value.enabled),
+    pvEnabled: normalizeSkuField("pvEnabled", value.pvEnabled ?? false),
+    pvValue: normalizeSkuField("pvValue", value.pvValue ?? 0),
   };
 }
 
@@ -532,7 +544,8 @@ export function applyProductChanges(serverProducts: ProductRecord[], requestedCh
           throw new ProductCommerceUpdateError(`SKU「${skuId}」欄位「${rawField.field}」缺少 expectedValue 或重複提交。`);
         }
         seenSkuFields.add(rawField.field);
-        if (!equal(sku[rawField.field], rawField.expectedValue)) conflict(product, String(sku.label || skuId));
+        const currentValue = rawField.field === "pvEnabled" ? sku.pvEnabled ?? false : rawField.field === "pvValue" ? sku.pvValue ?? 0 : sku[rawField.field];
+        if (!equal(currentValue, rawField.expectedValue)) conflict(product, String(sku.label || skuId));
         sku[rawField.field] = normalizeSkuField(rawField.field as SkuSensitiveField, rawField.nextValue);
         summary.push(`更新 ${sku.label || skuId} ${rawField.field}`);
       }

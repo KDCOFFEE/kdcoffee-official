@@ -293,6 +293,26 @@ export function getMembershipCommerceStateFile() {
   return path.join(getMembershipCommerceDir(), "commerce-state.json");
 }
 
+/** Admin-only membership simulator. Its namespace is never read by production commerce. */
+export function getMembershipTestLabDir() {
+  const root = getPersistentDataRoot();
+  return root
+    ? path.join(root, "membership-test-lab")
+    : path.join(process.cwd(), "data", "membership-test-lab");
+}
+
+export function getMembershipTestLabStateFile() {
+  return path.join(getMembershipTestLabDir(), "scenario-state.json");
+}
+
+export function getMembershipTestLabCommerceFile() {
+  return path.join(getMembershipTestLabDir(), "simulation-commerce.json");
+}
+
+export function getMembershipTestLabRulesFile() {
+  return path.join(getMembershipTestLabDir(), "simulation-rules.json");
+}
+
 /** Canonical order-fulfillment records and Owner logistics settings. */
 export function getFulfillmentDir() {
   const root = getPersistentDataRoot();

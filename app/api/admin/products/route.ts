@@ -134,7 +134,7 @@ function normalizeProduct(value: unknown) {
     },
 
     skus:
-      Array.isArray(product.skus) && product.skus.length
+      (Array.isArray(product.skus) && product.skus.length
         ? product.skus
         : purchase
             .filter(isRecord)
@@ -142,7 +142,7 @@ function normalizeProduct(value: unknown) {
               ...item,
               stock: product.stock || 0,
               enabled: true,
-            })),
+            }))).map((item) => ({ ...item, pvEnabled: item.pvEnabled === true, pvValue: typeof item.pvValue === "number" ? item.pvValue : 0 })),
   };
 }
 

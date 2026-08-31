@@ -1,0 +1,28 @@
+"use client";
+/* eslint-disable @next/next/no-img-element */
+import { useEffect, useState } from "react";
+type Center = { referralCode:string; referralUrl:string; pvDisclosure:string|null; summaries:Array<{level:number;members:number;pendingCredit:number;releasedCredit:number;aggregateEligibleSpend:number}>; nodes:Array<{memberNumber:string;safeDisplayName:string;level:number}>; rewards:Array<{rewardId:string;referralLevel:number;rewardType:string;calculationMode:string;effectivePV:number;rewardRate:number;rewardPV:number;creditAmount:number;projectedCreditAmount:number;status:string;cancellationReason:string|null;qualificationStatus:string;qualificationExpiresAt:string|null;qualificationOrderNumber:string|null;qualificationOrderCreatedAt:string|null;qualificationOrderFinalState:string|null;qualificationQualifiedAt:string|null;successfulPickupBusinessDate:string|null;releaseEligibleBusinessDate:string|null;releasedAt:string|null}> };
+const money=(value:number)=>`NT$ ${value.toLocaleString("zh-TW")}`;
+function rewardStatusLabel(reward:{status:string;cancellationReason:string|null},qualificationLabel:string){
+ if(reward.status==="released")return "已發放";
+ if(reward.status==="reversed")return "獎勵已沖回";
+ if(reward.status==="cancelled"){
+  if(reward.cancellationReason==="monthly_cap_exhausted_at_release")return "本月推薦獎勵上限已達";
+  if(reward.cancellationReason==="source_transaction_reversed_before_release")return "來源交易取消／退款，獎勵已取消";
+  return "獎勵已取消";
+ }
+ return qualificationLabel;
+}
+export default function MemberReferralCenter(){
+ const [data,setData]=useState<Center|null>(null); const [message,setMessage]=useState("");
+ useEffect(()=>{const referralCode=new URLSearchParams(window.location.search).get("ref");const establish=referralCode?fetch("/api/member/referral",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({referralCode,idempotencyKey:`referral-link:${referralCode}`})}).then(async(response)=>{const result=await response.json();if(!response.ok)throw new Error(result.error||"推薦關係無法建立");setMessage("推薦關係已安全建立，之後不會被其他推薦連結覆蓋。");}):Promise.resolve();establish.then(()=>fetch("/api/member/referral")).then((response)=>response.json()).then(setData).catch((error)=>setMessage(error instanceof Error?error.message:"推薦資料暫時無法讀取"));},[]);
+ if(!data)return <section className="member-commerce-section" id="referral"><div className="member-section-head"><div><p className="eyebrow dark">REFERRAL</p><h2>我的推薦</h2></div></div><p>{message||"讀取中…"}</p></section>;
+ const copy=async(value:string,label:string)=>{await navigator.clipboard.writeText(value);setMessage(`${label}已複製`);};
+ return <section className="member-commerce-section" id="referral"><div className="member-section-head"><div><p className="eyebrow dark">REFERRAL</p><h2>我的推薦團隊</h2></div><span>{data.nodes.length} 位</span></div>
+ {data.pvDisclosure&&<p className="member-notice"><strong>PV 獎勵制度</strong><br/>{data.pvDisclosure}</p>}{message&&<p className="member-notice" role="status">{message}</p>}
+ <div className="member-subscription-grid"><article className="member-subscription-summary"><div><small>我的推薦碼</small><strong>{data.referralCode}</strong><button type="button" onClick={()=>void copy(data.referralCode,"推薦碼")}>複製推薦碼</button></div><div><small>推薦連結</small><strong>分享給朋友</strong><button type="button" onClick={()=>void copy(data.referralUrl,"推薦連結")}>複製推薦連結</button></div></article><article className="member-commerce-empty compact"><img width="160" height="160" alt="推薦連結 QR Code" src={`https://quickchart.io/qr?size=240&text=${encodeURIComponent(data.referralUrl)}`}/><small>推薦連結不含會員資料庫 ID。</small></article></div>
+ <div className="member-credit-summary">{data.summaries.map((item)=><div key={item.level}><small>第 {item.level} 代・{item.members} 人</small><strong>{money(item.releasedCredit)}</strong><span>待發放 {money(item.pendingCredit)}・有效消費合計 {money(item.aggregateEligibleSpend)}</span></div>)}</div>
+ {data.nodes.length?<div className="member-referral-list">{data.nodes.map((node)=><article key={`${node.level}:${node.memberNumber}`}><div><strong>{node.safeDisplayName}</strong><small>{node.memberNumber}</small></div><div><span>第 {node.level} 代</span></div></article>)}</div>:<div className="member-commerce-empty compact"><strong>還沒有推薦團隊成員</strong><p>獎勵只由真實商品訂單成功取貨產生，不會因單純註冊而發放。</p></div>}
+ {data.rewards.length?<div className="member-credit-history">{data.rewards.map((reward)=>{const qualificationLabel=reward.qualificationStatus==="awaiting_order"?"待完成資格消費":reward.qualificationStatus==="awaiting_completion"?"已於期限內下單，等待訂單完成":reward.qualificationStatus==="qualified"?"已取得領獎資格・等待發放中":reward.qualificationStatus==="expired"?"領獎資格已逾期":"歷史獎勵";return <article key={reward.rewardId}><div><strong>{money(reward.creditAmount)}</strong><small>第 {reward.referralLevel} 代・{reward.rewardType==="new_referral"?"新推薦":"定期購"}</small></div><div><span>{rewardStatusLabel(reward,qualificationLabel)}</span>{reward.qualificationExpiresAt&&reward.qualificationStatus==="awaiting_order"?<small>請於 {reward.qualificationExpiresAt.slice(0,10)} 前完成一筆訂單；最後成功成交且無退款／退貨後即可取得。</small>:null}{reward.qualificationOrderNumber&&reward.qualificationStatus==="awaiting_completion"?<small>{reward.qualificationOrderNumber}・{reward.qualificationOrderCreatedAt?.slice(0,10)} 下單，等待成功成交。</small>:null}{reward.releaseEligibleBusinessDate&&reward.status==="scheduled"?<small>可發放日期：{reward.releaseEligibleBusinessDate.replaceAll("-","/")}</small>:null}<small>{reward.calculationMode==="pv"?`有效 ${reward.effectivePV} PV × PV 獎勵率 ${reward.rewardRate}% = ${reward.rewardPV} PV`:`獎勵率 ${reward.rewardRate}%`}</small></div></article>})}</div>:null}
+ </section>;
+}

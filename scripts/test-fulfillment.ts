@@ -62,6 +62,8 @@ try {
 
   const referrer = await member("referrer@example.test");
   const referred = await member("referred@example.test");
+  const referrerSubscription=await commerce.createSubscription({memberId:referrer,startedFromOrderId:"referrer-first",anchorDate:"2026-09-01",intervalDays:30,shippingMethod:"studio_pickup",defaultItems:[item()],idempotencyKey:"referrer-sub"});
+  await commerce.activateSubscriptionFromPickup({subscriptionId:referrerSubscription.subscriptionId,orderId:"referrer-first",idempotencyKey:"referrer-activate"});
   await commerce.assignReferralRelationship({referrerMemberId:referrer,referredMemberId:referred,idempotencyKey:"relation-i2a"});
   const firstOrder="KD20260828-1001";
   await createOrder(firstOrder,"711_cod",referred);
@@ -75,7 +77,7 @@ try {
   check("I","完成後收到到店通知不會倒退",(await fulfillment.processSevenElevenEmail(mail("arrived",cm,"msg-arrived-late"))).mutated===false&&(await fulfillment.readFulfillmentStore()).records[firstOrder].currentState==="completed");
   check("J","完成取貨重送只執行一次結果",completions.length===10&&await commerce.getGiftProgress(subscription.subscriptionId)===1);
   check("T","成功取貨啟動等待中的定期購",commerceState.subscriptions[subscription.subscriptionId].status==="active");
-  check("U","完成取貨進入既有贈品與推薦邏輯",Object.values(commerceState.referralConversions).filter((entry)=>entry.orderId===firstOrder).length===1&&Object.values(commerceState.creditEntries).filter((entry)=>entry.sourceType==="referral").length===1);
+  check("U","完成取貨進入贈品與延遲推薦獎勵邏輯",Object.values(commerceState.referralRewards).filter((entry)=>entry.sourceOrderNumber===firstOrder&&entry.status==="scheduled").length===1&&Object.values(commerceState.creditEntries).filter((entry)=>entry.sourceType==="referral").length===0);
 
   const pickupOrder="KD20260828-1002";
   await createOrder(pickupOrder,"studio_pickup");

@@ -23,6 +23,14 @@
     "test:order-checkout-regression": "jiti scripts/test-order-checkout-regression.ts",
     "test:fulfillment": "node --experimental-strip-types --import ./scripts/member-auth-test-bootstrap.mjs scripts/test-fulfillment.ts",
     "test:line-order-image": "node --experimental-strip-types --import ./scripts/member-auth-test-bootstrap.mjs scripts/test-line-order-notification-image.ts",
+    "test:phase-i3": "node --experimental-strip-types --import ./scripts/member-auth-test-bootstrap.mjs scripts/test-phase-i3-operational-rules.ts",
+    "test:phase-i3a": "node --experimental-strip-types --import ./scripts/member-auth-test-bootstrap.mjs scripts/test-phase-i3a-operational-completion.ts",
+    "test:phase-i3b": "node --experimental-strip-types --import ./scripts/member-auth-test-bootstrap.mjs scripts/test-phase-i3b-referral-pv.ts",
+    "test:phase-i3c": "node --experimental-strip-types --import ./scripts/member-auth-test-bootstrap.mjs scripts/test-phase-i3c-help-test-lab.ts",
+    "test:phase-i3c0a": "jiti scripts/test-phase-i3c0a-admin-display.tsx",
+    "test:phase-i3c1": "node --experimental-strip-types --import ./scripts/member-auth-test-bootstrap.mjs scripts/test-phase-i3c1-referral-qualification.ts",
+    "test:phase-i3c2": "node --experimental-strip-types --import ./scripts/member-auth-test-bootstrap.mjs scripts/test-phase-i3c2-final-reward-policy.ts",
+    "test:phase-i3c3": "node --experimental-strip-types --import ./scripts/member-auth-test-bootstrap.mjs scripts/test-phase-i3c3-final-acceptance.ts",
     "health": "node scripts/health-check.mjs"
   },
   "dependencies": {

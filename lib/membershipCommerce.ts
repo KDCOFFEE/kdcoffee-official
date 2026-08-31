@@ -2,11 +2,13 @@ import { createHash, randomBytes } from "crypto";
 import { promises as fs } from "fs";
 import path from "path";
 
+import { getDateOnlyInTimeZone } from "./checkoutRules";
 import { atomicWriteJson, withFileLock } from "./jsonFileStore";
-import { getCanonicalMemberRecord } from "./memberIdentity";
+import { getCanonicalMemberRecord, getIdentityRegistrySnapshot } from "./memberIdentity";
 import {
   getActiveMembershipRules,
   OWNER_DECISION_REQUIRED,
+  validateMembershipBusinessRules,
   type MembershipBusinessRules,
   type RulesVersion,
 } from "./membershipBusinessRules";
@@ -19,7 +21,11 @@ import {
   giftEligibleAt,
   giftQuantityForItems,
   maximumCreditRedemption,
+  isReferralReleaseBusinessDateDue,
+  referralReleaseEligibleBusinessDate,
   referralRewardForMerchandise,
+  resolveSubscriptionDateAvailability,
+  resolveSubscriptionInterval,
   validateSubscriptionItem,
   type SubscriptionItem,
 } from "./membershipPolicies";
@@ -83,6 +89,7 @@ export type SubscriptionCycle = {
   createdAt: string;
   updatedAt: string;
   revision: number;
+  modificationCount?: number;
 };
 
 export type ReferralRelationship = {
@@ -104,6 +111,67 @@ export type ReferralConversion = {
   rewardCreditEntryId: string | null;
   pendingRewardAmount: number;
   occurredAt: string;
+};
+
+export type ReferralReward = {
+  rewardId: string;
+  sourceOrderNumber: string;
+  sourceMemberId: string;
+  beneficiaryMemberId: string;
+  referralLevel: number;
+  rewardType: "new_referral" | "subscription";
+  calculationMode: "paid_amount" | "pv";
+  paidAmountBasis: number;
+  basePV: number;
+  discountRatio: number;
+  effectivePV: number;
+  rewardRate: number;
+  rewardPV: number;
+  pvRewardMoneyValue: number;
+  calculatedCreditAmount: number;
+  projectedCreditAmount?: number;
+  ruleVersion: number;
+  ancestrySnapshot: string[];
+  organizationCapPercentSnapshot?: number;
+  organizationCapAmountSnapshot?: number;
+  monthlyCapAmountSnapshot?: number;
+  monthlyCapPeriodSnapshot?: string;
+  monthlyCapUsageAtRelease?: number | null;
+  monthlyCapLimitedAmount?: number | null;
+  reversalPolicySnapshot?: MembershipBusinessRules["referral"]["reversalPolicy"];
+  baseWaitingDaysSnapshot?: number;
+  returnProtectionDaysSnapshot?: number;
+  totalWaitingDaysSnapshot?: number;
+  releasePolicyVersion?: "taipei-business-date-v1";
+  successfulPickupBusinessDate?: string | null;
+  releaseEligibleBusinessDate?: string | null;
+  sourceOrderFinalState?: "completed" | "cancelled" | "uncollected" | "refunded" | "returned";
+  cancellationReason?: string | null;
+  qualificationWindowDays?: number;
+  qualificationStartedAt?: string;
+  qualificationExpiresAt?: string;
+  qualificationStatus?: "awaiting_order" | "awaiting_completion" | "qualified" | "expired";
+  qualificationOrderNumber?: string | null;
+  qualificationOrderCreatedAt?: string | null;
+  qualificationOrderFinalState?: "pending" | "completed" | "cancelled" | "uncollected" | "refunded" | "returned" | null;
+  qualificationQualifiedAt?: string | null;
+  qualificationAttempts?: Array<{
+    orderNumber: string;
+    orderCreatedAt: string;
+    orderType: "normal" | "subscription";
+    status: "pending" | "completed" | "failed";
+    finalState: "pending" | "completed" | "cancelled" | "uncollected" | "refunded" | "returned";
+    finalizedAt: string | null;
+  }>;
+  createdAt: string;
+  eligibleAt: string;
+  scheduledReleaseAt: string;
+  releasedAt: string | null;
+  reversedAt?: string | null;
+  status: "scheduled" | "released" | "cancelled" | "reversed";
+  reversalCreditEntryId: string | null;
+  rewardCreditEntryId: string | null;
+  idempotencyKey: string;
 };
 
 export type CreditEntry = {
@@ -147,7 +215,12 @@ export type NotificationEvent = {
   eventType: "modification_window" | "deadline_tomorrow" | "order_created" | "shipped" | "ready_for_pickup" | "uncollected_terminated" | "gift_eligible" | "stock_blocked" | "subscription_paused" | "subscription_resumed" | "subscription_terminated" | "cycle_skipped" | "referral_conversion" | "credit_issued" | "credit_expiring";
   memberId?: string;
   channels: Array<"member_center" | "email" | "line" | "admin">;
-  status: "pending";
+  status: "pending" | "processing" | "delivered" | "failed";
+  deliveryPolicy?: { maxAttempts: number; emailFallback: boolean };
+  attempts?: number;
+  lastAttemptAt?: string;
+  deliveredChannels?: Array<"member_center" | "email" | "line" | "admin">;
+  lastError?: string;
   sourceEvent: string;
   createdAt: string;
   safeData: Record<string, string | number | boolean>;
@@ -175,6 +248,7 @@ export type MembershipCommerceState = {
   cycles: Record<string, SubscriptionCycle>;
   referrals: Record<string, ReferralRelationship>;
   referralConversions: Record<string, ReferralConversion>;
+  referralRewards: Record<string, ReferralReward>;
   creditEntries: Record<string, CreditEntry>;
   creditReservations: Record<string, CreditReservation>;
   events: CommerceEvent[];
@@ -212,7 +286,7 @@ function nowIso(now = new Date()) {
 
 function emptyState(now = new Date()): MembershipCommerceState {
   const timestamp = nowIso(now);
-  return { schemaVersion: 1, revision: 0, createdAt: timestamp, updatedAt: timestamp, subscriptions: {}, cycles: {}, referrals: {}, referralConversions: {}, creditEntries: {}, creditReservations: {}, events: [], notifications: [], audit: [], idempotency: {} };
+  return { schemaVersion: 1, revision: 0, createdAt: timestamp, updatedAt: timestamp, subscriptions: {}, cycles: {}, referrals: {}, referralConversions: {}, referralRewards: {}, creditEntries: {}, creditReservations: {}, events: [], notifications: [], audit: [], idempotency: {} };
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -221,12 +295,15 @@ function isObject(value: unknown): value is Record<string, unknown> {
 
 export function validateMembershipCommerceState(value: unknown): MembershipCommerceState {
   if (!isObject(value) || value.schemaVersion !== 1 || !Number.isSafeInteger(value.revision) || typeof value.createdAt !== "string" || typeof value.updatedAt !== "string") throw new MembershipCommerceError("會員商務資料格式不正確");
-  for (const field of ["subscriptions", "cycles", "referrals", "referralConversions", "creditEntries", "creditReservations", "idempotency"] as const) if (!isObject(value[field])) throw new MembershipCommerceError("會員商務資料集合不完整");
+  if (!isObject(value.referralRewards)) value.referralRewards = {};
+  for (const field of ["subscriptions", "cycles", "referrals", "referralConversions", "referralRewards", "creditEntries", "creditReservations", "idempotency"] as const) if (!isObject(value[field])) throw new MembershipCommerceError("會員商務資料集合不完整");
   for (const field of ["events", "notifications", "audit"] as const) if (!Array.isArray(value[field])) throw new MembershipCommerceError("會員商務事件集合不完整");
   for (const entry of Object.values(value.creditEntries as Record<string, CreditEntry>)) {
-    assertIntegerMoney(entry.amount, "抵用金");
+    if (entry.sourceReference.startsWith("referral_reward_reversal:")) {
+      if (!Number.isSafeInteger(entry.amount) || entry.amount >= 0) throw new MembershipCommerceError("推薦獎勵沖回金額不正確");
+    } else assertIntegerMoney(entry.amount, "抵用金");
     assertIntegerMoney(entry.remainingAmount, "抵用金餘額");
-    if (entry.remainingAmount > entry.amount) throw new MembershipCommerceError("抵用金餘額超過發放金額");
+    if (!entry.sourceReference.startsWith("referral_reward_reversal:") && entry.remainingAmount > entry.amount) throw new MembershipCommerceError("抵用金餘額超過發放金額");
   }
   return value as MembershipCommerceState;
 }
@@ -274,7 +351,26 @@ function event(state: MembershipCommerceState, type: string, safeData: CommerceE
 }
 
 function notify(state: MembershipCommerceState, rules: MembershipBusinessRules, eventType: NotificationEvent["eventType"], sourceEvent: string, now: Date, input: { memberId?: string; safeData?: NotificationEvent["safeData"]; adminOnly?: boolean } = {}) {
-  state.notifications.push({ notificationId: id("notice"), eventType, memberId: input.memberId, channels: input.adminOnly ? ["admin"] : [...rules.notification.channels], status: "pending", sourceEvent, createdAt: nowIso(now), safeData: input.safeData ?? {} });
+  const policyMap: Partial<Record<NotificationEvent["eventType"], keyof MembershipBusinessRules["notification"]["events"]>> = {
+    modification_window: "next_cycle_upcoming",
+    deadline_tomorrow: "modification_cutoff_reminder",
+    order_created: "subscription_order_created",
+    shipped: "shipped",
+    ready_for_pickup: "arrived_at_store",
+    uncollected_terminated: "unclaimed_risk",
+    gift_eligible: "gift_milestone",
+    referral_conversion: "referral_reward",
+    credit_issued: "credit_reward",
+    credit_expiring: "credit_expiry",
+  };
+  const policyKey = policyMap[eventType];
+  const policy = policyKey ? rules.notification.events[policyKey] : undefined;
+  if (!input.adminOnly && policy && !policy.enabled) return null;
+  const channels = input.adminOnly ? ["admin" as const] : [...(policy?.channels ?? rules.notification.channels)];
+  if (!channels.includes("member_center") && input.memberId) channels.unshift("member_center");
+  const notice: NotificationEvent = { notificationId: id("notice"), eventType, memberId: input.memberId, channels, status: "pending", deliveryPolicy: { maxAttempts: rules.notification.retryCount + 1, emailFallback: rules.notification.emailFallback }, sourceEvent, createdAt: nowIso(now), safeData: input.safeData ?? {} };
+  state.notifications.push(notice);
+  return notice;
 }
 
 async function assertCanonicalMember(memberId: string) {
@@ -302,7 +398,7 @@ function touch(record: { revision: number; updatedAt: string }, now: Date) {
 export async function createSubscription(input: { memberId: string; startedFromOrderId: string; anchorDate: string; intervalDays: number; shippingMethod: string; storeSelection?: Subscription["storeSelection"]; defaultItems: SubscriptionDefaultItem[]; idempotencyKey: string; now?: Date; stateFilePath?: string; rulesFilePath?: string }) {
   await assertCanonicalMember(input.memberId);
   const version = await getActiveMembershipRules(input.now, input.rulesFilePath);
-  if (!version.rules.subscription.intervalsDays.includes(input.intervalDays)) throw new MembershipCommerceError("此配送週期目前未開放");
+  if (!resolveSubscriptionInterval(input.intervalDays, version.rules).allowed) throw new MembershipCommerceError("此配送週期目前未開放");
   const items = cloneItems(input.defaultItems);
   const key = `subscription:create:${input.idempotencyKey}`;
   return transaction((state, now) => {
@@ -349,7 +445,7 @@ export async function activateSubscriptionFromPickup(input: { subscriptionId: st
 }
 
 /** One membership entry point for canonical order outcomes. */
-export async function handleCanonicalOrderOutcome(input: { orderId: string; outcome: "completed" | "uncollected"; memberId?: string; merchandiseAmount: number; eligibleItemCount?: number; idempotencyKey: string; now?: Date; stateFilePath?: string; rulesFilePath?: string }) {
+export async function handleCanonicalOrderOutcome(input: { orderId: string; outcome: "completed" | "uncollected"; memberId?: string; merchandiseAmount: number; basePV?: number; effectivePV?: number; discountRatio?: number; eligibleItemCount?: number; idempotencyKey: string; now?: Date; stateFilePath?: string; rulesFilePath?: string }) {
   const snapshot = await readMembershipCommerceState(input.stateFilePath);
   const subscription = Object.values(snapshot.subscriptions).find((item) => item.startedFromOrderId === input.orderId);
   const cycle = Object.values(snapshot.cycles).find((item) => item.createdOrderId === input.orderId);
@@ -369,9 +465,21 @@ export async function handleCanonicalOrderOutcome(input: { orderId: string; outc
     await markUncollected({ subscriptionId: linkedSubscription.subscriptionId, cycleId: cycle?.cycleId, orderId: input.orderId, idempotencyKey: `${input.idempotencyKey}:uncollected`, now: input.now, stateFilePath: input.stateFilePath, rulesFilePath: input.rulesFilePath });
   }
 
-  if (relationship && input.memberId) {
-    await processReferralOrderOutcome({ referredMemberId: input.memberId, orderId: input.orderId, outcome: input.outcome, orderMerchandiseAmount: input.merchandiseAmount, eligibleItemCount: input.eligibleItemCount, referrerCompletedOrders: 0, idempotencyKey: `${input.idempotencyKey}:referral`, now: input.now, stateFilePath: input.stateFilePath, rulesFilePath: input.rulesFilePath });
+  if (input.memberId) {
+    await handleReferralQualificationOrderOutcome({ memberId: input.memberId, orderId: input.orderId, outcome: input.outcome, idempotencyKey: `${input.idempotencyKey}:referral-qualification`, now: input.now, stateFilePath: input.stateFilePath, rulesFilePath: input.rulesFilePath });
   }
+
+  if (relationship && input.memberId) {
+    if (input.outcome === "completed") {
+      await createReferralRewardsFromFulfillment({ sourceMemberId: input.memberId, orderId: input.orderId, rewardType: cycle ? "subscription" : "new_referral", paidAmountBasis: input.merchandiseAmount, basePV: input.basePV, effectivePV: input.effectivePV, discountRatio: input.discountRatio, idempotencyKey: `${input.idempotencyKey}:referral-v2`, now: input.now, stateFilePath: input.stateFilePath, rulesFilePath: input.rulesFilePath });
+    } else {
+      await cancelOrReverseReferralRewards({ orderId: input.orderId, outcome: input.outcome, idempotencyKey: `${input.idempotencyKey}:referral-reversal`, now: input.now, stateFilePath: input.stateFilePath, rulesFilePath: input.rulesFilePath });
+    }
+  }
+
+  if (input.outcome === "completed") await runReferralRewardReleaseScheduler({ now: input.now, stateFilePath: input.stateFilePath, rulesFilePath: input.rulesFilePath });
+
+  await settleCreditReservationForOrder({ orderId: input.orderId, action: input.outcome === "completed" ? "consume" : "release", idempotencyKey: `${input.idempotencyKey}:credit`, reason: input.outcome === "completed" ? "訂單成功取貨" : "訂單未取貨，釋放抵用金", now: input.now, stateFilePath: input.stateFilePath });
 
   return { subscriptionHandled: Boolean(subscription || cycle), referralEvaluated: Boolean(relationship) };
 }
@@ -391,7 +499,7 @@ export async function generateSubscriptionCycle(input: { subscriptionId: string;
     const dates = cycleDates(input.plannedDate, version.rules.subscription.modificationCutoffDays, version.rules.subscription.orderCreationLeadDays);
     const cycleId = id("cycle");
     const timestamp = nowIso(now);
-    const cycle: SubscriptionCycle = { cycleId, subscriptionId: subscription.subscriptionId, sequence: input.sequence, kind, ...dates, status: "modifiable", itemsDraft: cloneItems(subscription.defaultItems), itemsSnapshot: null, pricingSnapshot: null, giftSnapshot: null, shippingSnapshot: null, rulesSnapshot: null, createdOrderId: null, createdAt: timestamp, updatedAt: timestamp, revision: 0 };
+    const cycle: SubscriptionCycle = { cycleId, subscriptionId: subscription.subscriptionId, sequence: input.sequence, kind, ...dates, status: "modifiable", itemsDraft: cloneItems(subscription.defaultItems), itemsSnapshot: null, pricingSnapshot: null, giftSnapshot: null, shippingSnapshot: null, rulesSnapshot: null, createdOrderId: null, createdAt: timestamp, updatedAt: timestamp, revision: 0, modificationCount: 0 };
     state.cycles[cycleId] = cycle;
     remember(state, key, cycleId, now);
     audit(state, { actor: "system", action: "cycle-generated", entityType: "cycle", entityId: cycleId, before: {}, after: { status: cycle.status, sequence: cycle.sequence }, reason: kind === "scheduled" ? "依配送週期建立" : "會員立即補貨", sourceEvent: input.idempotencyKey }, now);
@@ -410,13 +518,31 @@ export async function modifyCycleDate(input: { cycleId: string; plannedDate: str
     const subscription = state.subscriptions[cycle.subscriptionId];
     assertMemberOwns(subscription, input.memberId);
     assertRevision(cycle, input.expectedRevision);
+    const today = nowIso(now).slice(0, 10);
+    const modificationCount = cycle.modificationCount ?? 0;
+    const maximum = version.rules.subscription.maxModificationsPerCycle;
+    if (input.memberId) {
+      if (today > cycle.modificationDeadline) throw new MembershipCommerceError("本期已超過修改截止日");
+      if (maximum !== null && modificationCount >= maximum) throw new MembershipCommerceError(`本期最多可修改 ${maximum} 次`);
+      const availability = resolveSubscriptionDateAvailability({ requestedDate: input.plannedDate, today, customRoast: false, rules: version.rules });
+      if (!availability.allowed) throw new MembershipCommerceError(`最早可選擇 ${availability.earliestDate} 配送`);
+    }
     const before = cycle.plannedDate;
     Object.assign(cycle, cycleDates(input.plannedDate, version.rules.subscription.modificationCutoffDays, version.rules.subscription.orderCreationLeadDays));
-    if (input.recalculateAnchor) subscription.anchorDate = input.plannedDate;
+    cycle.modificationCount = modificationCount + 1;
+    if (input.recalculateAnchor) {
+      subscription.anchorDate = input.plannedDate;
+      for (const future of Object.values(state.cycles)) {
+        if (future.cycleId === cycle.cycleId || future.subscriptionId !== subscription.subscriptionId || future.sequence <= cycle.sequence || !["scheduled", "modifiable"].includes(future.status)) continue;
+        const futureDate = addTaipeiCalendarDays(input.plannedDate, subscription.intervalDays * (future.sequence - cycle.sequence));
+        Object.assign(future, cycleDates(futureDate, version.rules.subscription.modificationCutoffDays, version.rules.subscription.orderCreationLeadDays));
+        touch(future, now);
+      }
+    }
     touch(cycle, now);
     if (input.recalculateAnchor) touch(subscription, now);
     remember(state, key, cycle.cycleId, now);
-    audit(state, { actor: "member", action: "cycle-date-changed", entityType: "cycle", entityId: cycle.cycleId, before: { plannedDate: before }, after: { plannedDate: cycle.plannedDate, anchorChanged: input.recalculateAnchor }, reason: input.recalculateAnchor ? "從新日期重算後續週期" : "只修改本次", sourceEvent: input.idempotencyKey }, now);
+    audit(state, { actor: "member", action: "cycle-date-changed", entityType: "cycle", entityId: cycle.cycleId, before: { plannedDate: before }, after: { plannedDate: cycle.plannedDate, anchorChanged: input.recalculateAnchor, modificationCount: cycle.modificationCount }, reason: input.recalculateAnchor ? "從新日期重算後續週期" : "只修改本次", sourceEvent: input.idempotencyKey }, now);
     return cycle;
   }, { now: input.now, filePath: input.stateFilePath });
 }
@@ -609,7 +735,7 @@ export async function setSubscriptionStatus(input: { subscriptionId: string; sta
     if (before === "paused" && input.status === "active") {
       if (version.rules.subscription.pauseResumeAnchorPolicy === OWNER_DECISION_REQUIRED) throw new MembershipCommerceError("恢復配送後的基準日期尚待 Owner 決定");
       if (version.rules.subscription.pauseResumeAnchorPolicy === "member-selects-date") {
-        if (!input.resumeDate || !input.intervalDays || !version.rules.subscription.intervalsDays.includes(input.intervalDays)) throw new MembershipCommerceError("請選擇恢復配送日期與週期");
+        if (!input.resumeDate || !input.intervalDays || !resolveSubscriptionInterval(input.intervalDays, version.rules).allowed) throw new MembershipCommerceError("請選擇恢復配送日期與週期");
         const earliest = addTaipeiCalendarDays(nowIso(now).slice(0, 10), version.rules.subscription.preparationLeadDays);
         if (input.resumeDate < earliest) throw new MembershipCommerceError(`最早可從 ${earliest} 恢復配送`);
         subscription.anchorDate = input.resumeDate;
@@ -651,9 +777,13 @@ export async function markUncollected(input: { subscriptionId: string; cycleId?:
   }, { now: input.now, filePath: input.stateFilePath });
 }
 
-export async function assignReferralRelationship(input: { referrerMemberId: string; referredMemberId: string; safeDisplayName?: string; referralCode?: string; idempotencyKey: string; now?: Date; stateFilePath?: string }) {
+export type ReferralMemberIdentityAdapter = { assertMember: (memberId: string) => Promise<void> };
+
+const canonicalReferralMemberIdentityAdapter: ReferralMemberIdentityAdapter = { assertMember: assertCanonicalMember };
+
+export async function assignReferralRelationship(input: { referrerMemberId: string; referredMemberId: string; safeDisplayName?: string; referralCode?: string; idempotencyKey: string; now?: Date; stateFilePath?: string }, identityAdapter: ReferralMemberIdentityAdapter = canonicalReferralMemberIdentityAdapter) {
   if (input.referrerMemberId === input.referredMemberId) throw new MembershipCommerceError("不可推薦自己");
-  await Promise.all([assertCanonicalMember(input.referrerMemberId), assertCanonicalMember(input.referredMemberId)]);
+  await Promise.all([identityAdapter.assertMember(input.referrerMemberId), identityAdapter.assertMember(input.referredMemberId)]);
   const key = `referral:assign:${input.idempotencyKey}`;
   return transaction((state, now) => {
     const existingId = remembered(state, key);
@@ -664,6 +794,14 @@ export async function assignReferralRelationship(input: { referrerMemberId: stri
       remember(state, key, existing.relationshipId, now);
       return existing;
     }
+    const visited = new Set<string>([input.referredMemberId]);
+    let ancestor: string | undefined = input.referrerMemberId;
+    for (let depth = 0; ancestor && depth < 100; depth += 1) {
+      if (visited.has(ancestor)) throw new MembershipCommerceError("推薦關係不可形成循環");
+      visited.add(ancestor);
+      ancestor = Object.values(state.referrals).find((item) => item.referredMemberId === ancestor && item.status !== "inactive")?.referrerMemberId;
+    }
+    if (ancestor) throw new MembershipCommerceError("推薦關係深度異常，無法建立");
     const relationshipId = id("refrel");
     const timestamp = nowIso(now);
     const relationship: ReferralRelationship = { relationshipId, referrerMemberId: input.referrerMemberId, referredMemberId: input.referredMemberId, referralCode: input.referralCode || deterministicId("KD", relationshipId).toUpperCase(), safeDisplayName: String(input.safeDisplayName || "").slice(0, 40), status: "registered", createdAt: timestamp, updatedAt: timestamp };
@@ -671,6 +809,276 @@ export async function assignReferralRelationship(input: { referrerMemberId: stri
     remember(state, key, relationshipId, now);
     audit(state, { actor: "system", action: "referral-assigned", entityType: "referral", entityId: relationshipId, before: {}, after: { status: "registered" }, reason: "推薦碼完成歸屬", sourceEvent: input.idempotencyKey }, now);
     return relationship;
+  }, { now: input.now, filePath: input.stateFilePath });
+}
+
+export function referralCodeForMember(memberId: string) {
+  return `KD${createHash("sha256").update(`kd-referral:${memberId}`).digest("hex").slice(0, 10)}`.toUpperCase();
+}
+
+export async function assignReferralByCode(input: { referralCode: string; referredMemberId: string; safeDisplayName?: string; idempotencyKey: string; now?: Date; stateFilePath?: string }) {
+  const registry = await getIdentityRegistrySnapshot();
+  const normalized = input.referralCode.trim().toUpperCase();
+  const candidates = new Set(Object.keys(registry.members));
+  const referrerMemberId = [...candidates].find((memberId) => referralCodeForMember(memberId) === normalized);
+  if (!referrerMemberId) throw new MembershipCommerceError("推薦碼不存在或尚未啟用");
+  return assignReferralRelationship({ ...input, referrerMemberId, referralCode: normalized });
+}
+
+function rewardRound(value: number, mode: MembershipBusinessRules["money"]["roundingMode"]) {
+  if (!Number.isFinite(value) || value < 0) throw new MembershipCommerceError("推薦獎勵計算結果不正確");
+  if (mode === OWNER_DECISION_REQUIRED) throw new MembershipCommerceError("金額尾數處理方式尚待 Owner 決定");
+  return mode === "round-down" ? Math.floor(value) : mode === "round-up" ? Math.ceil(value) : Math.floor(value + 0.5);
+}
+
+function ancestryFor(state: MembershipCommerceState, memberId: string, maximum: number) {
+  const result: string[] = [];
+  const visited = new Set([memberId]);
+  let current = memberId;
+  for (let level = 0; level < Math.min(maximum, 10); level += 1) {
+    const parent = Object.values(state.referrals).find((item) => item.referredMemberId === current && item.status !== "inactive")?.referrerMemberId;
+    if (!parent) break;
+    if (visited.has(parent)) throw new MembershipCommerceError("推薦資料存在循環，已停止獎勵計算");
+    visited.add(parent); result.push(parent); current = parent;
+  }
+  return result;
+}
+
+function hasActiveSubscription(state: MembershipCommerceState, memberId: string) {
+  return Object.values(state.subscriptions).some((item) => item.memberId === memberId && item.status === "active");
+}
+
+function qualificationExpiresAt(now: Date, days: number) {
+  const lastDate = addTaipeiCalendarDays(getDateOnlyInTimeZone(now), days - 1);
+  return `${lastDate}T23:59:59.999+08:00`;
+}
+
+function hasQualificationSnapshot(reward: ReferralReward) {
+  return typeof reward.qualificationWindowDays === "number" && typeof reward.qualificationStartedAt === "string" && typeof reward.qualificationExpiresAt === "string" && typeof reward.qualificationStatus === "string";
+}
+
+function orderWithinQualificationWindow(reward: ReferralReward, orderCreatedAt: string) {
+  if (!hasQualificationSnapshot(reward)) return false;
+  const created = Date.parse(orderCreatedAt);
+  return Number.isFinite(created) && created >= Date.parse(reward.qualificationStartedAt!) && created <= Date.parse(reward.qualificationExpiresAt!);
+}
+
+function syncQualificationPointer(reward: ReferralReward) {
+  const attempts = reward.qualificationAttempts ?? [];
+  const selected = attempts.find((attempt) => attempt.status === "completed") ?? attempts.find((attempt) => attempt.status === "pending") ?? attempts.at(-1);
+  reward.qualificationOrderNumber = selected?.orderNumber ?? null;
+  reward.qualificationOrderCreatedAt = selected?.orderCreatedAt ?? null;
+  reward.qualificationOrderFinalState = selected?.finalState ?? null;
+}
+
+/** Associates a member's own normal or subscription order without changing price or issuing credit. */
+export async function registerReferralQualificationOrder(input: { memberId: string; orderId: string; orderCreatedAt: string; orderType: "normal" | "subscription"; idempotencyKey: string; now?: Date; stateFilePath?: string; rulesFilePath?: string }) {
+  const version = await getActiveMembershipRules(input.now, input.rulesFilePath);
+  const key = `referral-qualification:order-created:${input.idempotencyKey}`;
+  return transaction((state, now) => {
+    if (remembered(state, key)) return Object.values(state.referralRewards).filter((reward) => reward.qualificationAttempts?.some((attempt) => attempt.orderNumber === input.orderId));
+    const changed: ReferralReward[] = [];
+    for (const reward of Object.values(state.referralRewards)) {
+      if (reward.beneficiaryMemberId !== input.memberId || reward.status !== "scheduled" || !hasQualificationSnapshot(reward) || reward.qualificationStatus === "qualified" || reward.qualificationStatus === "expired" || !orderWithinQualificationWindow(reward, input.orderCreatedAt)) continue;
+      reward.qualificationAttempts ??= [];
+      if (reward.qualificationAttempts.some((attempt) => attempt.orderNumber === input.orderId)) continue;
+      reward.qualificationAttempts.push({ orderNumber: input.orderId, orderCreatedAt: input.orderCreatedAt, orderType: input.orderType, status: "pending", finalState: "pending", finalizedAt: null });
+      reward.qualificationStatus = "awaiting_completion";
+      syncQualificationPointer(reward);
+      const source = event(state, "referral_qualification_order_registered", { rewardId: reward.rewardId, orderType: input.orderType }, now, { memberId: input.memberId, orderId: input.orderId });
+      notify(state, version.rules, "referral_conversion", source.eventId, now, { memberId: input.memberId, safeData: { rewardAmount: reward.calculatedCreditAmount, qualificationStatus: "awaiting_completion" } });
+      changed.push(reward);
+    }
+    remember(state, key, changed[0]?.rewardId ?? "none", now);
+    return changed;
+  }, { now: input.now, filePath: input.stateFilePath });
+}
+
+function reverseReleasedQualificationReward(state: MembershipCommerceState, reward: ReferralReward, now: Date) {
+  if (reward.status !== "released" || reward.reversalCreditEntryId) return;
+  const original = reward.rewardCreditEntryId ? state.creditEntries[reward.rewardCreditEntryId] : undefined;
+  if (original) {
+    original.remainingAmount = Math.max(0, original.remainingAmount - reward.calculatedCreditAmount);
+    if (original.remainingAmount === 0) original.status = "consumed";
+  }
+  const reversalId = id("credit_reversal");
+  state.creditEntries[reversalId] = { creditEntryId: reversalId, memberId: reward.beneficiaryMemberId, sourceType: "referral", sourceReference: `referral_reward_reversal:${reward.rewardId}`, amount: -reward.calculatedCreditAmount, remainingAmount: 0, issuedAt: nowIso(now), expiresAt: nowIso(now), status: "consumed", createdAt: nowIso(now), metadata: { rewardId: reward.rewardId, reversalAmount: reward.calculatedCreditAmount, reversesCreditEntryId: reward.rewardCreditEntryId ?? "", reason: "qualification_order_failed" } };
+  reward.status = "reversed";
+  reward.reversedAt = nowIso(now);
+  reward.reversalCreditEntryId = reversalId;
+}
+
+/** Applies trusted outcomes to qualification attempts; source reward cancellation remains a separate flow. */
+export async function handleReferralQualificationOrderOutcome(input: { memberId: string; orderId: string; outcome: "completed" | "cancelled" | "uncollected" | "refunded" | "returned"; idempotencyKey: string; now?: Date; stateFilePath?: string; rulesFilePath?: string }) {
+  const version = await getActiveMembershipRules(input.now, input.rulesFilePath);
+  const key = `referral-qualification:order-outcome:${input.idempotencyKey}`;
+  return transaction((state, now) => {
+    if (remembered(state, key)) return [];
+    const changed: ReferralReward[] = [];
+    for (const reward of Object.values(state.referralRewards)) {
+      if (reward.beneficiaryMemberId !== input.memberId || !hasQualificationSnapshot(reward)) continue;
+      const attempt = reward.qualificationAttempts?.find((item) => item.orderNumber === input.orderId);
+      if (!attempt || (attempt.finalState === input.outcome && attempt.finalizedAt)) continue;
+      const wasQualifiedByThisOrder = reward.qualificationStatus === "qualified" && reward.qualificationOrderNumber === input.orderId;
+      attempt.finalizedAt = nowIso(now);
+      if (input.outcome === "completed") {
+        attempt.status = "completed";
+        attempt.finalState = "completed";
+      } else {
+        attempt.status = "failed";
+        attempt.finalState = input.outcome;
+      }
+
+      const completed = reward.qualificationAttempts!.filter((item) => item.status === "completed").sort((a, b) => a.orderCreatedAt.localeCompare(b.orderCreatedAt) || a.orderNumber.localeCompare(b.orderNumber))[0];
+      const pending = reward.qualificationAttempts!.filter((item) => item.status === "pending").sort((a, b) => a.orderCreatedAt.localeCompare(b.orderCreatedAt) || a.orderNumber.localeCompare(b.orderNumber))[0];
+      if (completed) {
+        reward.qualificationStatus = "qualified";
+        reward.qualificationOrderNumber = completed.orderNumber;
+        reward.qualificationOrderCreatedAt = completed.orderCreatedAt;
+        reward.qualificationOrderFinalState = "completed";
+        reward.qualificationQualifiedAt = completed.finalizedAt;
+        reward.eligibleAt = completed.finalizedAt ?? nowIso(now);
+        const pickupBusinessDate = getDateOnlyInTimeZone(new Date(completed.finalizedAt ?? now));
+        const baseWaitingDays = reward.baseWaitingDaysSnapshot ?? version.rules.referral.referralRewardBaseWaitingDays;
+        const returnProtectionDays = reward.returnProtectionDaysSnapshot ?? version.rules.referral.referralRewardReturnProtectionDays;
+        reward.successfulPickupBusinessDate = pickupBusinessDate;
+        reward.releaseEligibleBusinessDate = referralReleaseEligibleBusinessDate(pickupBusinessDate, baseWaitingDays, returnProtectionDays);
+        reward.scheduledReleaseAt = `${reward.releaseEligibleBusinessDate}T00:00:00+08:00`;
+      } else if (pending) {
+        reward.qualificationStatus = "awaiting_completion";
+        reward.qualificationOrderNumber = pending.orderNumber;
+        reward.qualificationOrderCreatedAt = pending.orderCreatedAt;
+        reward.qualificationOrderFinalState = "pending";
+        reward.qualificationQualifiedAt = null;
+      } else {
+        reward.qualificationStatus = Date.parse(reward.qualificationExpiresAt!) < now.getTime() ? "expired" : "awaiting_order";
+        syncQualificationPointer(reward);
+        reward.qualificationQualifiedAt = null;
+      }
+      if (wasQualifiedByThisOrder && reward.qualificationStatus !== "qualified" && (reward.reversalPolicySnapshot ?? version.rules.referral.reversalPolicy) === "cancel-pending-and-reverse-released") reverseReleasedQualificationReward(state, reward, now);
+      const source = event(state, input.outcome === "completed" ? "referral_qualification_completed" : "referral_qualification_order_failed", { rewardId: reward.rewardId, qualificationStatus: reward.qualificationStatus, outcome: input.outcome }, now, { memberId: input.memberId, orderId: input.orderId });
+      notify(state, version.rules, "referral_conversion", source.eventId, now, { memberId: input.memberId, safeData: { rewardAmount: reward.calculatedCreditAmount, qualificationStatus: reward.qualificationStatus } });
+      changed.push(reward);
+    }
+    remember(state, key, changed[0]?.rewardId ?? "none", now);
+    return changed;
+  }, { now: input.now, filePath: input.stateFilePath });
+}
+
+/** Creates immutable multi-generation reward snapshots from a trusted fulfillment outcome. */
+export async function createReferralRewardsFromFulfillment(input: { sourceMemberId: string; orderId: string; rewardType: "new_referral" | "subscription"; paidAmountBasis: number; basePV?: number; discountRatio?: number; effectivePV?: number; idempotencyKey: string; now?: Date; stateFilePath?: string; rulesFilePath?: string }) {
+  const version = await getActiveMembershipRules(input.now, input.rulesFilePath);
+  const key = `referral-rewards:create:${input.idempotencyKey}`;
+  return transaction((state, now) => {
+    if (remembered(state, key)) return Object.values(state.referralRewards).filter((item) => item.sourceOrderNumber === input.orderId);
+    const rules = version.rules.referral;
+    if (!rules.programEnabled) { remember(state, key, "none", now); return []; }
+    if (input.rewardType === "new_referral" && state.events.some((item) => item.type === "referral_new_qualified" && item.memberId === input.sourceMemberId)) { remember(state, key, "qualified", now); return []; }
+    const paidAmountBasis = assertIntegerMoney(input.paidAmountBasis, "推薦實付商品金額");
+    const basePV = Math.max(0, Number(input.basePV ?? 0));
+    const discountRatio = Math.max(0, Math.min(1, Number(input.discountRatio ?? 1)));
+    const effectivePV = Math.max(0, Number(input.effectivePV ?? basePV * discountRatio));
+    if (rules.referralRewardCalculationMode === "pv" && !Number.isFinite(effectivePV)) throw new MembershipCommerceError("訂單有效 PV 不完整");
+    const ancestry = ancestryFor(state, input.sourceMemberId, rules.referralMaxRewardDepth);
+    if (input.rewardType === "new_referral") event(state, "referral_new_qualified", { sourceOrderNumber: input.orderId }, now, { memberId: input.sourceMemberId, orderId: input.orderId });
+    const created: ReferralReward[] = [];
+    const qualificationWindowDays = rules.referralRewardQualificationWindowDays;
+    const qualificationStartedAt = nowIso(now);
+    const qualificationExpiry = qualificationExpiresAt(now, qualificationWindowDays);
+    const baseWaitingDaysSnapshot = rules.referralRewardBaseWaitingDays;
+    const returnProtectionDaysSnapshot = rules.referralRewardReturnProtectionDays;
+    const totalWaitingDaysSnapshot = baseWaitingDaysSnapshot + returnProtectionDaysSnapshot;
+    // Preserve the existing canonical cap period definition (reward createdAt YYYY-MM).
+    const monthlyCapPeriodSnapshot = nowIso(now).slice(0, 7);
+    let allocated = 0;
+    const capBasis = rules.referralRewardCalculationMode === "paid_amount" ? paidAmountBasis : effectivePV * rules.pvRewardMoneyValue;
+    const totalCap = rewardRound(capBasis * rules.referralTotalRewardCap / 100, version.rules.money.roundingMode);
+    for (let index = 0; index < ancestry.length; index += 1) {
+      const beneficiaryMemberId = ancestry[index];
+      const level = index + 1;
+      const levelRule = rules.levels.find((item) => item.level === level);
+      if (!levelRule?.enabled) continue;
+      const rewardRate = input.rewardType === "new_referral" ? levelRule.newReferralRewardRate : levelRule.subscriptionRewardRate;
+      const rewardPV = rules.referralRewardCalculationMode === "pv" ? effectivePV * rewardRate / 100 : 0;
+      const rawCredit = rules.referralRewardCalculationMode === "pv" ? rewardPV * rules.pvRewardMoneyValue : paidAmountBasis * rewardRate / 100;
+      const calculatedCreditAmount = Math.max(0, Math.min(rewardRound(rawCredit, version.rules.money.roundingMode), totalCap - allocated));
+      if (calculatedCreditAmount < 1) continue;
+      allocated += calculatedCreditAmount;
+      const rewardId = deterministicId("reward", `${input.orderId}:${input.rewardType}:${level}:${beneficiaryMemberId}`);
+      const reward: ReferralReward = { rewardId, sourceOrderNumber: input.orderId, sourceMemberId: input.sourceMemberId, beneficiaryMemberId, referralLevel: level, rewardType: input.rewardType, calculationMode: rules.referralRewardCalculationMode, paidAmountBasis, basePV, discountRatio, effectivePV, rewardRate, rewardPV, pvRewardMoneyValue: rules.pvRewardMoneyValue, calculatedCreditAmount, projectedCreditAmount: calculatedCreditAmount, ruleVersion: version.rulesVersion, ancestrySnapshot: [...ancestry], organizationCapPercentSnapshot: rules.referralTotalRewardCap, organizationCapAmountSnapshot: totalCap, monthlyCapAmountSnapshot: rules.referralMonthlyCreditCap, monthlyCapPeriodSnapshot, monthlyCapUsageAtRelease: null, monthlyCapLimitedAmount: null, reversalPolicySnapshot: rules.reversalPolicy, baseWaitingDaysSnapshot, returnProtectionDaysSnapshot, totalWaitingDaysSnapshot, releasePolicyVersion: "taipei-business-date-v1", successfulPickupBusinessDate: null, releaseEligibleBusinessDate: null, sourceOrderFinalState: "completed", cancellationReason: null, qualificationWindowDays, qualificationStartedAt, qualificationExpiresAt: qualificationExpiry, qualificationStatus: "awaiting_order", qualificationOrderNumber: null, qualificationOrderCreatedAt: null, qualificationOrderFinalState: null, qualificationQualifiedAt: null, qualificationAttempts: [], createdAt: nowIso(now), eligibleAt: nowIso(now), scheduledReleaseAt: "", releasedAt: null, status: "scheduled", reversalCreditEntryId: null, rewardCreditEntryId: null, idempotencyKey: `${input.idempotencyKey}:${level}` };
+      state.referralRewards[rewardId] = reward; created.push(reward);
+      const source = event(state, "referral_reward_scheduled", { amount: calculatedCreditAmount, level }, now, { memberId: beneficiaryMemberId, orderId: input.orderId });
+      notify(state, version.rules, "referral_conversion", source.eventId, now, { memberId: beneficiaryMemberId, safeData: { rewardAmount: calculatedCreditAmount } });
+      if (allocated >= totalCap) break;
+    }
+    remember(state, key, created[0]?.rewardId ?? "none", now);
+    return created;
+  }, { now: input.now, filePath: input.stateFilePath });
+}
+
+export async function runReferralRewardReleaseScheduler(input: { now?: Date; stateFilePath?: string; rulesFilePath?: string } = {}) {
+  const version = await getActiveMembershipRules(input.now, input.rulesFilePath);
+  return transaction((state, now) => {
+    const results: Array<{ rewardId: string; status: "released" | "failed" | "expired" | "cap_blocked"; error?: string }> = [];
+    const today = getDateOnlyInTimeZone(now);
+    for (const reward of Object.values(state.referralRewards).filter((item) => item.status === "scheduled" && item.qualificationStatus === "awaiting_order" && typeof item.qualificationExpiresAt === "string" && Date.parse(item.qualificationExpiresAt) < now.getTime())) {
+      reward.qualificationStatus = "expired";
+      const source = event(state, "referral_qualification_expired", { rewardId: reward.rewardId, amount: reward.calculatedCreditAmount }, now, { memberId: reward.beneficiaryMemberId, orderId: reward.sourceOrderNumber });
+      notify(state, version.rules, "referral_conversion", source.eventId, now, { memberId: reward.beneficiaryMemberId, safeData: { rewardAmount: reward.calculatedCreditAmount, qualificationStatus: "expired" } });
+      results.push({ rewardId: reward.rewardId, status: "expired" });
+    }
+    const dueRewards = Object.values(state.referralRewards).filter((item) => {
+      if (item.status !== "scheduled" || (hasQualificationSnapshot(item) && item.qualificationStatus !== "qualified")) return false;
+      const eligibleDate = item.releaseEligibleBusinessDate ?? item.scheduledReleaseAt?.slice(0, 10);
+      return Boolean(eligibleDate && isReferralReleaseBusinessDateDue(today, eligibleDate));
+    }).sort((a, b) => (a.releaseEligibleBusinessDate ?? a.scheduledReleaseAt).localeCompare(b.releaseEligibleBusinessDate ?? b.scheduledReleaseAt) || a.createdAt.localeCompare(b.createdAt) || a.rewardId.localeCompare(b.rewardId));
+    for (const reward of dueRewards) {
+      try {
+        if (!hasQualificationSnapshot(reward) && version.rules.referral.referrerEligibility.mode === "active-subscription" && !hasActiveSubscription(state, reward.beneficiaryMemberId)) throw new MembershipCommerceError("舊版推薦 reward：推薦人目前沒有啟用中的定期購");
+        if (reward.sourceOrderFinalState && reward.sourceOrderFinalState !== "completed") throw new MembershipCommerceError("來源交易最新狀態不允許發放");
+        if (reward.qualificationOrderFinalState && reward.qualificationOrderFinalState !== "completed") throw new MembershipCommerceError("資格交易最新狀態不允許發放");
+        const cap = reward.monthlyCapAmountSnapshot ?? version.rules.referral.referralMonthlyCreditCap;
+        const capPeriod = reward.monthlyCapPeriodSnapshot ?? reward.createdAt.slice(0, 7);
+        const monthUsed = Object.values(state.referralRewards).filter((item) => item.rewardId !== reward.rewardId && item.beneficiaryMemberId === reward.beneficiaryMemberId && item.status === "released" && (item.monthlyCapPeriodSnapshot ?? item.createdAt.slice(0, 7)) === capPeriod).reduce((sum, item) => sum + item.calculatedCreditAmount, 0);
+        const projectedAmount = reward.projectedCreditAmount ?? reward.calculatedCreditAmount;
+        const releaseAmount = cap === 0 ? projectedAmount : Math.min(projectedAmount, Math.max(0, cap - monthUsed));
+        reward.monthlyCapUsageAtRelease = monthUsed;
+        reward.monthlyCapLimitedAmount = projectedAmount - releaseAmount;
+        if (releaseAmount < 1) {
+          reward.status = "cancelled";
+          reward.cancellationReason = "monthly_cap_exhausted_at_release";
+          results.push({ rewardId: reward.rewardId, status: "cap_blocked", error: "本期月上限已用完" });
+          continue;
+        }
+        reward.calculatedCreditAmount = releaseAmount;
+        const credit = issueCreditInState(state, version.rules, { memberId: reward.beneficiaryMemberId, sourceType: "referral", sourceReference: `referral_reward:${reward.rewardId}`, amount: releaseAmount, metadata: { rewardId: reward.rewardId, orderId: reward.sourceOrderNumber, referralLevel: reward.referralLevel, monthlyCapPeriod: capPeriod, monthlyCapUsageBeforeRelease: monthUsed, monthlyCapLimitedAmount: reward.monthlyCapLimitedAmount } }, now);
+        reward.status = "released"; reward.releasedAt = nowIso(now); reward.rewardCreditEntryId = credit.creditEntryId;
+        const source = event(state, "referral_reward_released", { amount: credit.amount, level: reward.referralLevel }, now, { memberId: reward.beneficiaryMemberId, orderId: reward.sourceOrderNumber });
+        notify(state, version.rules, "credit_issued", source.eventId, now, { memberId: reward.beneficiaryMemberId, safeData: { amount: credit.amount } });
+        results.push({ rewardId: reward.rewardId, status: "released" });
+      } catch (error) { results.push({ rewardId: reward.rewardId, status: "failed", error: error instanceof Error ? error.message : "發放失敗" }); }
+    }
+    return results;
+  }, { now: input.now, filePath: input.stateFilePath });
+}
+
+export async function cancelOrReverseReferralRewards(input: { orderId: string; outcome?: "cancelled" | "uncollected" | "refunded" | "returned"; idempotencyKey: string; now?: Date; stateFilePath?: string; rulesFilePath?: string }) {
+  const version = await getActiveMembershipRules(input.now, input.rulesFilePath);
+  return transaction((state, now) => {
+    const key = `referral-rewards:reverse:${input.idempotencyKey}`;
+    if (remembered(state, key)) return [];
+    const changed: ReferralReward[] = [];
+    for (const reward of Object.values(state.referralRewards).filter((item) => item.sourceOrderNumber === input.orderId)) {
+      reward.sourceOrderFinalState = input.outcome ?? "cancelled";
+      if (reward.status === "scheduled") { reward.status = "cancelled"; reward.cancellationReason = "source_transaction_reversed_before_release"; changed.push(reward); const source=event(state,"referral_reward_cancelled",{amount:reward.calculatedCreditAmount},now,{memberId:reward.beneficiaryMemberId,orderId:reward.sourceOrderNumber}); notify(state,version.rules,"referral_conversion",source.eventId,now,{memberId:reward.beneficiaryMemberId,safeData:{rewardAmount:0}}); continue; }
+      if (reward.status !== "released" || (reward.reversalPolicySnapshot ?? version.rules.referral.reversalPolicy) !== "cancel-pending-and-reverse-released") continue;
+      const original = reward.rewardCreditEntryId ? state.creditEntries[reward.rewardCreditEntryId] : undefined;
+      if (original) { original.remainingAmount = Math.max(0, original.remainingAmount - reward.calculatedCreditAmount); if (original.remainingAmount === 0) original.status = "consumed"; }
+      const reversalId = id("credit_reversal");
+      state.creditEntries[reversalId] = { creditEntryId: reversalId, memberId: reward.beneficiaryMemberId, sourceType: "referral", sourceReference: `referral_reward_reversal:${reward.rewardId}`, amount: -reward.calculatedCreditAmount, remainingAmount: 0, issuedAt: nowIso(now), expiresAt: nowIso(now), status: "consumed", createdAt: nowIso(now), metadata: { rewardId: reward.rewardId, reversalAmount: reward.calculatedCreditAmount, reversesCreditEntryId: reward.rewardCreditEntryId ?? "" } };
+      reward.status = "reversed"; reward.reversedAt = nowIso(now); reward.reversalCreditEntryId = reversalId; changed.push(reward); const source=event(state,"referral_reward_reversed",{amount:reward.calculatedCreditAmount},now,{memberId:reward.beneficiaryMemberId,orderId:reward.sourceOrderNumber}); notify(state,version.rules,"referral_conversion",source.eventId,now,{memberId:reward.beneficiaryMemberId,safeData:{rewardAmount:0}});
+    }
+    remember(state, key, changed[0]?.rewardId ?? "none", now); return changed;
   }, { now: input.now, filePath: input.stateFilePath });
 }
 
@@ -720,7 +1128,7 @@ export async function processReferralOrderOutcome(input: { referredMemberId: str
     if (existing) { remember(state, key, existing.conversionId, now); return existing; }
     const eligibility = version.rules.referral.referrerEligibility;
     const recentThreshold = eligibility.mode === "recent-valid-purchase" ? now.getTime() - eligibility.withinDays * 86_400_000 : 0;
-    const eligible = eligibility.mode === "none" || (eligibility.mode === "completed-orders" && (input.referrerCompletedOrders ?? 0) >= eligibility.minimumOrders) || (eligibility.mode === "lifetime-spend" && (input.referrerLifetimeSpend ?? 0) >= eligibility.minimumAmount) || (eligibility.mode === "recent-valid-purchase" && Date.parse(input.referrerLastValidPurchaseAt ?? "") >= recentThreshold);
+    const eligible = eligibility.mode === "none" || (eligibility.mode === "active-subscription" && ((input.referrerCompletedOrders ?? 0) >= 1 || hasActiveSubscription(state, relationship.referrerMemberId))) || (eligibility.mode === "completed-orders" && (input.referrerCompletedOrders ?? 0) >= eligibility.minimumOrders) || (eligibility.mode === "lifetime-spend" && (input.referrerLifetimeSpend ?? 0) >= eligibility.minimumAmount) || (eligibility.mode === "recent-valid-purchase" && Date.parse(input.referrerLastValidPurchaseAt ?? "") >= recentThreshold);
     const calculatedReward = input.outcome === "completed" ? referralRewardAmount(version.rules, input.orderMerchandiseAmount, input.eligibleItemCount) : null;
     const repeatedAllowed = version.rules.referral.reward.repeatedRewards || !Object.values(state.referralConversions).some((item) => item.relationshipId === relationship.relationshipId && item.status === "rewarded");
     const rewardAmount = eligible && repeatedAllowed ? calculatedReward : null;
@@ -747,7 +1155,7 @@ export async function releasePendingReferralRewards(input: { referrerMemberId: s
   return transaction((state, now) => {
     if (remembered(state, key)) return [];
     const eligibility = version.rules.referral.referrerEligibility;
-    const eligible = eligibility.mode === "none" || (eligibility.mode === "completed-orders" && (input.completedOrders ?? 0) >= eligibility.minimumOrders) || (eligibility.mode === "lifetime-spend" && (input.lifetimeSpend ?? 0) >= eligibility.minimumAmount) || (eligibility.mode === "recent-valid-purchase" && Date.parse(input.lastValidPurchaseAt ?? "") >= now.getTime() - eligibility.withinDays * 86_400_000);
+    const eligible = eligibility.mode === "none" || (eligibility.mode === "active-subscription" && ((input.completedOrders ?? 0) >= 1 || hasActiveSubscription(state, input.referrerMemberId))) || (eligibility.mode === "completed-orders" && (input.completedOrders ?? 0) >= eligibility.minimumOrders) || (eligibility.mode === "lifetime-spend" && (input.lifetimeSpend ?? 0) >= eligibility.minimumAmount) || (eligibility.mode === "recent-valid-purchase" && Date.parse(input.lastValidPurchaseAt ?? "") >= now.getTime() - eligibility.withinDays * 86_400_000);
     if (!eligible) return [];
     const relationshipIds = new Set(Object.values(state.referrals).filter((item) => item.referrerMemberId === input.referrerMemberId).map((item) => item.relationshipId));
     const released: CreditEntry[] = [];
@@ -770,6 +1178,17 @@ function refreshExpiry(entry: CreditEntry, now: Date) {
 export async function getAvailableCredit(memberId: string, now = new Date(), filePath = getMembershipCommerceStateFile()) {
   const state = await readMembershipCommerceState(filePath);
   return Object.values(state.creditEntries).filter((entry) => entry.memberId === memberId && entry.remainingAmount > 0 && ["available", "reserved"].includes(entry.status) && Date.parse(entry.expiresAt) > now.getTime()).reduce((sum, entry) => sum + entry.remainingAmount, 0);
+}
+
+export async function getCheckoutCreditQuote(input: { memberId: string; merchandiseSubtotal: number; shipping: number; now?: Date; stateFilePath?: string; rulesFilePath?: string }) {
+  await assertCanonicalMember(input.memberId);
+  const [availableBalance, version] = await Promise.all([
+    getAvailableCredit(input.memberId, input.now, input.stateFilePath),
+    getActiveMembershipRules(input.now, input.rulesFilePath),
+  ]);
+  const policyMaximum = maximumCreditRedemption({ merchandiseSubtotal: input.merchandiseSubtotal, shipping: input.shipping, rules: version.rules });
+  const maximumUsable = Math.min(availableBalance, policyMaximum);
+  return { availableBalance, maximumUsable, payableWithoutCredit: input.merchandiseSubtotal + input.shipping, minimumPayable: input.merchandiseSubtotal + input.shipping - maximumUsable, uiMode: version.rules.credit.uiMode, rulesVersion: version.rulesVersion };
 }
 
 export async function reserveCredit(input: { memberId: string; orderId: string; requestedAmount: number; merchandiseSubtotal: number; shipping: number; idempotencyKey: string; now?: Date; stateFilePath?: string; rulesFilePath?: string }) {
@@ -834,6 +1253,13 @@ export async function settleCreditReservation(input: { reservationId: string; ac
   }, { now: input.now, filePath: input.stateFilePath });
 }
 
+export async function settleCreditReservationForOrder(input: { orderId: string; action: "consume" | "release"; idempotencyKey: string; reason: string; now?: Date; stateFilePath?: string }) {
+  const state = await readMembershipCommerceState(input.stateFilePath);
+  const reservation = Object.values(state.creditReservations).find((item) => item.orderId === input.orderId);
+  if (!reservation) return null;
+  return settleCreditReservation({ reservationId: reservation.reservationId, action: input.action, idempotencyKey: input.idempotencyKey, reason: input.reason, now: input.now, stateFilePath: input.stateFilePath });
+}
+
 export async function recordCycleFulfillment(input: { cycleId: string; orderId: string; idempotencyKey: string; now?: Date; stateFilePath?: string; rulesFilePath?: string }) {
   const version = await getActiveMembershipRules(input.now, input.rulesFilePath);
   const key = `cycle:complete:${input.idempotencyKey}`;
@@ -874,4 +1300,122 @@ export async function getMemberCommerceDashboard(memberId: string, now = new Dat
   const credits = Object.values(state.creditEntries).filter((item) => item.memberId === memberId).map((item) => ({ ...item, status: Date.parse(item.expiresAt) <= now.getTime() && item.remainingAmount > 0 ? "expired" as const : item.status }));
   const pendingCredit = Object.values(state.referralConversions).filter((conversion) => conversion.status === "pending" && state.referrals[conversion.relationshipId]?.referrerMemberId === memberId).reduce((sum, item) => sum + item.pendingRewardAmount, 0);
   return { subscriptions: structuredClone(subscriptions), cycles: structuredClone(cycles), credits: structuredClone(credits), pendingCredit, referrals: safeReferralMemberView(state, memberId) };
+}
+
+export async function getMemberReferralCenter(memberId: string, options: { baseUrl?: string; depth?: number; filePath?: string; rulesFilePath?: string } = {}) {
+  await assertCanonicalMember(memberId);
+  const [state, version, registry] = await Promise.all([readMembershipCommerceState(options.filePath), getActiveMembershipRules(new Date(), options.rulesFilePath), getIdentityRegistrySnapshot()]);
+  const depth = Math.max(1, Math.min(options.depth ?? version.rules.referral.referralMaxRewardDepth, version.rules.referral.referralMaxRewardDepth, 10));
+  const nodes: Array<{ memberNumber: string; safeDisplayName: string; level: number; parentMemberNumber: string }> = [];
+  let frontier = [memberId];
+  const visited = new Set([memberId]);
+  for (let level = 1; level <= depth && frontier.length; level += 1) {
+    const next: string[] = [];
+    for (const parentId of frontier) {
+      for (const relation of Object.values(state.referrals).filter((item) => item.referrerMemberId === parentId && item.status !== "inactive").slice(0, 200)) {
+        if (visited.has(relation.referredMemberId)) continue;
+        visited.add(relation.referredMemberId); next.push(relation.referredMemberId);
+        nodes.push({ memberNumber: registry.members[relation.referredMemberId]?.memberNumber ?? "KD-會員", safeDisplayName: relation.safeDisplayName || "KD Coffee 會員", level, parentMemberNumber: registry.members[parentId]?.memberNumber ?? "KD-會員" });
+      }
+    }
+    frontier = next;
+  }
+  const rewards = Object.values(state.referralRewards).filter((item) => item.beneficiaryMemberId === memberId);
+  const summaries = Array.from({ length: depth }, (_, index) => {
+    const level = index + 1;
+    const levelRewards = rewards.filter((item) => item.referralLevel === level);
+    return { level, members: nodes.filter((item) => item.level === level).length, pendingCredit: levelRewards.filter((item) => item.status === "scheduled" && item.qualificationStatus !== "expired").reduce((sum, item) => sum + item.calculatedCreditAmount, 0), releasedCredit: levelRewards.filter((item) => item.status === "released").reduce((sum, item) => sum + item.calculatedCreditAmount, 0), aggregateEligibleSpend: levelRewards.reduce((sum, item) => sum + item.paidAmountBasis, 0) };
+  });
+  const referralCode = referralCodeForMember(memberId);
+  const referralUrl = `${(options.baseUrl ?? "").replace(/\/$/, "")}/member?ref=${encodeURIComponent(referralCode)}`;
+  return { referralCode, referralUrl, mode: version.rules.referral.referralRewardCalculationMode, pvDisclosure: version.rules.referral.referralRewardCalculationMode === "pv" ? "本制度以 PV 計算，非商品售價百分比。PV 是商品獎勵計算單位，不是貨幣或可交易資產。" : null, maxDepth: depth, summaries, nodes, rewards: rewards.map((item) => ({ rewardId: item.rewardId, sourceOrderNumber: item.sourceOrderNumber, referralLevel: item.referralLevel, rewardType: item.rewardType, calculationMode: item.calculationMode, effectivePV: item.effectivePV, rewardRate: item.rewardRate, rewardPV: item.rewardPV, creditAmount: item.calculatedCreditAmount, projectedCreditAmount: item.projectedCreditAmount ?? item.calculatedCreditAmount, status: item.status, cancellationReason: item.cancellationReason ?? null, qualificationStatus: item.qualificationStatus ?? "legacy", qualificationExpiresAt: item.qualificationExpiresAt ?? null, qualificationOrderNumber: item.qualificationOrderNumber ?? null, qualificationOrderCreatedAt: item.qualificationOrderCreatedAt ?? null, qualificationOrderFinalState: item.qualificationOrderFinalState ?? null, qualificationQualifiedAt: item.qualificationQualifiedAt ?? null, successfulPickupBusinessDate: item.successfulPickupBusinessDate ?? null, releaseEligibleBusinessDate: item.releaseEligibleBusinessDate ?? item.scheduledReleaseAt?.slice(0, 10) ?? null, releasedAt: item.releasedAt })) };
+}
+
+export async function getAdminReferralOverview(input: { query?: string; from?: string; to?: string; filePath?: string } = {}) {
+  const [state, registry] = await Promise.all([readMembershipCommerceState(input.filePath), getIdentityRegistrySnapshot()]);
+  const query = input.query?.trim().toLowerCase() ?? "";
+  const relationships = Object.values(state.referrals).map((item) => ({ ...item, referrerNumber: registry.members[item.referrerMemberId]?.memberNumber ?? "—", referredNumber: registry.members[item.referredMemberId]?.memberNumber ?? "—" })).filter((item) => !query || item.referrerNumber.toLowerCase().includes(query) || item.referredNumber.toLowerCase().includes(query) || item.safeDisplayName.toLowerCase().includes(query));
+  const rewards = Object.values(state.referralRewards).filter((item) => (!input.from || item.createdAt.slice(0, 10) >= input.from) && (!input.to || item.createdAt.slice(0, 10) <= input.to));
+  const sum = (status?: ReferralReward["status"], type?: ReferralReward["rewardType"], mode?: ReferralReward["calculationMode"]) => rewards.filter((item) => (!status || item.status === status) && (!type || item.rewardType === type) && (!mode || item.calculationMode === mode)).reduce((total, item) => total + item.calculatedCreditAmount, 0);
+  return { relationships, rewards, statistics: { newReferralRewards: sum(undefined, "new_referral"), subscriptionRewards: sum(undefined, "subscription"), pendingAmount: rewards.filter((item) => item.status === "scheduled" && item.qualificationStatus !== "expired").reduce((total, item) => total + item.calculatedCreditAmount, 0), expiredAmount: rewards.filter((item) => item.qualificationStatus === "expired").reduce((total, item) => total + item.calculatedCreditAmount, 0), releasedAmount: sum("released"), reversedAmount: sum("reversed"), paidAmountModeRewards: sum(undefined, undefined, "paid_amount"), pvModeRewards: sum(undefined, undefined, "pv"), totalRewardCost: sum("released") } };
+}
+
+export async function enqueueScheduledMembershipNotifications(input: { today: string; now?: Date; stateFilePath?: string; rulesFilePath?: string }) {
+  const version = await getActiveMembershipRules(input.now, input.rulesFilePath);
+  return transaction((state, now) => {
+    let queued = 0;
+    const enqueueOnce = (key: string, eventType: NotificationEvent["eventType"], memberId: string, safeData: NotificationEvent["safeData"]) => {
+      if (remembered(state, key)) return;
+      const notice = notify(state, version.rules, eventType, key, now, { memberId, safeData });
+      if (!notice) return;
+      remember(state, key, notice.notificationId, now);
+      queued += 1;
+    };
+
+    for (const cycle of Object.values(state.cycles)) {
+      if (!["scheduled", "modifiable"].includes(cycle.status)) continue;
+      const subscription = state.subscriptions[cycle.subscriptionId];
+      if (!subscription || subscription.status !== "active") continue;
+      if (addTaipeiCalendarDays(cycle.plannedDate, -version.rules.notification.nextCycleReminderDays) === input.today) {
+        enqueueOnce(`notification:next-cycle:${cycle.cycleId}:${input.today}`, "modification_window", subscription.memberId, { cycleId: cycle.cycleId, plannedDate: cycle.plannedDate, modificationDeadline: cycle.modificationDeadline });
+      }
+      if (addTaipeiCalendarDays(cycle.modificationDeadline, -version.rules.notification.modificationCutoffReminderDays) === input.today) {
+        enqueueOnce(`notification:cutoff:${cycle.cycleId}:${input.today}`, "deadline_tomorrow", subscription.memberId, { cycleId: cycle.cycleId, plannedDate: cycle.plannedDate, modificationDeadline: cycle.modificationDeadline });
+      }
+    }
+
+    for (const entry of Object.values(state.creditEntries)) {
+      if (entry.remainingAmount <= 0 || !["available", "reserved"].includes(entry.status)) continue;
+      const finalUsableDate = addTaipeiCalendarDays(entry.expiresAt.slice(0, 10), -1);
+      if (addTaipeiCalendarDays(finalUsableDate, -version.rules.credit.expiryReminderDays) !== input.today) continue;
+      enqueueOnce(`notification:credit-expiry:${entry.creditEntryId}:${input.today}`, "credit_expiring", entry.memberId, { creditEntryId: entry.creditEntryId, amount: entry.remainingAmount, expiresOn: finalUsableDate });
+    }
+    return { queued };
+  }, { now: input.now, filePath: input.stateFilePath });
+}
+
+export async function previewMembershipRulesImpact(nextRules: unknown, filePath = getMembershipCommerceStateFile()) {
+  const validated = validateMembershipBusinessRules(nextRules);
+  const [state, active] = await Promise.all([readMembershipCommerceState(filePath), getActiveMembershipRules()]);
+  const changedAreas = (["subscription", "pickup", "credit", "referral", "gift", "notification", "fulfillment", "ownerExceptions"] as const)
+    .filter((key) => JSON.stringify(active.rules[key]) !== JSON.stringify(validated[key]));
+  const affectedCycles = Object.values(state.cycles).filter((cycle) => ["scheduled", "modifiable"].includes(cycle.status)).length;
+  const lockedCyclesPreserved = Object.values(state.cycles).filter((cycle) => Boolean(cycle.rulesSnapshot) || ["locked", "order_created", "shipped", "ready_for_pickup", "completed"].includes(cycle.status)).length;
+  const activeSubscriptions = Object.values(state.subscriptions).filter((subscription) => subscription.status === "active").length;
+  const pendingReferralRewardsPreserved = Object.values(state.referralRewards).filter((reward) => reward.status === "scheduled").length;
+  const historicalReferralRewardsPreserved = Object.values(state.referralRewards).filter((reward) => reward.status !== "scheduled").length;
+  const referralMembersAffectedByDepth = new Set(Object.values(state.referrals).flatMap((item) => [item.referrerMemberId, item.referredMemberId])).size;
+  return { changedAreas, affectedCycles, activeSubscriptions, lockedCyclesPreserved, pendingReferralRewardsPreserved, historicalReferralRewardsPreserved, referralMembersAffectedByDepth, nextRulesVersion: active.rulesVersion + 1 };
+}
+
+export async function claimNextMembershipNotification(options: { now?: Date; stateFilePath?: string } = {}) {
+  return transaction((state, now) => {
+    const notice = state.notifications.find((item) => item.status === "pending");
+    if (!notice) return null;
+    const maximum = notice.deliveryPolicy?.maxAttempts ?? 1;
+    if ((notice.attempts ?? 0) >= maximum) {
+      notice.status = "failed";
+      return null;
+    }
+    notice.status = "processing";
+    notice.attempts = (notice.attempts ?? 0) + 1;
+    notice.lastAttemptAt = nowIso(now);
+    return structuredClone(notice);
+  }, { now: options.now, filePath: options.stateFilePath });
+}
+
+export async function completeMembershipNotificationDelivery(input: { notificationId: string; deliveredChannels: NotificationEvent["channels"]; error?: string; now?: Date; stateFilePath?: string }) {
+  return transaction((state) => {
+    const notice = state.notifications.find((item) => item.notificationId === input.notificationId);
+    if (!notice) throw new MembershipCommerceError("找不到會員通知工作");
+    if (notice.status !== "processing") return notice;
+    notice.deliveredChannels = [...new Set(input.deliveredChannels)];
+    notice.lastError = input.error?.slice(0, 300);
+    const requestedExternal = notice.channels.filter((channel) => channel === "line" || channel === "email");
+    const deliveredExternal = requestedExternal.filter((channel) => notice.deliveredChannels?.includes(channel));
+    const emailFallbackDelivered = requestedExternal.includes("line") && notice.deliveredChannels.includes("email") && notice.deliveryPolicy?.emailFallback;
+    if (!requestedExternal.length || deliveredExternal.length === requestedExternal.length || emailFallbackDelivered) notice.status = "delivered";
+    else notice.status = (notice.attempts ?? 0) < (notice.deliveryPolicy?.maxAttempts ?? 1) ? "pending" : "failed";
+    return structuredClone(notice);
+  }, { now: input.now, filePath: input.stateFilePath });
 }

@@ -4,7 +4,7 @@ import path from "node:path";
 
 import { updateStoredOrderSafely, readOrder, type StoredOrder } from "./adminOrders";
 import { atomicWriteJson, withFileLock } from "./jsonFileStore";
-import { handleCanonicalOrderOutcome } from "./membershipCommerce";
+import { handleCanonicalOrderOutcome, handleReferralQualificationOrderOutcome } from "./membershipCommerce";
 import { getFulfillmentSettingsFile, getFulfillmentStateFile } from "./storagePaths";
 import { parseSevenElevenEmail, type FulfillmentEmailEvidence, type ParsedFulfillmentEvidence } from "./sevenElevenEmailParser";
 import {
@@ -105,15 +105,31 @@ export async function saveLogisticsSettings(input: { expectedRevision: number; n
     const email = input.notificationEmail.trim().toLowerCase();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new FulfillmentError("請填寫正確的物流通知信箱");
     if (!Number.isInteger(input.pickupDeadlineDays) || input.pickupDeadlineDays < 1 || input.pickupDeadlineDays > 30) throw new FulfillmentError("取貨期限須為 1 至 30 天");
-    if (!["manual_review", "confirm_uncollected"].includes(input.expiryPolicy)) throw new FulfillmentError("逾期處理方式不正確");
+    if (input.expiryPolicy !== "manual_review") throw new FulfillmentError("逾期只能先進入人工確認，不能自動判定未取貨");
     const updated: LogisticsSettings = {
       ...current,
       revision: current.revision + 1,
       notificationEmail: email,
       automaticTrackingEnabled: input.automaticTrackingEnabled,
       pickupDeadlineDays: input.pickupDeadlineDays,
-      expiryPolicy: input.expiryPolicy,
+      expiryPolicy: "manual_review",
       trackedEvents: { ...input.trackedEvents },
+      updatedAt: nowIso(input.now),
+    };
+    await atomicWriteJson(filePath, updated);
+    return updated;
+  }, { timeoutMs: 15_000 });
+}
+
+export async function updateGmailConnectionStatus(input: { status: LogisticsSettings["gmailConnection"]["status"]; recentProcessedCount: number; reviewCount: number; syncedAt?: string | null; filePath?: string; now?: Date }) {
+  const filePath = input.filePath ?? getFulfillmentSettingsFile();
+  await fs.mkdir(path.dirname(filePath), { recursive: true });
+  return withFileLock(filePath, async () => {
+    const current = await readLogisticsSettings(filePath);
+    const updated: LogisticsSettings = {
+      ...current,
+      revision: current.revision + 1,
+      gmailConnection: { status: input.status, lastSyncedAt: input.syncedAt ?? current.gmailConnection.lastSyncedAt, recentProcessedCount: Math.max(0, Math.floor(input.recentProcessedCount)), reviewCount: Math.max(0, Math.floor(input.reviewCount)) },
       updatedAt: nowIso(input.now),
     };
     await atomicWriteJson(filePath, updated);
@@ -194,12 +210,25 @@ async function mirrorEventToOrder(order: StoredOrder, event: FulfillmentEvent, r
 }
 
 async function runConsequence(order: StoredOrder, event: FulfillmentEvent) {
+  if (event.state === "cancelled") {
+    const memberId = typeof order.member?.memberId === "string" ? order.member.memberId : undefined;
+    if (memberId) await handleReferralQualificationOrderOutcome({ memberId, orderId: order.orderNumber, outcome: "cancelled", idempotencyKey: `fulfillment:${event.eventId}`, now: new Date(event.occurredAt) });
+    return;
+  }
   if (event.state !== "completed" && event.state !== "uncollected") return;
+  const items = Array.isArray(order.items) ? order.items as Array<Record<string, unknown>> : [];
+  const creditApplied = Math.max(0, Number(order.credit?.appliedAmount || 0));
+  const merchandiseAmount = Math.max(0, Number(order.subtotal || 0) - creditApplied);
+  const basePV = items.reduce((sum, item) => sum + Math.max(0, Number(item.basePV || 0)) * Math.max(1, Number(item.quantity || 1)), 0);
+  const effectivePV = items.reduce((sum, item) => sum + Math.max(0, Number(item.effectivePV || item.basePV || 0)) * Math.max(1, Number(item.quantity || 1)), 0);
   await handleCanonicalOrderOutcome({
     orderId: order.orderNumber,
     outcome: event.state,
     memberId: typeof order.member?.memberId === "string" ? order.member.memberId : undefined,
-    merchandiseAmount: Number(order.subtotal || 0),
+    merchandiseAmount,
+    basePV,
+    effectivePV,
+    discountRatio: basePV > 0 ? Math.min(1, effectivePV / basePV) : 1,
     eligibleItemCount: Array.isArray(order.items) ? order.items.reduce((sum: number, item: Record<string, unknown>) => sum + Math.max(0, Number(item.quantity) || 0), 0) : 0,
     idempotencyKey: `fulfillment:${event.eventId}`,
     now: new Date(event.occurredAt),
@@ -276,7 +305,7 @@ async function appendCanonicalEvent(input: { order: StoredOrder; state: Fulfillm
     }
     record.events.push(event);
     store.processedFingerprints[input.sourceFingerprint] = { eventId: event.eventId, orderId: record.orderId };
-    store.consequenceStatus[event.eventId] = event.state === "completed" || event.state === "uncollected" ? "pending" : "completed";
+    store.consequenceStatus[event.eventId] = event.state === "completed" || event.state === "uncollected" || event.state === "cancelled" ? "pending" : "completed";
     await persistStore(input.filePath, store, input.now);
     await mirrorEventToOrder(input.order, event, record);
     if (store.consequenceStatus[event.eventId] === "pending") {
@@ -329,8 +358,22 @@ export async function associateExternalFulfillment(input: { orderId: string; ext
 
 export async function processSevenElevenEmail(evidence: FulfillmentEmailEvidence, options: { filePath?: string; settingsFilePath?: string; now?: Date } = {}) {
   const parsed = parseSevenElevenEmail(evidence);
-  if (!parsed.recognized || !parsed.eventType || !parsed.externalOrderId) return { parsed, mutated: false, review: false };
   const settings = await readLogisticsSettings(options.settingsFilePath);
+  if (!parsed.recognized || !parsed.eventType || !parsed.externalOrderId) {
+    if (!settings.automaticTrackingEnabled || parsed.reason === "wrong_sender") return { parsed, mutated: false, review: false };
+    const filePath = options.filePath ?? getFulfillmentStateFile();
+    const now = options.now ?? new Date();
+    await fs.mkdir(path.dirname(filePath), { recursive: true });
+    const reviewId = await withFileLock(filePath, async () => {
+      const store = await readFulfillmentStore(filePath);
+      const replay = store.processedFingerprints[parsed.sourceFingerprint];
+      if (replay?.reviewId) return replay.reviewId;
+      const created = review(store, parsed, "malformed_evidence", "收到可信寄件者的新格式通知，系統未猜測狀態，請人工確認", now);
+      await persistStore(filePath, store, now);
+      return created;
+    }, { timeoutMs: 15_000 });
+    return { parsed, mutated: false, review: true, reviewId };
+  }
   const tracked = { order_created: settings.trackedEvents.orderCreated, shipped: settings.trackedEvents.shipped, arrived_at_pickup_store: settings.trackedEvents.arrived, completed: settings.trackedEvents.completed }[parsed.eventType];
   if (!settings.automaticTrackingEnabled || !tracked) return { parsed, mutated: false, review: false };
   const filePath = options.filePath ?? getFulfillmentStateFile();
@@ -377,7 +420,7 @@ export async function evaluatePickupDeadlines(options: { filePath?: string; sett
   const due = Object.values(store.records).filter((record) => record.pickupDeadline && Date.parse(record.pickupDeadline) <= now.getTime() && ["arrived_at_pickup_store", "ready_for_store_pickup"].includes(record.currentState));
   const results = [];
   for (const record of due) {
-    const target: FulfillmentState = settings.expiryPolicy === "confirm_uncollected" ? "uncollected" : "suspected_uncollected";
+    const target: FulfillmentState = "suspected_uncollected";
     const order = await readOrder(record.orderId);
     if (!order) continue;
     results.push(await appendCanonicalEvent({ order, state: target, source: "system", sourceFingerprint: createHash("sha256").update(`deadline:${record.orderId}:${record.pickupDeadline}`).digest("hex"), occurredAt: nowIso(now), note: "已超過取貨期限，尚未收到成功取貨通知", expectedRevision: record.revision, filePath, settings, now }));
