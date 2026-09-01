@@ -35,6 +35,15 @@
     "test:phase-i4a2": "node --experimental-strip-types --import ./scripts/member-auth-test-bootstrap.mjs scripts/test-phase-i4a2-credit-visibility.ts",
     "test:phase-i4a3": "node --experimental-strip-types --import ./scripts/member-auth-test-bootstrap.mjs scripts/test-phase-i4a3-cancel-credit-release.ts",
     "test:phase-i4a4": "node --experimental-strip-types --import ./scripts/member-auth-test-bootstrap.mjs scripts/test-phase-i4a4-successful-fulfillment.ts",
+    "test:phase-i4b": "node --experimental-strip-types --import ./scripts/member-auth-test-bootstrap.mjs scripts/test-phase-i4b-persistence.ts",
+    "test:phase-i4b3b": "node --experimental-strip-types --import ./scripts/member-auth-test-bootstrap.mjs scripts/test-phase-i4b3b-business-rules.ts",
+    "test:phase-i4b3c": "node --experimental-strip-types --import ./scripts/member-auth-test-bootstrap.mjs scripts/test-phase-i4b3c-qualification.ts",
+    "test:phase-i4b3d0": "node --experimental-strip-types --import ./scripts/member-auth-test-bootstrap.mjs scripts/test-phase-i4b3d0-qualification-authority.ts",
+    "test:phase-i4b3d1": "node --experimental-strip-types --import ./scripts/member-auth-test-bootstrap.mjs scripts/test-phase-i4b3d1-reward-coverage.ts",
+    "test:phase-i4b3e0": "node --experimental-strip-types --import ./scripts/member-auth-test-bootstrap.mjs scripts/test-phase-i4b3e0-reward-maturation.ts",
+    "test:phase-i4b3e1": "node --experimental-strip-types --import ./scripts/member-auth-test-bootstrap.mjs scripts/test-phase-i4b3e1-referral-payout.ts",
+    "test:phase-i4b3e2": "node --experimental-strip-types --import ./scripts/member-auth-test-bootstrap.mjs scripts/test-phase-i4b3e2-referral-payout-notifications.ts",
+    "test:phase-i4b3f": "node --experimental-strip-types --import ./scripts/member-auth-test-bootstrap.mjs scripts/test-phase-i4b3f-referral-e2e.ts",
     "health": "node scripts/health-check.mjs"
   },
   "dependencies": {

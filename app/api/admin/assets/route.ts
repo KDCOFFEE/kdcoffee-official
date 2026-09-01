@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { isAdminAuthenticated } from "@/lib/adminAuth";
-import { getAssetLibrary, saveAssetLibrary } from "@/lib/assets";
+import { AssetLibraryVersionConflictError, getAssetLibrary, saveAssetLibrary } from "@/lib/assets";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +17,9 @@ export async function PUT(request: Request) {
     await saveAssetLibrary(body);
     return NextResponse.json({ ok: true });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "儲存失敗" }, { status: 500 });
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "儲存失敗" },
+      { status: error instanceof AssetLibraryVersionConflictError ? 409 : 500 },
+    );
   }
 }

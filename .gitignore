@@ -30,6 +30,7 @@ yarn-error.log*
 
 # env files - NEVER upload secrets
 .env*
+!.env.example
 
 # vercel
 .vercel
@@ -57,8 +58,23 @@ next-env.d.ts
 /data/member-identity/*
 /data/membership-test-lab/*
 
+/data/membership-commerce/business-rules.json
+/data/membership-commerce/commerce-state.json
+
+/data/fulfillment/state.json
+/data/fulfillment/settings.json
+
 /data/backups/*
 /data/store-backups/*
+
+/public/uploads/order-notifications/*
+
+# Legacy local store-runtime locations. Immutable production seeds live in /bootstrap/store.
+/public/data/website-data.json
+/public/data/homepage.json
+/public/data/assets.json
+/public/data/monthly-menus.json
+/public/data/pages.json
 
 # local validation
 /reports/

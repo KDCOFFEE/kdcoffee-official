@@ -1,5 +1,7 @@
 import { promises as fs } from "fs";
+import path from "path";
 import { getAssetsDataFile } from "@/lib/storagePaths";
+import { atomicWriteJson, withFileLock } from "@/lib/jsonFileStore";
 
 /**
  * ============================================================
@@ -73,7 +75,14 @@ export type AssetLibrary = {
  * 這樣後台修改素材資料後，
  * Railway Redeploy 才不會恢復成 repository 舊版本。
  */
-const assetPath = getAssetsDataFile();
+export class AssetLibraryVersionConflictError extends Error {
+  readonly status = 409;
+
+  constructor() {
+    super("素材資料已由其他操作更新，請重新整理後再試一次。");
+    this.name = "AssetLibraryVersionConflictError";
+  }
+}
 
 /**
  * ============================================================
@@ -84,6 +93,7 @@ const assetPath = getAssetsDataFile();
  * 讀取完整素材資料。
  */
 export async function getAssetLibrary(): Promise<AssetLibrary> {
+  const assetPath = getAssetsDataFile();
   return JSON.parse(
     await fs.readFile(assetPath, "utf8"),
   ) as AssetLibrary;
@@ -106,17 +116,27 @@ export async function getAssetLibrary(): Promise<AssetLibrary> {
 export async function saveAssetLibrary(
   library: AssetLibrary,
 ) {
-  library.version =
-    Number(library.version || 0) + 1;
+  const assetPath = getAssetsDataFile();
+  await fs.mkdir(path.dirname(assetPath), { recursive: true });
+  return withFileLock(assetPath, async () => {
+    const current = JSON.parse(await fs.readFile(assetPath, "utf8")) as AssetLibrary;
+    if (Number(current.version || 0) !== Number(library.version || 0)) {
+      throw new AssetLibraryVersionConflictError();
+    }
 
-  library.updatedAt =
-    new Date().toISOString();
+    const updated: AssetLibrary = {
+      ...structuredClone(library),
+      version: Number(current.version || 0) + 1,
+      updatedAt: new Date().toISOString(),
+    };
+    await atomicWriteJson(assetPath, updated);
 
-  await fs.writeFile(
-    assetPath,
-    `${JSON.stringify(library, null, 2)}\n`,
-    "utf8",
-  );
+    // Preserve the existing caller contract: upload routes return the same
+    // object after save and expect its version/timestamp to be current.
+    library.version = updated.version;
+    library.updatedAt = updated.updatedAt;
+    return library;
+  });
 }
 
 /**

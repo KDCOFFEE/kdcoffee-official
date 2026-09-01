@@ -83,8 +83,8 @@ try {
   check("LINE 失敗時會員中心紀錄保留且進入有限重試", retryable.status === "pending" && retryable.deliveredChannels?.includes("member_center"));
   const claimedAgain = await commerce.claimNextMembershipNotification();
   assert.ok(claimedAgain);
-  const delivered = await commerce.completeMembershipNotificationDelivery({ notificationId: claimedAgain.notificationId, deliveredChannels: ["member_center", "line"] });
-  check("通知重試成功後完成且不建立重複通知事件", delivered.status === "delivered" && (await commerce.readMembershipCommerceState()).notifications.filter((notice) => notice.notificationId === delivered.notificationId).length === 1);
+  const delivered = await commerce.completeMembershipNotificationDelivery({ notificationId: claimedAgain.notificationId, deliveredChannels: ["member_center", "line", "email"] });
+  check("LINE／Email 通知重試成功後完成且不建立重複通知事件", delivered.status === "delivered" && (await commerce.readMembershipCommerceState()).notifications.filter((notice) => notice.notificationId === delivered.notificationId).length === 1);
 
   state = await commerce.readMembershipCommerceState();
   check("測試資料全部位於隔離目錄", state.subscriptions[subscription.subscriptionId].memberId === memberId);

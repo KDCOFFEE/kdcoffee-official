@@ -18,6 +18,17 @@ export const membershipNotificationEventTypes = [
 
 export type MembershipNotificationEventType = (typeof membershipNotificationEventTypes)[number];
 export type NotificationEventPolicy = { enabled: boolean; channels: Array<"member_center" | "email" | "line" | "admin"> };
+export type ReferralPayoutQualificationMode = "general" | "subscription" | "either" | "both";
+export type ReferralExcessConsumptionMode = "reset" | "carry";
+
+export type ReferralPayoutQualificationRules = {
+  mode: ReferralPayoutQualificationMode;
+  generalMember: { rollingWindowDays: number; cumulativeValidConsumptionThreshold: number };
+  activeSubscriptionMember: { rollingWindowDays: number; cumulativeValidConsumptionThreshold: number };
+  validConsumption: { includeCreditDiscount: boolean; includeShipping: boolean };
+  rewardCoverage: { lookbackDays: number; forwardDays: number };
+  excessConsumptionMode: ReferralExcessConsumptionMode;
+};
 
 export type MembershipBusinessRules = {
   membership: { openingYearFreeShipping: { enabled: boolean; startDate: string; endDate: string; shippingMethods: string[] } };
@@ -30,6 +41,8 @@ export type MembershipBusinessRules = {
     referralMaxRewardDepth: number;
     levels: Array<{ level: number; enabled: boolean; newReferralRewardRate: number; subscriptionRewardRate: number }>;
     referralRewardCalculationMode: "paid_amount" | "pv";
+    payoutQualification: ReferralPayoutQualificationRules;
+    /** Legacy per-reward forward window. Do not reinterpret as payoutQualification.rewardCoverage. */
     referralRewardQualificationWindowDays: number;
     referralRewardBaseWaitingDays: number;
     referralRewardReturnProtectionDays: number;
@@ -38,6 +51,7 @@ export type MembershipBusinessRules = {
     pvRewardMoneyValue: number;
     showProductPV: boolean;
     reversalPolicy: "cancel-pending-and-reverse-released" | "cancel-pending-only";
+    /** Legacy reward-flow compatibility only; not part of the canonical payout qualification model. */
     referrerEligibility: { mode: typeof OWNER_DECISION_REQUIRED } | { mode: "active-subscription" } | { mode: "none" } | { mode: "completed-orders"; minimumOrders: number } | { mode: "lifetime-spend"; minimumAmount: number } | { mode: "recent-valid-purchase"; withinDays: number };
     reward: ({ mode: typeof OWNER_DECISION_REQUIRED } | { mode: "fixed"; amount: number } | { mode: "percentage"; percent: number } | { mode: "per-eligible-item"; amount: number }) & { repeatedRewards: boolean };
   };

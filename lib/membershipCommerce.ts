@@ -2,11 +2,13 @@ import { createHash, randomBytes } from "crypto";
 import { promises as fs } from "fs";
 import path from "path";
 
+import { readOrder } from "./adminOrders";
 import { getDateOnlyInTimeZone } from "./checkoutRules";
 import { atomicWriteJson, withFileLock } from "./jsonFileStore";
 import { getCanonicalMemberRecord, getIdentityRegistrySnapshot } from "./memberIdentity";
 import {
   getActiveMembershipRules,
+  readMembershipRulesStore,
   OWNER_DECISION_REQUIRED,
   validateMembershipBusinessRules,
   type MembershipBusinessRules,
@@ -29,6 +31,7 @@ import {
   validateSubscriptionItem,
   type SubscriptionItem,
 } from "./membershipPolicies";
+import { projectOrderFinancialBreakdown } from "./orderFinancialProjection";
 import { getMembershipCommerceStateFile } from "./storagePaths";
 
 export const MEMBERSHIP_COMMERCE_SCHEMA_VERSION = 1 as const;
@@ -113,6 +116,99 @@ export type ReferralConversion = {
   occurredAt: string;
 };
 
+export type ValidConsumptionEvent = {
+  eventId: string;
+  memberId: string;
+  sourceOrderId: string;
+  sourceReference: string;
+  finalizedAt: string;
+  createdAt: string;
+  merchandiseSubtotal: number;
+  appliedCreditAmount: number;
+  shippingAmount: number;
+  validConsumptionAmount: number;
+  includeCreditDiscount: boolean;
+  includeShipping: boolean;
+  activeSubscriptionAtCompletion: boolean;
+  rulesVersion: number;
+  qualificationRulesSnapshot: MembershipBusinessRules["referral"]["payoutQualification"];
+  idempotencyKey: string;
+};
+
+export type QualificationPathEvaluation = {
+  windowDays: number;
+  windowStartedAt: string;
+  windowEndedAt: string;
+  threshold: number;
+  cumulativeAmount: number;
+  eligibleEventIds: string[];
+  activeSubscriptionRequired: boolean;
+  activeSubscriptionSatisfied: boolean;
+  passed: boolean;
+};
+
+export type QualificationRound = {
+  roundId: string;
+  memberId: string;
+  triggeringValidConsumptionEventId: string;
+  triggeringSourceOrderId: string;
+  qualifiedAt: string;
+  createdAt: string;
+  rulesVersion: number;
+  qualificationMode: MembershipBusinessRules["referral"]["payoutQualification"]["mode"];
+  generalPath: QualificationPathEvaluation;
+  subscriptionPath: QualificationPathEvaluation;
+  finalQualified: true;
+  selectedAccountingPaths: Array<"general" | "subscription">;
+  excessConsumptionMode: MembershipBusinessRules["referral"]["payoutQualification"]["excessConsumptionMode"];
+  consumptionAccounting: {
+    availableAmountBefore: number;
+    consumedAmount: number;
+    remainingAmountAfter: number;
+    allocations: Array<{ validConsumptionEventId: string; amount: number }>;
+  };
+  rewardCoverageRuleSnapshot: MembershipBusinessRules["referral"]["payoutQualification"]["rewardCoverage"];
+  rewardSafetyRuleSnapshot?: { baseWaitingDays: number; returnProtectionDays: number };
+  idempotencyKey: string;
+};
+
+export type ReferralRewardCoverage = {
+  coverageId: string;
+  memberId: string;
+  qualificationRoundId: string;
+  referralRewardId: string;
+  qualificationAt: string;
+  rewardGeneratedAt: string;
+  coverageStartsAt: string;
+  coverageEndsAt: string;
+  lookbackDays: number;
+  forwardDays: number;
+  rulesVersion: number;
+  inclusionReason: "reward-generated-within-snapshotted-coverage-window";
+  createdAt: string;
+  sourceReference: string;
+  idempotencyKey: string;
+};
+
+export type ReferralRewardMaturation = {
+  maturationId: string;
+  memberId: string;
+  referralRewardId: string;
+  coverageId: string;
+  qualificationRoundId: string;
+  qualificationAt: string;
+  baseWaitingDays: number;
+  returnProtectionDays: number;
+  maturesAt: string;
+  maturedAt: string;
+  rulesVersion: number;
+  createdAt: string;
+  sourceReference: string;
+  idempotencyKey: string;
+};
+
+export type ReferralRewardQualificationAuthority = "legacy_order" | "qualification_coverage";
+
 export type ReferralReward = {
   rewardId: string;
   sourceOrderNumber: string;
@@ -163,6 +259,8 @@ export type ReferralReward = {
     finalState: "pending" | "completed" | "cancelled" | "uncollected" | "refunded" | "returned";
     finalizedAt: string | null;
   }>;
+  /** Missing on historical rewards and therefore normalized behaviorally as legacy_order. */
+  qualificationAuthority?: ReferralRewardQualificationAuthority;
   createdAt: string;
   eligibleAt: string;
   scheduledReleaseAt: string;
@@ -273,6 +371,10 @@ export type MembershipCommerceState = {
   referrals: Record<string, ReferralRelationship>;
   referralConversions: Record<string, ReferralConversion>;
   referralRewards: Record<string, ReferralReward>;
+  validConsumptionEvents: Record<string, ValidConsumptionEvent>;
+  qualificationRounds: Record<string, QualificationRound>;
+  referralRewardCoverages: Record<string, ReferralRewardCoverage>;
+  referralRewardMaturations: Record<string, ReferralRewardMaturation>;
   creditEntries: Record<string, CreditEntry>;
   creditReservations: Record<string, CreditReservation>;
   events: CommerceEvent[];
@@ -310,7 +412,7 @@ function nowIso(now = new Date()) {
 
 function emptyState(now = new Date()): MembershipCommerceState {
   const timestamp = nowIso(now);
-  return { schemaVersion: 1, revision: 0, createdAt: timestamp, updatedAt: timestamp, subscriptions: {}, cycles: {}, referrals: {}, referralConversions: {}, referralRewards: {}, creditEntries: {}, creditReservations: {}, events: [], notifications: [], audit: [], idempotency: {} };
+  return { schemaVersion: 1, revision: 0, createdAt: timestamp, updatedAt: timestamp, subscriptions: {}, cycles: {}, referrals: {}, referralConversions: {}, referralRewards: {}, validConsumptionEvents: {}, qualificationRounds: {}, referralRewardCoverages: {}, referralRewardMaturations: {}, creditEntries: {}, creditReservations: {}, events: [], notifications: [], audit: [], idempotency: {} };
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -320,8 +422,43 @@ function isObject(value: unknown): value is Record<string, unknown> {
 export function validateMembershipCommerceState(value: unknown): MembershipCommerceState {
   if (!isObject(value) || value.schemaVersion !== 1 || !Number.isSafeInteger(value.revision) || typeof value.createdAt !== "string" || typeof value.updatedAt !== "string") throw new MembershipCommerceError("會員商務資料格式不正確");
   if (!isObject(value.referralRewards)) value.referralRewards = {};
-  for (const field of ["subscriptions", "cycles", "referrals", "referralConversions", "referralRewards", "creditEntries", "creditReservations", "idempotency"] as const) if (!isObject(value[field])) throw new MembershipCommerceError("會員商務資料集合不完整");
+  if (!isObject(value.validConsumptionEvents)) value.validConsumptionEvents = {};
+  if (!isObject(value.qualificationRounds)) value.qualificationRounds = {};
+  if (!isObject(value.referralRewardCoverages)) value.referralRewardCoverages = {};
+  if (!isObject(value.referralRewardMaturations)) value.referralRewardMaturations = {};
+  for (const field of ["subscriptions", "cycles", "referrals", "referralConversions", "referralRewards", "validConsumptionEvents", "qualificationRounds", "referralRewardCoverages", "referralRewardMaturations", "creditEntries", "creditReservations", "idempotency"] as const) if (!isObject(value[field])) throw new MembershipCommerceError("會員商務資料集合不完整");
   for (const field of ["events", "notifications", "audit"] as const) if (!Array.isArray(value[field])) throw new MembershipCommerceError("會員商務事件集合不完整");
+  for (const reward of Object.values(value.referralRewards as Record<string, ReferralReward>)) {
+    if (reward.qualificationAuthority !== undefined && reward.qualificationAuthority !== "legacy_order" && reward.qualificationAuthority !== "qualification_coverage") throw new MembershipCommerceError("推薦獎勵資格權限格式不正確");
+  }
+  for (const consumption of Object.values(value.validConsumptionEvents as Record<string, ValidConsumptionEvent>)) {
+    if (!consumption || typeof consumption.eventId !== "string" || typeof consumption.memberId !== "string" || typeof consumption.sourceOrderId !== "string" || typeof consumption.finalizedAt !== "string" || !Number.isFinite(Date.parse(consumption.finalizedAt)) || typeof consumption.createdAt !== "string" || !Number.isSafeInteger(consumption.rulesVersion)) throw new MembershipCommerceError("有效消費事件格式不正確");
+    for (const amount of [consumption.merchandiseSubtotal, consumption.appliedCreditAmount, consumption.shippingAmount, consumption.validConsumptionAmount]) assertIntegerMoney(amount, "有效消費事件金額");
+    if (typeof consumption.includeCreditDiscount !== "boolean" || typeof consumption.includeShipping !== "boolean" || typeof consumption.activeSubscriptionAtCompletion !== "boolean" || !isObject(consumption.qualificationRulesSnapshot)) throw new MembershipCommerceError("有效消費事件快照不完整");
+  }
+  for (const round of Object.values(value.qualificationRounds as Record<string, QualificationRound>)) {
+    if (!round || typeof round.roundId !== "string" || typeof round.memberId !== "string" || typeof round.triggeringValidConsumptionEventId !== "string" || round.finalQualified !== true || !Number.isSafeInteger(round.rulesVersion) || !isObject(round.generalPath) || !isObject(round.subscriptionPath) || !isObject(round.consumptionAccounting)) throw new MembershipCommerceError("推薦資格輪次格式不正確");
+    if (round.rewardSafetyRuleSnapshot && (!Number.isSafeInteger(round.rewardSafetyRuleSnapshot.baseWaitingDays) || round.rewardSafetyRuleSnapshot.baseWaitingDays < 0 || !Number.isSafeInteger(round.rewardSafetyRuleSnapshot.returnProtectionDays) || round.rewardSafetyRuleSnapshot.returnProtectionDays < 0)) throw new MembershipCommerceError("推薦資格輪次安全等待快照不正確");
+    if (!Array.isArray(round.consumptionAccounting.allocations) || !Number.isSafeInteger(round.consumptionAccounting.availableAmountBefore) || !Number.isSafeInteger(round.consumptionAccounting.consumedAmount) || !Number.isSafeInteger(round.consumptionAccounting.remainingAmountAfter)) throw new MembershipCommerceError("推薦資格輪次消費配置不正確");
+    for (const allocation of round.consumptionAccounting.allocations) if (!allocation || typeof allocation.validConsumptionEventId !== "string" || !Number.isSafeInteger(allocation.amount) || allocation.amount < 0) throw new MembershipCommerceError("推薦資格輪次配置項目不正確");
+  }
+  const coveredRewardIds = new Set<string>();
+  for (const coverage of Object.values(value.referralRewardCoverages as Record<string, ReferralRewardCoverage>)) {
+    if (!coverage || typeof coverage.coverageId !== "string" || typeof coverage.memberId !== "string" || typeof coverage.qualificationRoundId !== "string" || typeof coverage.referralRewardId !== "string" || !Number.isFinite(Date.parse(coverage.qualificationAt)) || !Number.isFinite(Date.parse(coverage.rewardGeneratedAt)) || !Number.isFinite(Date.parse(coverage.coverageStartsAt)) || !Number.isFinite(Date.parse(coverage.coverageEndsAt)) || !Number.isSafeInteger(coverage.lookbackDays) || coverage.lookbackDays < 0 || !Number.isSafeInteger(coverage.forwardDays) || coverage.forwardDays < 0 || !Number.isSafeInteger(coverage.rulesVersion) || coverage.inclusionReason !== "reward-generated-within-snapshotted-coverage-window" || typeof coverage.createdAt !== "string" || typeof coverage.sourceReference !== "string" || typeof coverage.idempotencyKey !== "string") throw new MembershipCommerceError("推薦獎勵資格涵蓋紀錄格式不正確");
+    if (coveredRewardIds.has(coverage.referralRewardId)) throw new MembershipCommerceError("同一推薦獎勵不可有重複資格涵蓋紀錄");
+    coveredRewardIds.add(coverage.referralRewardId);
+    const generatedAt = Date.parse(coverage.rewardGeneratedAt);
+    if (generatedAt < Date.parse(coverage.coverageStartsAt) || generatedAt > Date.parse(coverage.coverageEndsAt)) throw new MembershipCommerceError("推薦獎勵不在資格涵蓋期間內");
+  }
+  const maturedRewardIds = new Set<string>();
+  const maturedCoverageIds = new Set<string>();
+  for (const maturation of Object.values(value.referralRewardMaturations as Record<string, ReferralRewardMaturation>)) {
+    if (!maturation || typeof maturation.maturationId !== "string" || typeof maturation.memberId !== "string" || typeof maturation.referralRewardId !== "string" || typeof maturation.coverageId !== "string" || typeof maturation.qualificationRoundId !== "string" || !Number.isFinite(Date.parse(maturation.qualificationAt)) || !Number.isSafeInteger(maturation.baseWaitingDays) || maturation.baseWaitingDays < 0 || !Number.isSafeInteger(maturation.returnProtectionDays) || maturation.returnProtectionDays < 0 || !Number.isFinite(Date.parse(maturation.maturesAt)) || !Number.isFinite(Date.parse(maturation.maturedAt)) || !Number.isSafeInteger(maturation.rulesVersion) || typeof maturation.createdAt !== "string" || typeof maturation.sourceReference !== "string" || typeof maturation.idempotencyKey !== "string") throw new MembershipCommerceError("推薦獎勵成熟紀錄格式不正確");
+    if (Date.parse(maturation.maturedAt) < Date.parse(maturation.maturesAt)) throw new MembershipCommerceError("推薦獎勵不可在安全等待完成前成熟");
+    if (maturedRewardIds.has(maturation.referralRewardId) || maturedCoverageIds.has(maturation.coverageId)) throw new MembershipCommerceError("同一推薦獎勵不可有重複成熟紀錄");
+    maturedRewardIds.add(maturation.referralRewardId);
+    maturedCoverageIds.add(maturation.coverageId);
+  }
   for (const entry of Object.values(value.creditEntries as Record<string, CreditEntry>)) {
     const isNegativeLedgerEntry = entry.sourceReference.startsWith("referral_reward_reversal:") || entry.sourceReference.startsWith("admin_credit_adjustment:deduct:");
     if (isNegativeLedgerEntry) {
@@ -492,6 +629,9 @@ export async function handleCanonicalOrderOutcome(input: { orderId: string; outc
     }
     if (cycle) {
       await recordCycleFulfillment({ cycleId: cycle.cycleId, orderId: input.orderId, idempotencyKey: `${input.idempotencyKey}:cycle`, now: input.now, stateFilePath: input.stateFilePath, rulesFilePath: input.rulesFilePath });
+    }
+    if (input.memberId) {
+      await recordValidConsumptionFromCompletedOrder({ memberId: input.memberId, orderId: input.orderId, idempotencyKey: `${input.idempotencyKey}:valid-consumption`, now: input.now, stateFilePath: input.stateFilePath, rulesFilePath: input.rulesFilePath });
     }
   } else if (subscription || cycle) {
     const linkedSubscription = subscription ?? snapshot.subscriptions[cycle!.subscriptionId];
@@ -881,6 +1021,160 @@ function hasActiveSubscription(state: MembershipCommerceState, memberId: string)
   return Object.values(state.subscriptions).some((item) => item.memberId === memberId && item.status === "active");
 }
 
+const QUALIFICATION_DAY_MS = 86_400_000;
+
+function remainingConsumptionByEvent(state: MembershipCommerceState) {
+  const consumed = new Map<string, number>();
+  for (const round of Object.values(state.qualificationRounds)) {
+    for (const allocation of round.consumptionAccounting.allocations) consumed.set(allocation.validConsumptionEventId, (consumed.get(allocation.validConsumptionEventId) ?? 0) + allocation.amount);
+  }
+  const remaining = new Map<string, number>();
+  for (const consumption of Object.values(state.validConsumptionEvents)) remaining.set(consumption.eventId, Math.max(0, consumption.validConsumptionAmount - (consumed.get(consumption.eventId) ?? 0)));
+  return remaining;
+}
+
+function evaluateQualificationPath(input: { state: MembershipCommerceState; memberId: string; finalizedAt: Date; windowDays: number; threshold: number; remaining: Map<string, number>; activeSubscriptionRequired: boolean; activeSubscriptionSatisfied: boolean }): QualificationPathEvaluation {
+  const windowStartedAt = new Date(input.finalizedAt.getTime() - input.windowDays * QUALIFICATION_DAY_MS);
+  const eligible = Object.values(input.state.validConsumptionEvents)
+    .filter((consumption) => {
+      const occurredAt = Date.parse(consumption.finalizedAt);
+      return consumption.memberId === input.memberId && occurredAt >= windowStartedAt.getTime() && occurredAt <= input.finalizedAt.getTime() && (input.remaining.get(consumption.eventId) ?? 0) > 0;
+    })
+    .sort((left, right) => Date.parse(left.finalizedAt) - Date.parse(right.finalizedAt) || left.eventId.localeCompare(right.eventId));
+  const cumulativeAmount = eligible.reduce((sum, consumption) => sum + (input.remaining.get(consumption.eventId) ?? 0), 0);
+  return {
+    windowDays: input.windowDays,
+    windowStartedAt: windowStartedAt.toISOString(),
+    windowEndedAt: input.finalizedAt.toISOString(),
+    threshold: input.threshold,
+    cumulativeAmount,
+    eligibleEventIds: eligible.map((consumption) => consumption.eventId),
+    activeSubscriptionRequired: input.activeSubscriptionRequired,
+    activeSubscriptionSatisfied: input.activeSubscriptionSatisfied,
+    passed: cumulativeAmount >= input.threshold && (!input.activeSubscriptionRequired || input.activeSubscriptionSatisfied),
+  };
+}
+
+function allocateAvailableConsumption(input: { selectedPaths: Array<{ path: "general" | "subscription"; evaluation: QualificationPathEvaluation }>; remaining: Map<string, number>; mode: MembershipBusinessRules["referral"]["payoutQualification"]["excessConsumptionMode"] }) {
+  const union = new Set(input.selectedPaths.flatMap(({ evaluation }) => evaluation.eligibleEventIds));
+  const availableAmountBefore = [...union].reduce((sum, eventId) => sum + (input.remaining.get(eventId) ?? 0), 0);
+  const allocated = new Map<string, number>();
+  const take = (eventId: string, requested: number) => {
+    const available = (input.remaining.get(eventId) ?? 0) - (allocated.get(eventId) ?? 0);
+    const amount = Math.min(available, requested);
+    if (amount > 0) allocated.set(eventId, (allocated.get(eventId) ?? 0) + amount);
+    return amount;
+  };
+  if (input.mode === "reset") {
+    for (const eventId of union) take(eventId, Number.MAX_SAFE_INTEGER);
+  } else {
+    for (const { evaluation } of input.selectedPaths) {
+      const alreadyCounted = evaluation.eligibleEventIds.reduce((sum, eventId) => sum + (allocated.get(eventId) ?? 0), 0);
+      let required = Math.max(0, evaluation.threshold - alreadyCounted);
+      for (const eventId of evaluation.eligibleEventIds) {
+        required -= take(eventId, required);
+        if (required === 0) break;
+      }
+      if (required !== 0) throw new MembershipCommerceError("推薦資格消費配置不足");
+    }
+  }
+  const allocations = [...allocated].map(([validConsumptionEventId, amount]) => ({ validConsumptionEventId, amount }));
+  const consumedAmount = allocations.reduce((sum, allocation) => sum + allocation.amount, 0);
+  return { availableAmountBefore, consumedAmount, remainingAmountAfter: availableAmountBefore - consumedAmount, allocations };
+}
+
+/** Records one immutable event and, at most, one successful qualification round for a completed canonical order. */
+export async function recordValidConsumptionFromCompletedOrder(input: { memberId: string; orderId: string; idempotencyKey: string; now?: Date; stateFilePath?: string; rulesFilePath?: string }) {
+  const finalizedAt = input.now ?? new Date();
+  const order = await readOrder(input.orderId);
+  if (!order || order.status !== "completed") return null;
+  const orderMemberId = typeof order.member?.memberId === "string" ? order.member.memberId : typeof order.memberId === "string" ? order.memberId : null;
+  if (orderMemberId && orderMemberId !== input.memberId) throw new MembershipCommerceError("有效消費訂單會員不一致");
+
+  const financial = projectOrderFinancialBreakdown(order);
+  if (!Number.isSafeInteger(order.subtotal) || order.subtotal < 0 || !Number.isSafeInteger(order.shipping) || order.shipping < 0) throw new MembershipCommerceError("有效消費訂單金額證據不完整");
+  const rawCredit = order.credit && typeof order.credit === "object" ? order.credit.appliedAmount : undefined;
+  const appliedCreditAmount = rawCredit == null ? 0 : assertIntegerMoney(rawCredit, "有效消費抵用金");
+  if (appliedCreditAmount > 0 && (financial.creditEvidence !== "order-snapshot" || financial.creditApplied !== appliedCreditAmount)) throw new MembershipCommerceError("有效消費抵用金證據不一致");
+
+  const version = await getActiveMembershipRules(finalizedAt, input.rulesFilePath);
+  const qualificationRules = structuredClone(version.rules.referral.payoutQualification);
+  const validConsumptionAmount = Math.max(0, financial.subtotal - (qualificationRules.validConsumption.includeCreditDiscount ? 0 : appliedCreditAmount) + (qualificationRules.validConsumption.includeShipping ? financial.shipping : 0));
+  const sourceReference = `completed-order:${input.orderId}`;
+
+  return transaction((state, now) => {
+    const existing = Object.values(state.validConsumptionEvents).find((consumption) => consumption.sourceReference === sourceReference);
+    if (existing) {
+      if (existing.memberId !== input.memberId) throw new MembershipCommerceError("有效消費訂單已屬於其他會員");
+      return { event: existing, qualificationRound: Object.values(state.qualificationRounds).find((round) => round.triggeringValidConsumptionEventId === existing.eventId) ?? null, created: false };
+    }
+
+    const eventId = id("consumption");
+    const consumption: ValidConsumptionEvent = {
+      eventId,
+      memberId: input.memberId,
+      sourceOrderId: input.orderId,
+      sourceReference,
+      finalizedAt: finalizedAt.toISOString(),
+      createdAt: nowIso(now),
+      merchandiseSubtotal: financial.subtotal,
+      appliedCreditAmount,
+      shippingAmount: financial.shipping,
+      validConsumptionAmount,
+      includeCreditDiscount: qualificationRules.validConsumption.includeCreditDiscount,
+      includeShipping: qualificationRules.validConsumption.includeShipping,
+      activeSubscriptionAtCompletion: hasActiveSubscription(state, input.memberId),
+      rulesVersion: version.rulesVersion,
+      qualificationRulesSnapshot: qualificationRules,
+      idempotencyKey: input.idempotencyKey,
+    };
+    state.validConsumptionEvents[eventId] = consumption;
+
+    const remaining = remainingConsumptionByEvent(state);
+    const generalPath = evaluateQualificationPath({ state, memberId: input.memberId, finalizedAt, windowDays: qualificationRules.generalMember.rollingWindowDays, threshold: qualificationRules.generalMember.cumulativeValidConsumptionThreshold, remaining, activeSubscriptionRequired: false, activeSubscriptionSatisfied: true });
+    const subscriptionPath = evaluateQualificationPath({ state, memberId: input.memberId, finalizedAt, windowDays: qualificationRules.activeSubscriptionMember.rollingWindowDays, threshold: qualificationRules.activeSubscriptionMember.cumulativeValidConsumptionThreshold, remaining, activeSubscriptionRequired: true, activeSubscriptionSatisfied: consumption.activeSubscriptionAtCompletion });
+    const mode = qualificationRules.mode;
+    const qualified = mode === "general" ? generalPath.passed : mode === "subscription" ? subscriptionPath.passed : mode === "either" ? generalPath.passed || subscriptionPath.passed : generalPath.passed && subscriptionPath.passed;
+    let qualificationRound: QualificationRound | null = null;
+    if (qualified) {
+      const selectedPaths: Array<{ path: "general" | "subscription"; evaluation: QualificationPathEvaluation }> = mode === "general"
+        ? [{ path: "general", evaluation: generalPath }]
+        : mode === "subscription"
+          ? [{ path: "subscription", evaluation: subscriptionPath }]
+          : mode === "both"
+            ? [{ path: "general", evaluation: generalPath }, { path: "subscription", evaluation: subscriptionPath }]
+            : subscriptionPath.passed
+              ? [{ path: "subscription", evaluation: subscriptionPath }]
+              : [{ path: "general", evaluation: generalPath }];
+      const accounting = allocateAvailableConsumption({ selectedPaths, remaining, mode: qualificationRules.excessConsumptionMode });
+      const roundId = id("qualification");
+      qualificationRound = {
+        roundId,
+        memberId: input.memberId,
+        triggeringValidConsumptionEventId: eventId,
+        triggeringSourceOrderId: input.orderId,
+        qualifiedAt: finalizedAt.toISOString(),
+        createdAt: nowIso(now),
+        rulesVersion: version.rulesVersion,
+        qualificationMode: mode,
+        generalPath,
+        subscriptionPath,
+        finalQualified: true,
+        selectedAccountingPaths: selectedPaths.map(({ path: selectedPath }) => selectedPath),
+        excessConsumptionMode: qualificationRules.excessConsumptionMode,
+        consumptionAccounting: accounting,
+        rewardCoverageRuleSnapshot: structuredClone(qualificationRules.rewardCoverage),
+        rewardSafetyRuleSnapshot: { baseWaitingDays: version.rules.referral.referralRewardBaseWaitingDays, returnProtectionDays: version.rules.referral.referralRewardReturnProtectionDays },
+        idempotencyKey: input.idempotencyKey,
+      };
+      state.qualificationRounds[roundId] = qualificationRound;
+      coverExistingRewardsForQualificationRound(state, qualificationRound, now);
+    }
+    remember(state, `valid-consumption:${sourceReference}`, eventId, now);
+    return { event: consumption, qualificationRound, created: true };
+  }, { now: finalizedAt, filePath: input.stateFilePath });
+}
+
 function qualificationExpiresAt(now: Date, days: number) {
   const lastDate = addTaipeiCalendarDays(getDateOnlyInTimeZone(now), days - 1);
   return `${lastDate}T23:59:59.999+08:00`;
@@ -888,6 +1182,136 @@ function qualificationExpiresAt(now: Date, days: number) {
 
 function hasQualificationSnapshot(reward: ReferralReward) {
   return typeof reward.qualificationWindowDays === "number" && typeof reward.qualificationStartedAt === "string" && typeof reward.qualificationExpiresAt === "string" && typeof reward.qualificationStatus === "string";
+}
+
+export function referralRewardQualificationAuthority(reward: Pick<ReferralReward, "qualificationAuthority">): ReferralRewardQualificationAuthority {
+  return reward.qualificationAuthority ?? "legacy_order";
+}
+
+function qualificationCoverageInterval(round: QualificationRound) {
+  const qualificationTime = Date.parse(round.qualifiedAt);
+  const lookbackDays = round.rewardCoverageRuleSnapshot.lookbackDays;
+  const forwardDays = round.rewardCoverageRuleSnapshot.forwardDays;
+  return {
+    startsAtMs: qualificationTime - lookbackDays * QUALIFICATION_DAY_MS,
+    endsAtMs: qualificationTime + forwardDays * QUALIFICATION_DAY_MS,
+    startsAt: new Date(qualificationTime - lookbackDays * QUALIFICATION_DAY_MS).toISOString(),
+    endsAt: new Date(qualificationTime + forwardDays * QUALIFICATION_DAY_MS).toISOString(),
+    lookbackDays,
+    forwardDays,
+  };
+}
+
+function roundCoversReward(round: QualificationRound, reward: ReferralReward) {
+  if (round.memberId !== reward.beneficiaryMemberId || referralRewardQualificationAuthority(reward) !== "qualification_coverage") return false;
+  const generatedAt = Date.parse(reward.createdAt);
+  const interval = qualificationCoverageInterval(round);
+  return Number.isFinite(generatedAt) && generatedAt >= interval.startsAtMs && generatedAt <= interval.endsAtMs;
+}
+
+function coverRewardFromEarliestQualificationRound(state: MembershipCommerceState, reward: ReferralReward, now: Date) {
+  const existing = Object.values(state.referralRewardCoverages).find((coverage) => coverage.referralRewardId === reward.rewardId);
+  if (existing || referralRewardQualificationAuthority(reward) !== "qualification_coverage") return existing ?? null;
+  const round = Object.values(state.qualificationRounds)
+    .filter((candidate) => roundCoversReward(candidate, reward))
+    .sort((left, right) => Date.parse(left.qualifiedAt) - Date.parse(right.qualifiedAt) || left.roundId.localeCompare(right.roundId))[0];
+  if (!round) return null;
+  const interval = qualificationCoverageInterval(round);
+  const coverageId = deterministicId("coverage", reward.rewardId);
+  const sourceReference = `qualification-coverage:${round.roundId}:${reward.rewardId}`;
+  const coverage: ReferralRewardCoverage = {
+    coverageId,
+    memberId: reward.beneficiaryMemberId,
+    qualificationRoundId: round.roundId,
+    referralRewardId: reward.rewardId,
+    qualificationAt: round.qualifiedAt,
+    rewardGeneratedAt: reward.createdAt,
+    coverageStartsAt: interval.startsAt,
+    coverageEndsAt: interval.endsAt,
+    lookbackDays: interval.lookbackDays,
+    forwardDays: interval.forwardDays,
+    rulesVersion: round.rulesVersion,
+    inclusionReason: "reward-generated-within-snapshotted-coverage-window",
+    createdAt: nowIso(now),
+    sourceReference,
+    idempotencyKey: sourceReference,
+  };
+  state.referralRewardCoverages[coverageId] = coverage;
+  return coverage;
+}
+
+function coverExistingRewardsForQualificationRound(state: MembershipCommerceState, round: QualificationRound, now: Date) {
+  const coverages: ReferralRewardCoverage[] = [];
+  for (const reward of Object.values(state.referralRewards).filter((candidate) => roundCoversReward(round, candidate))) {
+    const coverage = coverRewardFromEarliestQualificationRound(state, reward, now);
+    if (coverage) coverages.push(coverage);
+  }
+  return coverages;
+}
+
+/** Explicit idempotent reconciliation for retry/restart recovery; it does not create rounds or rewards. */
+export async function reconcileReferralRewardCoverage(input: { qualificationRoundId?: string; referralRewardId?: string; now?: Date; stateFilePath?: string }) {
+  if (!input.qualificationRoundId && !input.referralRewardId) throw new MembershipCommerceError("必須指定推薦資格輪次或推薦獎勵");
+  return transaction((state, now) => {
+    const results: ReferralRewardCoverage[] = [];
+    if (input.qualificationRoundId) {
+      const round = state.qualificationRounds[input.qualificationRoundId];
+      if (!round) throw new MembershipCommerceError("找不到推薦資格輪次");
+      results.push(...coverExistingRewardsForQualificationRound(state, round, now));
+    }
+    if (input.referralRewardId) {
+      const reward = state.referralRewards[input.referralRewardId];
+      if (!reward) throw new MembershipCommerceError("找不到推薦獎勵");
+      const coverage = coverRewardFromEarliestQualificationRound(state, reward, now);
+      if (coverage && !results.some((item) => item.coverageId === coverage.coverageId)) results.push(coverage);
+    }
+    return results;
+  }, { now: input.now, filePath: input.stateFilePath });
+}
+
+function historicalRoundSafetySnapshot(round: QualificationRound, versions: RulesVersion[]) {
+  if (round.rewardSafetyRuleSnapshot) return round.rewardSafetyRuleSnapshot;
+  const historical = versions.find((version) => version.rulesVersion === round.rulesVersion);
+  if (!historical) throw new MembershipCommerceError(`推薦資格輪次 ${round.roundId} 缺少可驗證的歷史安全等待規則`);
+  return { baseWaitingDays: historical.rules.referral.referralRewardBaseWaitingDays, returnProtectionDays: historical.rules.referral.referralRewardReturnProtectionDays };
+}
+
+/** Appends due maturation facts only; payout, caps, credit, reward state, and notifications are untouched. */
+export async function processReferralRewardMaturations(input: { now?: Date; stateFilePath?: string; rulesFilePath?: string } = {}) {
+  const rulesStore = await readMembershipRulesStore(input.rulesFilePath);
+  return transaction((state, now) => {
+    const matured: ReferralRewardMaturation[] = [];
+    for (const coverage of Object.values(state.referralRewardCoverages).sort((left, right) => left.coverageId.localeCompare(right.coverageId))) {
+      if (Object.values(state.referralRewardMaturations).some((item) => item.referralRewardId === coverage.referralRewardId || item.coverageId === coverage.coverageId)) continue;
+      const reward = state.referralRewards[coverage.referralRewardId];
+      const round = state.qualificationRounds[coverage.qualificationRoundId];
+      if (!reward || !round || referralRewardQualificationAuthority(reward) !== "qualification_coverage") continue;
+      const safety = historicalRoundSafetySnapshot(round, rulesStore.versions);
+      const maturesAtMs = Date.parse(round.qualifiedAt) + (safety.baseWaitingDays + safety.returnProtectionDays) * QUALIFICATION_DAY_MS;
+      if (now.getTime() < maturesAtMs) continue;
+      const maturationId = deterministicId("maturation", coverage.coverageId);
+      const sourceReference = `reward-maturation:${coverage.coverageId}`;
+      const record: ReferralRewardMaturation = {
+        maturationId,
+        memberId: coverage.memberId,
+        referralRewardId: coverage.referralRewardId,
+        coverageId: coverage.coverageId,
+        qualificationRoundId: coverage.qualificationRoundId,
+        qualificationAt: round.qualifiedAt,
+        baseWaitingDays: safety.baseWaitingDays,
+        returnProtectionDays: safety.returnProtectionDays,
+        maturesAt: new Date(maturesAtMs).toISOString(),
+        maturedAt: nowIso(now),
+        rulesVersion: round.rulesVersion,
+        createdAt: nowIso(now),
+        sourceReference,
+        idempotencyKey: sourceReference,
+      };
+      state.referralRewardMaturations[maturationId] = record;
+      matured.push(record);
+    }
+    return matured;
+  }, { now: input.now, filePath: input.stateFilePath });
 }
 
 function orderWithinQualificationWindow(reward: ReferralReward, orderCreatedAt: string) {
@@ -912,7 +1336,7 @@ export async function registerReferralQualificationOrder(input: { memberId: stri
     if (remembered(state, key)) return Object.values(state.referralRewards).filter((reward) => reward.qualificationAttempts?.some((attempt) => attempt.orderNumber === input.orderId));
     const changed: ReferralReward[] = [];
     for (const reward of Object.values(state.referralRewards)) {
-      if (reward.beneficiaryMemberId !== input.memberId || reward.status !== "scheduled" || !hasQualificationSnapshot(reward) || reward.qualificationStatus === "qualified" || reward.qualificationStatus === "expired" || !orderWithinQualificationWindow(reward, input.orderCreatedAt)) continue;
+      if (referralRewardQualificationAuthority(reward) !== "legacy_order" || reward.beneficiaryMemberId !== input.memberId || reward.status !== "scheduled" || !hasQualificationSnapshot(reward) || reward.qualificationStatus === "qualified" || reward.qualificationStatus === "expired" || !orderWithinQualificationWindow(reward, input.orderCreatedAt)) continue;
       reward.qualificationAttempts ??= [];
       if (reward.qualificationAttempts.some((attempt) => attempt.orderNumber === input.orderId)) continue;
       reward.qualificationAttempts.push({ orderNumber: input.orderId, orderCreatedAt: input.orderCreatedAt, orderType: input.orderType, status: "pending", finalState: "pending", finalizedAt: null });
@@ -949,7 +1373,7 @@ export async function handleReferralQualificationOrderOutcome(input: { memberId:
     if (remembered(state, key)) return [];
     const changed: ReferralReward[] = [];
     for (const reward of Object.values(state.referralRewards)) {
-      if (reward.beneficiaryMemberId !== input.memberId || !hasQualificationSnapshot(reward)) continue;
+      if (referralRewardQualificationAuthority(reward) !== "legacy_order" || reward.beneficiaryMemberId !== input.memberId || !hasQualificationSnapshot(reward)) continue;
       const attempt = reward.qualificationAttempts?.find((item) => item.orderNumber === input.orderId);
       if (!attempt || (attempt.finalState === input.outcome && attempt.finalizedAt)) continue;
       const wasQualifiedByThisOrder = reward.qualificationStatus === "qualified" && reward.qualificationOrderNumber === input.orderId;
@@ -1038,8 +1462,9 @@ export async function createReferralRewardsFromFulfillment(input: { sourceMember
       if (calculatedCreditAmount < 1) continue;
       allocated += calculatedCreditAmount;
       const rewardId = deterministicId("reward", `${input.orderId}:${input.rewardType}:${level}:${beneficiaryMemberId}`);
-      const reward: ReferralReward = { rewardId, sourceOrderNumber: input.orderId, sourceMemberId: input.sourceMemberId, beneficiaryMemberId, referralLevel: level, rewardType: input.rewardType, calculationMode: rules.referralRewardCalculationMode, paidAmountBasis, basePV, discountRatio, effectivePV, rewardRate, rewardPV, pvRewardMoneyValue: rules.pvRewardMoneyValue, calculatedCreditAmount, projectedCreditAmount: calculatedCreditAmount, ruleVersion: version.rulesVersion, ancestrySnapshot: [...ancestry], organizationCapPercentSnapshot: rules.referralTotalRewardCap, organizationCapAmountSnapshot: totalCap, monthlyCapAmountSnapshot: rules.referralMonthlyCreditCap, monthlyCapPeriodSnapshot, monthlyCapUsageAtRelease: null, monthlyCapLimitedAmount: null, reversalPolicySnapshot: rules.reversalPolicy, baseWaitingDaysSnapshot, returnProtectionDaysSnapshot, totalWaitingDaysSnapshot, releasePolicyVersion: "taipei-business-date-v1", successfulPickupBusinessDate: null, releaseEligibleBusinessDate: null, sourceOrderFinalState: "completed", cancellationReason: null, qualificationWindowDays, qualificationStartedAt, qualificationExpiresAt: qualificationExpiry, qualificationStatus: "awaiting_order", qualificationOrderNumber: null, qualificationOrderCreatedAt: null, qualificationOrderFinalState: null, qualificationQualifiedAt: null, qualificationAttempts: [], createdAt: nowIso(now), eligibleAt: nowIso(now), scheduledReleaseAt: "", releasedAt: null, status: "scheduled", reversalCreditEntryId: null, rewardCreditEntryId: null, idempotencyKey: `${input.idempotencyKey}:${level}` };
+      const reward: ReferralReward = { rewardId, sourceOrderNumber: input.orderId, sourceMemberId: input.sourceMemberId, beneficiaryMemberId, referralLevel: level, rewardType: input.rewardType, calculationMode: rules.referralRewardCalculationMode, paidAmountBasis, basePV, discountRatio, effectivePV, rewardRate, rewardPV, pvRewardMoneyValue: rules.pvRewardMoneyValue, calculatedCreditAmount, projectedCreditAmount: calculatedCreditAmount, ruleVersion: version.rulesVersion, ancestrySnapshot: [...ancestry], organizationCapPercentSnapshot: rules.referralTotalRewardCap, organizationCapAmountSnapshot: totalCap, monthlyCapAmountSnapshot: rules.referralMonthlyCreditCap, monthlyCapPeriodSnapshot, monthlyCapUsageAtRelease: null, monthlyCapLimitedAmount: null, reversalPolicySnapshot: rules.reversalPolicy, baseWaitingDaysSnapshot, returnProtectionDaysSnapshot, totalWaitingDaysSnapshot, releasePolicyVersion: "taipei-business-date-v1", successfulPickupBusinessDate: null, releaseEligibleBusinessDate: null, sourceOrderFinalState: "completed", cancellationReason: null, qualificationWindowDays, qualificationStartedAt, qualificationExpiresAt: qualificationExpiry, qualificationStatus: "awaiting_order", qualificationOrderNumber: null, qualificationOrderCreatedAt: null, qualificationOrderFinalState: null, qualificationQualifiedAt: null, qualificationAttempts: [], qualificationAuthority: "qualification_coverage", createdAt: nowIso(now), eligibleAt: nowIso(now), scheduledReleaseAt: "", releasedAt: null, status: "scheduled", reversalCreditEntryId: null, rewardCreditEntryId: null, idempotencyKey: `${input.idempotencyKey}:${level}` };
       state.referralRewards[rewardId] = reward; created.push(reward);
+      coverRewardFromEarliestQualificationRound(state, reward, now);
       const source = event(state, "referral_reward_scheduled", { amount: calculatedCreditAmount, level }, now, { memberId: beneficiaryMemberId, orderId: input.orderId });
       notify(state, version.rules, "referral_conversion", source.eventId, now, { memberId: beneficiaryMemberId, safeData: { rewardAmount: calculatedCreditAmount } });
       if (allocated >= totalCap) break;
@@ -1049,19 +1474,44 @@ export async function createReferralRewardsFromFulfillment(input: { sourceMember
   }, { now: input.now, filePath: input.stateFilePath });
 }
 
+/**
+ * New-model rewards may only be paid from the immutable Coverage → Maturation
+ * chain.  The legacy qualification-order fields intentionally do not
+ * participate in this path.
+ */
+function validQualificationCoverageMaturation(state: MembershipCommerceState, reward: ReferralReward) {
+  if (referralRewardQualificationAuthority(reward) !== "qualification_coverage") return null;
+  const coverage = Object.values(state.referralRewardCoverages).find((item) => item.referralRewardId === reward.rewardId);
+  if (!coverage || coverage.memberId !== reward.beneficiaryMemberId) return null;
+  const round = state.qualificationRounds[coverage.qualificationRoundId];
+  if (!round || round.finalQualified !== true || round.memberId !== reward.beneficiaryMemberId) return null;
+  if (coverage.qualificationRoundId !== round.roundId || coverage.qualificationAt !== round.qualifiedAt || coverage.rewardGeneratedAt !== reward.createdAt || coverage.rulesVersion !== round.rulesVersion) return null;
+  const interval = qualificationCoverageInterval(round);
+  if (coverage.coverageStartsAt !== interval.startsAt || coverage.coverageEndsAt !== interval.endsAt || coverage.lookbackDays !== interval.lookbackDays || coverage.forwardDays !== interval.forwardDays) return null;
+  const rewardGeneratedAt = Date.parse(reward.createdAt);
+  if (!Number.isFinite(rewardGeneratedAt) || rewardGeneratedAt < Date.parse(coverage.coverageStartsAt) || rewardGeneratedAt > Date.parse(coverage.coverageEndsAt)) return null;
+  const maturation = Object.values(state.referralRewardMaturations).find((item) => item.referralRewardId === reward.rewardId);
+  if (!maturation || maturation.memberId !== reward.beneficiaryMemberId || maturation.coverageId !== coverage.coverageId || maturation.qualificationRoundId !== round.roundId || maturation.qualificationAt !== round.qualifiedAt || maturation.rulesVersion !== round.rulesVersion) return null;
+  const safety = round.rewardSafetyRuleSnapshot;
+  if (!safety || maturation.baseWaitingDays !== safety.baseWaitingDays || maturation.returnProtectionDays !== safety.returnProtectionDays) return null;
+  const expectedMaturesAt = Date.parse(round.qualifiedAt) + (safety.baseWaitingDays + safety.returnProtectionDays) * QUALIFICATION_DAY_MS;
+  if (!Number.isFinite(expectedMaturesAt) || Date.parse(maturation.maturesAt) !== expectedMaturesAt || Date.parse(maturation.maturedAt) < expectedMaturesAt) return null;
+  return { coverage, round, maturation };
+}
+
 export async function runReferralRewardReleaseScheduler(input: { now?: Date; stateFilePath?: string; rulesFilePath?: string } = {}) {
   const version = await getActiveMembershipRules(input.now, input.rulesFilePath);
   return transaction((state, now) => {
     const results: Array<{ rewardId: string; status: "released" | "failed" | "expired" | "cap_blocked"; error?: string }> = [];
     const today = getDateOnlyInTimeZone(now);
-    for (const reward of Object.values(state.referralRewards).filter((item) => item.status === "scheduled" && item.qualificationStatus === "awaiting_order" && typeof item.qualificationExpiresAt === "string" && Date.parse(item.qualificationExpiresAt) < now.getTime())) {
+    for (const reward of Object.values(state.referralRewards).filter((item) => referralRewardQualificationAuthority(item) === "legacy_order" && item.status === "scheduled" && item.qualificationStatus === "awaiting_order" && typeof item.qualificationExpiresAt === "string" && Date.parse(item.qualificationExpiresAt) < now.getTime())) {
       reward.qualificationStatus = "expired";
       const source = event(state, "referral_qualification_expired", { rewardId: reward.rewardId, amount: reward.calculatedCreditAmount }, now, { memberId: reward.beneficiaryMemberId, orderId: reward.sourceOrderNumber });
       notify(state, version.rules, "referral_conversion", source.eventId, now, { memberId: reward.beneficiaryMemberId, safeData: { rewardAmount: reward.calculatedCreditAmount, qualificationStatus: "expired" } });
       results.push({ rewardId: reward.rewardId, status: "expired" });
     }
     const dueRewards = Object.values(state.referralRewards).filter((item) => {
-      if (item.status !== "scheduled" || (hasQualificationSnapshot(item) && item.qualificationStatus !== "qualified")) return false;
+      if (referralRewardQualificationAuthority(item) !== "legacy_order" || item.status !== "scheduled" || (hasQualificationSnapshot(item) && item.qualificationStatus !== "qualified")) return false;
       const eligibleDate = item.releaseEligibleBusinessDate ?? item.scheduledReleaseAt?.slice(0, 10);
       return Boolean(eligibleDate && isReferralReleaseBusinessDateDue(today, eligibleDate));
     }).sort((a, b) => (a.releaseEligibleBusinessDate ?? a.scheduledReleaseAt).localeCompare(b.releaseEligibleBusinessDate ?? b.scheduledReleaseAt) || a.createdAt.localeCompare(b.createdAt) || a.rewardId.localeCompare(b.rewardId));
@@ -1088,6 +1538,39 @@ export async function runReferralRewardReleaseScheduler(input: { now?: Date; sta
         reward.status = "released"; reward.releasedAt = nowIso(now); reward.rewardCreditEntryId = credit.creditEntryId;
         const source = event(state, "referral_reward_released", { amount: credit.amount, level: reward.referralLevel }, now, { memberId: reward.beneficiaryMemberId, orderId: reward.sourceOrderNumber });
         notify(state, version.rules, "credit_issued", source.eventId, now, { memberId: reward.beneficiaryMemberId, safeData: { amount: credit.amount } });
+        results.push({ rewardId: reward.rewardId, status: "released" });
+      } catch (error) { results.push({ rewardId: reward.rewardId, status: "failed", error: error instanceof Error ? error.message : "發放失敗" }); }
+    }
+    const maturedCoverageRewards = Object.values(state.referralRewards).filter((item) => {
+      if (item.status !== "scheduled") return false;
+      const evidence = validQualificationCoverageMaturation(state, item);
+      return Boolean(evidence && Date.parse(evidence.maturation.maturedAt) <= now.getTime());
+    }).sort((left, right) => left.createdAt.localeCompare(right.createdAt) || left.rewardId.localeCompare(right.rewardId));
+    for (const reward of maturedCoverageRewards) {
+      try {
+        // Re-read the complete evidence chain inside this transaction before every monetary mutation.
+        const evidence = validQualificationCoverageMaturation(state, reward);
+        if (!evidence || Date.parse(evidence.maturation.maturedAt) > now.getTime()) throw new MembershipCommerceError("推薦獎勵缺少有效的資格成熟證據");
+        if (reward.sourceOrderFinalState && reward.sourceOrderFinalState !== "completed") throw new MembershipCommerceError("來源交易最新狀態不允許發放");
+        const cap = reward.monthlyCapAmountSnapshot ?? version.rules.referral.referralMonthlyCreditCap;
+        const capPeriod = reward.monthlyCapPeriodSnapshot ?? reward.createdAt.slice(0, 7);
+        const monthUsed = Object.values(state.referralRewards).filter((item) => item.rewardId !== reward.rewardId && item.beneficiaryMemberId === reward.beneficiaryMemberId && item.status === "released" && (item.monthlyCapPeriodSnapshot ?? item.createdAt.slice(0, 7)) === capPeriod).reduce((sum, item) => sum + item.calculatedCreditAmount, 0);
+        const projectedAmount = reward.projectedCreditAmount ?? reward.calculatedCreditAmount;
+        const releaseAmount = cap === 0 ? projectedAmount : Math.min(projectedAmount, Math.max(0, cap - monthUsed));
+        reward.monthlyCapUsageAtRelease = monthUsed;
+        reward.monthlyCapLimitedAmount = projectedAmount - releaseAmount;
+        if (releaseAmount < 1) {
+          reward.status = "cancelled";
+          reward.cancellationReason = "monthly_cap_exhausted_at_release";
+          results.push({ rewardId: reward.rewardId, status: "cap_blocked", error: "本期月上限已用完" });
+          continue;
+        }
+        reward.calculatedCreditAmount = releaseAmount;
+        const credit = issueCreditInState(state, version.rules, { memberId: reward.beneficiaryMemberId, sourceType: "referral", sourceReference: `referral_reward:${reward.rewardId}`, amount: releaseAmount, metadata: { rewardId: reward.rewardId, orderId: reward.sourceOrderNumber, referralLevel: reward.referralLevel, monthlyCapPeriod: capPeriod, monthlyCapUsageBeforeRelease: monthUsed, monthlyCapLimitedAmount: reward.monthlyCapLimitedAmount, qualificationAuthority: "qualification_coverage", qualificationRoundId: evidence.round.roundId, coverageId: evidence.coverage.coverageId, maturationId: evidence.maturation.maturationId } }, now);
+        reward.status = "released"; reward.releasedAt = nowIso(now); reward.rewardCreditEntryId = credit.creditEntryId;
+        const source = event(state, "referral_reward_released", { amount: credit.amount, level: reward.referralLevel }, now, { memberId: reward.beneficiaryMemberId, orderId: reward.sourceOrderNumber });
+        // Durable outbox evidence is committed with the already-final payout; delivery is performed separately after commit.
+        notify(state, version.rules, "credit_issued", source.eventId, now, { memberId: reward.beneficiaryMemberId, safeData: { amount: credit.amount, referralPayout: true } });
         results.push({ rewardId: reward.rewardId, status: "released" });
       } catch (error) { results.push({ rewardId: reward.rewardId, status: "failed", error: error instanceof Error ? error.message : "發放失敗" }); }
     }

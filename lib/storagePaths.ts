@@ -1,14 +1,112 @@
 import path from "path";
 
+export class StorageConfigurationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "StorageConfigurationError";
+  }
+}
+
+type StorageRootSource = "KD_DATA_DIR" | "RAILWAY_VOLUME_MOUNT_PATH" | "local";
+
+export type StorageRootContract = {
+  root: string;
+  source: StorageRootSource;
+  railwayMountPath: string;
+};
+
+function configuredValue(value: string | undefined) {
+  return value?.trim() || "";
+}
+
+function pathStyle(value: string) {
+  if (/^[A-Za-z]:[\\/]/u.test(value) || value.startsWith("\\\\")) return path.win32;
+  return path.posix;
+}
+
+function normalizeExplicitRoot(value: string, variableName: string) {
+  if (value.includes("\0")) {
+    throw new StorageConfigurationError(`${variableName} contains an invalid null character`);
+  }
+
+  const style = pathStyle(value);
+  if (!style.isAbsolute(value)) {
+    throw new StorageConfigurationError(`${variableName} must be an absolute filesystem path`);
+  }
+
+  const normalized = style.normalize(value);
+  if (normalized === style.parse(normalized).root) {
+    throw new StorageConfigurationError(`${variableName} must not be a filesystem root`);
+  }
+  return normalized;
+}
+
+function rootsEqual(left: string, right: string) {
+  const windows = pathStyle(left) === path.win32 || pathStyle(right) === path.win32;
+  return windows ? left.toLowerCase() === right.toLowerCase() : left === right;
+}
+
+function rootIsWithinMount(root: string, mount: string) {
+  const rootStyle = pathStyle(root);
+  const mountStyle = pathStyle(mount);
+  if (rootStyle !== mountStyle) return false;
+  if (rootsEqual(root, mount)) return true;
+  const relative = rootStyle.relative(mount, root);
+  return Boolean(relative) && relative !== ".." && !relative.startsWith(`..${rootStyle.sep}`) && !rootStyle.isAbsolute(relative);
+}
+
+/** Resolve and validate the single application storage-root contract. */
+export function getStorageRootContract(): StorageRootContract {
+  const configuredRoot = configuredValue(process.env.KD_DATA_DIR);
+  const configuredRailwayMount = configuredValue(process.env.RAILWAY_VOLUME_MOUNT_PATH);
+  const railwayMountPath = configuredRailwayMount
+    ? normalizeExplicitRoot(configuredRailwayMount, "RAILWAY_VOLUME_MOUNT_PATH")
+    : "";
+
+  if (configuredRoot) {
+    const root = normalizeExplicitRoot(configuredRoot, "KD_DATA_DIR");
+    if (railwayMountPath && !rootIsWithinMount(root, railwayMountPath)) {
+      throw new StorageConfigurationError(
+        "KD_DATA_DIR must be the Railway volume mount path or a directory beneath it",
+      );
+    }
+    return { root, source: "KD_DATA_DIR", railwayMountPath };
+  }
+
+  if (railwayMountPath) {
+    return {
+      root: railwayMountPath,
+      source: "RAILWAY_VOLUME_MOUNT_PATH",
+      railwayMountPath,
+    };
+  }
+
+  return { root: "", source: "local", railwayMountPath: "" };
+}
+
 /**
- * 將 KD_DATA_DIR 整理成可使用的絕對路徑。
- *
- * 如果沒有設定 KD_DATA_DIR，
- * 就回傳空字串，讓各個函式使用本機原始路徑。
+ * Fail server startup when Railway is clearly running in production but no
+ * mounted persistent root is visible. This check is intentionally performed
+ * at runtime, not during the Railway build where volumes are unavailable.
  */
-function cleanEnvPath(value: string | undefined) {
-  const trimmed = value?.trim();
-  return trimmed ? path.resolve(trimmed) : "";
+export function assertProductionStorageRootConfigured() {
+  const contract = getStorageRootContract();
+  const railwayRuntime = Boolean(
+    process.env.RAILWAY_PROJECT_ID ||
+    process.env.RAILWAY_ENVIRONMENT_ID ||
+    process.env.RAILWAY_SERVICE_ID ||
+    process.env.RAILWAY_VOLUME_NAME,
+  );
+  if (process.env.NODE_ENV === "production" && railwayRuntime && !contract.root) {
+    throw new StorageConfigurationError(
+      "Railway production requires KD_DATA_DIR or RAILWAY_VOLUME_MOUNT_PATH; refusing repository-local runtime storage",
+    );
+  }
+  return contract;
+}
+
+function joinPersistentRoot(root: string, ...segments: string[]) {
+  return pathStyle(root).join(root, ...segments);
 }
 
 /**
@@ -21,7 +119,7 @@ function cleanEnvPath(value: string | undefined) {
  * 回傳空字串。
  */
 export function getPersistentDataRoot() {
-  return cleanEnvPath(process.env.KD_DATA_DIR);
+  return getStorageRootContract().root;
 }
 
 /**
@@ -34,7 +132,7 @@ export function getOrdersDir() {
   const root = getPersistentDataRoot();
 
   return root
-    ? path.join(root, "orders")
+    ? joinPersistentRoot(root, "orders")
     : path.join(process.cwd(), "data", "orders");
 }
 
@@ -48,7 +146,7 @@ export function getMembersDir() {
   const root = getPersistentDataRoot();
 
   return root
-    ? path.join(root, "members")
+    ? joinPersistentRoot(root, "members")
     : path.join(process.cwd(), "data", "members");
 }
 
@@ -62,7 +160,7 @@ export function getStoreDir() {
   const root = getPersistentDataRoot();
 
   return root
-    ? path.join(root, "store")
+    ? joinPersistentRoot(root, "store")
     : path.join(process.cwd(), "public", "data");
 }
 
@@ -116,7 +214,7 @@ export function getBackupsDir() {
   const root = getPersistentDataRoot();
 
   return root
-    ? path.join(root, "backups")
+    ? joinPersistentRoot(root, "backups")
     : path.join(process.cwd(), "data", "backups");
 }
 
@@ -140,7 +238,7 @@ export function getUploadsRoot() {
   const root = getPersistentDataRoot();
 
   return root
-    ? path.join(root, "uploads")
+    ? joinPersistentRoot(root, "uploads")
     : path.join(process.cwd(), "public");
 }
 
@@ -159,7 +257,7 @@ export function getAssetsUploadDir(
   const root = getPersistentDataRoot();
 
   return root
-    ? path.join(
+    ? joinPersistentRoot(
         root,
         "uploads",
         "assets",
@@ -189,7 +287,7 @@ export function getArtworkUploadDir(
   const root = getPersistentDataRoot();
 
   return root
-    ? path.join(
+    ? joinPersistentRoot(
         root,
         "uploads",
         "artworks",
@@ -217,7 +315,7 @@ export function getCampaignUploadDir() {
   const root = getPersistentDataRoot();
 
   return root
-    ? path.join(
+    ? joinPersistentRoot(
         root,
         "uploads",
         "campaigns",
@@ -243,7 +341,7 @@ export function getHome003UploadDir() {
   const root = getPersistentDataRoot();
 
   return root
-    ? path.join(
+    ? joinPersistentRoot(
         root,
         "uploads",
         "home003",
@@ -265,7 +363,7 @@ export function getMemberIdentityDir() {
   const root = getPersistentDataRoot();
 
   return root
-    ? path.join(root, "member-identity")
+    ? joinPersistentRoot(root, "member-identity")
     : path.join(process.cwd(), "data", "member-identity");
 }
 
@@ -281,7 +379,7 @@ export function getMembershipCommerceDir() {
   const root = getPersistentDataRoot();
 
   return root
-    ? path.join(root, "membership-commerce")
+    ? joinPersistentRoot(root, "membership-commerce")
     : path.join(process.cwd(), "data", "membership-commerce");
 }
 
@@ -297,7 +395,7 @@ export function getMembershipCommerceStateFile() {
 export function getMembershipTestLabDir() {
   const root = getPersistentDataRoot();
   return root
-    ? path.join(root, "membership-test-lab")
+    ? joinPersistentRoot(root, "membership-test-lab")
     : path.join(process.cwd(), "data", "membership-test-lab");
 }
 
@@ -317,7 +415,7 @@ export function getMembershipTestLabRulesFile() {
 export function getFulfillmentDir() {
   const root = getPersistentDataRoot();
   return root
-    ? path.join(root, "fulfillment")
+    ? joinPersistentRoot(root, "fulfillment")
     : path.join(process.cwd(), "data", "fulfillment");
 }
 
@@ -338,6 +436,6 @@ export function getOrderNotificationUploadsDir() {
   const root = getPersistentDataRoot();
 
   return root
-    ? path.join(root, "uploads", "order-notifications")
+    ? joinPersistentRoot(root, "uploads", "order-notifications")
     : path.join(process.cwd(), "public", "uploads", "order-notifications");
 }

@@ -26,7 +26,7 @@ function check(letter: string, name: string, condition: unknown) {
 const orderDir = storage.getOrdersDir();
 await mkdir(orderDir, { recursive: true });
 async function createOrder(orderNumber: string, orderMode: "711_cod"|"studio_pickup", memberId?: string) {
-  const order = { orderNumber, createdAt:"2026-08-01T01:00:00.000Z", status:orderMode==="711_cod"?"waiting_merchant_create_cod_shipment":"waiting_studio_pickup_confirmation", orderMode, customer:{name:"測試會員"}, member:memberId?{memberId}:null, store:orderMode==="711_cod"?{id:"TEST01",name:"測試門市",address:"測試地址"}:undefined, studioPickup:orderMode==="studio_pickup"?{preferredDate:"2026-08-03",preferredTime:"14:00"}:undefined, items:[{name:"測試咖啡",quantity:1}], subtotal:1000, total:1060, inventoryTransaction:{state:"inventory_committed"} };
+  const order = { orderNumber, createdAt:"2026-08-01T01:00:00.000Z", status:orderMode==="711_cod"?"waiting_merchant_create_cod_shipment":"waiting_studio_pickup_confirmation", orderMode, customer:{name:"測試會員"}, member:memberId?{memberId}:null, store:orderMode==="711_cod"?{id:"TEST01",name:"測試門市",address:"測試地址"}:undefined, studioPickup:orderMode==="studio_pickup"?{preferredDate:"2026-08-03",preferredTime:"14:00"}:undefined, items:[{name:"測試咖啡",quantity:1}], subtotal:1000, shipping:60, total:1060, inventoryTransaction:{state:"inventory_committed"} };
   await writeFile(path.join(orderDir,`${orderNumber}.json`),`${JSON.stringify(order,null,2)}\n`,"utf8");
   return order;
 }
@@ -78,6 +78,7 @@ try {
   check("J","完成取貨重送只執行一次結果",completions.length===10&&await commerce.getGiftProgress(subscription.subscriptionId)===1);
   check("T","成功取貨啟動等待中的定期購",commerceState.subscriptions[subscription.subscriptionId].status==="active");
   check("U","完成取貨進入贈品與延遲推薦獎勵邏輯",Object.values(commerceState.referralRewards).filter((entry)=>entry.sourceOrderNumber===firstOrder&&entry.status==="scheduled").length===1&&Object.values(commerceState.creditEntries).filter((entry)=>entry.sourceType==="referral").length===0);
+  check("U1","可信完成取貨只建立一筆有效消費事件",Object.values(commerceState.validConsumptionEvents).filter((entry)=>entry.sourceOrderId===firstOrder).length===1);
 
   const pickupOrder="KD20260828-1002";
   await createOrder(pickupOrder,"studio_pickup");

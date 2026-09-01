@@ -1,0 +1,75 @@
+{
+  "schemaVersion": 1,
+  "baselineCommit": "0b0e23266da21d9e267156045d969cf60d531e9c",
+  "executionStatus": "PLAN_ONLY_DO_NOT_EXECUTE",
+  "constraints": {
+    "storageRoot": "/data",
+    "singleReplica": true,
+    "existingPersistentFilesAreAuthoritative": true
+  },
+  "bootstrap": {
+    "store": [
+      {
+        "source": "bootstrap/store/website-data.json",
+        "target": "/data/store/website-data.json",
+        "sha256": "e6d81343d6aa034955beea6a659be39995e71905bced60d963ea1a58d76c37e2",
+        "ownerApproval": "OPENING_INVENTORY_REQUIRED"
+      },
+      {
+        "source": "bootstrap/store/homepage.json",
+        "target": "/data/store/homepage.json",
+        "sha256": "83e38a87ad8af39afa7cd54ffae126aeccda90777bdc87fe48fd15b1dcf25c5f"
+      },
+      {
+        "source": "bootstrap/store/assets.json",
+        "target": "/data/store/assets.json",
+        "sha256": "84dfc2d80508fe234d32f306bf7e8ac533451640c0edeb3e6dd1de676922e09b"
+      },
+      {
+        "source": "bootstrap/store/monthly-menus.json",
+        "target": "/data/store/monthly-menus.json",
+        "sha256": "4c023596fd7d6944eabd27c0bb6059232ac888635b2f2150d2d6f92475db96c1"
+      },
+      {
+        "source": "bootstrap/store/pages.json",
+        "target": "/data/store/pages.json",
+        "sha256": "8764b09154688a5cd3da7a340898d5b73f26aec7d489b5d783362f0fa621ca62"
+      }
+    ],
+    "businessRules": {
+      "source": null,
+      "target": "/data/membership-commerce/business-rules.json",
+      "ownerApproval": "BUSINESS_RULES_REQUIRED",
+      "bootstrapEnabled": false
+    },
+    "media": {
+      "sourceRoot": "public",
+      "derivedFrom": [
+        "bootstrap/store/website-data.json",
+        "bootstrap/store/homepage.json",
+        "bootstrap/store/assets.json",
+        "bootstrap/store/monthly-menus.json",
+        "bootstrap/store/pages.json"
+      ],
+      "copyMode": "DERIVED_PERSISTENT_LOCAL_REFERENCES_ONLY"
+    }
+  },
+  "emptyRuntime": [
+    { "domain": "orders", "target": "/data/orders", "initialization": "EMPTY_DIRECTORY" },
+    { "domain": "members", "target": "/data/members", "initialization": "EMPTY_DIRECTORY_UNLESS_SEPARATELY_APPROVED" },
+    { "domain": "member-identity", "target": "/data/member-identity", "initialization": "EMPTY_DIRECTORY" },
+    { "domain": "membership-commerce", "target": "/data/membership-commerce/commerce-state.json", "initialization": "CODE_DEFAULT_ON_FIRST_TRANSACTION" },
+    { "domain": "fulfillment-state", "target": "/data/fulfillment/state.json", "initialization": "CODE_DEFAULT_ON_FIRST_MUTATION" },
+    { "domain": "fulfillment-settings", "target": "/data/fulfillment/settings.json", "initialization": "CODE_DEFAULT_ON_FIRST_SETTINGS_CHANGE" }
+  ],
+  "external": [
+    { "domain": "cloudinary-media", "action": "REFERENCE_ONLY_NO_VOLUME_COPY" },
+    { "domain": "environment-secrets", "action": "RAILWAY_VARIABLES_ONLY" },
+    { "domain": "seven-eleven-store-dataset", "source": "public/data/711-stores.json", "action": "GIT_STATIC_NO_VOLUME_COPY" }
+  ],
+  "archiveOnly": [
+    { "domain": "phase-i4a-orders", "source": "verified Phase I.4A backup", "productionAction": "NEVER_BOOTSTRAP" },
+    { "domain": "phase-i4a-commerce-state", "source": "verified Phase I.4A backup", "productionAction": "NEVER_BOOTSTRAP" },
+    { "domain": "phase-i4a-fulfillment-lifecycle", "source": "verified Phase I.4A backup", "productionAction": "NEVER_BOOTSTRAP" }
+  ]
+}

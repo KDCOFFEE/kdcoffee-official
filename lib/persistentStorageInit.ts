@@ -1,180 +1,271 @@
-import { promises as fs } from "fs";
-import path from "path";
+import { randomUUID } from "node:crypto";
+import { promises as fs } from "node:fs";
+import path from "node:path";
 
 import {
+  assertProductionStorageRootConfigured,
+  getArtworkBackupsDir,
+  getBackupsDir,
+  getCampaignUploadDir,
+  getFulfillmentDir,
+  getHome003UploadDir,
+  getMemberIdentityDir,
+  getMembersDir,
+  getMembershipCommerceDir,
+  getOrderNotificationUploadsDir,
+  getOrdersDir,
+  getPagesDataFile,
   getPersistentDataRoot,
   getStoreDir,
-  getOrdersDir,
-  getMembersDir,
-  getMemberIdentityDir,
-  getMembershipCommerceDir,
-  getFulfillmentDir,
-  getBackupsDir,
-  getArtworkBackupsDir,
-  getCampaignUploadDir,
-  getHome003UploadDir,
-  getPagesDataFile,
 } from "@/lib/storagePaths";
 
-/**
- * ============================================================
- * KD Coffee Persistent Storage 初始化
- * ============================================================
- *
- * 目的：
- *
- * Railway 第一次掛上全新的 /data Volume 時，
- * /data 會是空的。
- *
- * 但正式網站啟動時需要：
- *
- * website-data.json
- * homepage.json
- * assets.json
- * monthly-menus.json
- *
- * 所以第一次啟動時，
- * 需要把 repository 裡的原始 JSON
- * seed 到 Persistent Volume。
- *
- *
- * 【最重要安全規則】
- *
- * 只在目標檔案「不存在」時才複製。
- *
- * 如果 /data 裡已經有正式資料，
- * 絕對不可以使用 repository 裡的舊資料覆蓋。
- */
+const STORE_SEED_FILES = [
+  "website-data.json",
+  "homepage.json",
+  "assets.json",
+  "monthly-menus.json",
+  "pages.json",
+] as const;
 
-/**
- * 避免同一個 Node.js process
- * 在短時間內重複執行初始化。
- */
-let initializationPromise:
-  Promise<void> | null = null;
+type StoreSeedFile = (typeof STORE_SEED_FILES)[number];
 
-/**
- * 如果目標檔案不存在，
- * 才從 repository seed。
- *
- * 如果目標檔案已存在：
- * 完全不修改。
- */
-async function seedFileIfMissing(
-  sourceFile: string,
-  targetFile: string,
-) {
-  try {
-    /**
-     * access 成功代表目標檔已存在。
-     *
-     * 已存在就立即 return，
-     * 絕對不覆蓋正式資料。
-     */
-    await fs.access(targetFile);
-    return;
-  } catch {
-    /**
-     * 不存在才繼續 seed。
-     */
-  }
+export type SeedMediaClassification =
+  | "persistent-local"
+  | "external"
+  | "git-static"
+  | "invalid";
 
-  /**
-   * 確保目標資料夾存在。
-   */
-  await fs.mkdir(
-    path.dirname(targetFile),
-    {
-      recursive: true,
-    },
-  );
+export type SeedMediaPlanEntry = {
+  reference: string;
+  classification: SeedMediaClassification;
+  sourceFile?: string;
+  targetFile?: string;
+  reason?: string;
+};
 
-  /**
-   * 從 repository 原始 JSON
-   * 複製到 Persistent Storage。
-   */
-  await fs.copyFile(
-    sourceFile,
-    targetFile,
-  );
+export type PersistentStorageBootstrapResult = {
+  initialized: boolean;
+  jsonSeeded: string[];
+  jsonExisting: string[];
+  mediaSeeded: string[];
+  mediaExisting: string[];
+  mediaPlan: SeedMediaPlanEntry[];
+};
+
+export type PersistentStorageInitializationOptions = {
+  repositoryPublicDir?: string;
+  repositorySeedDir?: string;
+};
+
+let initializationPromise: Promise<void> | null = null;
+
+function errorCode(error: unknown) {
+  return error instanceof Error && "code" in error ? error.code : undefined;
 }
 
-/**
- * ============================================================
- * 初始化 Persistent Storage
- * ============================================================
- *
- * Windows 本機：
- *
- * 如果沒有 KD_DATA_DIR，
- * 直接 return，不做任何事情。
- *
- *
- * Railway：
- *
- * KD_DATA_DIR=/data
- *
- * 第一次：
- * 建立必要目錄並 seed 初始 JSON。
- *
- * 之後：
- * /data 裡已有檔案，所以不再覆蓋。
- */
-export async function ensurePersistentStorageInitialized() {
-  /**
-   * 同一個 process 已經正在初始化時，
-   * 共用同一個 Promise，
-   * 避免多個 request 同時 seed。
-   */
-  if (initializationPromise) {
-    return initializationPromise;
+function collectStrings(value: unknown, output: Set<string>) {
+  if (typeof value === "string") {
+    output.add(value);
+    return;
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) collectStrings(item, output);
+    return;
+  }
+  if (value && typeof value === "object") {
+    for (const item of Object.values(value)) collectStrings(item, output);
+  }
+}
+
+function safeSegments(pathname: string) {
+  if (pathname.includes("\\") || pathname.includes("\0")) return null;
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(pathname);
+  } catch {
+    return null;
+  }
+  if (decoded.includes("\\") || decoded.includes("\0")) return null;
+  const segments = decoded.split("/").filter(Boolean);
+  if (segments.some((segment) => segment === "." || segment === "..")) return null;
+  return segments;
+}
+
+function localPlan(
+  reference: string,
+  sourceSegments: string[],
+  targetSegments: string[],
+  repositoryPublicDir: string,
+  persistentRoot: string,
+): SeedMediaPlanEntry {
+  return {
+    reference,
+    classification: "persistent-local",
+    sourceFile: path.join(repositoryPublicDir, ...sourceSegments),
+    targetFile: path.join(persistentRoot, ...targetSegments),
+  };
+}
+
+/** Classify a seed reference according to runtime routes that switch to KD_DATA_DIR. */
+export function classifySeedMediaReference(
+  reference: string,
+  repositoryPublicDir: string,
+  persistentRoot: string,
+): SeedMediaPlanEntry {
+  const trimmed = reference.trim();
+  if (/^(?:https?:|data:)/iu.test(trimmed)) return { reference, classification: "external" };
+  if (!trimmed.startsWith("/")) return { reference, classification: "git-static" };
+
+  const pathname = trimmed.split(/[?#]/u, 1)[0];
+  const segments = safeSegments(pathname);
+  const persistentPrefix = /^\/(?:uploads\/(?:assets|artworks|order-notifications)|images\/(?:campaigns|home003))(?:\/|$)/u;
+  if (!segments) {
+    return persistentPrefix.test(pathname)
+      ? { reference, classification: "invalid", reason: "unsafe or malformed persistent media path" }
+      : { reference, classification: "git-static" };
   }
 
-  initializationPromise =
-    initializePersistentStorage();
+  if (segments[0] === "uploads" && segments[1] === "assets") {
+    if (segments.length !== 4) return { reference, classification: "invalid", reason: "asset seed path must contain one category and one filename" };
+    return localPlan(reference, segments, segments, repositoryPublicDir, persistentRoot);
+  }
+  if (segments[0] === "uploads" && segments[1] === "artworks") {
+    if (segments.length !== 4) return { reference, classification: "invalid", reason: "artwork seed path must contain one slug and one filename" };
+    return localPlan(reference, segments, segments, repositoryPublicDir, persistentRoot);
+  }
+  if (segments[0] === "uploads" && segments[1] === "order-notifications") {
+    return { reference, classification: "invalid", reason: "transaction notification media is not a permitted store seed" };
+  }
+  if (segments[0] === "images" && segments[1] === "campaigns") {
+    if (segments.length !== 3) return { reference, classification: "invalid", reason: "campaign seed path must contain one filename" };
+    return localPlan(reference, segments, ["uploads", "campaigns", segments[2]], repositoryPublicDir, persistentRoot);
+  }
+  if (segments[0] === "images" && segments[1] === "home003") {
+    if (segments.length !== 3) return { reference, classification: "invalid", reason: "HOME003 seed path must contain one filename" };
+    return localPlan(reference, segments, ["uploads", "home003", segments[2]], repositoryPublicDir, persistentRoot);
+  }
+  return { reference, classification: "git-static" };
+}
 
+function validateJson(data: Buffer, label: string) {
   try {
-    await initializationPromise;
+    JSON.parse(data.toString("utf8"));
+  } catch {
+    throw new Error(`Persistent storage bootstrap JSON is invalid: ${label}`);
+  }
+}
+
+async function validateMediaFile(filePath: string, label: string) {
+  let stat;
+  try {
+    stat = await fs.stat(filePath);
   } catch (error) {
-    /**
-     * 如果初始化真的失敗，
-     * 清掉 Promise。
-     *
-     * 下一次 request 還有機會重新嘗試，
-     * 而不是永久卡在失敗狀態。
-     */
-    initializationPromise = null;
+    throw new Error(`Persistent storage bootstrap media is missing or unreadable: ${label}`, { cause: error });
+  }
+  if (!stat.isFile() || stat.size < 1) {
+    throw new Error(`Persistent storage bootstrap media is empty or not a file: ${label}`);
+  }
+}
+
+async function targetExists(targetFile: string, validate: () => Promise<void>) {
+  try {
+    await fs.lstat(targetFile);
+    await validate();
+    return true;
+  } catch (error) {
+    if (errorCode(error) === "ENOENT") return false;
     throw error;
   }
 }
 
 /**
- * 真正執行初始化的內部函式。
+ * Publish a complete temporary file through an exclusive hard link. link()
+ * cannot replace an existing target, so concurrent initializers preserve the
+ * first complete authoritative file without an access/copy race.
  */
-async function initializePersistentStorage() {
-  const root =
-    getPersistentDataRoot();
+async function publishIfMissing(
+  sourceData: Buffer,
+  targetFile: string,
+  validateTarget: () => Promise<void>,
+) {
+  if (await targetExists(targetFile, validateTarget)) return false;
+  await fs.mkdir(path.dirname(targetFile), { recursive: true });
+  const temporaryFile = path.join(
+    path.dirname(targetFile),
+    `.${path.basename(targetFile)}.bootstrap.${process.pid}.${randomUUID()}.tmp`,
+  );
+  let handle;
+  let published = false;
+  try {
+    handle = await fs.open(temporaryFile, "wx", 0o600);
+    await handle.writeFile(sourceData);
+    await handle.sync();
+    await handle.close();
+    handle = undefined;
+    try {
+      await fs.link(temporaryFile, targetFile);
+      published = true;
+    } catch (error) {
+      if (errorCode(error) !== "EEXIST") throw error;
+    }
+    await validateTarget();
+    return published;
+  } finally {
+    if (handle) await handle.close().catch(() => undefined);
+    await fs.unlink(temporaryFile).catch((error) => {
+      if (errorCode(error) !== "ENOENT") throw error;
+    });
+  }
+}
 
-  /**
-   * ==========================================================
-   * Windows 本機
-   * ==========================================================
-   *
-   * 沒有 KD_DATA_DIR：
-   *
-   * 不建立任何 Persistent Storage，
-   * 不複製任何檔案，
-   * 完全維持目前本機專案運作方式。
-   */
+async function loadSeedDocuments(repositoryDataDir: string) {
+  const documents = new Map<StoreSeedFile, { data: Buffer; value: unknown }>();
+  for (const fileName of STORE_SEED_FILES) {
+    const sourceFile = path.join(repositoryDataDir, fileName);
+    let data: Buffer;
+    try {
+      data = await fs.readFile(sourceFile);
+    } catch (error) {
+      throw new Error(`Persistent storage bootstrap JSON source is missing: ${fileName}`, { cause: error });
+    }
+    validateJson(data, fileName);
+    documents.set(fileName, { data, value: JSON.parse(data.toString("utf8")) });
+  }
+  return documents;
+}
+
+export async function initializePersistentStorage(
+  options: PersistentStorageInitializationOptions = {},
+): Promise<PersistentStorageBootstrapResult> {
+  assertProductionStorageRootConfigured();
+  const root = getPersistentDataRoot();
   if (!root) {
-    return;
+    return { initialized: false, jsonSeeded: [], jsonExisting: [], mediaSeeded: [], mediaExisting: [], mediaPlan: [] };
   }
 
-  /**
-   * ==========================================================
-   * Railway Persistent Volume 目錄
-   * ==========================================================
-   */
+  const repositoryPublicDir = path.resolve(options.repositoryPublicDir ?? path.join(process.cwd(), "public"));
+  const repositorySeedDir = path.resolve(
+    options.repositorySeedDir ??
+      (options.repositoryPublicDir
+        ? path.join(repositoryPublicDir, "data")
+        : path.join(process.cwd(), "bootstrap", "store")),
+  );
+  const documents = await loadSeedDocuments(repositorySeedDir);
+  const strings = new Set<string>();
+  for (const document of documents.values()) collectStrings(document.value, strings);
+  const mediaPlan = [...strings]
+    .map((reference) => classifySeedMediaReference(reference, repositoryPublicDir, root))
+    .filter((entry) => entry.classification !== "git-static" || entry.reference.startsWith("/"))
+    .sort((left, right) => left.reference.localeCompare(right.reference));
+
+  const invalid = mediaPlan.find((entry) => entry.classification === "invalid");
+  if (invalid) throw new Error(`Invalid persistent seed media reference: ${invalid.reference} (${invalid.reason})`);
+  const localMedia = mediaPlan.filter(
+    (entry): entry is SeedMediaPlanEntry & { sourceFile: string; targetFile: string } =>
+      entry.classification === "persistent-local" && Boolean(entry.sourceFile) && Boolean(entry.targetFile),
+  );
+  for (const entry of localMedia) await validateMediaFile(entry.sourceFile, entry.reference);
+
   const directories = [
     root,
     getStoreDir(),
@@ -183,120 +274,55 @@ async function initializePersistentStorage() {
     getMemberIdentityDir(),
     getMembershipCommerceDir(),
     getFulfillmentDir(),
-    getBackupsDir(),
-    getArtworkBackupsDir(),
-
-    /**
-     * Campaign / HOME003 沒有參數，
-     * 可以直接建立。
-     *
-     * Assets / Artwork 有 category / slug，
-     * 實際上傳時由 upload route
-     * 再建立各自的子資料夾即可。
-     */
     getCampaignUploadDir(),
     getHome003UploadDir(),
-
-    path.join(
-      root,
-      "uploads",
-      "assets",
-    ),
-
-    path.join(
-      root,
-      "uploads",
-      "artworks",
-    ),
+    getOrderNotificationUploadsDir(),
+    getBackupsDir(),
+    getArtworkBackupsDir(),
+    path.join(root, "uploads", "assets"),
+    path.join(root, "uploads", "artworks"),
   ];
+  await Promise.all(directories.map((directory) => fs.mkdir(directory, { recursive: true })));
 
-  await Promise.all(
-    directories.map(
-      (directory) =>
-        fs.mkdir(
-          directory,
-          {
-            recursive: true,
-          },
-        ),
-    ),
-  );
+  const result: PersistentStorageBootstrapResult = {
+    initialized: true,
+    jsonSeeded: [],
+    jsonExisting: [],
+    mediaSeeded: [],
+    mediaExisting: [],
+    mediaPlan,
+  };
 
-  /**
-   * ==========================================================
-   * Repository Seed
-   * ==========================================================
-   *
-   * Source：
-   * 永遠是部署版本內 public/data 的原始 JSON。
-   *
-   * Target：
-   * Railway /data/store。
-   */
-  const repositoryDataDir =
-    path.join(
-      process.cwd(),
-      "public",
-      "data",
+  for (const entry of localMedia) {
+    const sourceData = await fs.readFile(entry.sourceFile);
+    const seeded = await publishIfMissing(
+      sourceData,
+      entry.targetFile,
+      () => validateMediaFile(entry.targetFile, entry.reference),
     );
+    (seeded ? result.mediaSeeded : result.mediaExisting).push(entry.reference);
+  }
 
-  const persistentStoreDir =
-    getStoreDir();
+  for (const fileName of STORE_SEED_FILES) {
+    const document = documents.get(fileName)!;
+    const targetFile = fileName === "pages.json" ? getPagesDataFile() : path.join(getStoreDir(), fileName);
+    const seeded = await publishIfMissing(
+      document.data,
+      targetFile,
+      async () => validateJson(await fs.readFile(targetFile), targetFile),
+    );
+    (seeded ? result.jsonSeeded : result.jsonExisting).push(fileName);
+  }
+  return result;
+}
 
-  /**
-   * 只有 target 不存在才 seed。
-   *
-   * 注意：
-   * 這裡絕對不是每次啟動都 copy。
-   */
-  await Promise.all([
-    seedFileIfMissing(
-      path.join(
-        repositoryDataDir,
-        "website-data.json",
-      ),
-      path.join(
-        persistentStoreDir,
-        "website-data.json",
-      ),
-    ),
-
-    seedFileIfMissing(
-      path.join(repositoryDataDir, "pages.json"),
-      getPagesDataFile(),
-    ),
-
-    seedFileIfMissing(
-      path.join(
-        repositoryDataDir,
-        "homepage.json",
-      ),
-      path.join(
-        persistentStoreDir,
-        "homepage.json",
-      ),
-    ),
-
-    seedFileIfMissing(
-      path.join(
-        repositoryDataDir,
-        "assets.json",
-      ),
-      path.join(
-        persistentStoreDir,
-        "assets.json",
-      ),
-    ),
-
-    seedFileIfMissing(
-      path.join(
-        repositoryDataDir,
-        "monthly-menus.json",
-      ),
-      path.join(
-        persistentStoreDir,
-        "monthly-menus.json",
-      ),
-    ),
-  ]);
+export async function ensurePersistentStorageInitialized() {
+  if (initializationPromise) return initializationPromise;
+  initializationPromise = initializePersistentStorage().then(() => undefined);
+  try {
+    await initializationPromise;
+  } catch (error) {
+    initializationPromise = null;
+    throw error;
+  }
 }

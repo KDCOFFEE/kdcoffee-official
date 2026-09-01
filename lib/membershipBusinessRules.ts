@@ -12,7 +12,7 @@ import {
 import { getMembershipRulesFile } from "./storagePaths";
 
 export { MEMBERSHIP_RULES_SCHEMA_VERSION, OWNER_DECISION_REQUIRED } from "./membershipRuleTypes";
-export type { MembershipBusinessRules, MembershipRulesStore, MoneyRoundingMode, RulesVersion } from "./membershipRuleTypes";
+export type { MembershipBusinessRules, MembershipRulesStore, MoneyRoundingMode, ReferralExcessConsumptionMode, ReferralPayoutQualificationMode, ReferralPayoutQualificationRules, RulesVersion } from "./membershipRuleTypes";
 
 export class MembershipRulesValidationError extends Error {
   constructor(message: string) {
@@ -85,9 +85,17 @@ export const DEFAULT_MEMBERSHIP_RULES: MembershipBusinessRules = {
       { level: 5, enabled: true, newReferralRewardRate: 0.5, subscriptionRewardRate: 0.5 },
     ],
     referralRewardCalculationMode: "paid_amount",
+    payoutQualification: {
+      mode: "either",
+      generalMember: { rollingWindowDays: 30, cumulativeValidConsumptionThreshold: 1_500 },
+      activeSubscriptionMember: { rollingWindowDays: 30, cumulativeValidConsumptionThreshold: 1_000 },
+      validConsumption: { includeCreditDiscount: true, includeShipping: false },
+      rewardCoverage: { lookbackDays: 7, forwardDays: 30 },
+      excessConsumptionMode: "reset",
+    },
     referralRewardQualificationWindowDays: 30,
     referralRewardBaseWaitingDays: 7,
-    referralRewardReturnProtectionDays: 3,
+    referralRewardReturnProtectionDays: 7,
     referralTotalRewardCap: 10,
     referralMonthlyCreditCap: 0,
     pvRewardMoneyValue: 1,
@@ -114,7 +122,11 @@ export const DEFAULT_MEMBERSHIP_RULES: MembershipBusinessRules = {
     modificationCutoffReminderDays: 1,
     events: Object.fromEntries(membershipNotificationEventTypes.map((eventType) => [eventType, {
       enabled: true,
-      channels: eventType === "unclaimed_risk" ? ["member_center", "line", "admin"] : ["member_center", "line"],
+      channels: eventType === "unclaimed_risk"
+        ? ["member_center", "line", "admin"]
+        : eventType === "credit_reward"
+          ? ["member_center", "line", "email"]
+          : ["member_center", "line"],
     }])) as MembershipBusinessRules["notification"]["events"],
   },
   fulfillment: { arrivalReminderAfterDays: 5, unknownEmailRequiresReview: true, gmailScanLookbackDays: 14 },
@@ -128,7 +140,11 @@ function object(value: unknown): value is Record<string, unknown> {
 }
 
 /** Backward-compatible resolver: missing Phase I.3 fields inherit safe defaults; supplied invalid values still fail validation. */
-export function normalizeMembershipBusinessRules(value: unknown): MembershipBusinessRules {
+type MembershipRulesNormalizationOptions = {
+  preserveLegacyMissingReturnProtection?: boolean;
+};
+
+export function normalizeMembershipBusinessRules(value: unknown, options: MembershipRulesNormalizationOptions = {}): MembershipBusinessRules {
   if (!object(value)) throw new MembershipRulesValidationError("會員商務設定格式不完整");
   const source = value as Record<string, unknown>;
   const nested = (key: string) => object(source[key]) ? source[key] as Record<string, unknown> : {};
@@ -155,11 +171,25 @@ export function normalizeMembershipBusinessRules(value: unknown): MembershipBusi
     referral: (() => {
       const supplied = nested("referral");
       const legacyBaseWaitingDays = supplied.referralNewRewardReleaseDelayDays;
+      const payoutQualification = object(supplied.payoutQualification) ? supplied.payoutQualification : {};
+      const generalMember = object(payoutQualification.generalMember) ? payoutQualification.generalMember : {};
+      const activeSubscriptionMember = object(payoutQualification.activeSubscriptionMember) ? payoutQualification.activeSubscriptionMember : {};
+      const validConsumption = object(payoutQualification.validConsumption) ? payoutQualification.validConsumption : {};
+      const rewardCoverage = object(payoutQualification.rewardCoverage) ? payoutQualification.rewardCoverage : {};
       return {
         ...DEFAULT_MEMBERSHIP_RULES.referral,
         ...supplied,
+        payoutQualification: {
+          ...DEFAULT_MEMBERSHIP_RULES.referral.payoutQualification,
+          ...payoutQualification,
+          generalMember: { ...DEFAULT_MEMBERSHIP_RULES.referral.payoutQualification.generalMember, ...generalMember },
+          activeSubscriptionMember: { ...DEFAULT_MEMBERSHIP_RULES.referral.payoutQualification.activeSubscriptionMember, ...activeSubscriptionMember },
+          validConsumption: { ...DEFAULT_MEMBERSHIP_RULES.referral.payoutQualification.validConsumption, ...validConsumption },
+          rewardCoverage: { ...DEFAULT_MEMBERSHIP_RULES.referral.payoutQualification.rewardCoverage, ...rewardCoverage },
+        },
         referralRewardBaseWaitingDays: supplied.referralRewardBaseWaitingDays ?? legacyBaseWaitingDays ?? DEFAULT_MEMBERSHIP_RULES.referral.referralRewardBaseWaitingDays,
-        referralRewardReturnProtectionDays: supplied.referralRewardReturnProtectionDays ?? DEFAULT_MEMBERSHIP_RULES.referral.referralRewardReturnProtectionDays,
+        referralRewardReturnProtectionDays: supplied.referralRewardReturnProtectionDays
+          ?? (options.preserveLegacyMissingReturnProtection ? 3 : DEFAULT_MEMBERSHIP_RULES.referral.referralRewardReturnProtectionDays),
         levels: Array.isArray(supplied.levels) ? supplied.levels : DEFAULT_MEMBERSHIP_RULES.referral.levels,
       };
     })(),
@@ -194,8 +224,8 @@ function validateOwnerChoice<T extends string>(value: unknown, allowed: readonly
   }
 }
 
-export function validateMembershipBusinessRules(value: unknown): MembershipBusinessRules {
-  const rules = normalizeMembershipBusinessRules(value);
+export function validateMembershipBusinessRules(value: unknown, options: MembershipRulesNormalizationOptions = {}): MembershipBusinessRules {
+  const rules = normalizeMembershipBusinessRules(value, options);
   if (!object(rules.membership) || !object(rules.membership.openingYearFreeShipping)) throw new MembershipRulesValidationError("會員免運設定不完整");
   const opening = rules.membership.openingYearFreeShipping;
   if (typeof opening.enabled !== "boolean" || !dateOnly(opening.startDate, true) || !dateOnly(opening.endDate, true) || !Array.isArray(opening.shippingMethods) || opening.shippingMethods.some((method) => typeof method !== "string" || !method)) throw new MembershipRulesValidationError("開站會員免運設定不正確");
@@ -267,6 +297,19 @@ export function validateMembershipBusinessRules(value: unknown): MembershipBusin
     if (typeof level.subscriptionRewardRate !== "number" || level.subscriptionRewardRate < 0 || level.subscriptionRewardRate > 100) throw new MembershipRulesValidationError("定期購獎勵率不正確");
   }
   validateOwnerChoice(rules.referral.referralRewardCalculationMode, ["paid_amount", "pv"], "推薦獎勵計算方式");
+  if (!object(rules.referral.payoutQualification)) throw new MembershipRulesValidationError("推薦獎勵領取資格設定不完整");
+  const payout = rules.referral.payoutQualification;
+  validateOwnerChoice(payout.mode, ["general", "subscription", "either", "both"], "推薦獎勵資格判定模式");
+  if (!object(payout.generalMember) || !object(payout.activeSubscriptionMember)) throw new MembershipRulesValidationError("推薦獎勵會員資格設定不完整");
+  integer(payout.generalMember.rollingWindowDays, 1, 3650, "一般會員累積期間");
+  integer(payout.generalMember.cumulativeValidConsumptionThreshold, 0, 100_000_000, "一般會員有效消費門檻");
+  integer(payout.activeSubscriptionMember.rollingWindowDays, 1, 3650, "訂閱會員累積期間");
+  integer(payout.activeSubscriptionMember.cumulativeValidConsumptionThreshold, 0, 100_000_000, "訂閱會員有效消費門檻");
+  if (!object(payout.validConsumption) || typeof payout.validConsumption.includeCreditDiscount !== "boolean" || typeof payout.validConsumption.includeShipping !== "boolean") throw new MembershipRulesValidationError("有效消費計算設定不正確");
+  if (!object(payout.rewardCoverage)) throw new MembershipRulesValidationError("推薦獎勵涵蓋期間設定不完整");
+  integer(payout.rewardCoverage.lookbackDays, 1, 3650, "獎勵涵蓋回看期間");
+  integer(payout.rewardCoverage.forwardDays, 1, 3650, "獎勵涵蓋未來期間");
+  validateOwnerChoice(payout.excessConsumptionMode, ["reset", "carry"], "超額消費處理方式");
   integer(rules.referral.referralRewardQualificationWindowDays, 1, 3650, "推薦獎勵領取資格期限");
   integer(rules.referral.referralRewardBaseWaitingDays, 0, 365, "推薦獎勵基礎等待天數");
   integer(rules.referral.referralRewardReturnProtectionDays, 0, 365, "推薦獎勵退貨保護天數");
@@ -335,14 +378,15 @@ function emptyStore(now = new Date()): MembershipRulesStore {
 
 export function validateMembershipRulesStore(value: unknown): MembershipRulesStore {
   if (!object(value) || value.schemaVersion !== MEMBERSHIP_RULES_SCHEMA_VERSION || !Number.isSafeInteger(value.revision) || !Number.isSafeInteger(value.activeRulesVersion) || !Array.isArray(value.versions) || typeof value.createdAt !== "string" || typeof value.updatedAt !== "string") throw new MembershipRulesValidationError("會員商務設定檔格式不正確");
+  const store = structuredClone(value) as MembershipRulesStore;
   let lastVersion = 0;
-  for (const version of value.versions) {
+  for (const version of store.versions) {
     if (!object(version) || !Number.isSafeInteger(version.rulesVersion) || version.rulesVersion !== lastVersion + 1 || typeof version.effectiveAt !== "string" || !Number.isFinite(Date.parse(version.effectiveAt)) || typeof version.createdAt !== "string" || !["owner", "system"].includes(String(version.createdBy))) throw new MembershipRulesValidationError("會員商務設定版本不正確");
-    version.rules = validateMembershipBusinessRules(version.rules);
+    version.rules = validateMembershipBusinessRules(version.rules, { preserveLegacyMissingReturnProtection: true });
     lastVersion = version.rulesVersion;
   }
-  if (!value.versions.length || value.activeRulesVersion !== lastVersion) throw new MembershipRulesValidationError("目前使用的設定版本不正確");
-  return value as MembershipRulesStore;
+  if (!store.versions.length || store.activeRulesVersion !== lastVersion) throw new MembershipRulesValidationError("目前使用的設定版本不正確");
+  return store;
 }
 
 export async function readMembershipRulesStore(filePath = getMembershipRulesFile()) {
@@ -368,15 +412,25 @@ export async function saveMembershipBusinessRules(input: { expectedRevision: num
   if (!Number.isFinite(Date.parse(effectiveAt))) throw new MembershipRulesValidationError("設定生效時間不正確");
   await fs.mkdir(path.dirname(filePath), { recursive: true });
   return withFileLock(filePath, async () => {
-    const store = await readMembershipRulesStore(filePath);
+    let persistedStore: MembershipRulesStore;
+    let store: MembershipRulesStore;
+    try {
+      const parsed = JSON.parse(await fs.readFile(filePath, "utf8"));
+      store = validateMembershipRulesStore(parsed);
+      persistedStore = parsed as MembershipRulesStore;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+      store = emptyStore(now);
+      persistedStore = structuredClone(store);
+    }
     if (store.revision !== input.expectedRevision) throw new MembershipRulesVersionConflictError();
     const rulesVersion = store.activeRulesVersion + 1;
-    store.versions.push({ rulesVersion, effectiveAt, createdAt: timestamp, createdBy: "owner", rules: validated });
-    store.activeRulesVersion = rulesVersion;
-    store.revision += 1;
-    store.updatedAt = timestamp;
-    validateMembershipRulesStore(store);
-    await atomicWriteJson(filePath, store);
-    return store;
+    persistedStore.versions.push({ rulesVersion, effectiveAt, createdAt: timestamp, createdBy: "owner", rules: validated });
+    persistedStore.activeRulesVersion = rulesVersion;
+    persistedStore.revision = store.revision + 1;
+    persistedStore.updatedAt = timestamp;
+    const normalizedStore = validateMembershipRulesStore(persistedStore);
+    await atomicWriteJson(filePath, persistedStore);
+    return normalizedStore;
   });
 }

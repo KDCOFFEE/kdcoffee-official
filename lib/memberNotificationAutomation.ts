@@ -22,19 +22,27 @@ const eventLabels: Record<NotificationEvent["eventType"], string> = {
 
 function template(notice: NotificationEvent) {
   const title = eventLabels[notice.eventType];
-  return { eventType: notice.eventType, subject: `KD Coffee｜${title}`, text: `KD Coffee｜${title}\n\n請登入會員中心查看最新安排與可操作項目。` };
+  const amount = typeof notice.safeData.amount === "number" && Number.isSafeInteger(notice.safeData.amount) && notice.safeData.amount > 0 ? notice.safeData.amount : null;
+  const referralPayout = notice.eventType === "credit_issued" && notice.safeData.referralPayout === true;
+  const detail = referralPayout && amount !== null
+    ? `您的推薦回饋 NT$${amount.toLocaleString("zh-TW")} 已成功入帳。`
+    : amount !== null
+      ? `會員抵用金 NT$${amount.toLocaleString("zh-TW")} 已成功入帳。`
+      : "請登入會員中心查看最新安排與可操作項目。";
+  return { eventType: notice.eventType, subject: `KD Coffee｜${title}`, text: `KD Coffee｜${title}\n\n${detail}` };
 }
 
 export async function deliverNextMembershipNotification(options: { stateFilePath?: string; lineFetcher?: typeof fetch; emailFetcher?: typeof fetch; now?: Date } = {}) {
   const notice = await claimNextMembershipNotification({ stateFilePath: options.stateFilePath, now: options.now });
   if (!notice) return null;
-  const delivered: NotificationEvent["channels"] = notice.channels.includes("member_center") ? ["member_center"] : [];
+  const delivered: NotificationEvent["channels"] = [...new Set(notice.deliveredChannels ?? [])];
+  if (notice.channels.includes("member_center") && !delivered.includes("member_center")) delivered.push("member_center");
   const errors: string[] = [];
   const member = notice.memberId ? await readMember(notice.memberId) : null;
   const message = template(notice);
 
-  let lineSucceeded = false;
-  if (notice.channels.includes("line")) {
+  let lineSucceeded = delivered.includes("line");
+  if (notice.channels.includes("line") && !lineSucceeded) {
     if (member?.lineUserId) {
       const result = await sendCustomerLineNotification({ userId: member.lineUserId, template: message, fetcher: options.lineFetcher });
       lineSucceeded = result.status === "sent";
@@ -42,7 +50,7 @@ export async function deliverNextMembershipNotification(options: { stateFilePath
     } else errors.push("會員沒有可用的 LINE 身份");
   }
 
-  const shouldEmail = notice.channels.includes("email") || (!lineSucceeded && notice.deliveryPolicy?.emailFallback === true);
+  const shouldEmail = (notice.channels.includes("email") || (!lineSucceeded && notice.deliveryPolicy?.emailFallback === true)) && !delivered.includes("email");
   if (shouldEmail) {
     if (member?.email && isValidEmail(member.email)) {
       const result = await sendCustomerOrderEmail({ recipientEmail: member.email, orderNumber: "會員通知", template: message, subject: message.subject, fetcher: options.emailFetcher });

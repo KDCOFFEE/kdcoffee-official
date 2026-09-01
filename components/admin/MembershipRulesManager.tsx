@@ -150,10 +150,51 @@ export default function MembershipRulesManager({ initialRevision, initialVersion
         <label className="membership-switch"><input type="checkbox" checked={rules.referral.programEnabled} onChange={(event) => change((draft) => { draft.referral.programEnabled = event.target.checked; })} /><span><b>啟用推薦制度</b><small>關閉後不建立新的獎勵資格</small></span><AdminRuleHelpButton ruleKey="referral.programEnabled" /></label>
         <NumberField label="獎勵代數" value={rules.referral.referralMaxRewardDepth} min={1} max={10} unit="代" onChange={(value) => change((draft) => { draft.referral.referralMaxRewardDepth = value; while (draft.referral.levels.length < value) { const level=draft.referral.levels.length+1; draft.referral.levels.push({level,enabled:true,newReferralRewardRate:0,subscriptionRewardRate:0}); } })} />
         <Choice label="獎勵計算方式" value={rules.referral.referralRewardCalculationMode} onChange={(value) => change((draft) => { draft.referral.referralRewardCalculationMode = value as "paid_amount"|"pv"; })}><option value="paid_amount">商品實付金額</option><option value="pv">PV 商品獎勵單位</option></Choice>
-        <NumberField label="推薦獎勵領取資格期限" value={rules.referral.referralRewardQualificationWindowDays} min={1} max={3650} unit="天" onChange={(value) => change((draft) => { draft.referral.referralRewardQualificationWindowDays = value; })} />
-        <NumberField label="推薦獎勵基礎等待天數" value={rules.referral.referralRewardBaseWaitingDays} min={0} max={365} unit="天" onChange={(value) => change((draft) => { draft.referral.referralRewardBaseWaitingDays = value; })} />
-        <NumberField label="推薦獎勵退貨保護天數" value={rules.referral.referralRewardReturnProtectionDays} min={0} max={365} unit="天" onChange={(value) => change((draft) => { draft.referral.referralRewardReturnProtectionDays = value; })} />
+      </div>
+      <fieldset className="membership-intervals">
+        <legend>推薦獎勵領取資格</legend>
+        <p>此區先建立推薦獎勵資格規則；資格計算功能將在後續階段接用，現階段不會改變既有發放流程。</p>
+        <div className="membership-fields two">
+          <Choice label="資格判定模式" value={rules.referral.payoutQualification.mode} onChange={(value) => change((draft) => { draft.referral.payoutQualification.mode = value as MembershipBusinessRules["referral"]["payoutQualification"]["mode"]; })}><option value="general">只採一般會員資格</option><option value="subscription">只採訂閱會員資格</option><option value="either">任一資格符合即可</option><option value="both">兩種資格都必須符合</option></Choice>
+          <Choice label="超額消費處理" value={rules.referral.payoutQualification.excessConsumptionMode} onChange={(value) => change((draft) => { draft.referral.payoutQualification.excessConsumptionMode = value as MembershipBusinessRules["referral"]["payoutQualification"]["excessConsumptionMode"]; })}><option value="reset">達標後歸零，不累計超額</option><option value="carry">超額可延續至下一輪</option></Choice>
+        </div>
+        <h3>一般會員資格</h3>
+        <div className="membership-fields two">
+          <NumberField label="一般會員累積期間" value={rules.referral.payoutQualification.generalMember.rollingWindowDays} min={1} max={3650} unit="天" onChange={(value) => change((draft) => { draft.referral.payoutQualification.generalMember.rollingWindowDays = value; })} />
+          <NumberField label="一般會員有效消費門檻" value={rules.referral.payoutQualification.generalMember.cumulativeValidConsumptionThreshold} min={0} max={100000000} unit="元" onChange={(value) => change((draft) => { draft.referral.payoutQualification.generalMember.cumulativeValidConsumptionThreshold = value; })} />
+        </div>
+        <p>一般會員：最近 {rules.referral.payoutQualification.generalMember.rollingWindowDays} 天累積有效消費達 NT$ {rules.referral.payoutQualification.generalMember.cumulativeValidConsumptionThreshold.toLocaleString("zh-TW")}。</p>
+        <h3>訂閱會員資格</h3>
+        <div className="membership-fields two">
+          <NumberField label="訂閱會員累積期間" value={rules.referral.payoutQualification.activeSubscriptionMember.rollingWindowDays} min={1} max={3650} unit="天" onChange={(value) => change((draft) => { draft.referral.payoutQualification.activeSubscriptionMember.rollingWindowDays = value; })} />
+          <NumberField label="訂閱會員有效消費門檻" value={rules.referral.payoutQualification.activeSubscriptionMember.cumulativeValidConsumptionThreshold} min={0} max={100000000} unit="元" onChange={(value) => change((draft) => { draft.referral.payoutQualification.activeSubscriptionMember.cumulativeValidConsumptionThreshold = value; })} />
+        </div>
+        <p>訂閱會員：須為有效訂閱會員，最近 {rules.referral.payoutQualification.activeSubscriptionMember.rollingWindowDays} 天累積有效消費達 NT$ {rules.referral.payoutQualification.activeSubscriptionMember.cumulativeValidConsumptionThreshold.toLocaleString("zh-TW")}。</p>
+        <h3>有效消費計算</h3>
+        <div className="membership-checks">
+          <label><input type="checkbox" checked={rules.referral.payoutQualification.validConsumption.includeCreditDiscount} onChange={(event) => change((draft) => { draft.referral.payoutQualification.validConsumption.includeCreditDiscount = event.target.checked; })} />抵用金折抵金額計入有效消費</label>
+          <label><input type="checkbox" checked={rules.referral.payoutQualification.validConsumption.includeShipping} onChange={(event) => change((draft) => { draft.referral.payoutQualification.validConsumption.includeShipping = event.target.checked; })} />運費計入有效消費</label>
+        </div>
+        <h3>獎勵涵蓋期間</h3>
+        <div className="membership-fields two">
+          <NumberField label="資格日前涵蓋" value={rules.referral.payoutQualification.rewardCoverage.lookbackDays} min={1} max={3650} unit="天" onChange={(value) => change((draft) => { draft.referral.payoutQualification.rewardCoverage.lookbackDays = value; })} />
+          <NumberField label="資格日後涵蓋" value={rules.referral.payoutQualification.rewardCoverage.forwardDays} min={1} max={3650} unit="天" onChange={(value) => change((draft) => { draft.referral.payoutQualification.rewardCoverage.forwardDays = value; })} />
+        </div>
+        <p>取得資格後，可涵蓋資格日前 {rules.referral.payoutQualification.rewardCoverage.lookbackDays} 天至資格日後 {rules.referral.payoutQualification.rewardCoverage.forwardDays} 天內產生的推薦獎勵。</p>
+        <h3>獎勵安全等待</h3>
+        <div className="membership-fields two">
+          <NumberField label="推薦獎勵基礎等待天數" value={rules.referral.referralRewardBaseWaitingDays} min={0} max={365} unit="天" onChange={(value) => change((draft) => { draft.referral.referralRewardBaseWaitingDays = value; })} />
+          <NumberField label="推薦獎勵退貨保護天數" value={rules.referral.referralRewardReturnProtectionDays} min={0} max={365} unit="天" onChange={(value) => change((draft) => { draft.referral.referralRewardReturnProtectionDays = value; })} />
+        </div>
         <div className="membership-rule-summary"><small>實際總等待</small><strong>{rules.referral.referralRewardBaseWaitingDays} 天 + {rules.referral.referralRewardReturnProtectionDays} 天 = {rules.referral.referralRewardBaseWaitingDays + rules.referral.referralRewardReturnProtectionDays} 天</strong></div>
+        <h3>通知方式</h3>
+        <div className="membership-checks">
+          <label><input type="checkbox" checked={rules.notification.events.credit_reward.channels.includes("line")} onChange={(event) => change((draft) => { const channels = draft.notification.events.credit_reward.channels; draft.notification.events.credit_reward.channels = event.target.checked ? [...new Set([...channels, "line" as const])] : channels.filter((channel) => channel !== "line"); })} />推薦獎勵發放時傳送 LINE</label>
+          <label><input type="checkbox" checked={rules.notification.events.credit_reward.channels.includes("email")} onChange={(event) => change((draft) => { const channels = draft.notification.events.credit_reward.channels; draft.notification.events.credit_reward.channels = event.target.checked ? [...new Set([...channels, "email" as const])] : channels.filter((channel) => channel !== "email"); })} />推薦獎勵發放時傳送 Email</label>
+        </div>
+      </fieldset>
+      <p className="membership-effective-note">舊版「推薦獎勵領取資格期限」會保留供既有獎勵快照解讀，不作為上述新資格規則。</p>
+      <div className="membership-fields two">
         <NumberField label="單筆全組織上限" value={rules.referral.referralTotalRewardCap} min={0} max={100} unit="%" onChange={(value) => change((draft) => { draft.referral.referralTotalRewardCap = value; })} />
         <NumberField label="單一會員每月上限" value={rules.referral.referralMonthlyCreditCap} min={0} max={100000000} unit="元（0 不限）" onChange={(value) => change((draft) => { draft.referral.referralMonthlyCreditCap = value; })} />
         <NumberField label="每 1 PV 換算" value={rules.referral.pvRewardMoneyValue} min={0} max={100000} unit="元抵用金" onChange={(value) => change((draft) => { draft.referral.pvRewardMoneyValue = value; })} />
