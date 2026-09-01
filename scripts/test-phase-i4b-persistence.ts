@@ -15,6 +15,8 @@ const assets = await import("../lib/assets.ts");
 const fulfillment = await import("../lib/fulfillment.ts");
 // @ts-expect-error -- Node's type-stripping test runner requires explicit TypeScript extensions.
 const commerce = await import("../lib/membershipCommerce.ts");
+// @ts-expect-error -- Node's type-stripping test runner requires explicit TypeScript extensions.
+const businessRules = await import("../lib/membershipBusinessRules.ts");
 
 const temporaryRoot = await fs.mkdtemp(path.join(os.tmpdir(), "kd-phase-i4b-"));
 const envKeys = [
@@ -33,6 +35,7 @@ const protectedHashes = new Map([
   ["data/orders/KD20260831-6077.json", "07931ba7f046711f49d2dfa509b02c775d213da97f80c3a8c39637abfa03e055"],
   ["data/orders/KD20260831-9263.json", "66aa9448e24b083978ff2d9801751d0bd106bba2e996bb1deadb51e64add6536"],
   ["data/membership-commerce/commerce-state.json", "2d974f178c309ba2cff6f88dbf3be9451f19b502eb5d5ccb3ca3b00ddc046012"],
+  ["data/membership-commerce/business-rules.json", "ed85524dcd2c0af891e115d0e8dc86b113a7ed60e60ad8611815d17d88938dc3"],
   ["data/fulfillment/state.json", "87580361fd3d7c898fa2b87196e6569284c8849ce6775ddb5f0cb69b30dde4fd"],
   ["public/data/website-data.json", "7fbbef961715cdb47d5691dbf8c1608d6c8fefd2610e7dcb24f2a72b65f5a5e0"],
 ]);
@@ -173,7 +176,7 @@ try {
   setEnvironment({ KD_DATA_DIR: persistentRoot });
   const initial = await bootstrap.initializePersistentStorage({ repositoryPublicDir: fixturePublic });
   assert.equal(initial.initialized, true);
-  assert.deepEqual(initial.jsonSeeded.sort(), ["assets.json", "homepage.json", "monthly-menus.json", "pages.json", "website-data.json"]);
+  assert.deepEqual(initial.jsonSeeded.sort(), ["assets.json", "homepage.json", "membership-commerce/business-rules.json", "monthly-menus.json", "pages.json", "website-data.json"]);
   assert.equal(initial.mediaSeeded.length, 4);
   assert.ok(initial.mediaPlan.some((entry: { classification: string }) => entry.classification === "external"));
   assert.ok(initial.mediaPlan.some((entry: { classification: string; reference: string }) => entry.classification === "git-static" && entry.reference === "/images/static-banner.png"));
@@ -205,11 +208,38 @@ try {
   for (const forbidden of [
     "orders/KD20260831-6077.json", "orders/KD20260831-9263.json", "members/member.json",
     "member-identity/registry.json", "membership-commerce/commerce-state.json",
-    "membership-commerce/business-rules.json", "fulfillment/state.json", "membership-test-lab/scenario-state.json",
+    "fulfillment/state.json", "membership-test-lab/scenario-state.json",
   ]) {
     assert.equal(await fs.stat(path.join(persistentRoot, ...forbidden.split("/"))).then(() => true).catch(() => false), false);
     checks += 1;
   }
+  const fixtureRulesTarget = path.join(persistentRoot, "membership-commerce", "business-rules.json");
+  const fixtureRulesSeed = path.resolve("bootstrap", "membership-commerce", "business-rules.json");
+  const fixtureRules = businessRules.validateMembershipRulesStore(JSON.parse(await fs.readFile(fixtureRulesTarget, "utf8")));
+  assert.equal(fixtureRules.schemaVersion, 1);
+  assert.equal(fixtureRules.revision, 0);
+  assert.equal(fixtureRules.activeRulesVersion, 1);
+  assert.equal(fixtureRules.versions.length, 1);
+  assert.equal(fixtureRules.versions[0].rulesVersion, 1);
+  assert.equal(fixtureRules.versions[0].createdBy, "system");
+  assert.equal(fixtureRules.createdAt, "2026-01-01T00:00:00.000Z");
+  assert.equal(fixtureRules.updatedAt, fixtureRules.createdAt);
+  assert.equal(fixtureRules.versions[0].effectiveAt, fixtureRules.createdAt);
+  assert.equal(fixtureRules.versions[0].createdAt, fixtureRules.createdAt);
+  assert.equal(fixtureRules.versions[0].rules.referral.payoutQualification.mode, "either");
+  assert.deepEqual(fixtureRules.versions[0].rules.referral.payoutQualification.generalMember, { rollingWindowDays: 30, cumulativeValidConsumptionThreshold: 1500 });
+  assert.deepEqual(fixtureRules.versions[0].rules.referral.payoutQualification.activeSubscriptionMember, { rollingWindowDays: 30, cumulativeValidConsumptionThreshold: 1000 });
+  assert.deepEqual(fixtureRules.versions[0].rules.referral.payoutQualification.validConsumption, { includeCreditDiscount: true, includeShipping: false });
+  assert.deepEqual(fixtureRules.versions[0].rules.referral.payoutQualification.rewardCoverage, { lookbackDays: 7, forwardDays: 30 });
+  assert.equal(fixtureRules.versions[0].rules.referral.payoutQualification.excessConsumptionMode, "reset");
+  assert.equal(fixtureRules.versions[0].rules.referral.referrerEligibility.mode, "none");
+  assert.equal(fixtureRules.versions[0].rules.referral.referralRewardBaseWaitingDays, 7);
+  assert.equal(fixtureRules.versions[0].rules.referral.referralRewardReturnProtectionDays, 7);
+  assert.ok(fixtureRules.versions[0].rules.notification.events.credit_reward.channels.includes("line"));
+  assert.ok(fixtureRules.versions[0].rules.notification.events.credit_reward.channels.includes("email"));
+  assert.deepEqual(fixtureRules.versions[0].rules.membership.openingYearFreeShipping, { enabled: false, startDate: "", endDate: "", shippingMethods: ["711_cod"] });
+  assert.equal(await sha256(fixtureRulesTarget), await sha256(fixtureRulesSeed));
+  checks += 22;
 
   const websiteTarget = path.join(persistentRoot, "store", "website-data.json");
   const mediaTarget = path.join(persistentRoot, "uploads", "assets", "logo", "logo.svg");
@@ -217,14 +247,20 @@ try {
   await fs.writeFile(mediaTarget, "authoritative-existing-media", "utf8");
   const sentinelWebsiteHash = await sha256(websiteTarget);
   const sentinelMediaHash = await sha256(mediaTarget);
+  const manuallyChangedRules = JSON.parse(await fs.readFile(fixtureRulesTarget, "utf8"));
+  manuallyChangedRules.versions[0].rules.credit.expiryReminderDays = 9;
+  await writeJson(fixtureRulesTarget, manuallyChangedRules);
+  const sentinelRulesHash = await sha256(fixtureRulesTarget);
   const beforeRestart = await fileHashes(persistentRoot);
   const restarted = await bootstrap.initializePersistentStorage({ repositoryPublicDir: fixturePublic });
   assert.equal(await sha256(websiteTarget), sentinelWebsiteHash);
   assert.equal(await sha256(mediaTarget), sentinelMediaHash);
+  assert.equal(await sha256(fixtureRulesTarget), sentinelRulesHash);
   assert.ok(restarted.jsonExisting.includes("website-data.json"));
+  assert.ok(restarted.jsonExisting.includes("membership-commerce/business-rules.json"));
   assert.ok(restarted.mediaExisting.includes("/uploads/assets/logo/logo.svg"));
   assert.deepEqual(await fileHashes(persistentRoot), beforeRestart);
-  checks += 5;
+  checks += 7;
 
   const concurrentRoot = path.join(temporaryRoot, "concurrent-root");
   setEnvironment({ KD_DATA_DIR: concurrentRoot });
@@ -232,7 +268,7 @@ try {
     bootstrap.initializePersistentStorage({ repositoryPublicDir: fixturePublic }),
     bootstrap.initializePersistentStorage({ repositoryPublicDir: fixturePublic }),
   ]);
-  assert.equal(concurrent.reduce((sum: number, result: { jsonSeeded: string[] }) => sum + result.jsonSeeded.length, 0), 5);
+  assert.equal(concurrent.reduce((sum: number, result: { jsonSeeded: string[] }) => sum + result.jsonSeeded.length, 0), 6);
   assert.equal(concurrent.reduce((sum: number, result: { mediaSeeded: string[] }) => sum + result.mediaSeeded.length, 0), 4);
   for (const fileName of ["website-data.json", "homepage.json", "assets.json", "monthly-menus.json", "pages.json"]) {
     JSON.parse(await fs.readFile(path.join(concurrentRoot, "store", fileName), "utf8"));
@@ -243,7 +279,7 @@ try {
   const actualSeedRoot = path.join(temporaryRoot, "actual-repository-seeds");
   setEnvironment({ KD_DATA_DIR: actualSeedRoot });
   const actualSeedResult = await bootstrap.initializePersistentStorage();
-  assert.equal(actualSeedResult.jsonSeeded.length, 5);
+  assert.equal(actualSeedResult.jsonSeeded.length, 6);
   assert.ok(actualSeedResult.mediaPlan.some((entry) => entry.classification === "external"));
   assert.ok(actualSeedResult.mediaPlan.some((entry) => entry.classification === "git-static"));
   const actualPersistentMedia = actualSeedResult.mediaPlan.filter(
@@ -265,7 +301,6 @@ try {
     "orders/KD20260831-6077.json",
     "orders/KD20260831-9263.json",
     "membership-commerce/commerce-state.json",
-    "membership-commerce/business-rules.json",
     "fulfillment/state.json",
     "fulfillment/settings.json",
   ]) {
@@ -297,8 +332,10 @@ try {
 
   const manifestText = await fs.readFile(path.resolve("config", "production-migration-manifest.json"), "utf8");
   const manifest = JSON.parse(manifestText);
-  assert.equal(manifest.bootstrap.businessRules.bootstrapEnabled, false);
-  assert.equal(manifest.bootstrap.businessRules.source, null);
+  assert.equal(manifest.bootstrap.businessRules.bootstrapEnabled, true);
+  assert.equal(manifest.bootstrap.businessRules.source, "bootstrap/membership-commerce/business-rules.json");
+  assert.equal(manifest.bootstrap.businessRules.target, "/data/membership-commerce/business-rules.json");
+  assert.equal(manifest.bootstrap.businessRules.sha256, await sha256(path.resolve(manifest.bootstrap.businessRules.source)));
   assert.equal(manifest.bootstrap.store[0].source, "bootstrap/store/website-data.json");
   assert.equal(manifestText.includes("KD20260831-6077"), false);
   assert.equal(manifestText.includes("KD20260831-9263"), false);
@@ -309,6 +346,10 @@ try {
       item.sha256,
     );
   }
+  assert.equal(
+    await sha256(path.join(actualSeedRoot, "membership-commerce", "business-rules.json")),
+    manifest.bootstrap.businessRules.sha256,
+  );
 
   for (const ignoredPath of [
     "data/orders/example.json",
@@ -349,9 +390,9 @@ try {
 
   const actualBeforeRestart = await fileHashes(actualSeedRoot);
   const actualRestart = await bootstrap.initializePersistentStorage();
-  assert.equal(actualRestart.jsonExisting.length, 5);
+  assert.equal(actualRestart.jsonExisting.length, 6);
   assert.deepEqual(await fileHashes(actualSeedRoot), actualBeforeRestart);
-  assert.equal(await fs.stat(path.join(actualSeedRoot, "membership-commerce", "business-rules.json")).then(() => true).catch(() => false), false);
+  assert.equal(await fs.stat(path.join(actualSeedRoot, "membership-commerce", "business-rules.json")).then(() => true).catch(() => false), true);
 
   const actualRootText = await Promise.all(
     [...(await fileHashes(actualSeedRoot)).keys()].map(async (relative) => fs.readFile(path.join(actualSeedRoot, relative)).catch(() => Buffer.from(""))),

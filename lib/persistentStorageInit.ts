@@ -12,12 +12,14 @@ import {
   getMemberIdentityDir,
   getMembersDir,
   getMembershipCommerceDir,
+  getMembershipRulesFile,
   getOrderNotificationUploadsDir,
   getOrdersDir,
   getPagesDataFile,
   getPersistentDataRoot,
   getStoreDir,
 } from "@/lib/storagePaths";
+import { validateMembershipRulesStore } from "@/lib/membershipBusinessRules";
 
 const STORE_SEED_FILES = [
   "website-data.json",
@@ -26,6 +28,7 @@ const STORE_SEED_FILES = [
   "monthly-menus.json",
   "pages.json",
 ] as const;
+const MEMBERSHIP_RULES_SEED_FILE = "business-rules.json";
 
 type StoreSeedFile = (typeof STORE_SEED_FILES)[number];
 
@@ -234,6 +237,19 @@ async function loadSeedDocuments(repositoryDataDir: string) {
   return documents;
 }
 
+async function loadMembershipRulesSeedDocument(repositoryMembershipCommerceDir: string) {
+  const sourceFile = path.join(repositoryMembershipCommerceDir, MEMBERSHIP_RULES_SEED_FILE);
+  let data: Buffer;
+  try {
+    data = await fs.readFile(sourceFile);
+  } catch (error) {
+    throw new Error(`Persistent storage bootstrap JSON source is missing: membership-commerce/${MEMBERSHIP_RULES_SEED_FILE}`, { cause: error });
+  }
+  validateJson(data, `membership-commerce/${MEMBERSHIP_RULES_SEED_FILE}`);
+  validateMembershipRulesStore(JSON.parse(data.toString("utf8")));
+  return data;
+}
+
 export async function initializePersistentStorage(
   options: PersistentStorageInitializationOptions = {},
 ): Promise<PersistentStorageBootstrapResult> {
@@ -251,6 +267,9 @@ export async function initializePersistentStorage(
         : path.join(process.cwd(), "bootstrap", "store")),
   );
   const documents = await loadSeedDocuments(repositorySeedDir);
+  const membershipRulesSeed = await loadMembershipRulesSeedDocument(
+    path.join(process.cwd(), "bootstrap", "membership-commerce"),
+  );
   const strings = new Set<string>();
   for (const document of documents.values()) collectStrings(document.value, strings);
   const mediaPlan = [...strings]
@@ -313,6 +332,13 @@ export async function initializePersistentStorage(
     );
     (seeded ? result.jsonSeeded : result.jsonExisting).push(fileName);
   }
+  const membershipRulesTarget = getMembershipRulesFile();
+  const membershipRulesSeeded = await publishIfMissing(
+    membershipRulesSeed,
+    membershipRulesTarget,
+    async () => { validateMembershipRulesStore(JSON.parse((await fs.readFile(membershipRulesTarget)).toString("utf8"))); },
+  );
+  (membershipRulesSeeded ? result.jsonSeeded : result.jsonExisting).push(`membership-commerce/${MEMBERSHIP_RULES_SEED_FILE}`);
   return result;
 }
 

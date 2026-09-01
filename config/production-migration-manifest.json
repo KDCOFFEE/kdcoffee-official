@@ -37,10 +37,11 @@
       }
     ],
     "businessRules": {
-      "source": null,
+      "source": "bootstrap/membership-commerce/business-rules.json",
       "target": "/data/membership-commerce/business-rules.json",
-      "ownerApproval": "BUSINESS_RULES_REQUIRED",
-      "bootstrapEnabled": false
+      "sha256": "3528aae49bbcd5dbfa0d97de49ecd3bcb77c063ef342e703d808dbefca0b366d",
+      "ownerApproval": "OWNER_APPROVED",
+      "bootstrapEnabled": true
     },
     "media": {
       "sourceRoot": "public",
