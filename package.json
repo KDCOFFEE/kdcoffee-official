@@ -62,7 +62,9 @@
     "health": "node scripts/health-check.mjs",
     "test:phase-j1f6": "node --experimental-strip-types --import ./scripts/member-auth-test-bootstrap.mjs scripts/test-phase-j1f6-works-public-seo.ts",
     "test:phase-j2b2": "node --experimental-strip-types scripts/test-phase-j2b2-homepage-schema.ts",
-    "test:phase-j2b3": "node --experimental-strip-types scripts/test-phase-j2b3-homepage-admin-presentation.ts"
+    "test:phase-j2b3": "node --experimental-strip-types scripts/test-phase-j2b3-homepage-admin-presentation.ts",
+    "test:phase-j2c": "node scripts/test-phase-j2c-homepage-navigation.mjs",
+    "test:phase-j2b3b1": "node scripts/test-phase-j2b3b1-hero-media.mjs"
   },
   "dependencies": {
     "cloudinary": "^2.10.0",

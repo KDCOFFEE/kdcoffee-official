@@ -1,4 +1,5 @@
 import type { MediaAsset } from "./media.ts";
+import type { CmsLinkValue } from "./cmsLinks.ts";
 // @ts-expect-error -- explicit extension keeps Node's type-stripping regression runner compatible.
 import { isMediaAsset } from "./media.ts";
 import type { VisualColorValue } from "./pageBuilderVisualStyle.ts";
@@ -13,6 +14,38 @@ export const HERO_TIMING_MAX_MS = 10_000;
 
 export const HOMEPAGE_HERO_OVERLAY_PRESETS = ["current", "soft", "strong", "none"] as const;
 export const HOMEPAGE_CARD_PRESENTATION_PRESETS = ["current", "minimal", "bordered"] as const;
+export const HOMEPAGE_NAVIGATION_LIMIT = 8;
+
+export type HomepageNavigationItem = {
+  id: string;
+  label: string;
+  href: CmsLinkValue;
+  enabled?: boolean;
+  order?: number;
+};
+
+export const DEFAULT_HOMEPAGE_NAVIGATION: HomepageNavigationItem[] = [
+  { id: "NAV-FIRST", label: "第一次怎麼選", href: "/#home003", enabled: true, order: 0 },
+  { id: "NAV-MONTHLY", label: "本月推薦", href: "/#home004", enabled: true, order: 1 },
+  { id: "NAV-WORKS", label: "全部咖啡", href: "/works", enabled: true, order: 2 },
+  { id: "NAV-WHY-KD", label: "為什麼是 KD", href: "/#home002", enabled: true, order: 3 },
+  { id: "NAV-GIFT", label: "耳掛與送禮", href: "/#home003", enabled: true, order: 4 },
+];
+
+export function resolveHomepageNavigation(value: unknown): HomepageNavigationItem[] {
+  if (!Array.isArray(value)) return DEFAULT_HOMEPAGE_NAVIGATION.map((item) => ({ ...item }));
+  return value
+    .filter((item): item is Record<string, unknown> => isRecord(item))
+    .map((item, index) => ({
+      id: typeof item.id === "string" && item.id.trim() ? item.id : `NAV-${index + 1}`,
+      label: typeof item.label === "string" ? item.label : "",
+      href: item.href as CmsLinkValue,
+      enabled: item.enabled !== false,
+      order: Number.isFinite(item.order) ? Number(item.order) : index,
+    }))
+    .sort((a, b) => Number(a.order ?? 0) - Number(b.order ?? 0));
+}
+
 
 export type HomepageHeroOverlayPreset = (typeof HOMEPAGE_HERO_OVERLAY_PRESETS)[number];
 export type HomepageCardPresentationPreset = (typeof HOMEPAGE_CARD_PRESENTATION_PRESETS)[number];
@@ -402,11 +435,32 @@ export function resolveHomepageOwnerPresentation(homepage: unknown): HomepageOwn
   return result;
 }
 
+function validateHomepageNavigation(value: unknown) {
+  if (value === undefined) return;
+  if (!Array.isArray(value) || value.length > HOMEPAGE_NAVIGATION_LIMIT) {
+    throw new Error(`首頁導覽最多可有 ${HOMEPAGE_NAVIGATION_LIMIT} 項。`);
+  }
+  const ids = new Set<string>();
+  value.forEach((item, index) => {
+    if (!isRecord(item)) throw new Error(`第 ${index + 1} 個首頁導覽格式不正確。`);
+    validateId(item.id, `第 ${index + 1} 個首頁導覽`);
+    if (ids.has(String(item.id))) throw new Error("首頁導覽項目 ID 不可重複。");
+    ids.add(String(item.id));
+    validateBoolean(item.enabled, `第 ${index + 1} 個首頁導覽顯示設定`);
+    validateText(item.label, `第 ${index + 1} 個首頁導覽名稱`, 40, true);
+    validateHref(item.href, `第 ${index + 1} 個首頁導覽連結`);
+    if (item.order !== undefined && (!Number.isInteger(item.order) || Number(item.order) < 0 || Number(item.order) >= HOMEPAGE_NAVIGATION_LIMIT)) {
+      throw new Error(`第 ${index + 1} 個首頁導覽排序不正確。`);
+    }
+  });
+}
+
 export function validateHomepageCms(homepage: unknown) {
   if (!isRecord(homepage) || !isRecord(homepage.hero)) throw new Error("首頁資料格式不完整。");
   const hero = homepage.hero;
   validateHomepageVisual(homepage.visual);
   validateHomepageSeo(homepage.seo);
+  validateHomepageNavigation(homepage.navigation);
   validateBoolean(hero.enabled, "主視覺顯示設定");
   validateBoolean(hero.motionEnabled, "主視覺電影式進場設定");
   validateBoolean(hero.primaryCtaEnabled, "主視覺主要按鈕顯示設定");

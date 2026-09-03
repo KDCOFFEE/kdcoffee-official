@@ -7,6 +7,7 @@ import {
   PREMIUM_HERO_TIMING,
   resolveHeroTiming,
   type HeroTiming,
+  type HomepageNavigationItem,
 } from "@/lib/homepageCms";
 
 export { PREMIUM_HERO_TIMING, resolveHeroTiming };
@@ -102,6 +103,8 @@ export type HomepageData = {
   updatedAt: string;
 
   hero: HeroSettings;
+
+  navigation?: HomepageNavigationItem[];
 
   campaignSection: {
     enabled?: boolean;

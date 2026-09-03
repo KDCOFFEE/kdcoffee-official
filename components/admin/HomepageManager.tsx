@@ -8,7 +8,7 @@ import MediaUploader from "@/components/admin/MediaUploader";
 import SmartLinkPicker, { SmartLinkEditingProvider } from "@/components/admin/SmartLinkPicker";
 import { validateHomepageCampaigns } from "@/lib/homepageCampaignValidation";
 import { home004IneligibilityReasons, resolveHome004Recommendations } from "@/lib/home004Recommendations";
-import { HOMEPAGE_CARD_PRESENTATION_PRESETS, HOMEPAGE_COLLECTION_LIMIT, HOMEPAGE_HERO_OVERLAY_PRESETS, HOMEPAGE_MOTION_PRESETS, HOMEPAGE_PRODUCT_LIMIT, HOMEPAGE_SECTION_MOTION_DEFAULTS, PREMIUM_HERO_TIMING, homepageMotionCssVariables, resolveHeroTiming, resolveHomepageMotion, validateHomepageCms, type HeroTiming, type HomepageMediaReference, type HomepageMotionSectionKey, type HomepageSectionMotion, type HomepageVisualConfig } from "@/lib/homepageCms";
+import { HOMEPAGE_CARD_PRESENTATION_PRESETS, HOMEPAGE_COLLECTION_LIMIT, HOMEPAGE_HERO_OVERLAY_PRESETS, HOMEPAGE_NAVIGATION_LIMIT, HOMEPAGE_MOTION_PRESETS, HOMEPAGE_PRODUCT_LIMIT, HOMEPAGE_SECTION_MOTION_DEFAULTS, PREMIUM_HERO_TIMING, homepageMotionCssVariables, resolveHeroTiming, resolveHomepageMotion, resolveHomepageNavigation, validateHomepageCms, type HeroTiming, type HomepageMediaReference, type HomepageMotionSectionKey, type HomepageNavigationItem, type HomepageSectionMotion, type HomepageVisualConfig } from "@/lib/homepageCms";
 import type { AssetRecord } from "@/lib/assets";
 import { VISUAL_COLOR_PRESETS, visualColorHex, type VisualColorValue } from "@/lib/pageBuilderVisualStyle";
 import { localImageMedia, resolveMediaAsset, youtubeMedia, type MediaAsset } from "@/lib/media";
@@ -37,7 +37,7 @@ export default function HomepageManager() {
   const [baseline, setBaseline] = useState("");
   const [message, setMessage] = useState("讀取中…");
   const [saving, setSaving] = useState(false);
-  const [activeTab, setActiveTab] = useState<"content" | "visual" | "seo">("content");
+  const [activeTab, setActiveTab] = useState<"content" | "navigation" | "visual" | "seo">("content");
   const [seoPickerOpen, setSeoPickerOpen] = useState(false);
   const [heroPicker, setHeroPicker] = useState<"desktop" | "mobile" | null>(null);
 
@@ -104,13 +104,13 @@ export default function HomepageManager() {
   return <SmartLinkEditingProvider pages={data.publishedPages}><div className="homepage-manager v3-admin">
     <div className="cms-toolbar"><div><p className="eyebrow dark">HOMEPAGE CMS 2.0</p><h1>管理我的首頁</h1><p>文字、順序與媒體都可視化管理；移除首頁引用不會刪除素材。</p></div><div className="cms-toolbar-actions"><a href="/" target="_blank">預覽首頁 ↗</a><button onClick={save} disabled={saving || !dirty}>{saving ? "儲存中…" : "儲存全部"}</button></div></div>
     {dirty ? <div className="cms-unsaved" role="status">有尚未儲存的變更</div> : null}{message ? <div className="cms-message" role="status">{message}</div> : null}
-    <div className="cms-toolbar-actions" role="tablist" aria-label="首頁管理分類">
+    <div className="cms-toolbar-actions homepage-admin-tabs" role="tablist" aria-label="首頁管理分類">
       <button type="button" role="tab" aria-selected={activeTab === "content"} onClick={() => setActiveTab("content")}>內容</button>
+      <button type="button" role="tab" aria-selected={activeTab === "navigation"} onClick={() => setActiveTab("navigation")}>導覽</button>
       <button type="button" role="tab" aria-selected={activeTab === "visual"} onClick={() => setActiveTab("visual")}>視覺</button>
       <button type="button" role="tab" aria-selected={activeTab === "seo"} onClick={() => setActiveTab("seo")}>SEO</button>
     </div>
     {activeTab === "content" ? <>
-      <HomepageCtaVisibility homepage={h} setPath={setPath}/>
       <HeroEditor value={h.hero} products={data.products} setPath={setPath} uploadHeroImage={uploadHeroImage} onOpenLibrary={setHeroPicker} />
       <CampaignEditor section={h.campaignSection || {}} campaigns={h.campaigns || []} products={data.products} setPath={setPath} uploadImage={uploadImage} />
       <ContentSectionEditor sectionKey="home002" value={h.home002 || {}} collectionKey="cards" setPath={setPath} uploadImage={uploadImage} assets={data.assets} />
@@ -123,11 +123,63 @@ export default function HomepageManager() {
       <ReviewsEditor value={h.home009 || {}} setPath={setPath} />
       <Home010Editor value={h.home010 || {}} products={data.products} setPath={setPath} />
     </> : null}
+    {activeTab === "navigation" ? <>
+      <HomepageNavigationEditor value={h.navigation} products={data.products} pages={data.publishedPages} setPath={setPath} />
+      <HomepageCtaVisibility homepage={h} setPath={setPath}/>
+    </> : null}
     {activeTab === "visual" ? <HomepageVisualEditor value={h.visual} setPath={setPath} /> : null}
     {activeTab === "seo" ? <HomepageSeoEditor value={h.seo} assets={data.assets} setPath={setPath} onOpenPicker={() => setSeoPickerOpen(true)} /> : null}
     {seoPickerOpen ? <ImageLibraryPicker assets={data.assets} title="選擇首頁 SEO 分享圖片" onClose={() => setSeoPickerOpen(false)} onChoose={(asset) => { setPath(["seo", "shareImage"], { media: localImageMedia(asset.path), alt: asset.alt || asset.name }); setSeoPickerOpen(false); }} /> : null}
     {heroPicker ? <HeroMediaLibraryPicker assets={data.assets} title={heroPicker === "desktop" ? "選擇桌機 Hero 素材" : "選擇手機 Hero 素材"} onClose={() => setHeroPicker(null)} onChoose={(media) => { setPath(["hero", heroPicker === "desktop" ? "desktopMedia" : "mobileMedia"], media); setHeroPicker(null); }} /> : null}
   </div></SmartLinkEditingProvider>;
+}
+
+function HomepageNavigationEditor({ value, products, pages, setPath }: { value: unknown; products: ProductOption[]; pages: import("@/lib/cmsLinks").PublishedCmsPage[]; setPath: SetPath }) {
+  const items = resolveHomepageNavigation(value);
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const commit = (next: HomepageNavigationItem[]) => setPath(["navigation"], next.map((item, order) => ({ ...item, order })));
+  const patch = (index: number, next: Partial<HomepageNavigationItem>) => commit(items.map((item, itemIndex) => itemIndex === index ? { ...item, ...next } : item));
+  const move = (index: number, direction: -1 | 1) => commit(moveItem(items, index, direction));
+  const add = () => {
+    if (items.length >= HOMEPAGE_NAVIGATION_LIMIT) return;
+    commit([...items, { id: stableId("NAV"), label: "新導覽", href: { type: "internal", target: "home" }, enabled: true, order: items.length }]);
+  };
+  const remove = (index: number) => {
+    if (items.length <= 1) return;
+    if (!globalThis.confirm(`確定要刪除「${items[index]?.label || "未命名導覽"}」嗎？`)) return;
+    commit(items.filter((_, itemIndex) => itemIndex !== index));
+  };
+  const dropAt = (index: number) => {
+    if (dragIndex === null || dragIndex === index) { setDragIndex(null); return; }
+    const next = [...items];
+    const [moved] = next.splice(dragIndex, 1);
+    next.splice(index, 0, moved);
+    setDragIndex(null);
+    commit(next);
+  };
+
+  return <Panel title="網站上方導覽" description="直接管理網站 Header 導覽。可改名稱、顯示／隱藏、拖曳排序、新增／刪除與修改 Smart Link；桌機與手機共用同一組設定。" open controls={<button type="button" className="homepage-navigation-add" disabled={items.length >= HOMEPAGE_NAVIGATION_LIMIT} onClick={add}>＋ 新增導覽</button>}>
+    <div className="homepage-navigation-table" role="table" aria-label="網站上方導覽管理">
+      <div className="homepage-navigation-table-head" role="row">
+        <span>排序</span><span>顯示</span><span>導覽名稱</span><span>連結（Smart Link）</span><span>操作</span>
+      </div>
+      {items.map((item, index) => <div className={`homepage-navigation-row${dragIndex === index ? " is-dragging" : ""}`} role="row" key={item.id} draggable onDragStart={() => setDragIndex(index)} onDragEnd={() => setDragIndex(null)} onDragOver={(event) => event.preventDefault()} onDrop={() => dropAt(index)}>
+        <div className="homepage-navigation-sort" role="cell">
+          <button type="button" className="homepage-navigation-drag" aria-label={`拖曳排序 ${item.label || "未命名導覽"}`} title="拖曳調整順序">⋮⋮</button>
+          <b>{String(index + 1).padStart(2, "0")}</b>
+          <div className="homepage-navigation-mobile-order">
+            <button type="button" disabled={index === 0} onClick={() => move(index, -1)} aria-label="上移">↑</button>
+            <button type="button" disabled={index === items.length - 1} onClick={() => move(index, 1)} aria-label="下移">↓</button>
+          </div>
+        </div>
+        <div className="homepage-navigation-visible" role="cell"><Visibility checked={item.enabled !== false} onChange={(checked) => patch(index, { enabled: checked })} label={item.enabled !== false ? "顯示" : "隱藏"} /></div>
+        <label className="homepage-navigation-name" role="cell"><span className="homepage-navigation-mobile-label">導覽名稱</span><input aria-label={`導覽名稱 ${index + 1}`} maxLength={40} value={item.label} onChange={(event) => patch(index, { label: event.target.value })} /></label>
+        <div className="homepage-navigation-link" role="cell"><SmartLinkPicker editorId={`homepage-navigation-${item.id}`} label="導覽連結" buttonText={item.label} value={item.href} onChange={(href) => patch(index, { href })} products={products} pages={pages} /></div>
+        <div className="homepage-navigation-actions" role="cell"><button type="button" className="danger-link" disabled={items.length <= 1} onClick={() => remove(index)}>刪除</button></div>
+      </div>)}
+    </div>
+    <div className="homepage-navigation-footer"><p>最多 {HOMEPAGE_NAVIGATION_LIMIT} 個導覽；至少保留 1 個。新增後可直接修改名稱與 Smart Link，再按右上「儲存全部」。</p><span>{items.length} / {HOMEPAGE_NAVIGATION_LIMIT}</span></div>
+  </Panel>;
 }
 
 const homepageVisualDefaults: Required<HomepageVisualConfig> = {

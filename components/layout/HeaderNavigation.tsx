@@ -1,20 +1,15 @@
 "use client";
 
-import Link from "next/link";
+import CmsLink from "@/components/CmsLink";
+import type { CmsLinkProduct, CmsLinkValue, PublishedCmsPage } from "@/lib/cmsLinks";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
-const navigationItems = [
-  { href: "/#home003", label: "第一次怎麼選" },
-  { href: "/#home004", label: "本月推薦" },
-  { href: "/works", label: "全部咖啡" },
-  { href: "/#home002", label: "為什麼是 KD" },
-  { href: "/#home003", label: "耳掛與送禮" },
-];
+type NavigationItem = { id: string; label: string; href: CmsLinkValue };
 
 const mobileNavigationId = "mobile-primary-navigation";
 
-export default function HeaderNavigation() {
+export default function HeaderNavigation({ items, products = [], pages = [] }: { items: NavigationItem[]; products?: CmsLinkProduct[]; pages?: PublishedCmsPage[] }) {
   const pathname = usePathname();
   const navigationRef = useRef<HTMLDivElement>(null);
   const [menuState, setMenuState] = useState({ isOpen: false, pathname });
@@ -45,7 +40,7 @@ export default function HeaderNavigation() {
   return (
     <div className="header-navigation" ref={navigationRef}>
       <nav className="desktop-navigation" aria-label="主要導覽">
-        {navigationItems.map((item) => <Link key={`${item.href}-${item.label}`} href={item.href}>{item.label}</Link>)}
+        {items.map((item) => <CmsLink key={item.id} value={item.href} registry={{ products, pages }}>{item.label}</CmsLink>)}
       </nav>
 
       <button
@@ -63,8 +58,8 @@ export default function HeaderNavigation() {
 
       <div className="mobile-navigation-panel" hidden={!isOpen}>
         <nav id={mobileNavigationId} aria-label="手機主要導覽">
-          {navigationItems.map((item) => (
-            <Link key={`${item.href}-${item.label}`} href={item.href} onClick={closeMenu}>{item.label}</Link>
+          {items.map((item) => (
+            <CmsLink key={item.id} value={item.href} registry={{ products, pages }} onClick={closeMenu}>{item.label}</CmsLink>
           ))}
         </nav>
       </div>
