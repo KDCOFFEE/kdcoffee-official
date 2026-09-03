@@ -10,6 +10,9 @@ import { HOMEPAGE_MOTION_PRESETS } from "./homepageCms.ts";
 import type { HeroPlaybackMode, PageBuilderBlockVisualStyle, WebsiteVisualStyle } from "./pageBuilderVisualStyle.ts";
 // @ts-expect-error -- see above.
 import { HERO_PLAYBACK_MODES, validateBlockVisualStyle, validateWebsiteVisualStyle } from "./pageBuilderVisualStyle.ts";
+import type { WorksPageCmsConfig } from "./worksPageCms.ts";
+// @ts-expect-error -- runtime test scripts use Node's TypeScript stripping and require explicit extensions.
+import { validateWorksPageCms } from "./worksPageCms.ts";
 
 export const PAGE_SECTION_TYPES = ["hero", "text", "mediaText", "gallery", "products", "features", "cta"] as const;
 export type PageSectionType = (typeof PAGE_SECTION_TYPES)[number];
@@ -70,7 +73,15 @@ export type PageRecord = {
   draft: PageDraft;
   publishedSnapshot?: PageDraft;
 };
-export type PageStore = { version: number; updatedAt: string; visualStyle?: WebsiteVisualStyle; pages: PageRecord[] };
+export type PageStore = {
+  version: number;
+  updatedAt: string;
+  visualStyle?: WebsiteVisualStyle;
+  pages: PageRecord[];
+  systemPages?: Record<string, unknown> & {
+    works?: WorksPageCmsConfig;
+  };
+};
 
 const ID_PATTERN = /^[a-z0-9][a-z0-9-]{5,80}$/u;
 const SLUG_PATTERN = /^[a-z0-9](?:[a-z0-9-]{1,78}[a-z0-9])?$/u;
@@ -169,6 +180,10 @@ export function validatePageDraft(value: PageDraft, productSlugs?: Set<string>, 
 export function validatePageStore(store: PageStore) {
   if (!store || typeof store !== "object" || !Number.isInteger(store.version) || !Array.isArray(store.pages)) throw new Error("頁面資料庫格式不正確。");
   if (store.visualStyle !== undefined) validateWebsiteVisualStyle(store.visualStyle);
+  if (store.systemPages !== undefined) {
+    if (!store.systemPages || typeof store.systemPages !== "object" || Array.isArray(store.systemPages)) throw new Error("系統頁面設定格式不正確。");
+    if (store.systemPages.works !== undefined) validateWorksPageCms(store.systemPages.works);
+  }
   assertUniqueIds(store.pages, "頁面");
   const slugs = new Set<string>();
   for (const page of store.pages) {

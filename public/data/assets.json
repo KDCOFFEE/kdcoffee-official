@@ -1,6 +1,6 @@
 {
-  "version": 8,
-  "updatedAt": "2026-08-26T03:16:20.032Z",
+  "version": 14,
+  "updatedAt": "2026-09-02T00:14:17.762Z",
   "assets": [
     {
       "id": "LOGO001",
@@ -137,6 +137,96 @@
       "status": "active",
       "originalFileName": "S__5546120_0.jpg",
       "updatedAt": "2026-08-26T03:16:20.032Z"
+    },
+    {
+      "id": "PAGEIMG-9150C2650B61",
+      "category": "page-builder",
+      "name": "8387f2df-ce81-4276-b162-2b2c82af2f87",
+      "usage": "Page Builder 活動／專題頁",
+      "path": "/uploads/assets/page-builder/kd-coffee-page-8387f2df-ce81-4276-b162-2b2c82af2f87-9150c2650b61-v01.webp",
+      "recommendedSize": "最長邊 1800 px；系統自動最佳化",
+      "displaySize": "依頁面區塊與裝置自適應",
+      "format": "WebP",
+      "alt": "8387f2df-ce81-4276-b162-2b2c82af2f87",
+      "seoStem": "kd-coffee-page-8387f2df-ce81-4276-b162-2b2c82af2f87-9150c2650b61",
+      "status": "active",
+      "originalFileName": "8387f2df-ce81-4276-b162-2b2c82af2f87.png",
+      "updatedAt": "2026-09-01T15:04:22.970Z"
+    },
+    {
+      "id": "PAGEIMG-A7E2B7EDBEF6",
+      "category": "page-builder",
+      "name": "8387f2df-ce81-4276-b162-2b2c82af2f87",
+      "usage": "Page Builder 活動／專題頁",
+      "path": "/uploads/assets/page-builder/kd-coffee-page-8387f2df-ce81-4276-b162-2b2c82af2f87-a7e2b7edbef6-v01.webp",
+      "recommendedSize": "最長邊 1800 px；系統自動最佳化",
+      "displaySize": "依頁面區塊與裝置自適應",
+      "format": "WebP",
+      "alt": "8387f2df-ce81-4276-b162-2b2c82af2f87",
+      "seoStem": "kd-coffee-page-8387f2df-ce81-4276-b162-2b2c82af2f87-a7e2b7edbef6",
+      "status": "active",
+      "originalFileName": "8387f2df-ce81-4276-b162-2b2c82af2f87.png",
+      "updatedAt": "2026-09-01T15:33:04.805Z"
+    },
+    {
+      "id": "PAGEIMG-73BE832E7A40",
+      "category": "page-builder",
+      "name": "8387f2df-ce81-4276-b162-2b2c82af2f87",
+      "usage": "Page Builder 活動／專題頁",
+      "path": "/uploads/assets/page-builder/kd-coffee-page-8387f2df-ce81-4276-b162-2b2c82af2f87-73be832e7a40-v01.webp",
+      "recommendedSize": "最長邊 1800 px；系統自動最佳化",
+      "displaySize": "依頁面區塊與裝置自適應",
+      "format": "WebP",
+      "alt": "8387f2df-ce81-4276-b162-2b2c82af2f87",
+      "seoStem": "kd-coffee-page-8387f2df-ce81-4276-b162-2b2c82af2f87-73be832e7a40",
+      "status": "active",
+      "originalFileName": "8387f2df-ce81-4276-b162-2b2c82af2f87.png",
+      "updatedAt": "2026-09-01T15:58:41.832Z"
+    },
+    {
+      "id": "PAGEIMG-ED955F0FA0A9",
+      "category": "page-builder",
+      "name": "8387f2df-ce81-4276-b162-2b2c82af2f87",
+      "usage": "Page Builder 活動／專題頁",
+      "path": "/uploads/assets/page-builder/kd-coffee-page-8387f2df-ce81-4276-b162-2b2c82af2f87-ed955f0fa0a9-v01.webp",
+      "recommendedSize": "最長邊 1800 px；系統自動最佳化",
+      "displaySize": "依頁面區塊與裝置自適應",
+      "format": "WebP",
+      "alt": "8387f2df-ce81-4276-b162-2b2c82af2f87",
+      "seoStem": "kd-coffee-page-8387f2df-ce81-4276-b162-2b2c82af2f87-ed955f0fa0a9",
+      "status": "active",
+      "originalFileName": "8387f2df-ce81-4276-b162-2b2c82af2f87.png",
+      "updatedAt": "2026-09-01T16:01:56.107Z"
+    },
+    {
+      "id": "PAGEIMG-3537F57F9A67",
+      "category": "page-builder",
+      "name": "KD-Coffee-Monthly-Menu-2026-08",
+      "usage": "Page Builder 活動／專題頁",
+      "path": "/uploads/assets/page-builder/kd-coffee-page-kd-coffee-monthly-menu-2026-08-3537f57f9a67-v01.webp",
+      "recommendedSize": "最長邊 1800 px；系統自動最佳化",
+      "displaySize": "依頁面區塊與裝置自適應",
+      "format": "WebP",
+      "alt": "KD-Coffee-Monthly-Menu-2026-08",
+      "seoStem": "kd-coffee-page-kd-coffee-monthly-menu-2026-08-3537f57f9a67",
+      "status": "active",
+      "originalFileName": "KD-Coffee-Monthly-Menu-2026-08.webp",
+      "updatedAt": "2026-09-02T00:13:47.175Z"
+    },
+    {
+      "id": "PAGEIMG-6A07EE707199",
+      "category": "page-builder",
+      "name": "8387f2df-ce81-4276-b162-2b2c82af2f87",
+      "usage": "Page Builder 活動／專題頁",
+      "path": "/uploads/assets/page-builder/kd-coffee-page-8387f2df-ce81-4276-b162-2b2c82af2f87-6a07ee707199-v01.webp",
+      "recommendedSize": "最長邊 1800 px；系統自動最佳化",
+      "displaySize": "依頁面區塊與裝置自適應",
+      "format": "WebP",
+      "alt": "8387f2df-ce81-4276-b162-2b2c82af2f87",
+      "seoStem": "kd-coffee-page-8387f2df-ce81-4276-b162-2b2c82af2f87-6a07ee707199",
+      "status": "active",
+      "originalFileName": "8387f2df-ce81-4276-b162-2b2c82af2f87.png",
+      "updatedAt": "2026-09-02T00:14:17.762Z"
     }
   ]
 }

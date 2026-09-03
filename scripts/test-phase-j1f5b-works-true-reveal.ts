@@ -1,0 +1,14 @@
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+// @ts-expect-error Node test execution requires explicit extension.
+import { resolveWorksPageCms, validateWorksPageCms } from "../lib/worksPageCms.ts";
+let passed=0;const check=(n:string,v:unknown)=>{assert.ok(v,n);passed++;console.log(`PASS ${passed}: ${n}`)};
+const runtime=await readFile("components/works/WorksMotionRuntime.tsx","utf8");const page=await readFile("app/works/page.tsx","utf8");const media=await readFile("components/works/WorksHeroMedia.tsx","utf8");
+const legacy=resolveWorksPageCms(undefined,{monthLabel:"月",intro:"豆"});check("SSR defaults are visible and heroMedia remains disabled",!legacy.motion.heroMedia.enabled&&legacy.motion.catalogIntro.triggerOnViewport);
+const cfg={schemaVersion:1,motion:{hero:{enabled:true,preset:"fade-up",durationMs:500,delayMs:0,distancePx:20,staggerMs:0,triggerOnViewport:false},heroMedia:{enabled:true,preset:"scale-reveal",durationMs:700,delayMs:100,distancePx:0,staggerMs:0,triggerOnViewport:true},catalogIntro:{enabled:true,preset:"fade",durationMs:400,delayMs:0,distancePx:0,staggerMs:0,triggerOnViewport:true},productGrid:{enabled:true,preset:"slide-left",durationMs:500,delayMs:0,distancePx:20,staggerMs:100,triggerOnViewport:true}}} as const;validateWorksPageCms(cfg);const r=resolveWorksPageCms(cfg,{monthLabel:"月",intro:"豆"});check("hero content and hero media resolve independently",r.motion.hero.preset!==r.motion.heroMedia.preset&&r.motion.heroMedia.triggerOnViewport);
+let bad=false;try{validateWorksPageCms({schemaVersion:1,motion:{heroMedia:{triggerOnViewport:"bad"}}} as never)}catch{bad=true}check("invalid heroMedia trigger rejected",bad);
+check("runtime enhancement preserves first-paint pre-reveal and restores visibility when IntersectionObserver is unavailable",runtime.includes("useLayoutEffect")&&!runtime.includes('node.style.opacity = "0"')&&runtime.includes('if (!("IntersectionObserver" in window)) { nodes.forEach(markWorksMotionRevealed); return; }'));
+check("intersection plays once and then disconnects",runtime.includes("entry.isIntersecting")&&runtime.includes("observer.disconnect()")&&runtime.includes("worksMotionState(node) === \"pre-reveal\""));
+check("runtime targets Hero media independently",runtime.includes('"heroMedia"')&&media.includes('data-works-motion-target="heroMedia"')&&page.includes("<WorksMotionRuntime motion={works.motion}"));
+check("catalog/grid targets remain in DOM and preserve product links",page.includes('data-works-motion-target="catalogIntro"')&&page.includes('data-works-motion-target="productGrid"')&&(page.match(/href=\{`\/works\/\$\{product\.slug\}`\}/gu)||[]).length===2);
+check("reduced motion is checked before any pre-reveal state",runtime.includes("prefers-reduced-motion: reduce"));console.log(`Phase J.1F.5B true reveal: ${passed} PASS`);

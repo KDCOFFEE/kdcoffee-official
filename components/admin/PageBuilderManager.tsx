@@ -1,8 +1,8 @@
 "use client";
-/* eslint-disable @next/next/no-img-element -- owner asset paths are runtime-managed and optimized during upload. */
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import MediaUploader from "@/components/admin/MediaUploader";
+import ImageLibraryPicker from "@/components/admin/ImageLibraryPicker";
 import SmartLinkPicker, { SmartLinkEditingProvider } from "@/components/admin/SmartLinkPicker";
 import { BlockVisualStyleEditor, HeroPlaybackEditor, VisualStyleStudio } from "@/components/admin/VisualStyleStudio";
 import PageBuilderRenderer from "@/components/page-builder/PageBuilderRenderer";
@@ -137,12 +137,6 @@ function MediaEditor({section,update,addMedia,youtubeUrl,setYoutubeUrl,addYoutub
     <div className="media-add-panel"><div className="page-image-actions"><button type="button" className="cms-secondary-button" onClick={()=>setPickerFor("new")}>從素材庫選圖片</button><MediaUploader label="上傳新圖片或影片" usage={section.type==="hero"?"hero":"content"} showPreview={false} onImageUpload={uploadImage} imageActionLabel="上傳新圖片" videoActionLabel="上傳影片" onChange={addMedia}/></div><div className="youtube-add"><label>YouTube 影片網址<input value={youtubeUrl} onChange={event=>setYoutubeUrl(event.target.value)}/></label><button type="button" onClick={addYoutube} disabled={!youtubeUrl.trim()}>＋新增 YouTube</button></div></div>
     {pickerFor!==null?<ImageLibraryPicker assets={assets} onChoose={chooseAsset} onClose={()=>setPickerFor(null)}/>:null}
   </section>;
-}
-
-function ImageLibraryPicker({assets,onChoose,onClose}:{assets:AssetRecord[];onChoose:(asset:AssetRecord)=>void;onClose:()=>void}) {
-  const [query,setQuery]=useState("");
-  const images=useMemo(()=>assets.filter(asset=>/\.(avif|gif|jpe?g|png|svg|webp)(?:\?|$)/i.test(asset.path)&&`${asset.name} ${asset.category} ${asset.alt}`.toLowerCase().includes(query.trim().toLowerCase())),[assets,query]);
-  return <div className="page-asset-picker" role="dialog" aria-modal="true" aria-label="從素材庫選擇圖片"><header><div><h3>從素材庫選擇圖片</h3><p>選取既有圖片，不會建立重複檔案。</p></div><button type="button" onClick={onClose} aria-label="關閉素材庫">×</button></header><label>搜尋素材<input autoFocus value={query} onChange={event=>setQuery(event.target.value)} placeholder="名稱、分類或替代文字"/></label><div className="page-asset-grid">{images.map(asset=><button type="button" key={asset.id} onClick={()=>onChoose(asset)}><span><img src={asset.path} alt={asset.alt||asset.name} loading="lazy"/></span><b>{asset.name}</b><small>{asset.alt||"網站圖片"}</small></button>)}{!images.length?<p>找不到符合的圖片。</p>:null}</div></div>;
 }
 
 function FeatureEditor({section,update}:{section:PageBuilderSection;update:<K extends keyof PageBuilderSection>(key:K,value:PageBuilderSection[K])=>void}) { const set=(index:number,value:typeof section.items[number])=>update("items",section.items.map((item,i)=>i===index?value:item)); return <section className="page-subeditor"><header><div><h3>特色項目</h3><p>使用精簡卡片整理活動或服務重點。</p></div><button type="button" onClick={()=>update("items",[...section.items,{id:newBuilderId("item"),enabled:true,title:"新特色",body:""}])}>＋新增項目</button></header>{section.items.map((item,index)=><article key={item.id} className={`owner-surface ${item.enabled?"is-visible":"is-hidden"}`}><div className="subeditor-heading"><strong>特色 {index+1}</strong><Visibility enabled={item.enabled} onChange={enabled=>set(index,{...item,enabled})}/></div><label>標題<input value={item.title} onChange={event=>set(index,{...item,title:event.target.value})}/></label><label>內容<textarea value={item.body} onChange={event=>set(index,{...item,body:event.target.value})}/></label><div className="subeditor-actions"><button type="button" disabled={index===0} onClick={()=>update("items",move(section.items,index,-1))}>↑ 往上</button><button type="button" disabled={index===section.items.length-1} onClick={()=>update("items",move(section.items,index,1))}>↓ 往下</button></div><div className="danger-zone"><span>危險操作</span><button type="button" onClick={()=>confirm("確定移除這個項目？")&&update("items",section.items.filter((_,i)=>i!==index))}>移除項目</button></div></article>)}</section>; }

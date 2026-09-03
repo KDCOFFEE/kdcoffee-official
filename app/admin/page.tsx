@@ -47,6 +47,7 @@ export default async function AdminPage() {
       <Link className="admin-logo-entry" href="/admin/logo"><strong>上傳與管理 Logo</strong><span>Header、Footer、方形標誌與分享圖 →</span></Link>
       <Link href="/admin/homepage"><strong>首頁內容與照片</strong><span>Hero、多活動、推薦作品圖片 →</span></Link>
       <Link href="/admin/pages"><strong>網站頁面管理</strong><span>建立、預覽與發布活動／專題頁 →</span></Link>
+      <Link href="/admin/works"><strong>全部咖啡 / Works</strong><span>編輯全部咖啡頁面的內容與呈現設定 →</span></Link>
       <Link href="/admin/assets"><strong>品牌資產與 Logo</strong><span>圖片編號、尺寸、用途與 SEO 自動命名 →</span></Link>
       <Link href="/admin/products"><strong>作品與本月豆單</strong><span>23 款作品、上架、售完與首頁顯示 →</span></Link>
       <Link href="/admin/monthly-menu"><strong>本月豆單背景</strong><span>背景圖片、濃度、位置與 AI 提示詞 →</span></Link>
