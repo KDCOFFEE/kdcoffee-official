@@ -14,7 +14,7 @@ import MonthlyCampaign from "@/components/home/MonthlyCampaign";
 import Home004ProductMedia from "@/components/home/Home004ProductMedia";
 import KdMedia from "@/components/media/KdMedia";
 import { resolveMediaAsset, type MediaAsset } from "@/lib/media";
-import { homepageMotionCssVariables, orderedEnabledItems, resolveHeroTiming, resolveHomepageMotion, sectionIsEnabled, type HomepageMotionSectionKey } from "@/lib/homepageCms";
+import { homepageMotionCssVariables, homepageSectionOrderMap, orderedEnabledItems, resolveHeroTiming, resolveHomepageMotion, sectionIsEnabled, type HomepageMotionSectionKey } from "@/lib/homepageCms";
 import type { CmsLinkValue, PublishedCmsPage } from "@/lib/cmsLinks";
 
 import {
@@ -85,12 +85,12 @@ type HomepageReviewItem = {
 
 type MotionOwner = { motion?: unknown };
 
-function sectionMotionProps(owner: MotionOwner, sectionKey: HomepageMotionSectionKey) {
-  if (!("motion" in owner) || owner.motion === undefined) return {};
+function sectionMotionProps(owner: MotionOwner, sectionKey: HomepageMotionSectionKey, order?: number) {
+  if (!("motion" in owner) || owner.motion === undefined) return order === undefined ? {} : { style: { order } as CSSProperties };
   const motion = resolveHomepageMotion(owner.motion, sectionKey);
   return {
     "data-home-motion": motion.activePreset,
-    style: homepageMotionCssVariables(motion) as CSSProperties,
+    style: { ...homepageMotionCssVariables(motion), ...(order === undefined ? {} : { order }) } as CSSProperties,
   };
 }
 
@@ -166,6 +166,7 @@ export default function HomepageV3({
   pages: PublishedCmsPage[];
 }) {
   const h = homepageData;
+  const sectionOrder = homepageSectionOrderMap((h as HomepageViewData & { sectionOrder?: unknown }).sectionOrder);
 
   const hero =
     h.hero || {};
@@ -341,6 +342,8 @@ export default function HomepageV3({
         </div>
       </section> : null}
 
+      <div className="v3-home-section-order">
+
       {/**
        * ======================================================
        * HOME002
@@ -353,7 +356,7 @@ export default function HomepageV3({
       {sectionIsEnabled(why) && whyCards.length ? <section
         id="home002"
         className="v3-section v3-why home-surface-light"
-        {...sectionMotionProps(why, "home002")}
+        {...sectionMotionProps(why, "home002", sectionOrder.home002)}
       >
         <div className="v3-why-heading" data-home-reveal="content" data-home-motion-part style={motionItemStyle(0)}>
           <div className="v3-why-title-row">
@@ -435,7 +438,7 @@ export default function HomepageV3({
       {sectionIsEnabled(entries) && entryCards.length ? <section
         id="home003"
         className="v3-section v3-entry v3-scenes home-surface-dark"
-        {...sectionMotionProps(entries, "home003")}
+        {...sectionMotionProps(entries, "home003", sectionOrder.home003)}
       >
         <header className="v3-section-head centered" data-home-reveal="content" data-home-motion-part style={motionItemStyle(0)}>
           <h2>
@@ -537,6 +540,7 @@ export default function HomepageV3({
         }
         products={products}
         pages={pages}
+        order={sectionOrder.home003 + 0.5}
       />
 
       {/**
@@ -552,7 +556,7 @@ export default function HomepageV3({
       {sectionIsEnabled(starter) && selected.length ? <section
         id="home004"
         className="v3-section v3-starter home-surface-light"
-        {...sectionMotionProps(starter, "home004")}
+        {...sectionMotionProps(starter, "home004", sectionOrder.home004)}
       >
         <header className="v3-section-head" data-home-reveal="content" data-home-motion-part style={motionItemStyle(0)}>
           <h2>
@@ -671,7 +675,7 @@ export default function HomepageV3({
       {sectionIsEnabled(process) && processSteps.length ? <section
         id="home005"
         className="v3-section v3-process home-surface-light"
-        {...sectionMotionProps(process, "home005")}
+        {...sectionMotionProps(process, "home005", sectionOrder.home005)}
       >
         <header className="v3-section-head centered" data-home-reveal="editorial" data-home-motion-part style={motionItemStyle(0)}>
           <h2>
@@ -705,7 +709,7 @@ export default function HomepageV3({
       {sectionIsEnabled(roast) ? <section
         id="home006"
         className="v3-section v3-roast-service home-surface-dark"
-        {...sectionMotionProps(roast, "home006")}
+        {...sectionMotionProps(roast, "home006", sectionOrder.home006)}
       >
         <div className="v3-roast-copy" data-home-reveal="content" data-home-motion-part style={motionItemStyle(0)}>
           <h2>
@@ -753,7 +757,7 @@ export default function HomepageV3({
       {sectionIsEnabled(art) && artCards.length ? <section
         id="home007"
         className="v3-section v3-art home-surface-light"
-        {...sectionMotionProps(art, "home007")}
+        {...sectionMotionProps(art, "home007", sectionOrder.home007)}
       >
         <header className="v3-section-head" data-home-reveal="editorial" data-home-motion-part style={motionItemStyle(0)}>
           <h2>
@@ -805,7 +809,7 @@ export default function HomepageV3({
       {sectionIsEnabled(studio) && studioMedia.length ? <section
         id="home008"
         className="v3-section v3-studio home-surface-light"
-        {...sectionMotionProps(studio, "home008")}
+        {...sectionMotionProps(studio, "home008", sectionOrder.home008)}
       >
         <div data-home-reveal="editorial" data-home-motion-part style={motionItemStyle(0)}>
           <h2>
@@ -827,7 +831,7 @@ export default function HomepageV3({
         <section
           id="home009"
           className="v3-section v3-reviews home-surface-light"
-          {...sectionMotionProps(reviews, "home009")}
+          {...sectionMotionProps(reviews, "home009", sectionOrder.home009)}
         >
           <header className="v3-section-head centered" data-home-motion-part style={motionItemStyle(0)}>
             <h2>
@@ -868,7 +872,7 @@ export default function HomepageV3({
       {sectionIsEnabled(cta) ? <section
         id="home010"
         className="v3-final home-surface-dark"
-        {...sectionMotionProps(cta, "home010")}
+        {...sectionMotionProps(cta, "home010", sectionOrder.home010)}
       >
         <h2 data-home-reveal="content" data-home-motion-part style={motionItemStyle(0)}>
           {cta.title}
@@ -893,6 +897,7 @@ export default function HomepageV3({
             "開始挑咖啡"}
         </CmsLink> : null}
       </section> : null}
+      </div>
     </>
   );
 }

@@ -1,0 +1,18 @@
+import fs from "node:fs";
+const read=(p)=>fs.readFileSync(new URL(`../${p}`,import.meta.url),"utf8");
+const cms=read("lib/homepageCms.ts"), data=read("data/homepageData.ts"), admin=read("components/admin/HomepageManager.tsx"), home=read("components/home/HomepageV3.tsx"), campaign=read("components/home/MonthlyCampaign.tsx"), css=read("app/globals.css");
+let pass=0; const check=(name,ok)=>{if(!ok) throw new Error(`FAIL ${name}`); console.log(`PASS ${name}`); pass++;};
+check("legacy default order", cms.includes('HOMEPAGE_SECTION_KEYS = ["home002", "home003", "home004", "home005", "home006", "home007", "home008", "home009", "home010"]'));
+check("section order resolver", cms.includes("resolveHomepageSectionOrder") && cms.includes("homepageSectionOrderMap"));
+check("section order validation", cms.includes("首頁區塊排序格式不正確"));
+check("section order optional data", data.includes("sectionOrder?: HomepageSectionOrderItem[]"));
+check("owner order tab", admin.includes('setActiveTab("sections")}>排序</button>'));
+check("compact owner order table", admin.includes("homepage-section-order-table"));
+check("desktop drag ordering", admin.includes("draggable") && admin.includes("onDrop={() => dropAt(index)}"));
+check("mobile order fallback", admin.includes("homepage-section-order-mobile") && admin.includes("move(index, -1)"));
+check("visibility reuse", admin.includes('setPath([item.key, "enabled"], checked)'));
+check("public order wrapper", home.includes('className="v3-home-section-order"'));
+check("public section order binding", home.includes('sectionOrder.home002') && home.includes('sectionOrder.home010'));
+check("campaign follows home003", home.includes('order={sectionOrder.home003 + 0.5}') && campaign.includes("order?: number"));
+check("order layout css", css.includes(".v3-home-section-order{display:flex;flex-direction:column"));
+console.log(`PHASE J.2D.2 Homepage section ordering assertions: ${pass} PASS`);

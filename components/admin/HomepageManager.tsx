@@ -8,7 +8,7 @@ import MediaUploader from "@/components/admin/MediaUploader";
 import SmartLinkPicker, { SmartLinkEditingProvider } from "@/components/admin/SmartLinkPicker";
 import { validateHomepageCampaigns } from "@/lib/homepageCampaignValidation";
 import { home004IneligibilityReasons, resolveHome004Recommendations } from "@/lib/home004Recommendations";
-import { HOMEPAGE_CARD_PRESENTATION_PRESETS, HOMEPAGE_COLLECTION_LIMIT, HOMEPAGE_HERO_OVERLAY_PRESETS, HOMEPAGE_NAVIGATION_LIMIT, HOMEPAGE_MOTION_PRESETS, HOMEPAGE_PRODUCT_LIMIT, HOMEPAGE_SECTION_MOTION_DEFAULTS, PREMIUM_HERO_TIMING, homepageMotionCssVariables, resolveHeroTiming, resolveHomepageMotion, resolveHomepageNavigation, validateHomepageCms, type HeroTiming, type HomepageMediaReference, type HomepageMotionSectionKey, type HomepageNavigationItem, type HomepageSectionMotion, type HomepageVisualConfig } from "@/lib/homepageCms";
+import { HOMEPAGE_CARD_PRESENTATION_PRESETS, HOMEPAGE_COLLECTION_LIMIT, HOMEPAGE_HERO_OVERLAY_PRESETS, HOMEPAGE_NAVIGATION_LIMIT, HOMEPAGE_MOTION_PRESETS, HOMEPAGE_PRODUCT_LIMIT, HOMEPAGE_SECTION_MOTION_DEFAULTS, PREMIUM_HERO_TIMING, homepageMotionCssVariables, resolveHeroTiming, resolveHomepageMotion, resolveHomepageNavigation, resolveHomepageSectionOrder, validateHomepageCms, type HeroTiming, type HomepageMediaReference, type HomepageMotionSectionKey, type HomepageNavigationItem, type HomepageSectionMotion, type HomepageVisualConfig } from "@/lib/homepageCms";
 import type { AssetRecord } from "@/lib/assets";
 import { VISUAL_COLOR_PRESETS, visualColorHex, type VisualColorValue } from "@/lib/pageBuilderVisualStyle";
 import { localImageMedia, resolveMediaAsset, youtubeMedia, type MediaAsset } from "@/lib/media";
@@ -37,7 +37,7 @@ export default function HomepageManager() {
   const [baseline, setBaseline] = useState("");
   const [message, setMessage] = useState("讀取中…");
   const [saving, setSaving] = useState(false);
-  const [activeTab, setActiveTab] = useState<"content" | "navigation" | "visual" | "seo">("content");
+  const [activeTab, setActiveTab] = useState<"content" | "sections" | "navigation" | "visual" | "seo">("content");
   const [seoPickerOpen, setSeoPickerOpen] = useState(false);
   const [heroPicker, setHeroPicker] = useState<"desktop" | "mobile" | null>(null);
 
@@ -106,6 +106,7 @@ export default function HomepageManager() {
     {dirty ? <div className="cms-unsaved" role="status">有尚未儲存的變更</div> : null}{message ? <div className="cms-message" role="status">{message}</div> : null}
     <div className="cms-toolbar-actions homepage-admin-tabs" role="tablist" aria-label="首頁管理分類">
       <button type="button" role="tab" aria-selected={activeTab === "content"} onClick={() => setActiveTab("content")}>內容</button>
+      <button type="button" role="tab" aria-selected={activeTab === "sections"} onClick={() => setActiveTab("sections")}>排序</button>
       <button type="button" role="tab" aria-selected={activeTab === "navigation"} onClick={() => setActiveTab("navigation")}>導覽</button>
       <button type="button" role="tab" aria-selected={activeTab === "visual"} onClick={() => setActiveTab("visual")}>視覺</button>
       <button type="button" role="tab" aria-selected={activeTab === "seo"} onClick={() => setActiveTab("seo")}>SEO</button>
@@ -123,6 +124,7 @@ export default function HomepageManager() {
       <ReviewsEditor value={h.home009 || {}} setPath={setPath} />
       <Home010Editor value={h.home010 || {}} products={data.products} setPath={setPath} />
     </> : null}
+    {activeTab === "sections" ? <HomepageSectionOrderEditor homepage={h} setPath={setPath} /> : null}
     {activeTab === "navigation" ? <>
       <HomepageNavigationEditor value={h.navigation} products={data.products} pages={data.publishedPages} setPath={setPath} />
       <HomepageCtaVisibility homepage={h} setPath={setPath}/>
@@ -132,6 +134,73 @@ export default function HomepageManager() {
     {seoPickerOpen ? <ImageLibraryPicker assets={data.assets} title="選擇首頁 SEO 分享圖片" onClose={() => setSeoPickerOpen(false)} onChoose={(asset) => { setPath(["seo", "shareImage"], { media: localImageMedia(asset.path), alt: asset.alt || asset.name }); setSeoPickerOpen(false); }} /> : null}
     {heroPicker ? <HeroMediaLibraryPicker assets={data.assets} title={heroPicker === "desktop" ? "選擇桌機 Hero 素材" : "選擇手機 Hero 素材"} onClose={() => setHeroPicker(null)} onChoose={(media) => { setPath(["hero", heroPicker === "desktop" ? "desktopMedia" : "mobileMedia"], media); setHeroPicker(null); }} /> : null}
   </div></SmartLinkEditingProvider>;
+}
+
+function HomepageSectionOrderEditor({ homepage, setPath }: { homepage: Record<string, any>; setPath: SetPath }) {
+  const items = resolveHomepageSectionOrder(homepage.sectionOrder);
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const commit = (next: typeof items) => setPath(["sectionOrder"], next.map((item, order) => ({ ...item, order })));
+  const move = (index: number, direction: -1 | 1) => commit(moveItem(items, index, direction));
+  const dropAt = (index: number) => {
+    if (dragIndex === null || dragIndex === index) { setDragIndex(null); return; }
+    const next = [...items]; const [moved] = next.splice(dragIndex, 1); next.splice(index, 0, moved); commit(next); setDragIndex(null);
+  };
+
+  return <Panel title="首頁區塊排序" description="用拖曳或上下箭頭調整首頁內容順序。這裡只改排列與顯示狀態，不會修改各區塊內容。" open>
+    <div className="homepage-section-order-guide">
+      <div><b>怎麼用</b><span>拖曳左側把手，或按右側 ↑ ↓ 調整位置。</span></div>
+      <div><b>套用方式</b><span>確認順序後，按右上角「儲存全部」。</span></div>
+      <div><b>固定規則</b><span>Hero 不參與排序；本月活動固定跟在 HOME003 後方。</span></div>
+    </div>
+
+    <div className="homepage-section-order-table" role="table" aria-label="首頁區塊排序">
+      <div className="homepage-section-order-head" role="row">
+        <span>順序</span><span>首頁區塊</span><span>顯示狀態</span><span>移動</span>
+      </div>
+      <div className="homepage-section-order-list">
+        {items.map((item, index) => {
+          const enabled = homepage[item.key]?.enabled !== false;
+          return <div
+            key={item.key}
+            className={`homepage-section-order-row${dragIndex === index ? " is-dragging" : ""}${enabled ? "" : " is-hidden"}`}
+            role="row"
+            draggable
+            onDragStart={() => setDragIndex(index)}
+            onDragOver={(event) => event.preventDefault()}
+            onDrop={() => dropAt(index)}
+            onDragEnd={() => setDragIndex(null)}
+          >
+            <div className="homepage-section-order-sort" role="cell">
+              <button type="button" className="homepage-section-order-drag" aria-label={`拖曳 ${item.key.toUpperCase()}`} title="拖曳調整順序">⋮⋮</button>
+              <span className="homepage-section-order-number">{String(index + 1).padStart(2, "0")}</span>
+            </div>
+
+            <div className="homepage-section-order-identity" role="cell">
+              <span className="homepage-section-order-code">{item.key.toUpperCase()}</span>
+              <div>
+                <strong>{sectionNames[item.key]}</strong>
+                <span className="homepage-section-order-purpose">{homepage[item.key]?.purpose || sectionNames[item.key]}</span>
+              </div>
+            </div>
+
+            <div className="homepage-section-order-visible" role="cell">
+              <Visibility checked={enabled} onChange={(checked) => setPath([item.key, "enabled"], checked)} label={enabled ? "顯示中" : "已隱藏"} />
+            </div>
+
+            <div className="homepage-section-order-mobile" role="cell" aria-label={`移動 ${item.key.toUpperCase()}`}>
+              <button type="button" disabled={index === 0} onClick={() => move(index, -1)} aria-label="上移">↑</button>
+              <button type="button" disabled={index === items.length - 1} onClick={() => move(index, 1)} aria-label="下移">↓</button>
+            </div>
+          </div>;
+        })}
+      </div>
+    </div>
+
+    <div className="homepage-section-order-footer">
+      <span>共 {items.length} 個首頁區塊</span>
+      <span>排序變更尚未儲存前，不會影響前台。</span>
+    </div>
+  </Panel>;
 }
 
 function HomepageNavigationEditor({ value, products, pages, setPath }: { value: unknown; products: ProductOption[]; pages: import("@/lib/cmsLinks").PublishedCmsPage[]; setPath: SetPath }) {

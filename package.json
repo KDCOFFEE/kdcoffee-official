@@ -64,7 +64,9 @@
     "test:phase-j2b2": "node --experimental-strip-types scripts/test-phase-j2b2-homepage-schema.ts",
     "test:phase-j2b3": "node --experimental-strip-types scripts/test-phase-j2b3-homepage-admin-presentation.ts",
     "test:phase-j2c": "node scripts/test-phase-j2c-homepage-navigation.mjs",
-    "test:phase-j2b3b1": "node scripts/test-phase-j2b3b1-hero-media.mjs"
+    "test:phase-j2b3b1": "node scripts/test-phase-j2b3b1-hero-media.mjs",
+    "test:phase-j2d2": "node scripts/test-phase-j2d2-homepage-section-order.mjs",
+    "test:phase-j2d2a": "node scripts/test-phase-j2d2a-section-order-ux.mjs"
   },
   "dependencies": {
     "cloudinary": "^2.10.0",

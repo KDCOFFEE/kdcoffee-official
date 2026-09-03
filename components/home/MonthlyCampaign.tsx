@@ -5,14 +5,14 @@ import CmsLink from "@/components/CmsLink";
 import type { CmsLinkProduct, PublishedCmsPage } from "@/lib/cmsLinks";
 import { homepageMotionCssVariables, resolveHomepageMotion } from "@/lib/homepageCms";
 
-export default function MonthlyCampaign({ homepageData, products, pages }: { homepageData: HomepageData; products: CmsLinkProduct[]; pages: PublishedCmsPage[] }) {
+export default function MonthlyCampaign({ homepageData, products, pages, order }: { homepageData: HomepageData; products: CmsLinkProduct[]; pages: PublishedCmsPage[]; order?: number }) {
   const section = homepageData.campaignSection;
   const configuredMotion = (section as typeof section & { motion?: unknown }).motion;
   const motion = configuredMotion === undefined ? null : resolveHomepageMotion(configuredMotion, "campaignSection");
   const motionProps = motion ? {
     "data-home-motion": motion.activePreset,
-    style: homepageMotionCssVariables(motion) as CSSProperties,
-  } : {};
+    style: { ...homepageMotionCssVariables(motion), ...(order === undefined ? {} : { order }) } as CSSProperties,
+  } : order === undefined ? {} : { style: { order } as CSSProperties };
   const campaigns = activeHomepageCampaigns(homepageData);
   if (section.enabled === false || campaigns.length === 0) return null;
 

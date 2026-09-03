@@ -16,6 +16,31 @@ export const HOMEPAGE_HERO_OVERLAY_PRESETS = ["current", "soft", "strong", "none
 export const HOMEPAGE_CARD_PRESENTATION_PRESETS = ["current", "minimal", "bordered"] as const;
 export const HOMEPAGE_NAVIGATION_LIMIT = 8;
 
+export const HOMEPAGE_SECTION_KEYS = ["home002", "home003", "home004", "home005", "home006", "home007", "home008", "home009", "home010"] as const;
+export type HomepageSectionKey = (typeof HOMEPAGE_SECTION_KEYS)[number];
+export type HomepageSectionOrderItem = { key: HomepageSectionKey; order: number };
+
+export const DEFAULT_HOMEPAGE_SECTION_ORDER: HomepageSectionOrderItem[] = HOMEPAGE_SECTION_KEYS.map((key, order) => ({ key, order }));
+
+export function resolveHomepageSectionOrder(value: unknown): HomepageSectionOrderItem[] {
+  if (!Array.isArray(value)) return DEFAULT_HOMEPAGE_SECTION_ORDER.map((item) => ({ ...item }));
+  const seen = new Set<HomepageSectionKey>();
+  const resolved: HomepageSectionOrderItem[] = [];
+  value.forEach((item, index) => {
+    if (!isRecord(item) || typeof item.key !== "string" || !HOMEPAGE_SECTION_KEYS.includes(item.key as HomepageSectionKey)) return;
+    const key = item.key as HomepageSectionKey;
+    if (seen.has(key)) return;
+    seen.add(key);
+    resolved.push({ key, order: Number.isFinite(item.order) ? Number(item.order) : index });
+  });
+  HOMEPAGE_SECTION_KEYS.forEach((key) => { if (!seen.has(key)) resolved.push({ key, order: resolved.length }); });
+  return resolved.sort((a, b) => a.order - b.order).map((item, order) => ({ ...item, order }));
+}
+
+export function homepageSectionOrderMap(value: unknown): Record<HomepageSectionKey, number> {
+  return Object.fromEntries(resolveHomepageSectionOrder(value).map((item, order) => [item.key, order])) as Record<HomepageSectionKey, number>;
+}
+
 export type HomepageNavigationItem = {
   id: string;
   label: string;
@@ -461,6 +486,11 @@ export function validateHomepageCms(homepage: unknown) {
   validateHomepageVisual(homepage.visual);
   validateHomepageSeo(homepage.seo);
   validateHomepageNavigation(homepage.navigation);
+  if (homepage.sectionOrder !== undefined) {
+    if (!Array.isArray(homepage.sectionOrder) || homepage.sectionOrder.length !== HOMEPAGE_SECTION_KEYS.length) throw new Error("首頁區塊排序格式不正確。");
+    const resolvedSectionOrder = resolveHomepageSectionOrder(homepage.sectionOrder);
+    if (resolvedSectionOrder.length !== HOMEPAGE_SECTION_KEYS.length || new Set(resolvedSectionOrder.map((item) => item.key)).size !== HOMEPAGE_SECTION_KEYS.length) throw new Error("首頁區塊排序不可重複或缺少區塊。");
+  }
   validateBoolean(hero.enabled, "主視覺顯示設定");
   validateBoolean(hero.motionEnabled, "主視覺電影式進場設定");
   validateBoolean(hero.primaryCtaEnabled, "主視覺主要按鈕顯示設定");
