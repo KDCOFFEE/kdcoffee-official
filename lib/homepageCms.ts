@@ -1,10 +1,57 @@
 import type { MediaAsset } from "./media.ts";
 // @ts-expect-error -- explicit extension keeps Node's type-stripping regression runner compatible.
+import { isMediaAsset } from "./media.ts";
+import type { VisualColorValue } from "./pageBuilderVisualStyle.ts";
+// @ts-expect-error -- explicit extension keeps Node's type-stripping regression runner compatible.
+import { resolveVisualColor } from "./pageBuilderVisualStyle.ts";
+// @ts-expect-error -- explicit extension keeps Node's type-stripping regression runner compatible.
 import { validateCmsLinkValue } from "./cmsLinks.ts";
 
 export const HOMEPAGE_COLLECTION_LIMIT = 50;
 export const HOMEPAGE_PRODUCT_LIMIT = 12;
 export const HERO_TIMING_MAX_MS = 10_000;
+
+export const HOMEPAGE_HERO_OVERLAY_PRESETS = ["current", "soft", "strong", "none"] as const;
+export const HOMEPAGE_CARD_PRESENTATION_PRESETS = ["current", "minimal", "bordered"] as const;
+
+export type HomepageHeroOverlayPreset = (typeof HOMEPAGE_HERO_OVERLAY_PRESETS)[number];
+export type HomepageCardPresentationPreset = (typeof HOMEPAGE_CARD_PRESENTATION_PRESETS)[number];
+
+export type HomepageVisualConfig = {
+  colors?: {
+    pageBackground?: VisualColorValue;
+    primaryText?: VisualColorValue;
+    secondaryText?: VisualColorValue;
+    accent?: VisualColorValue;
+    lightSurface?: VisualColorValue;
+    darkSurface?: VisualColorValue;
+    onDark?: VisualColorValue;
+    primaryButton?: VisualColorValue;
+    primaryButtonText?: VisualColorValue;
+    border?: VisualColorValue;
+  };
+  heroOverlayPreset?: HomepageHeroOverlayPreset;
+  cardPresentationPreset?: HomepageCardPresentationPreset;
+};
+
+export type HomepageSeoConfig = {
+  title?: string;
+  description?: string;
+  shareImage?: {
+    media: MediaAsset;
+    alt: string;
+  };
+};
+
+/**
+ * J.2B.2 is schema-only. These optional groups deliberately have no runtime
+ * defaults or public bindings yet, so legacy homepage.json renders byte-for-byte
+ * through the existing frontend path until a later Owner-approved integration.
+ */
+export type HomepageOwnerPresentationConfig = {
+  visual?: HomepageVisualConfig;
+  seo?: HomepageSeoConfig;
+};
 
 export const HOMEPAGE_MOTION_PRESETS = [
   "none",
@@ -295,9 +342,71 @@ function validateContentCollection(value: unknown, label: string) {
   });
 }
 
+function isSafeHomepageMediaUrl(value: string) {
+  if (value.startsWith("/") && !value.startsWith("//") && !value.includes("..")) return true;
+  try {
+    return new URL(value).protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+function validateHomepageVisual(value: unknown) {
+  if (value === undefined) return;
+  if (!isRecord(value)) throw new Error("首頁視覺設定格式不正確。");
+  const allowed = ["colors", "heroOverlayPreset", "cardPresentationPreset"];
+  const unknown = Object.keys(value).find((key) => !allowed.includes(key));
+  if (unknown) throw new Error(`首頁視覺設定包含不支援的欄位：${unknown}。`);
+
+  if (value.colors !== undefined) {
+    if (!isRecord(value.colors)) throw new Error("首頁色彩設定格式不正確。");
+    const colorKeys = ["pageBackground", "primaryText", "secondaryText", "accent", "lightSurface", "darkSurface", "onDark", "primaryButton", "primaryButtonText", "border"] as const;
+    const unknownColor = Object.keys(value.colors).find((key) => !colorKeys.includes(key as typeof colorKeys[number]));
+    if (unknownColor) throw new Error(`首頁色彩設定包含不支援的欄位：${unknownColor}。`);
+    for (const key of colorKeys) {
+      const candidate = value.colors[key];
+      if (candidate !== undefined && resolveVisualColor(candidate, "#000000") !== candidate) {
+        throw new Error(`首頁 ${key} 顏色不安全。`);
+      }
+    }
+  }
+  if (value.heroOverlayPreset !== undefined && !(HOMEPAGE_HERO_OVERLAY_PRESETS as readonly unknown[]).includes(value.heroOverlayPreset)) {
+    throw new Error("首頁 Hero 遮罩樣式不支援。");
+  }
+  if (value.cardPresentationPreset !== undefined && !(HOMEPAGE_CARD_PRESENTATION_PRESETS as readonly unknown[]).includes(value.cardPresentationPreset)) {
+    throw new Error("首頁卡片樣式不支援。");
+  }
+}
+
+function validateHomepageSeo(value: unknown) {
+  if (value === undefined) return;
+  if (!isRecord(value)) throw new Error("首頁 SEO 設定格式不正確。");
+  const allowed = ["title", "description", "shareImage"];
+  const unknown = Object.keys(value).find((key) => !allowed.includes(key));
+  if (unknown) throw new Error(`首頁 SEO 設定包含不支援的欄位：${unknown}。`);
+  validateText(value.title, "首頁 SEO 標題", 70);
+  validateText(value.description, "首頁 SEO 說明", 180);
+  if (value.shareImage !== undefined) {
+    if (!isRecord(value.shareImage) || !isMediaAsset(value.shareImage.media) || value.shareImage.media.type !== "image" || !isSafeHomepageMediaUrl(value.shareImage.media.url)) {
+      throw new Error("首頁 SEO 分享圖片必須是安全的圖片媒體。");
+    }
+    validateText(value.shareImage.alt, "首頁 SEO 分享圖片替代文字", 240, true);
+  }
+}
+
+export function resolveHomepageOwnerPresentation(homepage: unknown): HomepageOwnerPresentationConfig {
+  if (!isRecord(homepage)) return {};
+  const result: HomepageOwnerPresentationConfig = {};
+  if (isRecord(homepage.visual)) result.visual = structuredClone(homepage.visual) as HomepageVisualConfig;
+  if (isRecord(homepage.seo)) result.seo = structuredClone(homepage.seo) as HomepageSeoConfig;
+  return result;
+}
+
 export function validateHomepageCms(homepage: unknown) {
   if (!isRecord(homepage) || !isRecord(homepage.hero)) throw new Error("首頁資料格式不完整。");
   const hero = homepage.hero;
+  validateHomepageVisual(homepage.visual);
+  validateHomepageSeo(homepage.seo);
   validateBoolean(hero.enabled, "主視覺顯示設定");
   validateBoolean(hero.motionEnabled, "主視覺電影式進場設定");
   validateBoolean(hero.primaryCtaEnabled, "主視覺主要按鈕顯示設定");
