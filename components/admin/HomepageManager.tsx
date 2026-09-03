@@ -2,16 +2,20 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { useEffect, useMemo, useState } from "react";
+import ImageLibraryPicker from "@/components/admin/ImageLibraryPicker";
+import HeroMediaLibraryPicker from "@/components/admin/HeroMediaLibraryPicker";
 import MediaUploader from "@/components/admin/MediaUploader";
 import SmartLinkPicker, { SmartLinkEditingProvider } from "@/components/admin/SmartLinkPicker";
 import { validateHomepageCampaigns } from "@/lib/homepageCampaignValidation";
 import { home004IneligibilityReasons, resolveHome004Recommendations } from "@/lib/home004Recommendations";
-import { HOMEPAGE_COLLECTION_LIMIT, HOMEPAGE_MOTION_PRESETS, HOMEPAGE_PRODUCT_LIMIT, HOMEPAGE_SECTION_MOTION_DEFAULTS, PREMIUM_HERO_TIMING, homepageMotionCssVariables, resolveHeroTiming, resolveHomepageMotion, validateHomepageCms, type HeroTiming, type HomepageMediaReference, type HomepageMotionSectionKey, type HomepageSectionMotion } from "@/lib/homepageCms";
+import { HOMEPAGE_CARD_PRESENTATION_PRESETS, HOMEPAGE_COLLECTION_LIMIT, HOMEPAGE_HERO_OVERLAY_PRESETS, HOMEPAGE_MOTION_PRESETS, HOMEPAGE_PRODUCT_LIMIT, HOMEPAGE_SECTION_MOTION_DEFAULTS, PREMIUM_HERO_TIMING, homepageMotionCssVariables, resolveHeroTiming, resolveHomepageMotion, validateHomepageCms, type HeroTiming, type HomepageMediaReference, type HomepageMotionSectionKey, type HomepageSectionMotion, type HomepageVisualConfig } from "@/lib/homepageCms";
+import type { AssetRecord } from "@/lib/assets";
+import { VISUAL_COLOR_PRESETS, visualColorHex, type VisualColorValue } from "@/lib/pageBuilderVisualStyle";
 import { localImageMedia, resolveMediaAsset, youtubeMedia, type MediaAsset } from "@/lib/media";
 import { parseYouTubeUrl, youtubeWatchUrl } from "@/lib/youtubeMedia";
 
 type ProductOption = { slug: string; name: string; active?: boolean; status?: string; purchasable: boolean; inMonthlyMenu: boolean; hasAvailableSku: boolean };
-type AssetOption = { id: string; name: string; path: string; alt: string; status: string };
+type AssetOption = AssetRecord;
 type Payload = { homepage: Record<string, any>; products: ProductOption[]; assets: AssetOption[]; publishedPages: import("@/lib/cmsLinks").PublishedCmsPage[] };
 type Path = Array<string | number>;
 type SetPath = (path: Path, value: unknown) => void;
@@ -33,6 +37,9 @@ export default function HomepageManager() {
   const [baseline, setBaseline] = useState("");
   const [message, setMessage] = useState("讀取中…");
   const [saving, setSaving] = useState(false);
+  const [activeTab, setActiveTab] = useState<"content" | "visual" | "seo">("content");
+  const [seoPickerOpen, setSeoPickerOpen] = useState(false);
+  const [heroPicker, setHeroPicker] = useState<"desktop" | "mobile" | null>(null);
 
   useEffect(() => {
     Promise.all([
@@ -70,6 +77,14 @@ export default function HomepageManager() {
     setPath(path, result.path); setMessage(`${assetId} 上傳完成，請按儲存。`); return localImageMedia(result.path);
   };
 
+  const uploadHeroImage = async (file: File, assetId: string) => {
+    setMessage(`上傳 ${assetId}…`); const form = new FormData();
+    form.append("file", file); form.append("desiredName", `kd-coffee-${assetId.toLowerCase()}`); form.append("artworkSlug", "homepage"); form.append("assetType", assetId.toLowerCase());
+    const response = await fetch("/api/admin/homepage/upload", { method: "POST", body: form }); const result = await response.json();
+    if (!response.ok) throw new Error(result.error || "上傳失敗");
+    setMessage(`${assetId} 上傳完成，請按儲存。`); return localImageMedia(result.path);
+  };
+
   async function save() {
     if (!data) return;
     try {
@@ -89,19 +104,150 @@ export default function HomepageManager() {
   return <SmartLinkEditingProvider pages={data.publishedPages}><div className="homepage-manager v3-admin">
     <div className="cms-toolbar"><div><p className="eyebrow dark">HOMEPAGE CMS 2.0</p><h1>管理我的首頁</h1><p>文字、順序與媒體都可視化管理；移除首頁引用不會刪除素材。</p></div><div className="cms-toolbar-actions"><a href="/" target="_blank">預覽首頁 ↗</a><button onClick={save} disabled={saving || !dirty}>{saving ? "儲存中…" : "儲存全部"}</button></div></div>
     {dirty ? <div className="cms-unsaved" role="status">有尚未儲存的變更</div> : null}{message ? <div className="cms-message" role="status">{message}</div> : null}
-    <HomepageCtaVisibility homepage={h} setPath={setPath}/>
-    <HeroEditor value={h.hero} products={data.products} setPath={setPath} uploadImage={uploadImage} />
-    <CampaignEditor section={h.campaignSection || {}} campaigns={h.campaigns || []} products={data.products} setPath={setPath} uploadImage={uploadImage} />
-    <ContentSectionEditor sectionKey="home002" value={h.home002 || {}} collectionKey="cards" setPath={setPath} uploadImage={uploadImage} assets={data.assets} />
-    <ContentSectionEditor sectionKey="home003" value={h.home003 || {}} collectionKey="cards" products={data.products} setPath={setPath} uploadImage={uploadImage} assets={data.assets} />
-    <Home004Editor value={h.home004 || {}} products={data.products} setPath={setPath} />
-    <ContentSectionEditor sectionKey="home005" value={h.home005 || {}} collectionKey="steps" setPath={setPath} uploadImage={uploadImage} assets={data.assets} />
-    <Home006Editor value={h.home006 || {}} products={data.products} setPath={setPath} uploadImage={uploadImage} assets={data.assets} />
-    <ContentSectionEditor sectionKey="home007" value={h.home007 || {}} collectionKey="cards" setPath={setPath} uploadImage={uploadImage} assets={data.assets} />
-    <Home008Editor value={h.home008 || {}} setPath={setPath} uploadImage={uploadImage} assets={data.assets} />
-    <ReviewsEditor value={h.home009 || {}} setPath={setPath} />
-    <Home010Editor value={h.home010 || {}} products={data.products} setPath={setPath} />
+    <div className="cms-toolbar-actions" role="tablist" aria-label="首頁管理分類">
+      <button type="button" role="tab" aria-selected={activeTab === "content"} onClick={() => setActiveTab("content")}>內容</button>
+      <button type="button" role="tab" aria-selected={activeTab === "visual"} onClick={() => setActiveTab("visual")}>視覺</button>
+      <button type="button" role="tab" aria-selected={activeTab === "seo"} onClick={() => setActiveTab("seo")}>SEO</button>
+    </div>
+    {activeTab === "content" ? <>
+      <HomepageCtaVisibility homepage={h} setPath={setPath}/>
+      <HeroEditor value={h.hero} products={data.products} setPath={setPath} uploadHeroImage={uploadHeroImage} onOpenLibrary={setHeroPicker} />
+      <CampaignEditor section={h.campaignSection || {}} campaigns={h.campaigns || []} products={data.products} setPath={setPath} uploadImage={uploadImage} />
+      <ContentSectionEditor sectionKey="home002" value={h.home002 || {}} collectionKey="cards" setPath={setPath} uploadImage={uploadImage} assets={data.assets} />
+      <ContentSectionEditor sectionKey="home003" value={h.home003 || {}} collectionKey="cards" products={data.products} setPath={setPath} uploadImage={uploadImage} assets={data.assets} />
+      <Home004Editor value={h.home004 || {}} products={data.products} setPath={setPath} />
+      <ContentSectionEditor sectionKey="home005" value={h.home005 || {}} collectionKey="steps" setPath={setPath} uploadImage={uploadImage} assets={data.assets} />
+      <Home006Editor value={h.home006 || {}} products={data.products} setPath={setPath} uploadImage={uploadImage} assets={data.assets} />
+      <ContentSectionEditor sectionKey="home007" value={h.home007 || {}} collectionKey="cards" setPath={setPath} uploadImage={uploadImage} assets={data.assets} />
+      <Home008Editor value={h.home008 || {}} setPath={setPath} uploadImage={uploadImage} assets={data.assets} />
+      <ReviewsEditor value={h.home009 || {}} setPath={setPath} />
+      <Home010Editor value={h.home010 || {}} products={data.products} setPath={setPath} />
+    </> : null}
+    {activeTab === "visual" ? <HomepageVisualEditor value={h.visual} setPath={setPath} /> : null}
+    {activeTab === "seo" ? <HomepageSeoEditor value={h.seo} assets={data.assets} setPath={setPath} onOpenPicker={() => setSeoPickerOpen(true)} /> : null}
+    {seoPickerOpen ? <ImageLibraryPicker assets={data.assets} title="選擇首頁 SEO 分享圖片" onClose={() => setSeoPickerOpen(false)} onChoose={(asset) => { setPath(["seo", "shareImage"], { media: localImageMedia(asset.path), alt: asset.alt || asset.name }); setSeoPickerOpen(false); }} /> : null}
+    {heroPicker ? <HeroMediaLibraryPicker assets={data.assets} title={heroPicker === "desktop" ? "選擇桌機 Hero 素材" : "選擇手機 Hero 素材"} onClose={() => setHeroPicker(null)} onChoose={(media) => { setPath(["hero", heroPicker === "desktop" ? "desktopMedia" : "mobileMedia"], media); setHeroPicker(null); }} /> : null}
   </div></SmartLinkEditingProvider>;
+}
+
+const homepageVisualDefaults: Required<HomepageVisualConfig> = {
+  colors: { pageBackground: "ivory", primaryText: "ink", secondaryText: "warm-gray", accent: "gold", lightSurface: "ivory", darkSurface: "coffee", onDark: "white", primaryButton: "ink", primaryButtonText: "white", border: "warm-gray" },
+  heroOverlayPreset: "current",
+  cardPresentationPreset: "current",
+};
+
+const homepageColorLabels: Array<[keyof Required<HomepageVisualConfig>["colors"], string, string]> = [
+  ["pageBackground", "網站背景", "首頁主要底色"],
+  ["primaryText", "主要文字", "標題與重要內容"],
+  ["secondaryText", "次要文字", "說明與輔助內容"],
+  ["accent", "品牌重點色", "眉題、重點與裝飾"],
+  ["lightSurface", "淺色區塊", "淺色卡片與內容區"],
+  ["darkSurface", "深色區塊", "深色章節與卡片"],
+  ["onDark", "深色區塊文字", "深色背景上的文字"],
+  ["primaryButton", "主要按鈕", "主要行動按鈕底色"],
+  ["primaryButtonText", "按鈕文字", "主要按鈕上的文字"],
+  ["border", "邊框", "卡片與分隔線"],
+];
+
+const homepageColorNames: Record<(typeof VISUAL_COLOR_PRESETS)[number], string> = {
+  ink: "咖啡黑", coffee: "深咖啡", "warm-gray": "暖灰", ivory: "暖白", gold: "品牌金", white: "純白",
+};
+
+const homepageStylePresets: Array<{ id: string; name: string; description: string; colors: Required<HomepageVisualConfig>["colors"] }> = [
+  { id: "kd-classic", name: "KD 經典", description: "保留目前品牌的暖白、咖啡黑與品牌金。", colors: homepageVisualDefaults.colors },
+  { id: "warm-premium", name: "暖白精品", description: "明亮、柔和，適合大量商品與品牌內容。", colors: { ...homepageVisualDefaults.colors, pageBackground: "white", lightSurface: "ivory", secondaryText: "coffee", border: "ivory" } },
+  { id: "dark-gallery", name: "深焙藝廊", description: "深色基調更有展覽感，重點色維持品牌金。", colors: { ...homepageVisualDefaults.colors, pageBackground: "coffee", primaryText: "white", secondaryText: "ivory", lightSurface: "ink", darkSurface: "ink", onDark: "white", primaryButton: "gold", primaryButtonText: "ink", border: "warm-gray" } },
+  { id: "minimal", name: "極簡黑白", description: "降低裝飾色彩，讓影像與內容成為主角。", colors: { ...homepageVisualDefaults.colors, pageBackground: "white", primaryText: "ink", secondaryText: "warm-gray", accent: "ink", lightSurface: "white", darkSurface: "ink", onDark: "white", primaryButton: "ink", primaryButtonText: "white", border: "warm-gray" } },
+];
+
+const heroOverlayLabels: Record<string, string> = { current: "目前網站效果", soft: "柔和暗幕", strong: "精品深色", none: "無遮罩" };
+const cardPresentationLabels: Record<string, string> = { current: "目前網站效果", minimal: "極簡留白", bordered: "精品細框" };
+
+function HomepageVisualEditor({ value, setPath }: { value: HomepageVisualConfig | undefined; setPath: SetPath }) {
+  const colors = { ...homepageVisualDefaults.colors, ...(value?.colors || {}) };
+  const setColor = (key: keyof typeof colors, next: VisualColorValue) => setPath(["visual", "colors"], { ...colors, [key]: next });
+  const applyPreset = (next: Required<HomepageVisualConfig>["colors"]) => setPath(["visual", "colors"], { ...next });
+  const previewStyle = {
+    "--home-preview-bg": visualColorHex(colors.pageBackground ?? "ivory"),
+    "--home-preview-text": visualColorHex(colors.primaryText ?? "ink"),
+    "--home-preview-muted": visualColorHex(colors.secondaryText ?? "warm-gray"),
+    "--home-preview-accent": visualColorHex(colors.accent ?? "gold"),
+    "--home-preview-surface": visualColorHex(colors.lightSurface ?? "ivory"),
+    "--home-preview-dark": visualColorHex(colors.darkSurface ?? "coffee"),
+    "--home-preview-on-dark": visualColorHex(colors.onDark ?? "white"),
+    "--home-preview-button": visualColorHex(colors.primaryButton ?? "ink"),
+    "--home-preview-button-text": visualColorHex(colors.primaryButtonText ?? "white"),
+    "--home-preview-border": visualColorHex(colors.border ?? "warm-gray"),
+  } as React.CSSProperties;
+
+  return <Panel title="首頁視覺風格" description="用品牌色票與即時示意調整首頁風格；不需要理解程式色碼。" open>
+    <div className="homepage-visual-studio">
+      <section className="homepage-style-presets" aria-label="首頁風格快速套用">
+        <div className="homepage-visual-heading"><div><span>01</span><h3>先選整體方向</h3></div><p>一鍵套用後仍可在下方微調每個位置。</p></div>
+        <div className="homepage-style-preset-grid">
+          {homepageStylePresets.map((preset) => <button type="button" key={preset.id} onClick={() => applyPreset(preset.colors)}>
+            <span className="homepage-preset-swatches" aria-hidden="true">
+              <i style={{ backgroundColor: visualColorHex(preset.colors.pageBackground ?? "ivory") }} />
+              <i style={{ backgroundColor: visualColorHex(preset.colors.primaryText ?? "ink") }} />
+              <i style={{ backgroundColor: visualColorHex(preset.colors.accent ?? "gold") }} />
+            </span>
+            <strong>{preset.name}</strong><small>{preset.description}</small>
+          </button>)}
+        </div>
+      </section>
+
+      <div className="homepage-visual-layout">
+        <section className="homepage-color-controls">
+          <div className="homepage-visual-heading"><div><span>02</span><h3>微調使用位置</h3></div><p>每一列都直接告訴你會影響首頁哪裡。</p></div>
+          <div className="homepage-color-field-list">
+            {homepageColorLabels.map(([key, label, help]) => <div className="homepage-color-field" key={key}>
+              <div><strong>{label}</strong><small>{help}</small></div>
+              <div className="homepage-color-swatches">
+                {VISUAL_COLOR_PRESETS.map((preset) => <button type="button" key={preset} className={colors[key] === preset ? "is-selected" : ""} title={`${homepageColorNames[preset]} ${visualColorHex(preset).toUpperCase()}`} aria-label={`${label}：${homepageColorNames[preset]}`} onClick={() => setColor(key, preset)}>
+                  <i style={{ backgroundColor: visualColorHex(preset) }} /><span>{homepageColorNames[preset]}</span>
+                </button>)}
+                <label className="homepage-custom-color" title="自訂顏色"><input aria-label={`${label}自訂色`} type="color" value={visualColorHex(colors[key] ?? "ivory")} onChange={(event) => setColor(key, event.target.value as `#${string}`)} /><span>自訂</span></label>
+              </div>
+            </div>)}
+          </div>
+
+          <div className="homepage-presentation-controls">
+            <label><span><strong>Hero 影像遮罩</strong><small>控制首屏影像上的明暗層次</small></span><select value={value?.heroOverlayPreset ?? homepageVisualDefaults.heroOverlayPreset} onChange={(event) => setPath(["visual", "heroOverlayPreset"], event.target.value)}>{HOMEPAGE_HERO_OVERLAY_PRESETS.map((preset) => <option key={preset} value={preset}>{heroOverlayLabels[preset] || preset}</option>)}</select></label>
+            <label><span><strong>卡片風格</strong><small>控制首頁內容卡片的呈現方式</small></span><select value={value?.cardPresentationPreset ?? homepageVisualDefaults.cardPresentationPreset} onChange={(event) => setPath(["visual", "cardPresentationPreset"], event.target.value)}>{HOMEPAGE_CARD_PRESENTATION_PRESETS.map((preset) => <option key={preset} value={preset}>{cardPresentationLabels[preset] || preset}</option>)}</select></label>
+          </div>
+        </section>
+
+        <aside className="homepage-style-preview">
+          <div className="homepage-visual-heading"><div><span>03</span><h3>即時風格示意</h3></div><p>這是配色示意，不會改動公開首頁。</p></div>
+          <div className="homepage-style-preview-frame" style={previewStyle}>
+            <div className="homepage-preview-hero">
+              <small>KD COFFEE · 咖啡藝術工坊</small>
+              <h4>為了理想的風味，<br />我們打造了自己的烘豆機。</h4>
+              <p>從風味出發，找到真正適合自己的咖啡。</p>
+              <div><b>開始挑咖啡</b><span>本月作品</span></div>
+            </div>
+            <div className="homepage-preview-surface">
+              <small>OUR COFFEE</small><strong>每一杯，都有自己的性格。</strong>
+              <div><i /><i /><i /></div>
+            </div>
+          </div>
+          <p className="cms-help">目前 J.2B.3A 只改善後台操作與儲存；公開首頁套用會在後續獨立階段處理，避免一次改太多。</p>
+        </aside>
+      </div>
+    </div>
+  </Panel>;
+}
+
+function HomepageSeoEditor({ value, assets, setPath, onOpenPicker }: { value: any; assets: AssetOption[]; setPath: SetPath; onOpenPicker: () => void }) {
+  const title = value?.title || ""; const description = value?.description || ""; const shareImage = value?.shareImage;
+  return <Panel title="SEO 與社群分享" description="管理首頁搜尋標題、說明與分享圖片；這一階段只提供安全編輯與儲存。" open>
+    <div className="cms-grid two">
+      <label className="span-two">SEO 標題<input maxLength={70} value={title} onChange={(event) => setPath(["seo", "title"], event.target.value)} /><small>{title.length}/70</small></label>
+      <label className="span-two">SEO 說明<textarea maxLength={180} value={description} onChange={(event) => setPath(["seo", "description"], event.target.value)} /><small>{description.length}/180</small></label>
+    </div>
+    <div className="cms-item-card"><h3>分享圖片</h3>{shareImage ? <><p>{shareImage.media?.url}</p><label>替代文字（必填）<input maxLength={240} value={shareImage.alt || ""} onChange={(event) => setPath(["seo", "shareImage"], { ...shareImage, alt: event.target.value })} /></label><div className="cms-toolbar-actions"><button type="button" onClick={onOpenPicker}>從素材庫更換</button><button type="button" onClick={() => setPath(["seo", "shareImage"], undefined)}>移除分享圖片</button></div></> : <button type="button" className="cms-secondary-button" disabled={!assets.length} onClick={onOpenPicker}>從素材庫選擇分享圖片</button>}</div>
+    <p className="cms-help">分享圖片只接受素材庫中的圖片，影片不會出現在選擇器中。</p>
+  </Panel>;
 }
 
 function Panel({ title, description, children, open = false, controls }: { title: string; description: string; children: React.ReactNode; open?: boolean; controls?: React.ReactNode }) {
@@ -143,11 +289,17 @@ function SectionMotionEditor({ sectionKey, value, setPath }: { sectionKey: Homep
 
 const timingLabels: Array<[keyof HeroTiming, string]> = [["mediaDuration", "烘豆機浮現時間"], ["eyebrowStart", "品牌文字開始"], ["headlineLine1Start", "主標第一行"], ["headlineLine2Start", "主標第二行"], ["leadStart", "說明文字"], ["primaryCtaStart", "主要按鈕"], ["secondaryCtaStart", "次要動作"], ["trustStart", "信任資訊"]];
 
-function HeroEditor({ value, products, setPath, uploadImage }: { value: any; products: ProductOption[]; setPath: SetPath; uploadImage: UploadImage }) {
+function HeroEditor({ value, products, setPath, uploadHeroImage, onOpenLibrary }: { value: any; products: ProductOption[]; setPath: SetPath; uploadHeroImage: (file: File, assetId: string) => Promise<MediaAsset>; onOpenLibrary: (target: "desktop" | "mobile") => void }) {
   const timing = resolveHeroTiming(value.timing); const [previewKey, setPreviewKey] = useState(0);
   const updateTiming = (key: keyof HeroTiming, seconds: number) => setPath(["hero", "timing"], resolveHeroTiming({ ...timing, [key]: Math.round(Math.max(0, Math.min(10, Number.isFinite(seconds) ? seconds : 0)) * 10) * 100 }));
-  return <Panel title="HOME001｜主視覺" description="管理首屏內容與電影式進場時間。" open controls={<Visibility checked={value.enabled !== false} onChange={(checked) => setPath(["hero", "enabled"], checked)} />}>
-    <div className="cms-grid two"><label>品牌小標<input value={value.eyebrow || ""} onChange={(event) => setPath(["hero", "eyebrow"], event.target.value)} /></label><label>主要按鈕文字<input value={value.buttonLabel || ""} onChange={(event) => setPath(["hero", "buttonLabel"], event.target.value)} /></label><label>標題第一行<input value={value.titleLines?.[0] || ""} onChange={(event) => setPath(["hero", "titleLines"], [event.target.value, value.titleLines?.[1] || ""])} /></label><label>標題第二行<input value={value.titleLines?.[1] || ""} onChange={(event) => setPath(["hero", "titleLines"], [value.titleLines?.[0] || "", event.target.value])} /></label><label className="span-two">核心文案<textarea value={value.lead || ""} onChange={(event) => setPath(["hero", "lead"], event.target.value)} /></label><label>次要按鈕文字<input value={value.secondaryLabel || ""} onChange={(event) => setPath(["hero", "secondaryLabel"], event.target.value)} /></label><SmartLinkPicker editorId="hero-primary" label="主要按鈕" buttonText={value.buttonLabel} value={value.buttonHref} products={products} onChange={(link) => setPath(["hero", "buttonHref"], link)} /><SmartLinkPicker editorId="hero-secondary" label="次要按鈕" buttonText={value.secondaryLabel} value={value.secondaryHref} products={products} onChange={(link) => setPath(["hero", "secondaryHref"], link)} /><label className="span-two">信任資訊（每行一項）<textarea value={(value.trustCues || ["不用登入即可購買", "7-ELEVEN 取貨付款", "工作室自取"]).join("\n")} onChange={(event) => setPath(["hero", "trustCues"], event.target.value.split(/\r?\n/u).filter(Boolean))} /></label><div className="span-two"><MediaUploader label="Hero 圖片／影片" usage="hero" value={resolveMediaAsset(value.media, value.poster)} onImageUpload={(file) => uploadImage(file, ["hero", "poster"], "IMG0001")} onChange={(media) => setPath(["hero", "media"], media)} onRemove={value.media ? () => setPath(["hero", "media"], undefined) : undefined} /></div></div>
+  const desktopMedia = resolveMediaAsset(value.desktopMedia) || resolveMediaAsset(value.media, value.poster);
+  const mobileMedia = resolveMediaAsset(value.mobileMedia);
+  return <Panel title="HOME001｜主視覺" description="桌機與手機可分別設定主視覺；手機未設定時會自動使用桌機／既有 Hero。" open controls={<Visibility checked={value.enabled !== false} onChange={(checked) => setPath(["hero", "enabled"], checked)} />}>
+    <div className="cms-grid two"><label>品牌小標<input value={value.eyebrow || ""} onChange={(event) => setPath(["hero", "eyebrow"], event.target.value)} /></label><label>主要按鈕文字<input value={value.buttonLabel || ""} onChange={(event) => setPath(["hero", "buttonLabel"], event.target.value)} /></label><label>標題第一行<input value={value.titleLines?.[0] || ""} onChange={(event) => setPath(["hero", "titleLines"], [event.target.value, value.titleLines?.[1] || ""])} /></label><label>標題第二行<input value={value.titleLines?.[1] || ""} onChange={(event) => setPath(["hero", "titleLines"], [value.titleLines?.[0] || "", event.target.value])} /></label><label className="span-two">核心文案<textarea value={value.lead || ""} onChange={(event) => setPath(["hero", "lead"], event.target.value)} /></label><label>次要按鈕文字<input value={value.secondaryLabel || ""} onChange={(event) => setPath(["hero", "secondaryLabel"], event.target.value)} /></label><SmartLinkPicker editorId="hero-primary" label="主要按鈕" buttonText={value.buttonLabel} value={value.buttonHref} products={products} onChange={(link) => setPath(["hero", "buttonHref"], link)} /><SmartLinkPicker editorId="hero-secondary" label="次要按鈕" buttonText={value.secondaryLabel} value={value.secondaryHref} products={products} onChange={(link) => setPath(["hero", "secondaryHref"], link)} /><label className="span-two">信任資訊（每行一項）<textarea value={(value.trustCues || ["不用登入即可購買", "7-ELEVEN 取貨付款", "工作室自取"]).join("\n")} onChange={(event) => setPath(["hero", "trustCues"], event.target.value.split(/\r?\n/u).filter(Boolean))} /></label></div>
+    <div className="cms-grid two hero-responsive-media-editor">
+      <section className="cms-item-card"><div className="cms-subsection-head"><div><p className="eyebrow dark">DESKTOP HERO</p><h3>桌機 Hero 素材</h3><p>{value.desktopMedia ? "目前使用獨立桌機素材。" : "目前沿用既有 Hero 素材；不設定也不會讓原本 Hero 消失。"}</p></div></div><MediaUploader label="桌機 Hero 圖片／影片" usage="hero" value={desktopMedia} onImageUpload={(file) => uploadHeroImage(file, "IMG0001-DESKTOP")} onChange={(media) => setPath(["hero", "desktopMedia"], media)} onRemove={value.desktopMedia ? () => setPath(["hero", "desktopMedia"], undefined) : undefined} /><div className="cms-toolbar-actions"><button type="button" className="cms-secondary-button" onClick={() => onOpenLibrary("desktop")}>從素材庫選擇</button>{value.desktopMedia ? <button type="button" className="cms-secondary-button" onClick={() => setPath(["hero", "desktopMedia"], undefined)}>恢復原本 Hero</button> : null}</div></section>
+      <section className="cms-item-card"><div className="cms-subsection-head"><div><p className="eyebrow dark">MOBILE HERO</p><h3>手機 Hero 素材（選填）</h3><p>{mobileMedia ? "手機會使用這個獨立素材。" : "未設定時會自動 fallback 使用桌機／既有 Hero。"}</p></div></div><MediaUploader label="手機 Hero 圖片／影片" usage="hero" value={mobileMedia} onImageUpload={(file) => uploadHeroImage(file, "IMG0001-MOBILE")} onChange={(media) => setPath(["hero", "mobileMedia"], media)} onRemove={mobileMedia ? () => setPath(["hero", "mobileMedia"], undefined) : undefined} /><div className="cms-toolbar-actions"><button type="button" className="cms-secondary-button" onClick={() => onOpenLibrary("mobile")}>從素材庫選擇</button>{mobileMedia ? <button type="button" className="cms-secondary-button" onClick={() => setPath(["hero", "mobileMedia"], undefined)}>清除手機素材</button> : null}</div></section>
+    </div>
     <div className="hero-timing-editor"><div className="hero-timing-head"><Visibility checked={value.motionEnabled !== false} onChange={(checked) => setPath(["hero", "motionEnabled"], checked)} /><div><button type="button" className="cms-secondary-button" onClick={() => setPath(["hero", "timing"], { ...PREMIUM_HERO_TIMING })}>恢復精品預設值</button><button type="button" className="cms-secondary-button" onClick={() => setPreviewKey((key) => key + 1)}>預覽進場動畫</button></div></div><div className="hero-timing-grid">{timingLabels.map(([key, label]) => <label key={key}><span className="hero-timing-label">{label}</span><input type="range" min="0" max="10" step="0.1" value={timing[key] / 1000} onChange={(event) => updateTiming(key, Number(event.target.value))} /><span className="hero-timing-value"><input type="number" min="0" max="10" step="0.1" value={(timing[key] / 1000).toFixed(1)} onChange={(event) => updateTiming(key, Number(event.target.value))} /><span>秒</span></span></label>)}</div><div className="hero-timing-preview" key={previewKey} data-playing={previewKey > 0}><small style={{ animationDelay: `${timing.eyebrowStart}ms` }}>KD COFFEE</small><strong style={{ animationDelay: `${timing.headlineLine1Start}ms` }}>為了理想的風味，</strong><strong style={{ animationDelay: `${timing.headlineLine2Start}ms` }}>我們打造自己的烘豆機。</strong><span style={{ animationDelay: `${timing.leadStart}ms` }}>每一個細節，累積成一杯好咖啡。</span></div><p className="cms-help">預覽只會在這裡重播，不會儲存；按「儲存全部」後才會更新前台。</p></div>
   </Panel>;
 }

@@ -51,6 +51,8 @@ export type HeroSettings = {
   monthNumber: string;
   monthLabel: string;
   media?: MediaAsset;
+  desktopMedia?: MediaAsset;
+  mobileMedia?: MediaAsset;
   secondaryLabel?: string;
   secondaryHref?: CmsLinkValue;
   secondaryCtaEnabled?: boolean;

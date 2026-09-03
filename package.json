@@ -61,7 +61,8 @@
     "test:phase-i4b3f": "node --experimental-strip-types --import ./scripts/member-auth-test-bootstrap.mjs scripts/test-phase-i4b3f-referral-e2e.ts",
     "health": "node scripts/health-check.mjs",
     "test:phase-j1f6": "node --experimental-strip-types --import ./scripts/member-auth-test-bootstrap.mjs scripts/test-phase-j1f6-works-public-seo.ts",
-    "test:phase-j2b2": "node --experimental-strip-types scripts/test-phase-j2b2-homepage-schema.ts"
+    "test:phase-j2b2": "node --experimental-strip-types scripts/test-phase-j2b2-homepage-schema.ts",
+    "test:phase-j2b3": "node --experimental-strip-types scripts/test-phase-j2b3-homepage-admin-presentation.ts"
   },
   "dependencies": {
     "cloudinary": "^2.10.0",

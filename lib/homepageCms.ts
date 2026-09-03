@@ -417,6 +417,9 @@ export function validateHomepageCms(homepage: unknown) {
   validateHref(hero.buttonHref, "主視覺主要按鈕連結");
   validateText(hero.secondaryLabel, "主視覺次要按鈕", 100);
   validateHref(hero.secondaryHref, "主視覺次要按鈕連結");
+  if (hero.media !== undefined) validateMediaAsset(hero.media, "主視覺既有媒體");
+  if (hero.desktopMedia !== undefined) validateMediaAsset(hero.desktopMedia, "主視覺桌機媒體");
+  if (hero.mobileMedia !== undefined) validateMediaAsset(hero.mobileMedia, "主視覺手機媒體");
   if (hero.trustCues !== undefined) {
     if (!Array.isArray(hero.trustCues) || hero.trustCues.length > 8) throw new Error("主視覺信任資訊最多可有 8 項。");
     hero.trustCues.forEach((cue, index) => validateText(cue, `第 ${index + 1} 項信任資訊`, 120, true));

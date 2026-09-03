@@ -229,6 +229,11 @@ export default function HomepageV3({
     "--home-hero-trust-start": `${heroTiming.trustStart}ms`,
   } as CSSProperties;
 
+  const desktopHeroMedia = resolveMediaAsset(hero.desktopMedia) || resolveMediaAsset(hero.media);
+  const mobileHeroMedia = resolveMediaAsset(hero.mobileMedia);
+  const hasMobileHeroMedia = Boolean(mobileHeroMedia);
+  const desktopHeroClassName = `v3-hero-video${hasMobileHeroMedia ? " v3-hero-media-desktop" : ""}`;
+
   return (
     <>
       <HomepageMotion />
@@ -251,23 +256,31 @@ export default function HomepageV3({
         data-hero-motion={hero.motionEnabled === false ? "off" : "on"}
         style={heroStyle}
       >
-        {resolveMediaAsset(hero.media) ? (
+        {desktopHeroMedia ? (
           <KdMedia
-            media={resolveMediaAsset(hero.media)}
+            media={desktopHeroMedia}
             alt="KD Coffee 首頁主視覺"
-            className="v3-hero-video"
+            className={desktopHeroClassName}
             fallbackImageUrl={hero.poster}
             backgroundVideo
             eager
           />
         ) : hero.videoWebm || hero.videoMp4 ? (
-          <video className="v3-hero-video" autoPlay muted loop playsInline poster={hero.poster} aria-label="KD Coffee 真實烘豆影片">
+          <video className={desktopHeroClassName} autoPlay muted loop playsInline poster={hero.poster} aria-label="KD Coffee 真實烘豆影片">
             {hero.videoWebm ? <source src={hero.videoWebm} type="video/webm" /> : null}
             {hero.videoMp4 ? <source src={hero.videoMp4} type="video/mp4" /> : null}
           </video>
         ) : hero.poster ? (
-          <img className="v3-hero-video" src={hero.poster} alt="KD Coffee 首頁主視覺" />
+          <img className={desktopHeroClassName} src={hero.poster} alt="KD Coffee 首頁主視覺" />
         ) : null}
+        {mobileHeroMedia ? <KdMedia
+          media={mobileHeroMedia}
+          alt="KD Coffee 手機首頁主視覺"
+          className="v3-hero-video v3-hero-media-mobile"
+          fallbackImageUrl={hero.poster}
+          backgroundVideo
+          eager
+        /> : null}
 
         <div className="v3-hero-shade" />
 

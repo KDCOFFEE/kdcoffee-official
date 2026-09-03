@@ -52,6 +52,7 @@ export async function POST(request: Request) {
     const body = (await request.json()) as Record<string, unknown>;
     const publicId = String(body.publicId || "").trim();
     const usage = isCloudinaryMediaUsage(body.usage) ? body.usage : "content";
+    const reuseExisting = body.reuseExisting === true;
     const mediaPurpose = typeof body.mediaPurpose === "string" ? body.mediaPurpose : "";
     if (mediaPurpose === CUSTOM_SECTION_MEDIA_PURPOSE) {
       customSectionRequest = true;
@@ -74,6 +75,7 @@ export async function POST(request: Request) {
     );
 
     const publicIdPrefixValid =
+      (reuseExisting && publicId.startsWith(`${CLOUDINARY_VIDEO_FOLDER}/`)) ||
       legacyPublicId.test(publicId) ||
       (
         publicId.startsWith(`${CLOUDINARY_VIDEO_FOLDER}/`) &&
