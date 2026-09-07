@@ -6,7 +6,10 @@ import { getCurrentMember, getMemberLoginMethods, safeReturnPath } from "@/lib/m
 import { getOrdersDir, getWebsiteDataFile } from "@/lib/storagePaths";
 
 import MemberProfileForm from "@/components/member/MemberProfileForm";
+import MemberAvatarForm from "@/components/member/MemberAvatarForm";
 import EmailAuthForms from "@/components/member/EmailAuthForms";
+import MemberMobileDisclosure from "@/components/member/MemberMobileDisclosure";
+import MemberSectionNav from "@/components/member/MemberSectionNav";
 import MemberSubscriptionExperience from "@/components/member/MemberSubscriptionExperience";
 import MemberReferralCenter from "@/components/member/MemberReferralCenter";
 import { getMemberCommerceDashboard } from "@/lib/membershipCommerce";
@@ -201,6 +204,35 @@ function modeLabel(
  *
  * 原本邏輯不修改。
  */
+function formatTaipeiDate(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  const parts = new Intl.DateTimeFormat("zh-TW", {
+    timeZone: "Asia/Taipei",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const map = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${map.year}/${map.month}/${map.day}`;
+}
+
+function formatTaipeiDateTime(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  const parts = new Intl.DateTimeFormat("zh-TW", {
+    timeZone: "Asia/Taipei",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(date);
+  const map = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${map.year}/${map.month}/${map.day} ${map.hour}:${map.minute}`;
+}
+
 function statusLabel(
   status: string,
 ) {
@@ -247,11 +279,13 @@ export default async function MemberPage({
     error?: string;
     linked?: string;
     returnTo?: string;
+    ref?: string;
   }>;
 }) {
   const params =
     await searchParams;
-  const returnTo = safeReturnPath(params.returnTo);
+  const referralCode = typeof params.ref === "string" ? params.ref.trim().toUpperCase().slice(0, 40) : "";
+  const returnTo = safeReturnPath(params.returnTo || (referralCode ? `/member?ref=${encodeURIComponent(referralCode)}` : "/member"));
 
   const member =
     await getCurrentMember();
@@ -311,8 +345,12 @@ export default async function MemberPage({
     await getMemberOrders(
       member.id,
     );
-  const displayName = member.displayName?.trim() || "KD Coffee 會員";
+  const memberName = member.pickupName?.trim() || member.displayName?.trim() || "";
   const [loginMethods, commerce, rulesVersion, subscriptionProducts] = await Promise.all([getMemberLoginMethods(member), getMemberCommerceDashboard(member.id), getActiveMembershipRules(), getSubscriptionProducts()]);
+  const availableCredit = commerce.credits
+    .filter((item) => item.status === "available")
+    .reduce((sum, item) => sum + item.remainingAmount, 0);
+  const latestOrder = orders[0];
 
   return (
     <main className="member-page">
@@ -326,126 +364,127 @@ export default async function MemberPage({
         {params.error === "line_link_failed" && (
           <p className="member-notice">LINE 連結未完成。此 LINE 可能已連結其他會員，或驗證已逾時；會員資料沒有變更。</p>
         )}
-        <nav className="member-center-nav" aria-label="會員中心導覽"><Link href="/">首頁</Link><a href="#subscription">定期配送</a><a href="#orders">訂單</a><a href="#credit">抵用金</a><a href="#referral">推薦</a><a href="#login-methods">登入方式</a></nav>
-        <div className="member-profile">
-          {member.pictureUrl ? (
-            <img
-              src={member.pictureUrl}
-              alt="會員頭像"
-            />
-          ) : (
-            <div className="member-avatar-fallback">
-              KD
-            </div>
-          )}
+        <MemberSectionNav />
 
-          <div className="member-profile-copy">
-            <p className="eyebrow dark">
-              KD COFFEE MEMBER
-            </p>
-
-            <h1>
-              {displayName}
-            </h1>
-
-            <p>
-              歡迎回來。常用資料會在結帳時自動帶入。
-            </p>
-          </div>
-        </div>
-
-        <div className="member-actions">
-          <Link href="/works">
-            選購咖啡作品
-          </Link>
-
-          <Link
-            className="member-primary-action"
-            href="/checkout"
-          >
-            前往結帳
-          </Link>
-        </div>
-
-        <div className="member-info-grid">
-          <div>
-            <small>會員編號</small>
-            <strong>{loginMethods.memberNumber}</strong>
-            <span>這是您的固定 KD Coffee 會員識別。</span>
-          </div>
-
-          <div>
-            <small>
-              常用姓名
-            </small>
-
-            <strong>
-              {member.pickupName ||
-                "尚未設定"}
-            </strong>
-          </div>
-
-          <div>
-            <small>
-              手機號碼
-            </small>
-
-            <strong>
-              {member.phone ||
-                "尚未設定"}
-            </strong>
-          </div>
-
-          <div>
-            <small>
-              常用門市
-            </small>
-
-            <strong>
-              {member.favoriteStore
-                ?.name ||
-                "尚未設定"}
-            </strong>
-
-            {member.favoriteStore
-              ?.address && (
-              <span>
-                {
-                  member
-                    .favoriteStore
-                    .address
-                }
-              </span>
+        <section className="member-welcome-hero" id="member-overview">
+          <div className="member-welcome-main">
+            {(member.avatarUrl || member.pictureUrl) ? (
+              <img className="member-welcome-avatar" src={member.avatarUrl || member.pictureUrl} alt="會員頭像" />
+            ) : (
+              <div className="member-welcome-avatar member-avatar-fallback">KD</div>
             )}
+
+            <div className="member-profile-copy">
+              <p className="eyebrow dark">KD COFFEE MEMBER</p>
+              <h1>{memberName ? `${memberName}，歡迎回來` : "歡迎回來"}</h1>
+              <p>享受每一杯咖啡，也感謝你成為 KD Coffee 的一份子。</p>
+              <div className="member-welcome-meta">
+                <span>會員編號 <strong>{loginMethods.memberNumber}</strong></span>
+                <span>加入日期 <strong>{formatTaipeiDate(member.createdAt)}</strong></span>
+              </div>
+            </div>
           </div>
 
+          <div className="member-welcome-art" aria-hidden="true">
+            <span className="member-welcome-steam">Good Coffee</span>
+            <strong>A Better Day</strong>
+            <div className="member-welcome-cup"><i /></div>
+          </div>
+        </section>
+
+        <section className="member-dashboard" aria-label="會員總覽">
+          <div className="member-dashboard-grid">
+            <a className="member-dashboard-card" href="#credit">
+              <small>可用抵用金</small>
+              <strong>NT$ {availableCredit.toLocaleString("zh-TW")}</strong>
+              <span>結帳時可自行選擇使用</span>
+            </a>
+            <a className="member-dashboard-card" href="#credit">
+              <small>待入帳回饋</small>
+              <strong>NT$ {commerce.pendingCredit.toLocaleString("zh-TW")}</strong>
+              <span>符合目前規則後轉為可用抵用金</span>
+            </a>
+            <a className="member-dashboard-card" href="#referral">
+              <small>直接推薦</small>
+              <strong>{commerce.referrals.length} 人</strong>
+              <span>查看推薦與團隊進度</span>
+            </a>
+            <a className="member-dashboard-card" href="#orders">
+              <small>最近訂單</small>
+              <strong>{latestOrder ? (latestOrder.fulfillment ? fulfillmentStateLabels[latestOrder.fulfillment.currentState] : statusLabel(latestOrder.status)) : "尚無訂單"}</strong>
+              <span>{latestOrder ? latestOrder.orderNumber : "完成第一筆訂購後會顯示於此"}</span>
+            </a>
+          </div>
+
+        </section>
+
+        <section className="member-qualification-banner">
           <div>
-            <small>
-              會員建立日期
-            </small>
-
-            <strong>
-              {new Date(
-                member.createdAt,
-              ).toLocaleDateString(
-                "zh-TW",
-              )}
-            </strong>
-
-            <span>
-              最近登入：
-              {new Date(
-                member.lastLoginAt,
-              ).toLocaleString(
-                "zh-TW",
-              )}
-            </span>
+            <small>MEMBER STATUS</small>
+            <strong>{commerce.pendingCredit > 0 ? "目前有推薦回饋等待入帳" : "會員帳戶已啟用"}</strong>
+            <span>推薦資格與回饋狀態可在下方「推薦與回饋」查看完整資訊。</span>
           </div>
-        </div>
+          <a href="#referral">查看推薦與回饋 <b>→</b></a>
+        </section>
 
-        <MemberSubscriptionExperience {...commerce} products={subscriptionProducts} rules={{ intervalsDays: rulesVersion.rules.subscription.intervalOptions.filter((item) => item.enabled).map((item) => item.days), customCycleEnabled: rulesVersion.rules.subscription.customCycleEnabled, customCycleMinDays: rulesVersion.rules.subscription.customCycleMinDays, customCycleMaxDays: rulesVersion.rules.subscription.customCycleMaxDays, delayQuickOptionsDays: rulesVersion.rules.subscription.delayQuickOptionsDays, advanceQuickOptionsDays: rulesVersion.rules.subscription.advanceQuickOptionsDays, preparationLeadDays: rulesVersion.rules.subscription.preparationLeadDays, discountPercent: rulesVersion.rules.subscription.discountPercent, datePickerMode: rulesVersion.rules.subscription.datePickerMode, maxModificationsPerCycle: rulesVersion.rules.subscription.maxModificationsPerCycle }} />
-        <MemberReferralCenter />
+        <section className="member-quick-actions" aria-label="快速功能">
+          <header>
+            <div>
+              <p className="eyebrow dark">QUICK ACTIONS</p>
+              <h2>快速功能</h2>
+            </div>
+            <span>常用功能，快速前往</span>
+          </header>
+          <div className="member-quick-action-grid">
+            <Link href="/works"><i>01</i><strong>選購咖啡作品</strong><span>瀏覽 KD Coffee 作品</span></Link>
+            <a href="#referral"><i>02</i><strong>分享推薦連結</strong><span>邀請朋友加入</span></a>
+            <a href="#orders"><i>03</i><strong>查看我的訂單</strong><span>掌握訂單最新狀態</span></a>
+            <a href="#subscription"><i>04</i><strong>管理定期配送</strong><span>查看配送設定</span></a>
+            <a href="#account"><i>05</i><strong>編輯帳戶資料</strong><span>管理會員資訊</span></a>
+          </div>
+        </section>
 
+        <MemberMobileDisclosure id="account" className="member-account-summary" eyebrow="ACCOUNT" title="帳戶資料" summary="個人資料、頭像與常用門市">
+          <div className="member-account-inline-layout">
+            <div className="member-account-static-grid">
+              <div>
+                <small>會員編號</small>
+                <strong>{loginMethods.memberNumber}</strong>
+                <span>固定會員識別，不可變更。</span>
+              </div>
+              <div>
+                <small>會員建立日期</small>
+                <strong>{formatTaipeiDate(member.createdAt)}</strong>
+                <span>最近登入：{formatTaipeiDateTime(member.lastLoginAt)}</span>
+              </div>
+              <div>
+                <small>常用門市</small>
+                <strong>{member.favoriteStore?.name || "尚未設定"}</strong>
+                {member.favoriteStore?.address && <span>{member.favoriteStore.address}</span>}
+              </div>
+            </div>
+
+            <MemberProfileForm
+              initial={{
+                pickupName: member.pickupName,
+                phone: member.phone,
+                email: member.email,
+              }}
+            />
+
+            <MemberAvatarForm customAvatarUrl={member.avatarUrl} providerPictureUrl={member.pictureUrl} />
+          </div>
+        </MemberMobileDisclosure>
+
+        <div className="member-dashboard-content">
+        <MemberMobileDisclosure eyebrow="SUBSCRIPTION" title="定期配送與抵用金" summary="配送安排、抵用金與推薦摘要">
+          <MemberSubscriptionExperience {...commerce} products={subscriptionProducts} rules={{ intervalsDays: rulesVersion.rules.subscription.intervalOptions.filter((item) => item.enabled).map((item) => item.days), customCycleEnabled: rulesVersion.rules.subscription.customCycleEnabled, customCycleMinDays: rulesVersion.rules.subscription.customCycleMinDays, customCycleMaxDays: rulesVersion.rules.subscription.customCycleMaxDays, delayQuickOptionsDays: rulesVersion.rules.subscription.delayQuickOptionsDays, advanceQuickOptionsDays: rulesVersion.rules.subscription.advanceQuickOptionsDays, preparationLeadDays: rulesVersion.rules.subscription.preparationLeadDays, discountPercent: rulesVersion.rules.subscription.discountPercent, datePickerMode: rulesVersion.rules.subscription.datePickerMode, maxModificationsPerCycle: rulesVersion.rules.subscription.maxModificationsPerCycle }} />
+        </MemberMobileDisclosure>
+        <MemberMobileDisclosure eyebrow="REFERRAL" title="推薦與回饋" summary={`直接推薦 ${commerce.referrals.length} 人・待入帳 NT$ ${commerce.pendingCredit.toLocaleString("zh-TW")}`}>
+          <MemberReferralCenter />
+        </MemberMobileDisclosure>
+
+        <MemberMobileDisclosure eyebrow="ACCOUNT" title="登入方式" summary="管理 Email 與 LINE 登入">
         <section className="member-login-methods" id="login-methods">
           <div className="member-section-head">
             <div>
@@ -467,20 +506,9 @@ export default async function MemberPage({
           </div>
           <p className="member-login-method-note">登入方式只用來確認是您本人；訂單與會員紀錄都會保留在同一個會員帳號。</p>
         </section>
+        </MemberMobileDisclosure>
 
-        <MemberProfileForm
-          initial={{
-            pickupName:
-              member.pickupName,
-
-            phone:
-              member.phone,
-
-            email:
-              member.email,
-          }}
-        />
-
+        <MemberMobileDisclosure eyebrow="ORDERS" title="我的訂單" summary={latestOrder ? `最近：${latestOrder.orderNumber}` : "尚無訂單紀錄"}>
         <section className="member-orders" id="orders">
           <div className="member-section-head">
             <div>
@@ -515,11 +543,7 @@ export default async function MemberPage({
                     </strong>
 
                     <small>
-                      {new Date(
-                        order.createdAt,
-                      ).toLocaleString(
-                        "zh-TW",
-                      )}
+                      {formatTaipeiDateTime(order.createdAt)}
                       ・
                       {modeLabel(
                         order.orderMode,
@@ -541,8 +565,8 @@ export default async function MemberPage({
                     {order.fulfillment ? (
                       <div className="member-fulfillment-summary">
                         <strong>{fulfillmentStateLabels[order.fulfillment.currentState]}</strong>
-                        {order.fulfillment.pickupDeadline ? <span>取貨期限：{new Date(order.fulfillment.pickupDeadline).toLocaleDateString("zh-TW")}</span> : null}
-                        {order.fulfillment.events.length ? <ol>{order.fulfillment.events.slice(-4).map((event)=><li key={event.eventId}><time>{new Date(event.occurredAt).toLocaleDateString("zh-TW")}</time><span>{fulfillmentStateLabels[event.state]}</span></li>)}</ol> : null}
+                        {order.fulfillment.pickupDeadline ? <span>取貨期限：{formatTaipeiDate(order.fulfillment.pickupDeadline)}</span> : null}
+                        {order.fulfillment.events.length ? <ol>{order.fulfillment.events.slice(-4).map((event)=><li key={event.eventId}><time>{formatTaipeiDate(event.occurredAt)}</time><span>{fulfillmentStateLabels[event.state]}</span></li>)}</ol> : null}
                       </div>
                     ) : null}
                   </div>
@@ -607,6 +631,7 @@ export default async function MemberPage({
             </div>
           )}
         </section>
+        </MemberMobileDisclosure>
 
         <form
           action="/api/auth/logout"
@@ -616,6 +641,7 @@ export default async function MemberPage({
             登出會員
           </button>
         </form>
+        </div>
       </section>
     </main>
   );

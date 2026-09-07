@@ -1,4 +1,4 @@
-import { createHmac, randomBytes, timingSafeEqual } from "crypto";
+import { createHmac, randomBytes, randomInt, timingSafeEqual } from "crypto";
 import { promises as fs } from "fs";
 import path from "path";
 
@@ -8,7 +8,7 @@ import { atomicWriteJson, withFileLock } from "./jsonFileStore.ts";
 import { getMemberIdentityRegistryFile } from "./storagePaths.ts";
 
 export const MEMBER_IDENTITY_SCHEMA_VERSION = 1 as const;
-export const MEMBER_NUMBER_PATTERN = /^KD-\d{6,9}$/;
+export const MEMBER_NUMBER_PATTERN = /^(?:KD-\d{6,9}|1962\d{5})$/;
 export const LINE_LINK_TTL_MS = 10 * 60 * 1000;
 
 export type IdentityProvider = "email" | "line";
@@ -140,7 +140,17 @@ export function formatMemberNumber(sequence: number) {
   if (!Number.isSafeInteger(sequence) || sequence < 1 || sequence > 999_999_999) {
     throw new IdentityValidationError("會員編號序號超出範圍");
   }
+  // Legacy compatibility only. New public member numbers are allocated randomly.
   return `KD-${String(sequence).padStart(6, "0")}`;
+}
+
+function allocatePublicMemberNumber(registry: MemberIdentityRegistry) {
+  const used = new Set(Object.values(registry.members).map((member) => member.memberNumber));
+  for (let attempt = 0; attempt < 500; attempt += 1) {
+    const candidate = `1962${String(randomInt(0, 100_000)).padStart(5, "0")}`;
+    if (!used.has(candidate)) return candidate;
+  }
+  throw new IdentityValidationError("公開會員編號暫時無法產生，請稍後再試");
 }
 
 function emptyRegistry(now = new Date()): MemberIdentityRegistry {
@@ -316,12 +326,13 @@ function allocateMember(
   const timestamp = nowIso(now);
   const record: CanonicalMemberRecord = {
     memberId,
-    memberNumber: formatMemberNumber(registry.nextMemberSequence++),
+    memberNumber: allocatePublicMemberNumber(registry),
     status: "active",
     legacyMemberIds: [...new Set(legacyMemberIds)],
     createdAt: timestamp,
     updatedAt: timestamp,
   };
+  registry.nextMemberSequence += 1;
   registry.members[memberId] = record;
   for (const legacyId of record.legacyMemberIds) registry.legacyAliases[legacyId] = memberId;
   return record;
@@ -420,6 +431,26 @@ export async function provisionCanonicalMember(input: {
     }, now);
     await writeRegistry(filePath, registry, now);
     return { member, identity };
+  });
+}
+
+export async function purgeCanonicalMembers(memberIds?: string[]) {
+  return withRegistryLock(async (filePath) => {
+    const registry = await readRegistry(filePath);
+    const targets = new Set(memberIds?.length ? memberIds : Object.keys(registry.members));
+    for (const memberId of targets) delete registry.members[memberId];
+    for (const [key, identity] of Object.entries(registry.identities)) {
+      if (targets.has(identity.memberId)) delete registry.identities[key];
+    }
+    for (const [legacyId, memberId] of Object.entries(registry.legacyAliases)) {
+      if (targets.has(memberId) || targets.has(legacyId)) delete registry.legacyAliases[legacyId];
+    }
+    for (const [key, transaction] of Object.entries(registry.linkTransactions)) {
+      if (targets.has(transaction.memberId)) delete registry.linkTransactions[key];
+    }
+    registry.auditLog = registry.auditLog.filter((entry) => !targets.has(entry.memberId));
+    await writeRegistry(filePath, registry);
+    return targets.size;
   });
 }
 

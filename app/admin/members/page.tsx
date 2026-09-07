@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 
 import { isAdminAuthenticated } from "@/lib/adminAuth";
 import { getAdminMemberList, type AdminMemberListFilters } from "@/lib/adminMemberManagement";
+import MemberDeletionPanel from "@/components/admin/MemberDeletionPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -43,5 +44,6 @@ export default async function AdminMembersPage({ searchParams }: { searchParams:
       </Link>)}</div>
       {!result.rows.length ? <div className="member-admin-empty"><strong>找不到符合條件的會員</strong><p>請調整搜尋文字或清除篩選條件。</p></div> : null}
     </section>
+    <MemberDeletionPanel totalMembers={result.total} />
   </main>;
 }

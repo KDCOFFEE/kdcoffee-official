@@ -5,6 +5,16 @@ import path from "path";
 
 const DEFAULT_LOCK_TIMEOUT_MS = 5_000;
 const DEFAULT_LOCK_RETRY_MS = 50;
+const TEST_LAB_WINDOWS_WRITE_RETRY_DELAYS_MS = [40, 80, 160, 320, 640] as const;
+
+function isMembershipTestLabPath(filePath: string) {
+  return path.resolve(filePath).split(path.sep).includes("membership-test-lab");
+}
+
+function isTransientWindowsReplaceError(error: unknown) {
+  if (process.platform !== "win32") return false;
+  return ["EPERM", "EACCES", "EBUSY"].some((code) => hasErrorCode(error, code));
+}
 
 export class FileLockTimeoutError extends Error {
   constructor(filePath: string, timeoutMs: number) {
@@ -25,7 +35,7 @@ export function serializeJson(data: unknown) {
   return `${JSON.stringify(data, null, 2)}\n`;
 }
 
-export async function atomicWriteJson(filePath: string, data: unknown) {
+async function atomicWriteJsonOnce(filePath: string, data: unknown) {
   const targetPath = path.resolve(filePath);
   const dir = path.dirname(targetPath);
   const tempPath = path.join(
@@ -49,6 +59,23 @@ export async function atomicWriteJson(filePath: string, data: unknown) {
       await fs.unlink(tempPath).catch((error: unknown) => {
         if (!hasErrorCode(error, "ENOENT")) throw error;
       });
+    }
+  }
+}
+
+export async function atomicWriteJson(filePath: string, data: unknown) {
+  const retryDelays = isMembershipTestLabPath(filePath)
+    ? TEST_LAB_WINDOWS_WRITE_RETRY_DELAYS_MS
+    : [];
+
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      await atomicWriteJsonOnce(filePath, data);
+      return;
+    } catch (error) {
+      const delay = retryDelays[attempt];
+      if (delay == null || !isTransientWindowsReplaceError(error)) throw error;
+      await wait(delay);
     }
   }
 }

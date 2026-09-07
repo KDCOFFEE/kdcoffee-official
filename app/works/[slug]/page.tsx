@@ -178,8 +178,17 @@ export default async function WorkPage({ params }: { params: Promise<{ slug: str
   const artworkCoverPath = resolveStaticProductAssetImage(product, "artworkCover");
   const artworkCoverAlt = product.assets?.artworkCover?.alt || `${product.name} Artwork Cover`;
   const roastedBeanPhotoPath = resolveStaticProductAssetImage(product, "roastedBeanPhoto");
-  const showRoastedBeanViewer = product.showRoastedBeanPhoto === true && Boolean(roastedBeanPhotoPath);
-  const roastedBeanPhotoAlt = product.assets?.roastedBeanPhoto?.alt || `${product.name} 實際烘焙咖啡豆`;
+  const roastedBeanAsset = (product.assets?.roastedBeanPhoto && typeof product.assets.roastedBeanPhoto === "object" ? product.assets.roastedBeanPhoto : {}) as any;
+  const explicitRoastedBeanGallery = Array.isArray(roastedBeanAsset.gallery)
+    ? roastedBeanAsset.gallery.filter((item: any) => item && typeof item === "object" && (item.path || item.media))
+    : [];
+  const roastedBeanMediaItems = explicitRoastedBeanGallery.length
+    ? explicitRoastedBeanGallery
+    : (roastedBeanPhotoPath || roastedBeanAsset.media)
+      ? [{ id: "legacy-roasted-1", path: roastedBeanPhotoPath, media: roastedBeanAsset.media || null, alt: roastedBeanAsset.alt || `${product.name} 實際烘焙咖啡豆`, title: roastedBeanAsset.title || "", caption: roastedBeanAsset.caption || "" }]
+      : [];
+  const showRoastedBeanViewer = product.showRoastedBeanPhoto === true && roastedBeanMediaItems.length > 0;
+  const roastedBeanPhotoAlt = roastedBeanAsset.alt || `${product.name} 實際烘焙咖啡豆`;
   const gallery = resolveGalleryAssets(product);
   const relatedSettings = product.relatedProducts && typeof product.relatedProducts === "object" ? product.relatedProducts : null;
   const productBySlug = new Map(live.menu.products.map((item: any) => [item.slug, item]));
@@ -349,7 +358,7 @@ export default async function WorkPage({ params }: { params: Promise<{ slug: str
         <div className="product-story-details">
           {flavorContent.flavors.length ? <section {...getProductAnimationAttributes(sectionAnimation("flavor-notes"))} id="flavor-notes" className="flavor-notes" aria-labelledby="flavor-notes-title"><div className="story-detail-heading" data-section-reveal><EditorialIcon name="flavor" /><div><p>{flavorContent.eyebrow}</p><h3 id="flavor-notes-title">{flavorContent.heading}</h3>{flavorContent.description ? <span>{flavorContent.description}</span> : null}</div></div><div className="flavor-notes-list">{flavorContent.flavors.map((flavor: string, index: number) => <span key={flavor} data-section-reveal data-reveal-delay={String(index * 80)}>{flavor}</span>)}</div></section> : null}
           {facts.length ? <section {...getProductAnimationAttributes(sectionAnimation("coffee-profile"))} id="coffee-profile" className="coffee-profile" aria-labelledby="coffee-profile-title"><div className="story-detail-heading" data-section-reveal><div><p>{profileContent.eyebrow}</p><h3 id="coffee-profile-title">{profileContent.heading}</h3>{profileContent.description ? <span>{profileContent.description}</span> : null}</div></div><dl>{facts.map(([key, label, value], index) => <div key={String(key)} data-section-reveal data-reveal-delay={String(index * 80)}><dt><EditorialIcon name={key as "origin" | "process" | "roast"} /><span>{label}</span></dt><dd>{value}</dd></div>)}</dl></section> : null}
-          {showRoastedBeanViewer ? <section className="roasted-bean-viewer-entry" data-section-reveal data-reveal-delay="180" aria-label="烘焙豆照片"><RoastedBeanViewer productName={heroContent.title} imageSrc={roastedBeanPhotoPath} imageAlt={roastedBeanPhotoAlt} heading={profileContent.roastedBeanHeading} cta={profileContent.roastedBeanCta} /></section> : null}
+          {showRoastedBeanViewer ? <section className="roasted-bean-viewer-entry" data-section-reveal data-reveal-delay="180" aria-label="烘焙豆照片與影片"><RoastedBeanViewer productName={heroContent.title} items={roastedBeanMediaItems} imageSrc={roastedBeanPhotoPath} imageAlt={roastedBeanPhotoAlt} heading={profileContent.roastedBeanHeading} cta={profileContent.roastedBeanCta} /></section> : null}
         </div>
       </section>
 

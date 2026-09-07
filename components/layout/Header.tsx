@@ -23,11 +23,12 @@ export default async function Header() {
     .map((item) => ({ id: item.id, label: item.label, href: item.href }));
   const products = website?.menu?.products || [];
   const pages = pageStore ? publishedPageRegistry(pageStore) : [];
+  const memberName = member?.pickupName?.trim() || member?.displayName?.trim() || "KD Coffee 會員";
   return <header className="v2-header">
     <Link className={`brand ${logo?.path ? "brand-image" : ""}`} href="/#top" aria-label="KD Coffee 首頁">
       {logo?.path ? <img src={logo.path} alt={logo.alt || "KD Coffee 咖啡藝術工坊"}/> : <><span>KD</span><b>COFFEE</b></>}
     </Link>
     <HeaderNavigation items={navigation} products={products} pages={pages} />
-    <div className="header-actions"><MemberLink initialName={member ? member.displayName?.trim() || "KD Coffee 會員" : ""}/><CartLink compact/></div>
+    <div className="header-actions"><MemberLink initialName={member ? memberName : ""}/><span id="site-header-cart" data-header-cart-trigger><CartLink compact/></span></div>
   </header>;
 }

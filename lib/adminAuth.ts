@@ -36,3 +36,11 @@ export async function isAdminAuthenticated() {
 }
 
 export const adminCookieName = COOKIE_NAME;
+
+export function verifyAdminPassword(password: string) {
+  const expected = (process.env.ADMIN_PASSWORD || "").trim();
+  if (!expected || !password) return false;
+  const left = Buffer.from(password);
+  const right = Buffer.from(expected);
+  return left.length === right.length && crypto.timingSafeEqual(left, right);
+}

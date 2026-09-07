@@ -30,11 +30,13 @@ function formatDuration(seconds?: number) {
 export default function HeroMediaLibraryPicker({
   assets,
   title,
+  usage = "hero",
   onChoose,
   onClose,
 }: {
   assets: AssetRecord[];
   title: string;
+  usage?: "hero" | "product";
   onChoose: (media: MediaAsset) => void;
   onClose: () => void;
 }) {
@@ -100,7 +102,7 @@ export default function HeroMediaLibraryPicker({
       const response = await fetch("/api/admin/media/finalize", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ publicId: item.publicId, usage: "hero", mediaType: "video", reuseExisting: true }),
+        body: JSON.stringify({ publicId: item.publicId, usage, mediaType: "video", reuseExisting: true }),
       });
       const result = await response.json() as { error?: string; media?: MediaAsset };
       if (!response.ok || !result.media) throw new Error(result.error || "影片驗證失敗");

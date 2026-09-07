@@ -15,6 +15,9 @@ const VIDEO_ASSET_TYPES = new Set([
   "productPhoto",
   "mainVisual",
   "artworkCover",
+  // J.4 H2: only this product-detail asset is additionally allowed to
+  // mirror a video as its primary media when Gallery item #1 is a video.
+  "roastedBeanPhoto",
 ]);
 
 const PRODUCT_PUBLIC_ID = new RegExp(
@@ -72,7 +75,11 @@ async function verifyProductAsset(
   }
 
   const publicId = String(value.media.publicId || "").trim();
-  if (!PRODUCT_PUBLIC_ID.test(publicId)) {
+  const publicIdValid =
+    assetType === "roastedBeanPhoto"
+      ? publicId.startsWith(`${CLOUDINARY_VIDEO_FOLDER}/`)
+      : PRODUCT_PUBLIC_ID.test(publicId);
+  if (!publicIdValid) {
     throw new ProductMediaValidationError("商品影片識別資料不正確，請重新上傳。");
   }
 
@@ -89,6 +96,28 @@ async function verifyProductAsset(
     }
     throw error;
   }
+}
+
+async function verifyRoastedBeanGallery(
+  value: UnknownRecord,
+) {
+  if (!("gallery" in value) || value.gallery === undefined) return { ...value };
+  if (!Array.isArray(value.gallery)) {
+    throw new ProductMediaValidationError("烘焙豆 Gallery 資料格式不正確。");
+  }
+
+  const gallery: UnknownRecord[] = [];
+  for (const item of value.gallery) {
+    if (!isRecord(item)) {
+      throw new ProductMediaValidationError("烘焙豆 Gallery 媒體項目格式不正確。");
+    }
+
+    // Reuse the exact same trusted media verification used by product assets.
+    // This validates local images and re-fetches Cloudinary video metadata.
+    gallery.push(await verifyProductAsset("roastedBeanPhoto", item));
+  }
+
+  return { ...value, gallery };
 }
 
 export async function verifyProductAssetUpdates(
@@ -113,7 +142,11 @@ export async function verifyProductAssetUpdates(
       if (!assetType.trim() || !isRecord(value)) {
         throw new ProductMediaValidationError("商品素材項目格式不正確。");
       }
-      assets[assetType] = await verifyProductAsset(assetType, value);
+      const verifiedAsset = await verifyProductAsset(assetType, value);
+      assets[assetType] =
+        assetType === "roastedBeanPhoto"
+          ? await verifyRoastedBeanGallery(verifiedAsset)
+          : verifiedAsset;
     }
     verified.push({ ...update, assets });
   }

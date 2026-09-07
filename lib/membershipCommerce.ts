@@ -1978,7 +1978,7 @@ export async function getMemberReferralCenter(memberId: string, options: { baseU
   await assertCanonicalMember(memberId);
   const [state, version, registry] = await Promise.all([readMembershipCommerceState(options.filePath), getActiveMembershipRules(new Date(), options.rulesFilePath), getIdentityRegistrySnapshot()]);
   const depth = Math.max(1, Math.min(options.depth ?? version.rules.referral.referralMaxRewardDepth, version.rules.referral.referralMaxRewardDepth, 10));
-  const nodes: Array<{ memberNumber: string; safeDisplayName: string; level: number; parentMemberNumber: string }> = [];
+  const traversedNodes: Array<{ memberId: string; memberNumber: string; level: number; parentMemberId: string; parentMemberNumber: string }> = [];
   let frontier = [memberId];
   const visited = new Set([memberId]);
   for (let level = 1; level <= depth && frontier.length; level += 1) {
@@ -1987,11 +1987,199 @@ export async function getMemberReferralCenter(memberId: string, options: { baseU
       for (const relation of Object.values(state.referrals).filter((item) => item.referrerMemberId === parentId && item.status !== "inactive").slice(0, 200)) {
         if (visited.has(relation.referredMemberId)) continue;
         visited.add(relation.referredMemberId); next.push(relation.referredMemberId);
-        nodes.push({ memberNumber: registry.members[relation.referredMemberId]?.memberNumber ?? "KD-會員", safeDisplayName: relation.safeDisplayName || "KD Coffee 會員", level, parentMemberNumber: registry.members[parentId]?.memberNumber ?? "KD-會員" });
+        traversedNodes.push({
+          memberId: relation.referredMemberId,
+          memberNumber: registry.members[relation.referredMemberId]?.memberNumber ?? "KD-會員",
+          level,
+          parentMemberId: parentId,
+          parentMemberNumber: registry.members[parentId]?.memberNumber ?? "KD-會員",
+        });
       }
     }
     frontier = next;
   }
+  const directCountByMemberId = new Map<string, number>();
+  for (const node of traversedNodes) {
+    directCountByMemberId.set(node.parentMemberId, (directCountByMemberId.get(node.parentMemberId) ?? 0) + 1);
+  }
+  const descendantCount = (memberNodeId: string) => {
+    let total = 0;
+    let descendantFrontier = [memberNodeId];
+    const descendantVisited = new Set([memberNodeId]);
+    while (descendantFrontier.length) {
+      const next: string[] = [];
+      for (const parentId of descendantFrontier) {
+        for (const node of traversedNodes) {
+          if (node.parentMemberId !== parentId || descendantVisited.has(node.memberId)) continue;
+          descendantVisited.add(node.memberId);
+          next.push(node.memberId);
+          total += 1;
+        }
+      }
+      descendantFrontier = next;
+    }
+    return total;
+  };
+  const nodes = traversedNodes.map((node) => ({
+    memberNumber: node.memberNumber,
+    level: node.level,
+    parentMemberNumber: node.parentMemberNumber,
+    directReferralCount: directCountByMemberId.get(node.memberId) ?? 0,
+    teamCount: descendantCount(node.memberId),
+  }));
+
+  // Organization chart is a navigation view, not a reward-depth rule. Keep a wider
+  // read-only ancestry window so a downline can become the new root and still show
+  // the next three generations without changing the production reward depth.
+  const orgDepth = 10;
+  const orgTraversedNodes: Array<{ memberId: string; memberNumber: string; level: number; parentMemberId: string; parentMemberNumber: string }> = [];
+  let orgFrontier = [memberId];
+  const orgVisited = new Set([memberId]);
+  for (let level = 1; level <= orgDepth && orgFrontier.length; level += 1) {
+    const next: string[] = [];
+    for (const parentId of orgFrontier) {
+      const relations = Object.values(state.referrals).filter((item) => item.referrerMemberId === parentId && item.status !== "inactive").slice(0, 200);
+      for (const relation of relations) {
+        if (orgVisited.has(relation.referredMemberId)) continue;
+        orgVisited.add(relation.referredMemberId);
+        next.push(relation.referredMemberId);
+        orgTraversedNodes.push({
+          memberId: relation.referredMemberId,
+          memberNumber: registry.members[relation.referredMemberId]?.memberNumber ?? "KD-會員",
+          level,
+          parentMemberId: parentId,
+          parentMemberNumber: registry.members[parentId]?.memberNumber ?? "KD-會員",
+        });
+      }
+    }
+    orgFrontier = next;
+  }
+
+  const orgDirectCountByMemberId = new Map<string, number>();
+  for (const relation of Object.values(state.referrals)) {
+    if (relation.status === "inactive") continue;
+    if (!orgVisited.has(relation.referrerMemberId)) continue;
+    orgDirectCountByMemberId.set(relation.referrerMemberId, (orgDirectCountByMemberId.get(relation.referrerMemberId) ?? 0) + 1);
+  }
+  const orgDescendantCount = (rootId: string) => {
+    let total = 0;
+    let current = [rootId];
+    const seen = new Set([rootId]);
+    while (current.length) {
+      const next: string[] = [];
+      for (const parentId of current) {
+        for (const node of orgTraversedNodes) {
+          if (node.parentMemberId !== parentId || seen.has(node.memberId)) continue;
+          seen.add(node.memberId);
+          next.push(node.memberId);
+          total += 1;
+        }
+      }
+      current = next;
+    }
+    return total;
+  };
+
+  const orgMemberIds = new Set([memberId, ...orgTraversedNodes.map((node) => node.memberId)]);
+  const orgSourceRewards = Object.values(state.referralRewards).filter((reward) => orgMemberIds.has(reward.sourceMemberId));
+  const orgOrderSourceMember = new Map<string, string>();
+  for (const reward of orgSourceRewards) {
+    if (reward.sourceOrderNumber && !orgOrderSourceMember.has(reward.sourceOrderNumber)) orgOrderSourceMember.set(reward.sourceOrderNumber, reward.sourceMemberId);
+  }
+  const orgOrderPairs = await Promise.all([...orgOrderSourceMember.keys()].map(async (orderNumber) => [orderNumber, await readOrder(orderNumber)] as const));
+  const orgOrders = new Map(orgOrderPairs);
+  const recentOrderCutoff = Date.now() - 30 * 86_400_000;
+  const currentPeriodKey = getDateOnlyInTimeZone(new Date()).slice(0, 7);
+  const periodLabel = `${currentPeriodKey.replace("-", "/")} 本月`;
+
+  const safeOrgOrderItems = (order: Awaited<ReturnType<typeof readOrder>>) => Array.isArray(order?.items)
+    ? order.items.slice(0, 20).map((raw: unknown) => {
+        const orderItem = raw && typeof raw === "object" && !Array.isArray(raw) ? raw as Record<string, unknown> : {};
+        return {
+          name: String(orderItem.name || "KD Coffee 商品").slice(0, 80),
+          optionLabel: String(orderItem.optionLabel || "").slice(0, 60),
+          optionDetail: String(orderItem.optionDetail || "").slice(0, 80),
+          preparationLabel: String(orderItem.preparationLabel || "").slice(0, 60),
+          quantity: Math.max(1, Math.min(999, Number(orderItem.quantity) || 1)),
+        };
+      })
+    : [];
+
+  const metricsForSourceMember = (sourceMemberId: string) => {
+    const sourceOrderNumbers = [...orgOrderSourceMember.entries()].filter(([, sourceId]) => sourceId === sourceMemberId).map(([orderNumber]) => orderNumber);
+    const sourceRewardsForCurrentMember = orgSourceRewards.filter((reward) => reward.sourceMemberId === sourceMemberId && reward.beneficiaryMemberId === memberId);
+    const recentOrders = sourceOrderNumbers
+      .map((orderNumber) => {
+        const sourceOrder = orgOrders.get(orderNumber);
+        const createdAt = sourceOrder?.createdAt ?? null;
+        if (!createdAt || Date.parse(createdAt) < recentOrderCutoff) return null;
+        const reward = sourceRewardsForCurrentMember.find((item) => item.sourceOrderNumber === orderNumber) ?? null;
+        return {
+          orderNumber,
+          createdAt,
+          sourceItems: safeOrgOrderItems(sourceOrder ?? null),
+          referralLevel: reward?.referralLevel ?? null,
+          effectivePV: reward?.effectivePV ?? null,
+          rewardRate: reward?.rewardRate ?? null,
+          creditAmount: reward?.calculatedCreditAmount ?? null,
+          projectedCreditAmount: reward?.projectedCreditAmount ?? reward?.calculatedCreditAmount ?? null,
+          status: reward?.status ?? null,
+          cancellationReason: reward?.cancellationReason ?? null,
+          qualificationStatus: reward?.qualificationStatus ?? null,
+          releasedAt: reward?.releasedAt ?? null,
+        };
+      })
+      .filter((item): item is NonNullable<typeof item> => Boolean(item))
+      .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+    const recentOrderCount = recentOrders.length;
+    const pendingCredit = sourceRewardsForCurrentMember
+      .filter((reward) => reward.status === "scheduled" && reward.qualificationStatus !== "expired")
+      .reduce((sum, reward) => sum + (reward.projectedCreditAmount ?? reward.calculatedCreditAmount), 0);
+    const currentPeriodCredit = sourceRewardsForCurrentMember
+      .filter((reward) => reward.status === "released" && reward.releasedAt && getDateOnlyInTimeZone(new Date(reward.releasedAt)).slice(0, 7) === currentPeriodKey)
+      .reduce((sum, reward) => sum + reward.calculatedCreditAmount, 0);
+    return { recentOrderCount, pendingCredit, currentPeriodCredit, recentOrders };
+  };
+
+  const orgNodes = orgTraversedNodes.map((node) => ({
+    memberId: node.memberId,
+    memberNumber: node.memberNumber,
+    parentMemberId: node.parentMemberId,
+    parentMemberNumber: node.parentMemberNumber,
+    level: node.level,
+    directReferralCount: orgDirectCountByMemberId.get(node.memberId) ?? 0,
+    teamCount: orgDescendantCount(node.memberId),
+    ...metricsForSourceMember(node.memberId),
+  }));
+  const rootMetrics = metricsForSourceMember(memberId);
+  const orgChart = {
+    periodLabel,
+    stats: {
+      teamMembers: orgTraversedNodes.length,
+      newOrders: [...orgOrderSourceMember.keys()].filter((orderNumber) => {
+        const createdAt = orgOrders.get(orderNumber)?.createdAt;
+        return Boolean(createdAt && Date.parse(createdAt) >= recentOrderCutoff);
+      }).length,
+      pendingCredit: Object.values(state.referralRewards)
+        .filter((reward) => reward.beneficiaryMemberId === memberId && reward.status === "scheduled" && reward.qualificationStatus !== "expired")
+        .reduce((sum, reward) => sum + (reward.projectedCreditAmount ?? reward.calculatedCreditAmount), 0),
+      currentPeriodCredit: Object.values(state.referralRewards)
+        .filter((reward) => reward.beneficiaryMemberId === memberId && reward.status === "released" && reward.releasedAt && getDateOnlyInTimeZone(new Date(reward.releasedAt)).slice(0, 7) === currentPeriodKey)
+        .reduce((sum, reward) => sum + reward.calculatedCreditAmount, 0),
+    },
+    root: {
+      memberId,
+      memberNumber: registry.members[memberId]?.memberNumber ?? "KD-會員",
+      parentMemberId: null,
+      parentMemberNumber: null,
+      level: 0,
+      directReferralCount: orgDirectCountByMemberId.get(memberId) ?? 0,
+      teamCount: orgTraversedNodes.length,
+      ...rootMetrics,
+    },
+    nodes: orgNodes,
+  };
+
   const rewards = Object.values(state.referralRewards).filter((item) => item.beneficiaryMemberId === memberId);
   const summaries = Array.from({ length: depth }, (_, index) => {
     const level = index + 1;
@@ -2000,7 +2188,25 @@ export async function getMemberReferralCenter(memberId: string, options: { baseU
   });
   const referralCode = referralCodeForMember(memberId);
   const referralUrl = `${(options.baseUrl ?? "").replace(/\/$/, "")}/member?ref=${encodeURIComponent(referralCode)}`;
-  return { referralCode, referralUrl, mode: version.rules.referral.referralRewardCalculationMode, pvDisclosure: version.rules.referral.referralRewardCalculationMode === "pv" ? "本制度以 PV 計算，非商品售價百分比。PV 是商品獎勵計算單位，不是貨幣或可交易資產。" : null, maxDepth: depth, summaries, nodes, rewards: rewards.map((item) => ({ rewardId: item.rewardId, sourceOrderNumber: item.sourceOrderNumber, referralLevel: item.referralLevel, rewardType: item.rewardType, calculationMode: item.calculationMode, effectivePV: item.effectivePV, rewardRate: item.rewardRate, rewardPV: item.rewardPV, creditAmount: item.calculatedCreditAmount, projectedCreditAmount: item.projectedCreditAmount ?? item.calculatedCreditAmount, status: item.status, cancellationReason: item.cancellationReason ?? null, qualificationStatus: item.qualificationStatus ?? "legacy", qualificationExpiresAt: item.qualificationExpiresAt ?? null, qualificationOrderNumber: item.qualificationOrderNumber ?? null, qualificationOrderCreatedAt: item.qualificationOrderCreatedAt ?? null, qualificationOrderFinalState: item.qualificationOrderFinalState ?? null, qualificationQualifiedAt: item.qualificationQualifiedAt ?? null, successfulPickupBusinessDate: item.successfulPickupBusinessDate ?? null, releaseEligibleBusinessDate: item.releaseEligibleBusinessDate ?? item.scheduledReleaseAt?.slice(0, 10) ?? null, releasedAt: item.releasedAt })) };
+  const uniqueOrderNumbers = [...new Set(rewards.map((item) => item.sourceOrderNumber).filter(Boolean))];
+  const orderPairs = await Promise.all(uniqueOrderNumbers.map(async (orderNumber) => [orderNumber, await readOrder(orderNumber)] as const));
+  const sourceOrders = new Map(orderPairs);
+  const safeOrderItems = (order: Awaited<ReturnType<typeof readOrder>>) => Array.isArray(order?.items)
+    ? order.items.slice(0, 20).map((raw: unknown) => {
+        const item = raw && typeof raw === "object" && !Array.isArray(raw) ? raw as Record<string, unknown> : {};
+        return {
+          name: String(item.name || "KD Coffee 商品").slice(0, 80),
+          optionLabel: String(item.optionLabel || "").slice(0, 60),
+          optionDetail: String(item.optionDetail || "").slice(0, 80),
+          preparationLabel: String(item.preparationLabel || "").slice(0, 60),
+          quantity: Math.max(1, Math.min(999, Number(item.quantity) || 1)),
+        };
+      })
+    : [];
+  return { referralCode, referralUrl, mode: version.rules.referral.referralRewardCalculationMode, pvDisclosure: version.rules.referral.referralRewardCalculationMode === "pv" ? "本制度以 PV 計算，非商品售價百分比。PV 是商品獎勵計算單位，不是貨幣或可交易資產。" : null, maxDepth: depth, summaries, nodes, orgChart, rewards: rewards.map((item) => {
+    const sourceOrder = sourceOrders.get(item.sourceOrderNumber);
+    return { rewardId: item.rewardId, sourceOrderNumber: item.sourceOrderNumber, sourceOrderCreatedAt: sourceOrder?.createdAt ?? null, sourceMemberNumber: registry.members[item.sourceMemberId]?.memberNumber ?? "KD-會員", sourceItems: safeOrderItems(sourceOrder ?? null), referralLevel: item.referralLevel, rewardType: item.rewardType, calculationMode: item.calculationMode, effectivePV: item.effectivePV, rewardRate: item.rewardRate, rewardPV: item.rewardPV, creditAmount: item.calculatedCreditAmount, projectedCreditAmount: item.projectedCreditAmount ?? item.calculatedCreditAmount, status: item.status, cancellationReason: item.cancellationReason ?? null, qualificationStatus: item.qualificationStatus ?? "legacy", qualificationExpiresAt: item.qualificationExpiresAt ?? null, qualificationOrderNumber: item.qualificationOrderNumber ?? null, qualificationOrderCreatedAt: item.qualificationOrderCreatedAt ?? null, qualificationOrderFinalState: item.qualificationOrderFinalState ?? null, qualificationQualifiedAt: item.qualificationQualifiedAt ?? null, successfulPickupBusinessDate: item.successfulPickupBusinessDate ?? null, releaseEligibleBusinessDate: item.releaseEligibleBusinessDate ?? item.scheduledReleaseAt?.slice(0, 10) ?? null, releasedAt: item.releasedAt };
+  }) };
 }
 
 export async function getAdminReferralOverview(input: { query?: string; from?: string; to?: string; filePath?: string } = {}) {
@@ -2091,4 +2297,50 @@ export async function completeMembershipNotificationDelivery(input: { notificati
     else notice.status = (notice.attempts ?? 0) < (notice.deliveryPolicy?.maxAttempts ?? 1) ? "pending" : "failed";
     return structuredClone(notice);
   }, { now: input.now, filePath: input.stateFilePath });
+}
+
+/** Owner test-data maintenance. Cascades membership/referral state without touching order records. */
+export async function purgeMembershipCommerceForMembers(memberIds?: string[]) {
+  const filePath = getMembershipCommerceStateFile();
+  await fs.mkdir(path.dirname(filePath), { recursive: true });
+  return withFileLock(filePath, async () => {
+    const current = await readMembershipCommerceState(filePath);
+    if (!memberIds?.length) {
+      const cleared = emptyState();
+      cleared.revision = current.revision + 1;
+      cleared.createdAt = current.createdAt;
+      cleared.updatedAt = new Date().toISOString();
+      await atomicWriteJson(filePath, cleared);
+      return { clearedAll: true };
+    }
+
+    const targets = new Set(memberIds);
+    const subscriptionIds = new Set(Object.values(current.subscriptions).filter((item) => targets.has(item.memberId)).map((item) => item.subscriptionId));
+    const relationshipIds = new Set(Object.values(current.referrals).filter((item) => targets.has(item.referrerMemberId) || targets.has(item.referredMemberId)).map((item) => item.relationshipId));
+    const rewardIds = new Set(Object.values(current.referralRewards).filter((item) => targets.has(item.sourceMemberId) || targets.has(item.beneficiaryMemberId) || item.ancestrySnapshot.some((id) => targets.has(id))).map((item) => item.rewardId));
+    const creditEntryIds = new Set(Object.values(current.creditEntries).filter((item) => targets.has(item.memberId) || [...rewardIds].some((rewardId) => item.sourceReference.includes(rewardId))).map((item) => item.creditEntryId));
+    const roundIds = new Set(Object.values(current.qualificationRounds).filter((item) => targets.has(item.memberId)).map((item) => item.roundId));
+    const coverageIds = new Set(Object.values(current.referralRewardCoverages).filter((item) => targets.has(item.memberId) || rewardIds.has(item.referralRewardId) || roundIds.has(item.qualificationRoundId)).map((item) => item.coverageId));
+
+    for (const [id, item] of Object.entries(current.subscriptions)) if (targets.has(item.memberId)) delete current.subscriptions[id];
+    for (const [id, item] of Object.entries(current.cycles)) if (subscriptionIds.has(item.subscriptionId)) delete current.cycles[id];
+    for (const [id] of Object.entries(current.referrals)) if (relationshipIds.has(id)) delete current.referrals[id];
+    for (const [id, item] of Object.entries(current.referralConversions)) if (relationshipIds.has(item.relationshipId)) delete current.referralConversions[id];
+    for (const [id] of Object.entries(current.referralRewards)) if (rewardIds.has(id)) delete current.referralRewards[id];
+    for (const [id, item] of Object.entries(current.validConsumptionEvents)) if (targets.has(item.memberId)) delete current.validConsumptionEvents[id];
+    for (const [id] of Object.entries(current.qualificationRounds)) if (roundIds.has(id)) delete current.qualificationRounds[id];
+    for (const [id, item] of Object.entries(current.referralRewardCoverages)) if (coverageIds.has(id)) delete current.referralRewardCoverages[id];
+    for (const [id, item] of Object.entries(current.referralRewardMaturations)) if (targets.has(item.memberId) || rewardIds.has(item.referralRewardId) || coverageIds.has(item.coverageId) || roundIds.has(item.qualificationRoundId)) delete current.referralRewardMaturations[id];
+    for (const [id] of Object.entries(current.creditEntries)) if (creditEntryIds.has(id)) delete current.creditEntries[id];
+    for (const [id, item] of Object.entries(current.creditReservations)) if (targets.has(item.memberId) || item.allocations.some((allocation) => creditEntryIds.has(allocation.creditEntryId))) delete current.creditReservations[id];
+    current.events = current.events.filter((item) => !item.memberId || !targets.has(item.memberId));
+    current.notifications = current.notifications.filter((item) => !item.memberId || !targets.has(item.memberId));
+    current.audit = current.audit.filter((item) => !targets.has(item.entityId) && ![...targets].some((memberId) => item.sourceEvent.includes(memberId)));
+    current.idempotency = {};
+    current.revision += 1;
+    current.updatedAt = new Date().toISOString();
+    validateMembershipCommerceState(current);
+    await atomicWriteJson(filePath, current);
+    return { clearedAll: false, memberIds: [...targets] };
+  });
 }

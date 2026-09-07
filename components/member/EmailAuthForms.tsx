@@ -44,6 +44,9 @@ export default function EmailAuthForms({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           email: email.trim().toLowerCase(),
+          ...(mode === "register" && /^\/member\?ref=KD[A-F0-9]{10}$/.test(returnTo)
+            ? { referralCode: new URL(returnTo, window.location.origin).searchParams.get("ref") }
+            : {}),
           ...(mode === "forgot"
             ? {}
             : {
@@ -77,7 +80,7 @@ export default function EmailAuthForms({
       }
 
       const destination =
-        returnTo === "/checkout" || returnTo === "/member"
+        returnTo === "/checkout" || returnTo === "/member" || /^\/member\?ref=KD[A-F0-9]{10}$/.test(returnTo)
           ? returnTo
           : "/member";
       window.location.assign(destination);

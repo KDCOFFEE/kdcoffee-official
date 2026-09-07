@@ -40,6 +40,8 @@ export type Member = {
   lineUserId?: string;
   displayName?: string;
   pictureUrl?: string;
+  /** Member-uploaded avatar. Takes precedence over provider profile photos. */
+  avatarUrl?: string;
   email?: string;
   /** Email 登入憑證識別；聯絡 Email 可獨立更新。 */
   loginEmail?: string;
@@ -224,10 +226,10 @@ export async function getCurrentMember(): Promise<Member | null> {
   if (!member) return null;
 
   try {
-    return await attachCanonicalIdentity(member);
+    return await attachCanonicalIdentityForRead(member);
   } catch (error) {
     // 不因身份索引暫時不可用而中斷既有有效 session。
-    console.error("Member identity resolution failed", {
+    console.warn("Member identity resolution unavailable", {
       reason: error instanceof Error ? error.name : "unknown",
     });
     return member;
@@ -279,6 +281,14 @@ async function attachCanonicalIdentity(member: Member) {
     identities: identityCandidates(member),
   });
   return { ...member, memberNumber: canonical.memberNumber };
+}
+
+async function attachCanonicalIdentityForRead(member: Member) {
+  const state = await getMemberIdentityState(member.id);
+  if (state.member) {
+    return { ...member, memberNumber: state.member.memberNumber };
+  }
+  return attachCanonicalIdentity(member);
 }
 
 async function updateMemberSafely(memberId: string, updater: (current: Member) => Member) {
@@ -501,6 +511,17 @@ export async function authenticateEmailMember(
     updatedAt: now,
   };
 
+  // Canonical members should not re-enter the legacy canonicalization write path
+  // on every successful email login. Read the existing identity state first; only
+  // fall back to legacy canonicalization for genuinely unindexed legacy members.
+  const identityState = await getMemberIdentityState(updated.id);
+  if (identityState.member) {
+    return saveMember({
+      ...updated,
+      memberNumber: identityState.member.memberNumber,
+    });
+  }
+
   const canonical = await attachCanonicalIdentity(updated);
   return saveMember(canonical);
 }
@@ -638,6 +659,7 @@ export async function updateMemberProfile(
     phone?: string;
     email?: string;
     favoriteStore?: FavoriteStore;
+    avatarUrl?: string;
   },
 ) {
   return updateMemberSafely(memberId, (current) => {
@@ -646,12 +668,13 @@ export async function updateMemberProfile(
     if (patch.phone !== undefined) next.phone = patch.phone;
     if (patch.email !== undefined) next.email = patch.email;
     if (patch.favoriteStore !== undefined) next.favoriteStore = patch.favoriteStore;
+    if (patch.avatarUrl !== undefined) next.avatarUrl = patch.avatarUrl || undefined;
     return next;
   });
 }
 
 export async function getMemberLoginMethods(member: Member) {
-  const canonical = await attachCanonicalIdentity(member);
+  const canonical = await attachCanonicalIdentityForRead(member);
   const state = await getMemberIdentityState(canonical.id);
   return {
     memberNumber: state.member?.memberNumber || canonical.memberNumber || "",
@@ -694,7 +717,28 @@ export function randomState() {
 export function safeReturnPath(
   value: string | null | undefined,
 ) {
-  return value === "/checkout" || value === "/member"
-    ? value
-    : "/member";
+  if (value === "/checkout" || value === "/member") return value;
+  if (!value?.startsWith("/member?")) return "/member";
+
+  try {
+    const url = new URL(value, "https://kdcoffee.local");
+    if (url.pathname !== "/member") return "/member";
+    const referralCode = url.searchParams.get("ref")?.trim().toUpperCase() ?? "";
+    if (!/^KD[A-F0-9]{10}$/.test(referralCode)) return "/member";
+    return `/member?ref=${encodeURIComponent(referralCode)}`;
+  } catch {
+    return "/member";
+  }
+}
+
+/** Test/owner maintenance: removes member credential/profile files only. */
+export async function purgeMemberFiles(memberIds?: string[]) {
+  await fs.mkdir(membersDir(), { recursive: true });
+  const targets = memberIds?.length ? memberIds : (await listMembers()).map((member) => member.id);
+  let removed = 0;
+  for (const memberId of new Set(targets)) {
+    try { await fs.unlink(memberFilePath(memberId)); removed += 1; }
+    catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
+  }
+  return removed;
 }

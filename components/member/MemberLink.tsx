@@ -19,7 +19,7 @@ export default function MemberLink({ initialName = "" }: { initialName?: string 
         if (active) {
           setName(
             data.member
-              ? data.member.displayName?.trim() || "KD Coffee 會員"
+              ? data.member.pickupName?.trim() || data.member.displayName?.trim() || "KD Coffee 會員"
               : "",
           );
         }

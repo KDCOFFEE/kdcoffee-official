@@ -354,6 +354,16 @@ export function getHome003UploadDir() {
       );
 }
 
+
+/** Member-uploaded avatar images. */
+export function getMemberAvatarUploadDir(memberId: string) {
+  const safeMemberId = memberId.replace(/[^a-zA-Z0-9_-]/g, "");
+  const root = getPersistentDataRoot();
+  return root
+    ? joinPersistentRoot(root, "uploads", "member-avatars", safeMemberId)
+    : path.join(process.cwd(), "public", "uploads", "member-avatars", safeMemberId);
+}
+
 /**
  * 會員身份註冊表。
  *
