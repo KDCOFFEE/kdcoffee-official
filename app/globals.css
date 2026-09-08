@@ -5536,3 +5536,89 @@ body.roasted-bean-viewer-open{overflow:hidden}
   .roasted-bean-admin-gallery-head-actions>button,
   .roasted-bean-admin-gallery-head-actions>label{flex:1 1 auto;text-align:center}
 }
+
+
+/* J.5C.1 — Works detail header UX fix */
+.revenue-product-nav .revenue-product-back-link{
+  justify-self:start;
+  align-self:center;
+  display:inline-flex;
+  width:max-content;
+  max-width:100%;
+  min-height:40px;
+  align-items:center;
+  padding:0 2px;
+  text-decoration:none;
+  touch-action:manipulation;
+}
+.revenue-product-nav .revenue-product-nav-actions{
+  justify-self:end;
+  display:flex;
+  align-items:center;
+  justify-content:flex-end;
+  gap:8px;
+  min-width:0;
+}
+.revenue-product-nav .revenue-product-nav-actions .member-link{
+  color:inherit;
+  font-size:14px;
+  font-weight:700;
+}
+@media(max-width:760px){
+  .revenue-product-nav .revenue-product-back-link{
+    min-height:44px;
+    font-size:13px;
+  }
+  .revenue-product-nav .revenue-product-nav-actions{
+    gap:2px;
+  }
+  .revenue-product-nav .revenue-product-nav-actions .member-link{
+    min-width:0 !important;
+    padding-inline:6px !important;
+    font-size:13px;
+  }
+}
+
+
+/* J.5C.1 H2 — strict works header hit-area + three-column alignment */
+.revenue-product-nav{
+  grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);
+}
+.revenue-product-nav .revenue-product-nav-left{
+  justify-self:stretch;
+  display:flex;
+  align-items:center;
+  justify-content:flex-start;
+  min-width:0;
+  pointer-events:none;
+}
+.revenue-product-nav .revenue-product-back-link{
+  flex:0 0 auto;
+  width:auto;
+  max-width:max-content;
+  pointer-events:auto;
+  position:relative;
+  z-index:2;
+}
+.revenue-product-nav .brand{
+  justify-self:center;
+  position:relative;
+  z-index:3;
+}
+.revenue-product-nav .revenue-product-nav-actions{
+  justify-self:stretch;
+  display:flex;
+  align-items:center;
+  justify-content:flex-end;
+  min-width:0;
+  position:relative;
+  z-index:3;
+}
+@media(max-width:980px){
+  .revenue-product-nav{
+    grid-template-columns:minmax(0,1fr) auto;
+  }
+  .revenue-product-nav .brand{
+    display:none;
+  }
+}

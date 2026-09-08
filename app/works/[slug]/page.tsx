@@ -14,6 +14,7 @@ import ProductSectionReveals from "@/components/commerce/ProductSectionReveals";
 import ProductVisualMedia from "@/components/commerce/ProductVisualMedia";
 import CustomProductSectionSlot from "@/components/commerce/CustomProductSectionSlot";
 import KdMedia from "@/components/media/KdMedia";
+import MemberLink from "@/components/member/MemberLink";
 import { getHomepageData, resolveProductCampaigns } from "@/data/homepageData";
 import {
   getProductMediaAsset,
@@ -238,9 +239,14 @@ export default async function WorkPage({ params }: { params: Promise<{ slug: str
   return (
     <main className={`revenue-product-page${isGiottoPrototype ? " giotto-art-direction" : ""}`}>
       <header className="revenue-product-nav">
-        <Link href="/works">← 返回本月作品</Link>
+        <div className="revenue-product-nav-left">
+          <Link className="revenue-product-back-link" href="/works">← 返回本月作品</Link>
+        </div>
         <Link className="brand" href="/"><span>KD</span><b>COFFEE</b></Link>
-        <CartLink compact />
+        <div className="revenue-product-nav-actions">
+          <MemberLink />
+          <CartLink compact />
+        </div>
       </header>
 
       <ProductSectionReveals key={product.slug} calibrated={isGiottoPrototype}>
