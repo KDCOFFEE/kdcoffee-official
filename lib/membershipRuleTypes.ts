@@ -39,8 +39,12 @@ export type MembershipBusinessRules = {
   referral: {
     programEnabled: boolean;
     referralMaxRewardDepth: number;
-    levels: Array<{ level: number; enabled: boolean; newReferralRewardRate: number; subscriptionRewardRate: number }>;
+    levels: Array<{ level: number; enabled: boolean; newReferralRewardRate: number; repeatPurchaseRewardRate: number; subscriptionRewardRate: number }>;
     referralRewardCalculationMode: "paid_amount" | "pv";
+    /** Owner-editable display name for the internal PV unit. Internal data fields remain PV for compatibility. */
+    pointDisplayName: string;
+    /** Owner-editable reward rate for a member's own repeat purchases. */
+    selfPurchaseRewardRate: number;
     payoutQualification: ReferralPayoutQualificationRules;
     /** Legacy per-reward forward window. Do not reinterpret as payoutQualification.rewardCoverage. */
     referralRewardQualificationWindowDays: number;

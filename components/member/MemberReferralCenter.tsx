@@ -7,6 +7,7 @@ import MemberReferralOrgChart, { type ReferralOrgChartData } from "./MemberRefer
 type Center = {
   referralCode: string;
   referralUrl: string;
+  pointDisplayName: string;
   pvDisclosure: string | null;
   summaries: Array<{
     level: number;
@@ -287,7 +288,7 @@ export default function MemberReferralCenter() {
           </button>
         </div>
         <div className={`member-mobile-reward-details${mobileRewardDetailsOpen ? " is-open" : ""}`}>
-          <div className="member-reward-ledger-heading"><div><p className="eyebrow dark">REWARD DETAILS</p><h4>回饋明細</h4><p>查看每一筆推薦消費所產生的回饋與入帳狀態。</p></div><span>共 {data.rewards.length} 筆</span></div>
+          <div className="member-reward-ledger-heading"><div><p className="eyebrow dark">REWARD DETAILS</p><h4>回饋明細</h4><p>查看自己的續購與推薦消費所產生的回饋與入帳狀態。</p></div><span>共 {data.rewards.length} 筆</span></div>
         {data.rewards.length ? <>
           <div className="member-reward-filters" aria-label="回饋紀錄篩選">
             <div>{(["all", "pending", "released"] as const).map((filter) => {
@@ -302,16 +303,16 @@ export default function MemberReferralCenter() {
           {pagedRewards.length ? <div className="member-reward-ledger-list">{pagedRewards.map((reward) => {
           const qualificationLabel = reward.qualificationStatus === "awaiting_order" ? "待完成資格消費" : reward.qualificationStatus === "awaiting_completion" ? "等待訂單完成" : reward.qualificationStatus === "qualified" ? "已取得資格・等待發放" : reward.qualificationStatus === "expired" ? "資格已逾期" : "歷史獎勵";
           const itemText = reward.sourceItems.length ? reward.sourceItems.map((item) => `${item.name}${item.optionLabel ? `・${item.optionLabel}` : ""}${item.optionDetail ? ` ${item.optionDetail}` : ""}${item.preparationLabel ? `・${item.preparationLabel}` : ""} × ${item.quantity}`).join("、") : "來源訂單商品明細未保留";
-          const basis = reward.calculationMode === "pv" ? `${reward.effectivePV.toLocaleString("zh-TW")} PV × ${reward.rewardRate.toLocaleString("zh-TW", { maximumFractionDigits: 2 })}%` : `依正式回饋規則 × ${reward.rewardRate.toLocaleString("zh-TW", { maximumFractionDigits: 2 })}%`;
+          const basis = reward.calculationMode === "pv" ? `${reward.effectivePV.toLocaleString("zh-TW")} ${data.pointDisplayName || "KD點"} × ${reward.rewardRate.toLocaleString("zh-TW", { maximumFractionDigits: 2 })}%` : `依正式回饋規則 × ${reward.rewardRate.toLocaleString("zh-TW", { maximumFractionDigits: 2 })}%`;
           return <article className="member-reward-ledger-card member-reward-ledger-item" key={reward.rewardId}>
             <header className="member-reward-ledger-meta"><time>{formatDate(reward.releasedAt || reward.sourceOrderCreatedAt)}</time><span className={`member-reward-status is-${reward.status}`}>{rewardStatusLabel(reward, qualificationLabel)}</span></header>
             <div className="member-reward-ledger-body">
               <div className="member-reward-ledger-title-row">
-                <div><small>REFERRAL REWARD</small><h4>第 {reward.referralLevel} 代推薦回饋</h4></div>
-                <span className="member-reward-generation">你的第 {reward.referralLevel} 代</span>
+                <div><small>{reward.rewardType === "self_purchase" ? "MEMBER REWARD" : "REFERRAL REWARD"}</small><h4>{reward.rewardType === "self_purchase" ? "會員續購回饋" : reward.rewardType === "new_referral" ? `第 ${reward.referralLevel} 層首次消費推薦回饋` : reward.rewardType === "repeat_purchase" ? `第 ${reward.referralLevel} 層一般續購推薦回饋` : `第 ${reward.referralLevel} 層定期購續期回饋`}</h4></div>
+                <span className="member-reward-generation">{reward.rewardType === "self_purchase" ? "自己的消費" : `你的第 ${reward.referralLevel} 層`}</span>
               </div>
               <div className="member-reward-order-info">
-                <p className="member-reward-source-member"><b>來源會員</b><strong>{reward.sourceMemberNumber}</strong></p>
+                <p className="member-reward-source-member"><b>{reward.rewardType === "self_purchase" ? "消費會員" : "來源會員"}</b><strong>{reward.sourceMemberNumber}</strong></p>
                 <p className="member-reward-consumption"><b>消費內容</b><span>{itemText}</span></p>
               </div>
               <div className="member-reward-ledger-math member-reward-ledger-bottom">

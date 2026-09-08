@@ -16,7 +16,7 @@ type Props = {
 };
 
 const fieldHelpKeys: Record<string, string> = {
-  "未免運時的定期購運費": "shipping.subscriptionShippingFee", "定期購價格": "subscription.discountPercent", "修改期限": "subscription.modificationCutoffDays", "建立訂單": "subscription.orderCreationLeadDays", "一般備貨至少": "subscription.preparationLeadDays", "專屬烘焙至少": "subscription.customRoastPreparationLeadDays", "未取貨停止": "subscription.uncollectedTerminationCount", "每期最多修改": "subscription.maxModificationsPerCycle", "自訂最少": "subscription.customCycleMinDays", "自訂最多": "subscription.customCycleMaxDays", "會員選配送日期方式": "subscription.datePickerMode", "獎勵代數": "referral.referralMaxRewardDepth", "獎勵計算方式": "referral.referralRewardCalculationMode", "推薦獎勵領取資格期限": "referral.referralRewardQualificationWindowDays", "推薦獎勵基礎等待天數": "referral.referralRewardBaseWaitingDays", "推薦獎勵退貨保護天數": "referral.referralRewardReturnProtectionDays", "單筆全組織上限": "referral.referralTotalRewardCap", "單一會員每月上限": "referral.referralMonthlyCreditCap", "每 1 PV 換算": "referral.pvRewardMoneyValue", "一般商品最少備貨": "pickup.preparationLeadDays", "專屬烘焙最少備貨": "pickup.customRoastPreparationLeadDays", "自取日期選擇方式": "pickup.datePickerMode", "完成第幾次開始送": "gift.startsAtFulfillment", "開始後每隔": "gift.repeatEveryFulfillments", "半磅贈品": "gift.halfPoundQuantity", "一磅贈品": "gift.onePoundQuantity", "有效期限": "credit.expiryCalendarMonths", "到期前提醒": "credit.expiryReminderDays", "每筆最高折抵": "credit.redemption", "最高折抵": "credit.redemption", "每筆至少應付": "credit.redemption", "最高折抵商品金額": "credit.redemption", "抵用金是否可折運費": "credit.appliesToShipping", "會員使用抵用金方式": "credit.uiMode", "活動適用定期購時": "campaign.eligiblePricingMode", "暫停後恢復配送日期": "subscription.pauseResumeAnchorPolicy", "折扣金額有小數時": "money.roundingMode", "下一期前幾天提醒": "notification.nextCycleReminderDays", "修改截止前幾天提醒": "notification.modificationCutoffReminderDays", "通知失敗最多重試": "notification.retryCount", "到店後第幾天提醒": "fulfillment.arrivalReminderAfterDays", "Gmail 每次回看": "fulfillment.gmailScanLookbackDays",
+  "未免運時的定期購運費": "shipping.subscriptionShippingFee", "定期購價格": "subscription.discountPercent", "修改期限": "subscription.modificationCutoffDays", "建立訂單": "subscription.orderCreationLeadDays", "一般備貨至少": "subscription.preparationLeadDays", "專屬烘焙至少": "subscription.customRoastPreparationLeadDays", "未取貨停止": "subscription.uncollectedTerminationCount", "每期最多修改": "subscription.maxModificationsPerCycle", "自訂最少": "subscription.customCycleMinDays", "自訂最多": "subscription.customCycleMaxDays", "會員選配送日期方式": "subscription.datePickerMode", "獎勵代數": "referral.referralMaxRewardDepth", "獎勵計算方式": "referral.referralRewardCalculationMode", "點數顯示名稱": "referral.pointDisplayName", "會員續購回饋": "referral.selfPurchaseRewardRate", "推薦獎勵領取資格期限": "referral.referralRewardQualificationWindowDays", "推薦獎勵基礎等待天數": "referral.referralRewardBaseWaitingDays", "推薦獎勵退貨保護天數": "referral.referralRewardReturnProtectionDays", "單筆全組織上限": "referral.referralTotalRewardCap", "單一會員每月上限": "referral.referralMonthlyCreditCap", "每 1 PV 換算": "referral.pvRewardMoneyValue", "一般商品最少備貨": "pickup.preparationLeadDays", "專屬烘焙最少備貨": "pickup.customRoastPreparationLeadDays", "自取日期選擇方式": "pickup.datePickerMode", "完成第幾次開始送": "gift.startsAtFulfillment", "開始後每隔": "gift.repeatEveryFulfillments", "半磅贈品": "gift.halfPoundQuantity", "一磅贈品": "gift.onePoundQuantity", "有效期限": "credit.expiryCalendarMonths", "到期前提醒": "credit.expiryReminderDays", "每筆最高折抵": "credit.redemption", "最高折抵": "credit.redemption", "每筆至少應付": "credit.redemption", "最高折抵商品金額": "credit.redemption", "抵用金是否可折運費": "credit.appliesToShipping", "會員使用抵用金方式": "credit.uiMode", "活動適用定期購時": "campaign.eligiblePricingMode", "暫停後恢復配送日期": "subscription.pauseResumeAnchorPolicy", "折扣金額有小數時": "money.roundingMode", "下一期前幾天提醒": "notification.nextCycleReminderDays", "修改截止前幾天提醒": "notification.modificationCutoffReminderDays", "通知失敗最多重試": "notification.retryCount", "到店後第幾天提醒": "fulfillment.arrivalReminderAfterDays", "Gmail 每次回看": "fulfillment.gmailScanLookbackDays",
 };
 
 function RuleFieldTitle({ label, ruleKey }: { label: string; ruleKey?: string }) {
@@ -29,6 +29,10 @@ function NumberField({ label, value, unit, min = 0, max = 999, onChange, helpKey
 
 function Choice({ label, value, onChange, children, helpKey }: { label: string; value: string; onChange: (value: string) => void; children: React.ReactNode; helpKey?: string }) {
   return <label className="membership-choice"><RuleFieldTitle label={label} ruleKey={helpKey || fieldHelpKeys[label]} /><select value={value} onChange={(event) => onChange(event.target.value)}>{children}</select></label>;
+}
+
+function TextField({ label, value, onChange, placeholder, helpKey }: { label: string; value: string; onChange: (value: string) => void; placeholder?: string; helpKey?: string }) {
+  return <label className="membership-text-field"><RuleFieldTitle label={label} ruleKey={helpKey || fieldHelpKeys[label]} /><input type="text" value={value} maxLength={24} placeholder={placeholder} onChange={(event) => onChange(event.target.value)} /><small>前台與會員中心共用此名稱；內部 PV 欄位維持不變。</small></label>;
 }
 
 export default function MembershipRulesManager({ initialRevision, initialVersion, initialRules, products }: Props) {
@@ -145,12 +149,15 @@ export default function MembershipRulesManager({ initialRevision, initialVersion
     </section>
 
     <section className="membership-rule-card">
-      <header><span>03</span><div><h2>推薦制度與工作室自取</h2><p>管理多代推薦、PV／實付金額獎勵，以及工作室自取日期；前台與伺服器共用同一套版本化規則。</p></div></header>
+      <header><span>03</span><div><h2>推薦制度與工作室自取</h2><p>管理多代推薦、點數／實付金額獎勵，以及工作室自取日期；前台與伺服器共用同一套版本化規則。</p></div></header>
       <div className="membership-fields two">
         <label className="membership-switch"><input type="checkbox" checked={rules.referral.programEnabled} onChange={(event) => change((draft) => { draft.referral.programEnabled = event.target.checked; })} /><span><b>啟用推薦制度</b><small>關閉後不建立新的獎勵資格</small></span><AdminRuleHelpButton ruleKey="referral.programEnabled" /></label>
-        <NumberField label="獎勵代數" value={rules.referral.referralMaxRewardDepth} min={1} max={10} unit="代" onChange={(value) => change((draft) => { draft.referral.referralMaxRewardDepth = value; while (draft.referral.levels.length < value) { const level=draft.referral.levels.length+1; draft.referral.levels.push({level,enabled:true,newReferralRewardRate:0,subscriptionRewardRate:0}); } })} />
-        <Choice label="獎勵計算方式" value={rules.referral.referralRewardCalculationMode} onChange={(value) => change((draft) => { draft.referral.referralRewardCalculationMode = value as "paid_amount"|"pv"; })}><option value="paid_amount">商品實付金額</option><option value="pv">PV 商品獎勵單位</option></Choice>
+        <NumberField label="獎勵代數" value={rules.referral.referralMaxRewardDepth} min={1} max={10} unit="代" onChange={(value) => change((draft) => { draft.referral.referralMaxRewardDepth = value; while (draft.referral.levels.length < value) { const level=draft.referral.levels.length+1; draft.referral.levels.push({level,enabled:true,newReferralRewardRate:0,repeatPurchaseRewardRate:0,subscriptionRewardRate:0}); } })} />
+        <Choice label="獎勵計算方式" value={rules.referral.referralRewardCalculationMode} onChange={(value) => change((draft) => { draft.referral.referralRewardCalculationMode = value as "paid_amount"|"pv"; })}><option value="paid_amount">商品實付金額</option><option value="pv">{rules.referral.pointDisplayName || "KD點"} 商品獎勵單位</option></Choice>
+        <TextField label="點數顯示名稱" value={rules.referral.pointDisplayName} placeholder="例如：KD點" onChange={(value) => change((draft) => { draft.referral.pointDisplayName = value; })} />
+        <NumberField label="會員續購回饋" value={rules.referral.selfPurchaseRewardRate} min={0} max={100} unit="%" onChange={(value) => change((draft) => { draft.referral.selfPurchaseRewardRate = value; })} />
       </div>
+      <p className="membership-inline-note">會員續購回饋目前先保存為 Owner 可調整設定；實際自己消費回饋入帳會在下一階段接入 Reward Engine。</p>
       <fieldset className="membership-intervals">
         <legend>推薦獎勵領取資格</legend>
         <p>此區先建立推薦獎勵資格規則；資格計算功能將在後續階段接用，現階段不會改變既有發放流程。</p>
@@ -197,15 +204,34 @@ export default function MembershipRulesManager({ initialRevision, initialVersion
       <div className="membership-fields two">
         <NumberField label="單筆全組織上限" value={rules.referral.referralTotalRewardCap} min={0} max={100} unit="%" onChange={(value) => change((draft) => { draft.referral.referralTotalRewardCap = value; })} />
         <NumberField label="單一會員每月上限" value={rules.referral.referralMonthlyCreditCap} min={0} max={100000000} unit="元（0 不限）" onChange={(value) => change((draft) => { draft.referral.referralMonthlyCreditCap = value; })} />
-        <NumberField label="每 1 PV 換算" value={rules.referral.pvRewardMoneyValue} min={0} max={100000} unit="元抵用金" onChange={(value) => change((draft) => { draft.referral.pvRewardMoneyValue = value; })} />
-        <label className="membership-switch"><input type="checkbox" checked={rules.referral.showProductPV} onChange={(event) => change((draft) => { draft.referral.showProductPV = event.target.checked; })} /><span><b>商品頁顯示 PV</b><small>關閉不影響後台獎勵計算</small></span><AdminRuleHelpButton ruleKey="referral.showProductPV" /></label>
+        <NumberField label={`每 1 ${rules.referral.pointDisplayName || "KD點"} 換算`} value={rules.referral.pvRewardMoneyValue} min={0} max={100000} unit="元抵用金" onChange={(value) => change((draft) => { draft.referral.pvRewardMoneyValue = value; })} />
+        <label className="membership-switch"><input type="checkbox" checked={rules.referral.showProductPV} onChange={(event) => change((draft) => { draft.referral.showProductPV = event.target.checked; })} /><span><b>商品頁顯示 {rules.referral.pointDisplayName || "KD點"}</b><small>關閉不影響後台獎勵計算</small></span><AdminRuleHelpButton ruleKey="referral.showProductPV" /></label>
         <Choice label="退款／退貨後獎勵" helpKey="referral.reversalPolicy" value={rules.referral.reversalPolicy} onChange={(value) => change((draft) => { draft.referral.reversalPolicy = value as MembershipBusinessRules["referral"]["reversalPolicy"]; })}><option value="cancel-pending-and-reverse-released">取消待發放並沖回已發放</option><option value="cancel-pending-only">只取消待發放</option></Choice>
         <NumberField label="一般商品最少備貨" value={rules.pickup.preparationLeadDays} min={0} max={60} unit="天" onChange={(value) => change((draft) => { draft.pickup.preparationLeadDays = value; if (draft.pickup.customRoastPreparationLeadDays < value) draft.pickup.customRoastPreparationLeadDays = value; })} />
         <NumberField label="專屬烘焙最少備貨" value={rules.pickup.customRoastPreparationLeadDays} min={rules.pickup.preparationLeadDays} max={90} unit="天" onChange={(value) => change((draft) => { draft.pickup.customRoastPreparationLeadDays = value; })} />
         <label><RuleFieldTitle label="不可自取日期" ruleKey="pickup.blockedDates" /><textarea rows={5} value={rules.pickup.blockedDates.join("\n")} placeholder={"每行一個日期，例如：\n2026-09-15\n2026-09-16"} onChange={(event) => change((draft) => { draft.pickup.blockedDates = event.target.value.split(/\s|,|，/).map((date) => date.trim()).filter(Boolean); })} /><small>可加入臨時休息或單日封鎖；每行填一個日期。</small></label>
         <Choice label="自取日期選擇方式" value={rules.pickup.datePickerMode} onChange={(value) => change((draft) => { draft.pickup.datePickerMode = value as MembershipBusinessRules["pickup"]["datePickerMode"]; })}><option value="calendar">日曆自由選日期</option><option value="suggestion-and-calendar">系統建議＋日曆</option></Choice>
       </div>
-      <div className="gift-pool-editor"><h3>各代獎勵率</h3>{rules.referral.levels.slice(0,rules.referral.referralMaxRewardDepth).map((level,index)=><div className="membership-fields four" key={level.level}><label className="membership-switch"><input type="checkbox" checked={level.enabled} onChange={(event)=>change((draft)=>{draft.referral.levels[index].enabled=event.target.checked;})}/><span><b>第 {level.level} 代</b></span><AdminRuleHelpButton ruleKey={`referral.levels.${index}.enabled`} /></label><NumberField label="新推薦" helpKey={`referral.levels.${index}.newReferralRewardRate`} value={level.newReferralRewardRate} min={0} max={100} unit={rules.referral.referralRewardCalculationMode==="pv"?"% PV 獎勵率":"%"} onChange={(value)=>change((draft)=>{draft.referral.levels[index].newReferralRewardRate=value;})}/><NumberField label="定期購" helpKey={`referral.levels.${index}.subscriptionRewardRate`} value={level.subscriptionRewardRate} min={0} max={100} unit={rules.referral.referralRewardCalculationMode==="pv"?"% PV 獎勵率":"%"} onChange={(value)=>change((draft)=>{draft.referral.levels[index].subscriptionRewardRate=value;})}/></div>)}</div>
+      <div className="referral-rate-editor">
+        <div className="referral-rate-editor-head">
+          <div><h3>推薦回饋設定</h3><p>每一層分開設定首次消費、一般續購與定期購續期回饋；關閉該層後不建立新的該層回饋。</p></div>
+          <span>計算基準：{rules.referral.referralRewardCalculationMode === "pv" ? (rules.referral.pointDisplayName || "KD點") : "商品實付金額"}</span>
+        </div>
+        <div className="referral-rate-list">
+          {rules.referral.levels.slice(0, rules.referral.referralMaxRewardDepth).map((level, index) => <article className={`referral-rate-row${level.enabled ? "" : " is-disabled"}`} key={level.level}>
+            <label className="referral-rate-toggle">
+              <input type="checkbox" checked={level.enabled} onChange={(event) => change((draft) => { draft.referral.levels[index].enabled = event.target.checked; })} />
+              <span><b>第 {level.level} 層</b><small>{level.enabled ? "啟用中" : "已關閉"}</small></span>
+              <AdminRuleHelpButton ruleKey={`referral.levels.${index}.enabled`} />
+            </label>
+            <div className="referral-rate-fields">
+              <NumberField label="首次消費推薦" helpKey={`referral.levels.${index}.newReferralRewardRate`} value={level.newReferralRewardRate} min={0} max={100} unit="%" onChange={(value) => change((draft) => { draft.referral.levels[index].newReferralRewardRate = value; })} />
+              <NumberField label="一般續購推薦" helpKey={`referral.levels.${index}.repeatPurchaseRewardRate`} value={level.repeatPurchaseRewardRate} min={0} max={100} unit="%" onChange={(value) => change((draft) => { draft.referral.levels[index].repeatPurchaseRewardRate = value; })} />
+              <NumberField label="定期購續期" helpKey={`referral.levels.${index}.subscriptionRewardRate`} value={level.subscriptionRewardRate} min={0} max={100} unit="%" onChange={(value) => change((draft) => { draft.referral.levels[index].subscriptionRewardRate = value; })} />
+            </div>
+          </article>)}
+        </div>
+      </div>
     </section>
 
     <section className="membership-rule-card">

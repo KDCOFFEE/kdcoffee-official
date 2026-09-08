@@ -322,12 +322,12 @@ export default async function WorkPage({ params }: { params: Promise<{ slug: str
               <p className="giotto-purchase-heading">{purchaseContent.eyebrow}</p>
               {purchaseContent.heading ? <h2 className="product-purchase-title">{purchaseContent.heading}</h2> : null}
               {purchaseContent.description ? <p className="product-purchase-description">{purchaseContent.description}</p> : null}
-              <AddToCart product={product} showPv={membershipRules.rules.referral.showProductPV} />
+              <AddToCart product={product} showPv={membershipRules.rules.referral.showProductPV} pointDisplayName={membershipRules.rules.referral.pointDisplayName} />
             </PurchaseChapterReveal>
           ) : (
             <div {...getProductAnimationAttributes(sectionAnimation("select-your-coffee"))} id="select-your-coffee" className="product-purchase-chapter">
               {pageContent.raw["select-your-coffee"] ? <div className="product-purchase-copy"><p className="giotto-purchase-heading">{purchaseContent.eyebrow}</p>{purchaseContent.heading ? <h2 className="product-purchase-title">{purchaseContent.heading}</h2> : null}{purchaseContent.description ? <span>{purchaseContent.description}</span> : null}</div> : null}
-              <AddToCart product={product} showPv={membershipRules.rules.referral.showProductPV} />
+              <AddToCart product={product} showPv={membershipRules.rules.referral.showProductPV} pointDisplayName={membershipRules.rules.referral.pointDisplayName} />
             </div>
           )}
         </div>

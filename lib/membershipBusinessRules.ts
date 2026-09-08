@@ -78,13 +78,15 @@ export const DEFAULT_MEMBERSHIP_RULES: MembershipBusinessRules = {
     programEnabled: true,
     referralMaxRewardDepth: 5,
     levels: [
-      { level: 1, enabled: true, newReferralRewardRate: 5, subscriptionRewardRate: 5 },
-      { level: 2, enabled: true, newReferralRewardRate: 2, subscriptionRewardRate: 2 },
-      { level: 3, enabled: true, newReferralRewardRate: 1, subscriptionRewardRate: 1 },
-      { level: 4, enabled: true, newReferralRewardRate: 0.5, subscriptionRewardRate: 0.5 },
-      { level: 5, enabled: true, newReferralRewardRate: 0.5, subscriptionRewardRate: 0.5 },
+      { level: 1, enabled: true, newReferralRewardRate: 5, repeatPurchaseRewardRate: 5, subscriptionRewardRate: 5 },
+      { level: 2, enabled: true, newReferralRewardRate: 2, repeatPurchaseRewardRate: 2, subscriptionRewardRate: 2 },
+      { level: 3, enabled: true, newReferralRewardRate: 1, repeatPurchaseRewardRate: 1, subscriptionRewardRate: 1 },
+      { level: 4, enabled: true, newReferralRewardRate: 0.5, repeatPurchaseRewardRate: 0.5, subscriptionRewardRate: 0.5 },
+      { level: 5, enabled: true, newReferralRewardRate: 0.5, repeatPurchaseRewardRate: 0.5, subscriptionRewardRate: 0.5 },
     ],
     referralRewardCalculationMode: "paid_amount",
+    pointDisplayName: "KD點",
+    selfPurchaseRewardRate: 5,
     payoutQualification: {
       mode: "either",
       generalMember: { rollingWindowDays: 30, cumulativeValidConsumptionThreshold: 1_500 },
@@ -190,7 +192,16 @@ export function normalizeMembershipBusinessRules(value: unknown, options: Member
         referralRewardBaseWaitingDays: supplied.referralRewardBaseWaitingDays ?? legacyBaseWaitingDays ?? DEFAULT_MEMBERSHIP_RULES.referral.referralRewardBaseWaitingDays,
         referralRewardReturnProtectionDays: supplied.referralRewardReturnProtectionDays
           ?? (options.preserveLegacyMissingReturnProtection ? 3 : DEFAULT_MEMBERSHIP_RULES.referral.referralRewardReturnProtectionDays),
-        levels: Array.isArray(supplied.levels) ? supplied.levels : DEFAULT_MEMBERSHIP_RULES.referral.levels,
+        levels: (Array.isArray(supplied.levels) ? supplied.levels : DEFAULT_MEMBERSHIP_RULES.referral.levels).map((rawLevel, index) => {
+          const level = object(rawLevel) ? rawLevel : {};
+          const fallback = DEFAULT_MEMBERSHIP_RULES.referral.levels[index] ?? { level: index + 1, enabled: true, newReferralRewardRate: 0, repeatPurchaseRewardRate: 0, subscriptionRewardRate: 0 };
+          const newReferralRewardRate = typeof level.newReferralRewardRate === "number" ? level.newReferralRewardRate : fallback.newReferralRewardRate;
+          return {
+            ...fallback,
+            ...level,
+            repeatPurchaseRewardRate: typeof level.repeatPurchaseRewardRate === "number" ? level.repeatPurchaseRewardRate : newReferralRewardRate,
+          };
+        }),
       };
     })(),
     credit: { ...DEFAULT_MEMBERSHIP_RULES.credit, ...nested("credit") },
@@ -293,10 +304,13 @@ export function validateMembershipBusinessRules(value: unknown, options: Members
     integer(level.level, 1, 10, "推薦代數");
     if (referralLevels.has(level.level)) throw new MembershipRulesValidationError("推薦代數不可重複");
     referralLevels.add(level.level);
-    if (typeof level.newReferralRewardRate !== "number" || level.newReferralRewardRate < 0 || level.newReferralRewardRate > 100) throw new MembershipRulesValidationError("新推薦獎勵率不正確");
-    if (typeof level.subscriptionRewardRate !== "number" || level.subscriptionRewardRate < 0 || level.subscriptionRewardRate > 100) throw new MembershipRulesValidationError("定期購獎勵率不正確");
+    if (typeof level.newReferralRewardRate !== "number" || level.newReferralRewardRate < 0 || level.newReferralRewardRate > 100) throw new MembershipRulesValidationError("首次消費推薦回饋率不正確");
+    if (typeof level.repeatPurchaseRewardRate !== "number" || level.repeatPurchaseRewardRate < 0 || level.repeatPurchaseRewardRate > 100) throw new MembershipRulesValidationError("一般續購推薦回饋率不正確");
+    if (typeof level.subscriptionRewardRate !== "number" || level.subscriptionRewardRate < 0 || level.subscriptionRewardRate > 100) throw new MembershipRulesValidationError("定期購續期回饋率不正確");
   }
   validateOwnerChoice(rules.referral.referralRewardCalculationMode, ["paid_amount", "pv"], "推薦獎勵計算方式");
+  if (typeof rules.referral.pointDisplayName !== "string" || !rules.referral.pointDisplayName.trim() || rules.referral.pointDisplayName.trim().length > 24) throw new MembershipRulesValidationError("點數顯示名稱需為 1～24 個字元");
+  if (typeof rules.referral.selfPurchaseRewardRate !== "number" || !Number.isFinite(rules.referral.selfPurchaseRewardRate) || rules.referral.selfPurchaseRewardRate < 0 || rules.referral.selfPurchaseRewardRate > 100) throw new MembershipRulesValidationError("會員續購回饋比例不正確");
   if (!object(rules.referral.payoutQualification)) throw new MembershipRulesValidationError("推薦獎勵領取資格設定不完整");
   const payout = rules.referral.payoutQualification;
   validateOwnerChoice(payout.mode, ["general", "subscription", "either", "both"], "推薦獎勵資格判定模式");

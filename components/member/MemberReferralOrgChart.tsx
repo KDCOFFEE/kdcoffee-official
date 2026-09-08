@@ -33,6 +33,7 @@ export type ReferralOrgChartNode = {
 
 export type ReferralOrgChartData = {
   periodLabel: string;
+  pointDisplayName: string;
   stats: {
     teamMembers: number;
     newOrders: number;
@@ -142,7 +143,7 @@ function orgRewardStatusLabel(order: ReferralOrgOrderDetail) {
   return "待入帳";
 }
 
-function MemberOrgOrderViewer({ node, onClose }: { node: ReferralOrgChartNode; onClose: () => void }) {
+function MemberOrgOrderViewer({ node, pointDisplayName, onClose }: { node: ReferralOrgChartNode; pointDisplayName: string; onClose: () => void }) {
   return (
     <div className="member-org-order-viewer" role="dialog" aria-modal="true" aria-labelledby="member-org-order-title">
       <button type="button" className="member-org-order-backdrop" aria-label="關閉新訂單明細" onClick={onClose} />
@@ -178,7 +179,7 @@ function MemberOrgOrderViewer({ node, onClose }: { node: ReferralOrgChartNode; o
                 </div>
                 {hasReward ? (
                   <div className="member-org-order-calc">
-                    <span><small>回饋計算</small><strong>{Math.round(order.effectivePV!)} PV × {(order.rewardRate! * 100).toLocaleString("zh-TW", { maximumFractionDigits: 2 })}%</strong></span>
+                    <span><small>回饋計算</small><strong>{Math.round(order.effectivePV!)} {pointDisplayName || "KD點"} × {(order.rewardRate! * 100).toLocaleString("zh-TW", { maximumFractionDigits: 2 })}%</strong></span>
                     <span><small>本筆回饋</small><strong>+ {money(rewardAmount!)}</strong></span>
                   </div>
                 ) : (
@@ -351,7 +352,7 @@ function MemberReferralOrgChartDialog({ data, onClose }: Omit<Props, "open">) {
           </div>
         </div>
 
-        {orderNode ? <MemberOrgOrderViewer node={orderNode} onClose={() => setOrderNode(null)} /> : null}
+        {orderNode ? <MemberOrgOrderViewer node={orderNode} pointDisplayName={data.pointDisplayName} onClose={() => setOrderNode(null)} /> : null}
 
         <footer className="member-org-footer">
           <span>拖曳移動畫布 · 滾輪或雙指縮放</span>
