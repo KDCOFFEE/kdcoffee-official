@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useRef, useState } from "react";
+import { useState } from "react";
 import {
   fulfillmentOrderStatuses,
   MAX_CANCELLATION_REASON_LENGTH,
@@ -91,7 +91,7 @@ export async function runOrderStatusSave({
   }
 }
 
-export default function OrderStatusForm({
+function OrderStatusFormInner({
   orderNumber,
   initialStatus,
   initialTracking,
@@ -129,7 +129,7 @@ export default function OrderStatusForm({
   const [notifyLine, setNotifyLine] = useState(customerNotificationCapability.lineAvailable);
   const [notifyEmail, setNotifyEmail] = useState(!customerNotificationCapability.lineAvailable && customerNotificationCapability.emailAvailable);
   const [notificationPhoto, setNotificationPhoto] = useState<File>();
-  const notificationActionId = useRef(crypto.randomUUID());
+  const [notificationActionId, setNotificationActionId] = useState(() => crypto.randomUUID());
   const statusIsKnown = (orderStatuses as readonly string[]).includes(status);
   const statusTransitionAllowed =
     statusIsKnown &&
@@ -186,13 +186,13 @@ export default function OrderStatusForm({
       setSaving,
       customerNotification: {
         enabled: notifyCustomer && notificationStatusSuggested,
-        actionId: notificationActionId.current,
+        actionId: notificationActionId,
         channels: selectedNotificationChannels,
         photo: notificationPhoto,
       },
     });
     if (completed) {
-      notificationActionId.current = crypto.randomUUID();
+      setNotificationActionId(crypto.randomUUID());
       setNotificationPhoto(undefined);
       setNotifyCustomer(false);
     }
@@ -301,7 +301,7 @@ export default function OrderStatusForm({
                 <label className="admin-notification-photo">
                   準備完成／包裝照片 <small>選填，JPEG／PNG／WebP，最大 5MB</small>
                   <input
-                    key={notificationActionId.current}
+                    key={notificationActionId}
                     type="file"
                     accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"
                     onChange={(event) => setNotificationPhoto(event.target.files?.[0])}
@@ -318,4 +318,24 @@ export default function OrderStatusForm({
       {message && <p className="admin-save-message">{message}</p>}
     </div>
   );
+}
+
+export default function OrderStatusForm(props: {
+  orderNumber: string;
+  initialStatus: string;
+  initialTracking?: string;
+  orderMode: string;
+  reactivationBlocked?: boolean;
+  inventoryReturned?: boolean;
+  inventoryFulfillmentBlocked?: boolean;
+  inventoryGuardMessage?: string;
+  cancellationAllowed?: boolean;
+  cancellationBlockedMessage?: string;
+  customerNotificationCapability: {
+    lineAvailable: boolean;
+    emailAvailable: boolean;
+  };
+}) {
+  const refreshKey = `${props.orderNumber}:${props.initialStatus}:${props.initialTracking || ""}`;
+  return <OrderStatusFormInner key={refreshKey} {...props} />;
 }
