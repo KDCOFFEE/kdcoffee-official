@@ -4,13 +4,52 @@ import { assignReferralByCode, getMemberReferralCenter, MembershipCommerceError 
 
 export const dynamic = "force-dynamic";
 
-function sameOrigin(request: Request) { const origin = request.headers.get("origin"); return !origin || origin === new URL(request.url).origin; }
+function normalizeOrigin(value: string | null | undefined) {
+  if (!value?.trim()) return null;
+
+  try {
+    return new URL(value.trim()).origin;
+  } catch {
+    return null;
+  }
+}
+
+function resolvePublicOrigin(request: Request) {
+  const configured =
+    normalizeOrigin(process.env.MEMBER_SITE_URL) ??
+    normalizeOrigin(process.env.NEXT_PUBLIC_SITE_URL);
+
+  if (configured) return configured;
+
+  const forwardedHost = request.headers.get("x-forwarded-host")?.split(",")[0]?.trim();
+  const forwardedProto = request.headers.get("x-forwarded-proto")?.split(",")[0]?.trim();
+
+  if (forwardedHost) {
+    const protocol = forwardedProto === "http" ? "http" : "https";
+    const forwardedOrigin = normalizeOrigin(`${protocol}://${forwardedHost}`);
+    if (forwardedOrigin) return forwardedOrigin;
+  }
+
+  const host = request.headers.get("host")?.trim();
+
+  if (host) {
+    const requestProtocol = new URL(request.url).protocol;
+    const hostOrigin = normalizeOrigin(`${requestProtocol}//${host}`);
+    if (hostOrigin) return hostOrigin;
+  }
+
+  return new URL(request.url).origin;
+}
+
+function sameOrigin(request: Request) {
+  const origin = normalizeOrigin(request.headers.get("origin"));
+  return !origin || origin === resolvePublicOrigin(request);
+}
 
 export async function GET(request: Request) {
   const member = await getCurrentMember();
   if (!member) return NextResponse.json({ error: "請先登入會員" }, { status: 401 });
-  const url = new URL(request.url);
-  return NextResponse.json(await getMemberReferralCenter(member.id, { baseUrl: url.origin }));
+  return NextResponse.json(await getMemberReferralCenter(member.id, { baseUrl: resolvePublicOrigin(request) }));
 }
 
 export async function POST(request: Request) {
