@@ -7,6 +7,7 @@ import {
   memberSessionCookieOptions,
   normalizeEmail,
 } from "@/lib/memberAuth";
+import { clearReferralAttributionCookie } from "@/lib/referralAttribution";
 
 const LOGIN_ERROR = "Email 或密碼錯誤";
 
@@ -27,6 +28,7 @@ export async function POST(request: Request) {
       createSessionToken(member.id),
       memberSessionCookieOptions(process.env.NODE_ENV === "production"),
     );
+    clearReferralAttributionCookie(response);
     return response;
   } catch {
     return NextResponse.json({ error: LOGIN_ERROR }, { status: 401 });

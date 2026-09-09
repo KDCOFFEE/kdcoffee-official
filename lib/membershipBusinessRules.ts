@@ -76,6 +76,8 @@ export const DEFAULT_MEMBERSHIP_RULES: MembershipBusinessRules = {
   },
   referral: {
     programEnabled: true,
+    referralAttributionEnabled: true,
+    referralAttributionSessionMinutes: 60,
     referralMaxRewardDepth: 5,
     levels: [
       { level: 1, enabled: true, newReferralRewardRate: 5, repeatPurchaseRewardRate: 5, subscriptionRewardRate: 5 },
@@ -296,6 +298,8 @@ export function validateMembershipBusinessRules(value: unknown, options: Members
 
   if (!object(rules.referral) || !object(rules.referral.referrerEligibility) || !object(rules.referral.reward)) throw new MembershipRulesValidationError("推薦獎勵設定不完整");
   if (typeof rules.referral.programEnabled !== "boolean" || typeof rules.referral.showProductPV !== "boolean") throw new MembershipRulesValidationError("推薦制度開關不正確");
+  if (typeof rules.referral.referralAttributionEnabled !== "boolean") throw new MembershipRulesValidationError("推薦來源追蹤開關不正確");
+  integer(rules.referral.referralAttributionSessionMinutes, 5, 1440, "推薦瀏覽有效時間");
   integer(rules.referral.referralMaxRewardDepth, 1, 10, "推薦獎勵代數");
   if (!Array.isArray(rules.referral.levels) || rules.referral.levels.length < rules.referral.referralMaxRewardDepth) throw new MembershipRulesValidationError("各代推薦獎勵設定不完整");
   const referralLevels = new Set<number>();

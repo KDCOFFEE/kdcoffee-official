@@ -38,6 +38,10 @@ export type MembershipBusinessRules = {
   gift: { startsAtFulfillment: number; repeatEveryFulfillments: number; halfPoundQuantity: number; onePoundQuantity: number; pool: Array<{ productId: string; priority: number; enabled: boolean }> };
   referral: {
     programEnabled: boolean;
+    /** Temporary referral attribution before first member creation. */
+    referralAttributionEnabled: boolean;
+    /** Last valid referral click attribution lifetime in minutes. */
+    referralAttributionSessionMinutes: number;
     referralMaxRewardDepth: number;
     levels: Array<{ level: number; enabled: boolean; newReferralRewardRate: number; repeatPurchaseRewardRate: number; subscriptionRewardRate: number }>;
     referralRewardCalculationMode: "paid_amount" | "pv";

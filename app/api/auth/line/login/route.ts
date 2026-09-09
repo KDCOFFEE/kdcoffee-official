@@ -1,5 +1,11 @@
 import { NextResponse } from "next/server";
 import { randomState, safeReturnPath } from "@/lib/memberAuth";
+import {
+  getReferralAttributionPolicy,
+  isValidReferralAttributionCode,
+  referralCodeFromReturnPath,
+  setReferralAttributionCookie,
+} from "@/lib/referralAttribution";
 
 function safeOrigin(value: string | null) {
   if (!value) return "";
@@ -65,6 +71,7 @@ export async function GET(request: Request) {
   const returnTo = safeReturnPath(
     requestUrl.searchParams.get("returnTo"),
   );
+  const referralCode = referralCodeFromReturnPath(returnTo);
 
   const redirectUri = `${baseUrl}/api/auth/line/callback`;
 
@@ -125,6 +132,21 @@ export async function GET(request: Request) {
     "login",
     options,
   );
+
+  if (
+    referralCode &&
+    await isValidReferralAttributionCode(referralCode)
+  ) {
+    const policy = await getReferralAttributionPolicy();
+
+    if (policy.enabled) {
+      setReferralAttributionCookie(
+        response,
+        referralCode,
+        policy.sessionMinutes,
+      );
+    }
+  }
 
   return response;
 }

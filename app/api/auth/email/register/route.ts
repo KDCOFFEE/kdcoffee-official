@@ -10,6 +10,10 @@ import {
 } from "@/lib/memberAuth";
 import { assignReferralByCode, referralCodeForMember, MembershipCommerceError } from "@/lib/membershipCommerce";
 import { getIdentityRegistrySnapshot } from "@/lib/memberIdentity";
+import {
+  clearReferralAttributionCookie,
+  resolveReferralAttributionCandidate,
+} from "@/lib/referralAttribution";
 
 export async function POST(request: Request) {
   try {
@@ -17,7 +21,10 @@ export async function POST(request: Request) {
     const email = normalizeEmail(String(body.email ?? ""));
     const password = String(body.password ?? "");
     const passwordConfirmation = String(body.passwordConfirmation ?? "");
-    const referralCode = String(body.referralCode ?? "").trim().toUpperCase();
+    const suppliedReferralCode = String(body.referralCode ?? "").trim().toUpperCase();
+    const referralCode = await resolveReferralAttributionCandidate(
+      suppliedReferralCode,
+    );
 
     if (!isValidEmail(email)) {
       return NextResponse.json({ error: "Email 格式不正確" }, { status: 400 });
@@ -67,6 +74,7 @@ export async function POST(request: Request) {
       createSessionToken(member.id),
       memberSessionCookieOptions(process.env.NODE_ENV === "production"),
     );
+    clearReferralAttributionCookie(response);
     return response;
   } catch {
     return NextResponse.json({ error: "建立會員失敗，請稍後再試" }, { status: 500 });

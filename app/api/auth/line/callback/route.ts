@@ -8,6 +8,14 @@ import {
   memberSessionCookieOptions,
   safeReturnPath,
 } from "@/lib/memberAuth";
+import {
+  assignReferralByCode,
+  MembershipCommerceError,
+} from "@/lib/membershipCommerce";
+import {
+  clearReferralAttributionCookie,
+  resolveReferralAttributionCandidate,
+} from "@/lib/referralAttribution";
 
 function env(name: string) {
   return process.env[name]?.trim();
@@ -88,6 +96,10 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    const referralCode = mode === "login"
+      ? await resolveReferralAttributionCandidate()
+      : "";
+
     const redirectUri = `${baseUrl}/api/auth/line/callback`;
     const body = new URLSearchParams({
       grant_type: "authorization_code",
@@ -169,6 +181,7 @@ export async function GET(request: NextRequest) {
 
       const linked = NextResponse.redirect(`${baseUrl}/member?linked=line`);
       clearOAuthCookies(linked);
+      clearReferralAttributionCookie(linked);
       return linked;
     }
 
@@ -182,10 +195,31 @@ export async function GET(request: NextRequest) {
     if (login.status === "link-required") {
       const linkRequired = NextResponse.redirect(`${baseUrl}/member?error=account_link_required`);
       clearOAuthCookies(linkRequired);
+      clearReferralAttributionCookie(linkRequired);
       return linkRequired;
     }
 
     const member = login.member;
+
+    if (login.createdNewMember && referralCode) {
+      try {
+        await assignReferralByCode({
+          referralCode,
+          referredMemberId: member.id,
+          safeDisplayName: member.displayName || "KD Coffee Member",
+          idempotencyKey: `line-register:${member.id}:${referralCode}`,
+        });
+      } catch (referralError) {
+        if (referralError instanceof MembershipCommerceError) {
+          console.error("LINE referral assignment rejected", {
+            memberId: member.id,
+            reason: referralError.message,
+          });
+        } else {
+          throw referralError;
+        }
+      }
+    }
 
     const response = NextResponse.redirect(`${baseUrl}${returnTo}`);
     response.cookies.set(
@@ -194,6 +228,7 @@ export async function GET(request: NextRequest) {
       memberSessionCookieOptions(baseUrl.startsWith("https://")),
     );
     clearOAuthCookies(response);
+    clearReferralAttributionCookie(response);
     return response;
   } catch (err) {
     console.error("LINE login callback failed", {

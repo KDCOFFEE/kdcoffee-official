@@ -527,7 +527,7 @@ export async function authenticateEmailMember(
 }
 
 export type LineLoginResult =
-  | { status: "authenticated"; member: Member }
+  | { status: "authenticated"; member: Member; createdNewMember: boolean }
   | { status: "link-required" };
 
 export async function loginLineMember(profile: {
@@ -551,7 +551,7 @@ export async function loginLineMember(profile: {
       updatedAt: new Date().toISOString(),
     }));
     if (!updated) throw new Error("LINE 會員資料不存在");
-    return { status: "authenticated", member: { ...updated, memberNumber: mapped.memberNumber } };
+    return { status: "authenticated", member: { ...updated, memberNumber: mapped.memberNumber }, createdNewMember: false };
   }
 
   const legacyId = createHmac("sha256", secret())
@@ -577,7 +577,7 @@ export async function loginLineMember(profile: {
       updatedAt: now,
     }));
     if (!updated) throw new Error("LINE 會員資料不存在");
-    return { status: "authenticated", member: { ...updated, memberNumber: canonical.memberNumber } };
+    return { status: "authenticated", member: { ...updated, memberNumber: canonical.memberNumber }, createdNewMember: false };
   }
 
   if (profile.email) {
@@ -617,7 +617,7 @@ export async function loginLineMember(profile: {
     },
   });
   if (!created) throw new Error("LINE 會員建立失敗");
-  return { status: "authenticated", member: created as Member };
+  return { status: "authenticated", member: created as Member, createdNewMember: true };
 }
 
 /** 保留舊函式名稱供既有內部呼叫相容；新流程應使用 loginLineMember。 */
