@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import {
   authenticateEmailMember,
+  MemberAccountDisabledError,
   createSessionToken,
   MEMBER_SESSION_COOKIE,
   memberSessionCookieOptions,
@@ -30,7 +31,17 @@ export async function POST(request: Request) {
     );
     clearReferralAttributionCookie(response);
     return response;
-  } catch {
+  } catch (error) {
+    if (error instanceof MemberAccountDisabledError) {
+      return NextResponse.json(
+        {
+          error: "此會員帳號目前已由 KD Coffee 停用。如需重新啟用或有任何疑問，請聯繫 KD Coffee 客服協助。",
+          code: "MEMBER_DISABLED",
+        },
+        { status: 403 },
+      );
+    }
+
     return NextResponse.json({ error: LOGIN_ERROR }, { status: 401 });
   }
 }

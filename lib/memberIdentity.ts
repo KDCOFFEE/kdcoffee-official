@@ -12,7 +12,7 @@ export const MEMBER_NUMBER_PATTERN = /^(?:KD-\d{6,9}|1962\d{5})$/;
 export const LINE_LINK_TTL_MS = 10 * 60 * 1000;
 
 export type IdentityProvider = "email" | "line";
-export type CanonicalMemberStatus = "active" | "possible-duplicate" | "merged-tombstone";
+export type CanonicalMemberStatus = "active" | "disabled" | "possible-duplicate" | "merged-tombstone";
 export type IdentityStatus = "active" | "unlinked";
 export type LinkTransactionStatus = "pending" | "completed" | "rejected" | "expired";
 
@@ -50,7 +50,7 @@ export type IdentityLinkTransaction = {
 
 export type IdentityAuditRecord = {
   auditId: string;
-  action: "member-canonicalized" | "identity-linked" | "identity-link-rejected";
+  action: "member-canonicalized" | "member-disabled" | "member-reactivated" | "identity-linked" | "identity-link-rejected";
   memberId: string;
   provider?: IdentityProvider;
   occurredAt: string;
@@ -208,7 +208,7 @@ export function validateMemberIdentityRegistry(value: unknown): MemberIdentityRe
       raw.memberId !== memberId ||
       !memberId ||
       !MEMBER_NUMBER_PATTERN.test(String(raw.memberNumber)) ||
-      !["active", "possible-duplicate", "merged-tombstone"].includes(String(raw.status))
+      !["active", "disabled", "possible-duplicate", "merged-tombstone"].includes(String(raw.status))
     ) {
       throw new IdentityValidationError("會員核心資料無效");
     }
@@ -266,7 +266,7 @@ export function validateMemberIdentityRegistry(value: unknown): MemberIdentityRe
     if (
       !isObject(raw) ||
       typeof raw.auditId !== "string" ||
-      !["member-canonicalized", "identity-linked", "identity-link-rejected"].includes(String(raw.action)) ||
+      !["member-canonicalized", "member-disabled", "member-reactivated", "identity-linked", "identity-link-rejected"].includes(String(raw.action)) ||
       typeof raw.memberId !== "string" ||
       !["success", "rejected"].includes(String(raw.result)) ||
       typeof raw.safeReason !== "string" ||
@@ -451,6 +451,36 @@ export async function purgeCanonicalMembers(memberIds?: string[]) {
     registry.auditLog = registry.auditLog.filter((entry) => !targets.has(entry.memberId));
     await writeRegistry(filePath, registry);
     return targets.size;
+  });
+}
+
+export async function setCanonicalMemberAccountStatus(
+  memberId: string,
+  status: Extract<CanonicalMemberStatus, "active" | "disabled">,
+) {
+  return withRegistryLock(async (filePath) => {
+    const registry = await readRegistry(filePath);
+    const canonicalId = registry.legacyAliases[memberId] || memberId;
+    const member = registry.members[canonicalId];
+    if (!member) throw new IdentityValidationError("找不到這位會員");
+    if (!["active", "disabled"].includes(member.status)) {
+      throw new IdentityValidationError("只有正常或已停用會員可以變更登入狀態");
+    }
+    if (member.status === status) return member;
+
+    const now = new Date();
+    member.status = status;
+    member.updatedAt = nowIso(now);
+    appendAudit(registry, {
+      action: status === "disabled" ? "member-disabled" : "member-reactivated",
+      memberId: canonicalId,
+      result: "success",
+      safeReason: status === "disabled" ? "Owner 已停用會員登入權限" : "Owner 已重新啟用會員登入權限",
+      actorType: "system",
+      correlationId: randomId("account_status"),
+    }, now);
+    await writeRegistry(filePath, registry, now);
+    return member;
   });
 }
 

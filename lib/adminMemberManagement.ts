@@ -1,6 +1,6 @@
 import { listOrders, type StoredOrder } from "@/lib/adminOrders";
 import { listMembers, type Member } from "@/lib/memberAuth";
-import { getIdentityRegistrySnapshot } from "@/lib/memberIdentity";
+import { getIdentityRegistrySnapshot, type CanonicalMemberStatus } from "@/lib/memberIdentity";
 import {
   effectiveCreditRemaining,
   readMembershipCommerceState,
@@ -16,7 +16,7 @@ export type AdminMemberListFilters = {
   subscription?: "all" | "active" | "inactive";
   credit?: "all" | "available";
   referral?: "all" | "participating";
-  status?: "all" | "active" | "possible-duplicate";
+  status?: "all" | "active" | "disabled" | "possible-duplicate";
 };
 
 export type AdminMemberListRow = {
@@ -32,7 +32,7 @@ export type AdminMemberListRow = {
   availableCredit: number;
   subscriptionStatus: SubscriptionStatus | null;
   referralStatus: "referrer" | "referred" | "both" | null;
-  accountStatus: "active" | "possible-duplicate" | "merged-tombstone";
+  accountStatus: CanonicalMemberStatus;
 };
 
 const invalidSpendStatuses = new Set(["cancelled", "uncollected", "refunded", "returned"]);

@@ -2853,6 +2853,7 @@ body.roasted-bean-viewer-open .mobile-purchase-return{opacity:0!important;visibi
 /* Phase J.3A.1 — referral center completion + owner test-member deletion */
 .member-referral-center-v2 .member-section-head>div>p:last-child{margin:7px 0 0;color:#776a60;line-height:1.6}.member-referral-invite-v2{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(240px,.6fr);gap:18px;margin:18px 0 24px}.member-referral-share-main,.member-referral-qr-card-v2{padding:clamp(20px,3vw,30px);border:1px solid #ded3c8;border-radius:20px;background:#fcfaf7}.member-referral-share-main h3,.member-referral-subhead h3{margin:4px 0 8px;color:#35291f}.member-referral-share-intro{margin:0 0 16px;color:#74675d;line-height:1.7}.member-referral-message-preview{padding:16px;border:1px solid #e4d9cf;border-radius:14px;background:#fff}.member-referral-message-preview small{color:#8a796c;font-weight:800}.member-referral-message-preview p{white-space:pre-line;line-height:1.8;color:#44362d}.member-referral-message-preview span{display:block;padding-top:10px;border-top:1px solid #eee5dd;color:#6d5949;font-size:.82rem;line-height:1.6;overflow-wrap:anywhere}.member-referral-actions-v2{display:flex;gap:9px;flex-wrap:wrap;margin-top:14px}.member-referral-actions-v2 button,.member-referral-qr-card-v2 button,.member-referral-code-details button{min-height:42px;padding:9px 14px;border:1px solid #cdbdad;border-radius:10px;background:#fff;color:#49382d;font:inherit;font-size:.8rem;font-weight:800;cursor:pointer}.member-referral-actions-v2 .member-referral-share-primary{border-color:#5f4533;background:#5f4533;color:#fff}.member-referral-code-details{margin-top:14px;color:#6e6055}.member-referral-code-details summary{cursor:pointer;font-size:.8rem;font-weight:800}.member-referral-code-details>div{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;margin-top:10px;align-items:center}.member-referral-code-details span{padding:10px 12px;border-radius:9px;background:#f3ede7;overflow-wrap:anywhere}.member-referral-code-details .is-url{font-size:.75rem}.member-referral-qr-card-v2{display:grid;align-content:center;justify-items:center;text-align:center;background:#f3ece4}.member-referral-qr-card-v2 p{margin:0 0 8px;color:#76675c;font-size:.82rem}.member-referral-results-v2,.member-referral-team-v2{padding:22px 0;border-top:1px solid #e2d8cf}.member-referral-kpis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:14px}.member-referral-kpis article{padding:17px;border-radius:14px;background:#f6f1eb}.member-referral-kpis small{display:block;color:#7b6d62}.member-referral-kpis strong{display:inline-block;margin-top:5px;color:#382b22;font-size:1.55rem}.member-referral-kpis span{margin-left:4px;color:#77695e}.member-referral-policy{margin-top:12px;padding:12px 14px;border:1px solid #dfd4c9;border-radius:12px}.member-referral-policy summary{cursor:pointer;font-weight:800}.member-referral-policy p{color:#74675d;line-height:1.65}.member-referral-level-tabs{display:flex;gap:7px;flex-wrap:wrap;margin:14px 0}.member-referral-level-tabs button{min-height:40px;padding:8px 13px;border:1px solid #d7cabd;border-radius:999px;background:#fff;color:#6b5b4f;font:inherit;font-size:.78rem;font-weight:800;cursor:pointer}.member-referral-level-tabs button.is-active{border-color:#4e3b2e;background:#4e3b2e;color:#fff}.member-referral-list-v2{display:grid;gap:8px}.member-referral-list-v2 article{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 16px;border:1px solid #e1d7cd;border-radius:12px;background:#fff}.member-referral-list-v2 article>div{display:grid;gap:3px}.member-referral-list-v2 small{color:#827469}.member-referral-list-v2 article>span{font-size:.78rem;font-weight:800;color:#6c5b4e}
 .member-delete-panel{display:flex;align-items:flex-start;justify-content:space-between;gap:22px;margin-top:24px;padding:22px;border:1px solid #e0c7c1;border-radius:16px;background:#fff8f6}.member-delete-panel.is-all{margin-top:18px}.member-delete-panel>div:first-child{max-width:720px}.member-delete-panel strong{color:#713a32}.member-delete-panel p{margin:7px 0 0;color:#765e59;line-height:1.65}.member-delete-open,.member-delete-confirm{min-height:42px;padding:9px 14px;border:1px solid #a95649;border-radius:9px;background:#fff;color:#8b3d32;font:inherit;font-weight:800;cursor:pointer}.member-delete-form{display:grid;min-width:min(100%,360px);gap:10px}.member-delete-form label{display:grid;gap:5px;color:#674f49;font-size:.78rem;font-weight:800}.member-delete-form input{min-height:42px;padding:9px 11px;border:1px solid #d8c4bf;border-radius:8px;background:#fff;font:inherit}.member-delete-form>div{display:flex;justify-content:flex-end;gap:8px}.member-delete-form>div button{min-height:40px;padding:8px 12px;border:1px solid #d0bdb8;border-radius:8px;background:#fff;font:inherit;cursor:pointer}.member-delete-form>div .member-delete-confirm{border-color:#8f4035;background:#8f4035;color:#fff}.member-delete-form .form-error{margin:0;color:#a1362a;font-size:.78rem}
+.member-lifecycle-action,.member-delete-form>div .member-lifecycle-action{min-height:42px;padding:9px 15px;border:1px solid transparent;border-radius:9px;color:#fffaf6;font:inherit;font-weight:800;cursor:pointer;box-shadow:0 4px 12px rgba(58,39,29,.16);transition:background-color .18s ease,border-color .18s ease,box-shadow .18s ease}.member-lifecycle-action--disable,.member-delete-form>div .member-lifecycle-action--disable{border-color:#684536;background:#7b5948;color:#fffaf6}.member-lifecycle-action--disable:hover,.member-delete-form>div .member-lifecycle-action--disable:hover{border-color:#53362a;background:#624437;box-shadow:0 6px 16px rgba(79,48,35,.24)}.member-lifecycle-action--reactivate,.member-delete-form>div .member-lifecycle-action--reactivate{border-color:#3f5844;background:#506d56;color:#f8fff9}.member-lifecycle-action--reactivate:hover,.member-delete-form>div .member-lifecycle-action--reactivate:hover{border-color:#304636;background:#3d5743;box-shadow:0 6px 16px rgba(43,72,50,.24)}.member-lifecycle-action:focus-visible{outline:3px solid rgba(181,130,88,.42);outline-offset:3px}.member-lifecycle-action:disabled{cursor:not-allowed;opacity:.62;box-shadow:none}
 @media(max-width:820px){.member-referral-invite-v2{grid-template-columns:1fr}.member-referral-kpis{grid-template-columns:1fr 1fr}.member-delete-panel{display:grid}.member-delete-form{min-width:0;width:100%}}@media(max-width:560px){.member-referral-kpis{grid-template-columns:1fr}.member-referral-actions-v2{display:grid}.member-referral-actions-v2 button{width:100%}.member-referral-code-details>div{grid-template-columns:1fr}.member-referral-list-v2 article{align-items:flex-start;flex-direction:column}.member-delete-form>div{display:grid}.member-delete-form>div button{width:100%}}
 
 
@@ -5663,4 +5664,71 @@ body.roasted-bean-viewer-open{overflow:hidden}
   .guided-fulfillment-timeline li:not(:last-child)::after{top:30px;bottom:0;left:16px;right:auto;width:1px;height:auto}
   .guided-fulfillment-timeline li>div{padding-top:4px}
   .fulfillment-action-grid.compact{grid-template-columns:1fr}
+}
+
+/* =========================================================
+   J.5D.3 MEMBER LIFECYCLE ACTION BUTTONS
+   ========================================================= */
+
+button.member-lifecycle-action,
+.member-lifecycle-action {
+  appearance: none !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  min-height: 46px !important;
+  padding: 0 26px !important;
+  border-radius: 999px !important;
+  border: 1px solid transparent !important;
+  font: inherit !important;
+  font-weight: 700 !important;
+  line-height: 1 !important;
+  text-decoration: none !important;
+  cursor: pointer !important;
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease !important;
+}
+
+button.member-lifecycle-action--disable,
+.member-lifecycle-action--disable {
+  background: #7b3f32 !important;
+  border-color: #7b3f32 !important;
+  color: #fffaf5 !important;
+}
+
+button.member-lifecycle-action--disable:hover,
+.member-lifecycle-action--disable:hover {
+  background: #653126 !important;
+  border-color: #653126 !important;
+  transform: translateY(-1px);
+}
+
+button.member-lifecycle-action--reactivate,
+.member-lifecycle-action--reactivate {
+  background: #536b55 !important;
+  border-color: #536b55 !important;
+  color: #ffffff !important;
+}
+
+button.member-lifecycle-action--reactivate:hover,
+.member-lifecycle-action--reactivate:hover {
+  background: #435845 !important;
+  border-color: #435845 !important;
+  transform: translateY(-1px);
+}
+
+button.member-lifecycle-action:focus-visible,
+.member-lifecycle-action:focus-visible {
+  outline: 3px solid rgba(83, 107, 85, 0.28) !important;
+  outline-offset: 3px !important;
+}
+
+button.member-lifecycle-action:disabled,
+.member-lifecycle-action:disabled {
+  opacity: 0.55 !important;
+  cursor: not-allowed !important;
+  transform: none !important;
 }

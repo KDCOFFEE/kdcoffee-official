@@ -2018,7 +2018,18 @@ export async function getMemberCommerceDashboard(memberId: string, now = new Dat
         .map((allocation) => ({ orderNumber: reservation.orderId, amount: allocation.amount, status: reservation.status })));
     return { creditEntryId: item.creditEntryId, amount: item.amount, remainingAmount, issuedAt: item.issuedAt, expiresAt: item.expiresAt, status, direction, sourceLabel, orderRedemptions };
   });
-  const pendingCredit = Object.values(state.referralConversions).filter((conversion) => conversion.status === "pending" && state.referrals[conversion.relationshipId]?.referrerMemberId === memberId).reduce((sum, item) => sum + item.pendingRewardAmount, 0);
+  const pendingCredit = Object.values(state.referralRewards)
+    .filter(
+      (reward) =>
+        reward.beneficiaryMemberId === memberId &&
+        reward.status === "scheduled" &&
+        reward.qualificationStatus !== "expired",
+    )
+    .reduce(
+      (sum, reward) =>
+        sum + (reward.projectedCreditAmount ?? reward.calculatedCreditAmount),
+      0,
+    );
   return { subscriptions: structuredClone(subscriptions), cycles: structuredClone(cycles), credits: structuredClone(credits), pendingCredit, referrals: safeReferralMemberView(state, memberId) };
 }
 

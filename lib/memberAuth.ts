@@ -226,6 +226,8 @@ export async function getCurrentMember(): Promise<Member | null> {
   if (!member) return null;
 
   try {
+    const identityState = await getMemberIdentityState(member.id);
+    if (identityState.member?.status === "disabled") return null;
     return await attachCanonicalIdentityForRead(member);
   } catch (error) {
     // 不因身份索引暫時不可用而中斷既有有效 session。
@@ -472,6 +474,13 @@ export async function registerEmailMember(emailInput: string, password: string) 
   }
 }
 
+export class MemberAccountDisabledError extends Error {
+  constructor() {
+    super("此會員帳號目前已由 KD Coffee 停用。");
+    this.name = "MemberAccountDisabledError";
+  }
+}
+
 export async function authenticateEmailMember(
   emailInput: string,
   password: string,
@@ -516,6 +525,9 @@ export async function authenticateEmailMember(
   // fall back to legacy canonicalization for genuinely unindexed legacy members.
   const identityState = await getMemberIdentityState(updated.id);
   if (identityState.member) {
+    if (identityState.member.status === "disabled") {
+      throw new MemberAccountDisabledError();
+    }
     return saveMember({
       ...updated,
       memberNumber: identityState.member.memberNumber,
@@ -540,6 +552,7 @@ export async function loginLineMember(profile: {
 
   const mapped = await resolveMemberByIdentity("line", profile.sub);
   if (mapped) {
+    if (mapped.status === "disabled") throw new Error("LINE 會員登入失敗");
     const current = await readMember(mapped.memberId);
     if (!current) throw new Error("LINE 會員資料不存在");
     const updated = await updateMemberSafely(current.id, (latest) => ({
@@ -565,7 +578,10 @@ export async function loginLineMember(profile: {
   const now = new Date().toISOString();
 
   if (existing) {
-    const canonical = await attachCanonicalIdentity(existing);
+    const identityState = await getMemberIdentityState(existing.id);
+    if (identityState.member?.status === "disabled") throw new Error("LINE 會員登入失敗");
+    const canonical = identityState.member ?? await attachCanonicalIdentity(existing);
+    if (canonical.status === "disabled") throw new Error("LINE 會員登入失敗");
     const updated = await updateMemberSafely(existing.id, (latest) => ({
       ...latest,
       lineUserId: profile.sub,
