@@ -21,7 +21,29 @@ export const dynamic = "force-dynamic";
 
 function sameOrigin(request: Request) {
   const origin = request.headers.get("origin");
-  return !origin || origin === new URL(request.url).origin;
+  if (!origin) return true;
+
+  let originUrl: URL;
+  try {
+    originUrl = new URL(origin);
+  } catch {
+    return false;
+  }
+
+  const requestUrl = new URL(request.url);
+  if (originUrl.origin === requestUrl.origin) return true;
+
+  // Reverse proxies such as Railway and ngrok expose the public browser
+  // origin through forwarded headers while Next.js can see an internal URL.
+  const forwardedHost = request.headers.get("x-forwarded-host")?.split(",")[0]?.trim();
+  const host = forwardedHost || request.headers.get("host")?.trim();
+  if (!host) return false;
+
+  const forwardedProto = request.headers.get("x-forwarded-proto")?.split(",")[0]?.trim();
+  const protocol = forwardedProto || requestUrl.protocol.replace(":", "");
+  if (protocol !== "http" && protocol !== "https") return false;
+
+  return originUrl.origin === `${protocol}://${host}`;
 }
 
 async function currentMember() {
