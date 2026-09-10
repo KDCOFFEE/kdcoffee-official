@@ -142,7 +142,45 @@ export default function MembershipRulesManager({ initialRevision, initialVersion
         <NumberField label="未取貨停止" value={rules.subscription.uncollectedTerminationCount} min={1} max={10} unit="次" onChange={(value) => change((draft) => { draft.subscription.uncollectedTerminationCount = value; })} />
         <NumberField label="每期最多修改" value={rules.subscription.maxModificationsPerCycle ?? 99} min={0} max={99} unit={rules.subscription.maxModificationsPerCycle === null ? "不限" : "次"} onChange={(value) => change((draft) => { draft.subscription.maxModificationsPerCycle = value === 99 ? null : value; })} />
       </div>
-      <fieldset className="membership-intervals"><legend>快捷配送週期 <AdminRuleHelpButton ruleKey="subscription.intervalOptions" /></legend>{rules.subscription.intervalOptions.map((option, index) => <label key={`${option.days}:${index}`}><input type="checkbox" checked={option.enabled} onChange={(event) => change((draft) => { draft.subscription.intervalOptions[index].enabled = event.target.checked; draft.subscription.intervalsDays = draft.subscription.intervalOptions.filter((item) => item.enabled).map((item) => item.days); })} />每 <input aria-label={`快捷週期 ${index + 1}`} type="number" min={1} max={365} value={option.days} onChange={(event) => change((draft) => { draft.subscription.intervalOptions[index].days = Number(event.target.value); draft.subscription.intervalsDays = draft.subscription.intervalOptions.filter((item) => item.enabled).map((item) => item.days); })} /> 天</label>)}</fieldset>
+      <fieldset className="membership-intervals"><legend>快捷配送週期 <AdminRuleHelpButton ruleKey="subscription.intervalOptions" /></legend>{rules.subscription.intervalOptions.map((option, index) => <label key={`${option.days}:${index}`}><input type="checkbox" checked={option.enabled} onChange={(event) => change((draft) => { draft.subscription.intervalOptions[index].enabled = event.target.checked; draft.subscription.intervalsDays = draft.subscription.intervalOptions.filter((item) => item.enabled).map((item) => item.days); })} />每 <input aria-label={`快捷週期 ${index + 1}`} type="number" min={1} max={365} value={option.days} onChange={(event) => change((draft) => { draft.subscription.intervalOptions[index].days = Number(event.target.value); draft.subscription.intervalsDays = draft.subscription.intervalOptions.filter((item) => item.enabled).map((item) => item.days); })} /> 天</label>)}<div className="membership-interval-actions">
+  <button
+    type="button"
+    onClick={() =>
+      change((draft) => {
+        if (
+          draft.subscription.intervalOptions.some(
+            (option) => option.days === 15,
+          )
+        ) {
+          return;
+        }
+
+        draft.subscription.intervalOptions.push({
+          days: 15,
+          enabled: true,
+        });
+
+        draft.subscription.intervalOptions.sort(
+          (a, b) => a.days - b.days,
+        );
+
+        draft.subscription.intervalsDays =
+          draft.subscription.intervalOptions
+            .filter((item) => item.enabled)
+            .map((item) => item.days);
+      })
+    }
+    disabled={rules.subscription.intervalOptions.some(
+      (option) => option.days === 15,
+    )}
+  >
+    {rules.subscription.intervalOptions.some(
+      (option) => option.days === 15,
+    )
+      ? "已加入每 15 天"
+      : "＋ 新增每 15 天"}
+  </button>
+</div></fieldset>
       <div className="membership-fields three"><label className="membership-switch"><input type="checkbox" checked={rules.subscription.customCycleEnabled} onChange={(event) => change((draft) => { draft.subscription.customCycleEnabled = event.target.checked; })} /><span><b>開放會員自訂週期</b><small>API 也會依上下限重新驗證</small></span><AdminRuleHelpButton ruleKey="subscription.customCycleEnabled" /></label><NumberField label="自訂最少" value={rules.subscription.customCycleMinDays} min={1} max={365} unit="天" onChange={(value) => change((draft) => { draft.subscription.customCycleMinDays = value; })} /><NumberField label="自訂最多" value={rules.subscription.customCycleMaxDays} min={1} max={365} unit="天" onChange={(value) => change((draft) => { draft.subscription.customCycleMaxDays = value; })} /></div>
       <div className="membership-checks"><label><input type="checkbox" checked={rules.subscription.allowOtherSubscriptionProducts} onChange={(event) => change((draft) => { draft.subscription.allowOtherSubscriptionProducts = event.target.checked; })} />可換其他定期購作品 <AdminRuleHelpButton ruleKey="subscription.allowOtherSubscriptionProducts" /></label><label><input type="checkbox" checked={rules.subscription.allowHalfToOnePound} onChange={(event) => change((draft) => { draft.subscription.allowHalfToOnePound = event.target.checked; })} />半磅可改一磅 <AdminRuleHelpButton ruleKey="subscription.allowHalfToOnePound" /></label><label><input type="checkbox" checked={rules.subscription.allowOneToHalfPound} onChange={(event) => change((draft) => { draft.subscription.allowOneToHalfPound = event.target.checked; })} />一磅可改半磅 <AdminRuleHelpButton ruleKey="subscription.allowOneToHalfPound" /></label><label><input type="checkbox" checked={rules.subscription.allowMixedOnePound} onChange={(event) => change((draft) => { draft.subscription.allowMixedOnePound = event.target.checked; })} />一磅可 A+A 或 A+B <AdminRuleHelpButton ruleKey="subscription.allowMixedOnePound" /></label><label><input type="checkbox" checked={rules.subscription.allowQuantityChange} onChange={(event) => change((draft) => { draft.subscription.allowQuantityChange = event.target.checked; })} />可修改數量 <AdminRuleHelpButton ruleKey="subscription.allowQuantityChange" /></label></div>
       <div className="membership-fields two"><Choice label="會員選配送日期方式" value={rules.subscription.datePickerMode} onChange={(value) => change((draft) => { draft.subscription.datePickerMode = value as MembershipBusinessRules["subscription"]["datePickerMode"]; })}><option value="quick-and-calendar">快捷按鈕＋日曆</option><option value="calendar-only">只顯示日曆</option><option value="suggestion-and-calendar">系統建議＋日曆</option></Choice></div>
