@@ -9,6 +9,9 @@ import {
   type SubscriptionItem,
 } from "./membershipPolicies";
 import type { RequestedItem } from "./orderPricing";
+import { MEMBER_SUBSCRIPTION_MAX_ITEMS } from "./subscriptionItemTypes";
+
+export { MEMBER_SUBSCRIPTION_MAX_ITEMS } from "./subscriptionItemTypes";
 
 export type PricedSubscriptionItem = SubscriptionItem & { unitPrice: number };
 
@@ -151,7 +154,9 @@ export function subscriptionItemProductIds(item: SubscriptionItem) {
   return isBeanSubscriptionItem(item) ? beanProductIds(item) : [item.productId];
 }
 
-function resolveMemberBeanItem(rawItem: Record<string, unknown>, website: WebsiteData, index: number) {
+type AllocateSubscriptionItemId = (baseId: string) => string;
+
+function resolveMemberBeanItem(rawItem: Record<string, unknown>, website: WebsiteData, persistedItemId: string | undefined, allocateItemId: AllocateSubscriptionItemId) {
   const packageWeight = rawItem.packageWeight === "one-pound" ? "one-pound" as const : rawItem.packageWeight === "half-pound" ? "half-pound" as const : null;
   if (!packageWeight) throw new Error("咖啡豆份量設定不正確");
   const rawComponents = Array.isArray(rawItem.components) ? rawItem.components.map(record) : [];
@@ -168,8 +173,9 @@ function resolveMemberBeanItem(rawItem: Record<string, unknown>, website: Websit
   }));
   const components = resolved.map(({ product, sku }) => ({ productId: product.slug, skuId: sku.id, weightHalfPounds: 1 as const }));
   const quantity = Number(rawItem.quantity);
+  const itemId = persistedItemId ?? allocateItemId(`beans:${packageWeight}:${components.map((component) => component.skuId).join("+")}`);
   const item = validateSubscriptionItem({
-    itemId: `beans:${packageWeight}:${components.map((component) => component.skuId).join("+")}:${index}`,
+    itemId,
     skuKind: "beans",
     packageWeight,
     quantity,
@@ -179,13 +185,14 @@ function resolveMemberBeanItem(rawItem: Record<string, unknown>, website: Websit
   return { ...item, unitPrice: resolved.reduce((sum, entry) => sum + positiveIntegerMoney(entry.sku.price, "SKU 價格"), 0) };
 }
 
-function resolveMemberDripItem(rawItem: Record<string, unknown>, website: WebsiteData, index: number) {
+function resolveMemberDripItem(rawItem: Record<string, unknown>, website: WebsiteData, persistedItemId: string | undefined, allocateItemId: AllocateSubscriptionItemId) {
   const productId = String(rawItem.productId || "").trim();
   const skuId = String(rawItem.skuId || "").trim();
   if (!skuId) throw new Error("耳掛定期購商品必須指定 SKU");
   const { product, sku } = resolveSubscriptionSku({ website, productId, skuId, kind: "drip", requireStock: true });
+  const itemId = persistedItemId ?? allocateItemId(`drip:${product.slug}:${sku.id}`);
   const item = validateSubscriptionItem({
-    itemId: `drip:${product.slug}:${sku.id}:${index}`,
+    itemId,
     skuKind: "drip",
     productId: product.slug,
     skuId: sku.id,
@@ -199,19 +206,50 @@ export function resolveMemberSubscriptionItems(input: {
   currentItems: PricedSubscriptionItem[];
   website: WebsiteData;
   rules: MembershipBusinessRules;
+  legacyPositionalMatching?: boolean;
 }) {
-  if (!Array.isArray(input.items) || input.items.length < 1 || input.items.length > 20) throw new Error("定期購商品清單不正確");
+  if (!Array.isArray(input.items) || input.items.length < 1 || input.items.length > MEMBER_SUBSCRIPTION_MAX_ITEMS) throw new Error("定期購商品清單不正確");
   const rawItems = input.items.map(record);
+  const currentById = new Map(input.currentItems.map((item) => [item.itemId, item]));
+  const submittedExistingIds = new Set<string>();
+  const reservedItemIds = new Set([
+    ...input.currentItems.map((item) => item.itemId),
+    ...rawItems.map((item) => String(item.itemId || "").trim()).filter(Boolean),
+  ]);
+  const allocateItemId: AllocateSubscriptionItemId = (baseId) => {
+    let itemId = baseId;
+    let suffix = 2;
+    while (reservedItemIds.has(itemId)) {
+      itemId = `${baseId}:${suffix}`;
+      suffix += 1;
+    }
+    reservedItemIds.add(itemId);
+    return itemId;
+  };
+  const currentMatches = rawItems.map((rawItem, index) => {
+    const requestedItemId = String(rawItem.itemId || "").trim();
+    if (requestedItemId && currentById.has(requestedItemId)) return currentById.get(requestedItemId);
+    return input.legacyPositionalMatching === true && !requestedItemId ? input.currentItems[index] : undefined;
+  });
   const items = rawItems.map((rawItem, index) => {
-    if (rawItem.skuKind === "beans") return resolveMemberBeanItem(rawItem, input.website, index);
-    if (rawItem.skuKind === "drip") return resolveMemberDripItem(rawItem, input.website, index);
+    const requestedItemId = String(rawItem.itemId || "").trim();
+    const persistedItemId = currentById.has(requestedItemId)
+      ? requestedItemId
+      : input.legacyPositionalMatching === true && !requestedItemId
+        ? currentMatches[index]?.itemId
+        : undefined;
+    if (persistedItemId && submittedExistingIds.has(persistedItemId)) throw new Error("定期購商品識別重複");
+    if (persistedItemId) submittedExistingIds.add(persistedItemId);
+    if (rawItem.skuKind === "beans") return resolveMemberBeanItem(rawItem, input.website, persistedItemId, allocateItemId);
+    if (rawItem.skuKind === "drip") return resolveMemberDripItem(rawItem, input.website, persistedItemId, allocateItemId);
     throw new Error("每個定期購商品都必須指定 beans 或 drip");
   });
+  if (new Set(items.map((item) => item.itemId)).size !== items.length) throw new Error("定期購商品識別重複");
   if (items.some((item) => item.quantity > 12)) throw new Error("數量設定不正確");
 
   if (!input.rules.subscription.allowQuantityChange && (
     items.length !== input.currentItems.length ||
-    items.some((item, index) => item.quantity !== input.currentItems[index]?.quantity)
+    items.some((item, index) => item.quantity !== currentMatches[index]?.quantity)
   )) throw new Error("目前未開放修改數量");
 
   if (!input.rules.subscription.allowOtherSubscriptionProducts) {
@@ -223,7 +261,7 @@ export function resolveMemberSubscriptionItems(input: {
 
   items.forEach((item, index) => {
     if (isBeanSubscriptionItem(item) && item.packageWeight === "one-pound" && item.components[0].productId !== item.components[1].productId && !input.rules.subscription.allowMixedOnePound) throw new Error("目前一磅只開放同款組合");
-    const current = input.currentItems[index];
+    const current = currentMatches[index];
     if (!current || !isBeanSubscriptionItem(current) || !isBeanSubscriptionItem(item)) return;
     if (current.packageWeight === "half-pound" && item.packageWeight === "one-pound" && !input.rules.subscription.allowHalfToOnePound) throw new Error("目前未開放半磅改為一磅");
     if (current.packageWeight === "one-pound" && item.packageWeight === "half-pound" && !input.rules.subscription.allowOneToHalfPound) throw new Error("目前未開放一磅改為半磅");

@@ -16,6 +16,8 @@ import { getMemberCommerceDashboard } from "@/lib/membershipCommerce";
 import { getActiveMembershipRules } from "@/lib/membershipBusinessRules";
 import { fulfillmentRecordForOrder, readFulfillmentStore } from "@/lib/fulfillment";
 import { fulfillmentStateLabels, type FulfillmentState } from "@/lib/fulfillmentTypes";
+import type { MemberSubscriptionProduct } from "@/components/member/memberSubscriptionEditorModel";
+import { MEMBER_SUBSCRIPTION_MAX_ITEMS } from "@/lib/subscriptionItemTypes";
 
 export const dynamic = "force-dynamic";
 
@@ -171,15 +173,20 @@ async function getMemberOrders(
   }
 }
 
-async function getSubscriptionProducts() {
+async function getSubscriptionProducts(): Promise<MemberSubscriptionProduct[]> {
   try {
     const website = JSON.parse(await fs.readFile(getWebsiteDataFile(), "utf8"));
     if (!Array.isArray(website?.menu?.products)) return [];
     return website.menu.products.flatMap((product: Record<string, unknown>) => {
       if (product.active !== true || product.purchasable === false || product.status !== "active" || typeof product.slug !== "string" || typeof product.name !== "string") return [];
-      const options = Array.isArray(product.skus) ? product.skus : Array.isArray(product.purchase) ? product.purchase : [];
-      const beans = options.find((option: Record<string, unknown>) => option.kind === "beans" && option.enabled !== false && Number(option.stock ?? 1) > 0 && Number.isSafeInteger(Number(option.price)));
-      return beans ? [{ id: product.slug, name: product.name, price: Number(beans.price), roast: typeof product.roast === "string" ? product.roast : "工作室建議" }] : [];
+      const options = Array.isArray(product.skus) && product.skus.length ? product.skus : Array.isArray(product.purchase) ? product.purchase : [];
+      const eligibleOptions = options.flatMap((option: Record<string, unknown>) => {
+        const kind = option.kind === "beans" || option.kind === "drip" ? option.kind : null;
+        const price = Number(option.price);
+        if (!kind || typeof option.id !== "string" || !option.id.trim() || option.enabled === false || Number(option.stock ?? 1) <= 0 || !Number.isSafeInteger(price) || price < 0) return [];
+        return [{ skuId: option.id, kind, label: String(option.label || ""), detail: String(option.detail || ""), price }];
+      });
+      return eligibleOptions.length ? [{ id: product.slug, name: product.name, roast: typeof product.roast === "string" ? product.roast : "工作室建議", options: eligibleOptions }] : [];
     });
   } catch {
     return [];
@@ -478,7 +485,7 @@ export default async function MemberPage({
 
         <div className="member-dashboard-content">
         <MemberMobileDisclosure eyebrow="SUBSCRIPTION" title="定期配送與抵用金" summary="配送安排、抵用金與推薦摘要">
-          <MemberSubscriptionExperience {...commerce} products={subscriptionProducts} rules={{ intervalsDays: rulesVersion.rules.subscription.intervalOptions.filter((item) => item.enabled).map((item) => item.days), customCycleEnabled: rulesVersion.rules.subscription.customCycleEnabled, customCycleMinDays: rulesVersion.rules.subscription.customCycleMinDays, customCycleMaxDays: rulesVersion.rules.subscription.customCycleMaxDays, delayQuickOptionsDays: rulesVersion.rules.subscription.delayQuickOptionsDays, advanceQuickOptionsDays: rulesVersion.rules.subscription.advanceQuickOptionsDays, preparationLeadDays: rulesVersion.rules.subscription.preparationLeadDays, discountPercent: rulesVersion.rules.subscription.discountPercent, datePickerMode: rulesVersion.rules.subscription.datePickerMode, maxModificationsPerCycle: rulesVersion.rules.subscription.maxModificationsPerCycle }} />
+          <MemberSubscriptionExperience {...commerce} products={subscriptionProducts} rules={{ intervalsDays: rulesVersion.rules.subscription.intervalOptions.filter((item) => item.enabled).map((item) => item.days), customCycleEnabled: rulesVersion.rules.subscription.customCycleEnabled, customCycleMinDays: rulesVersion.rules.subscription.customCycleMinDays, customCycleMaxDays: rulesVersion.rules.subscription.customCycleMaxDays, delayQuickOptionsDays: rulesVersion.rules.subscription.delayQuickOptionsDays, advanceQuickOptionsDays: rulesVersion.rules.subscription.advanceQuickOptionsDays, preparationLeadDays: rulesVersion.rules.subscription.preparationLeadDays, discountPercent: rulesVersion.rules.subscription.discountPercent, datePickerMode: rulesVersion.rules.subscription.datePickerMode, maxModificationsPerCycle: rulesVersion.rules.subscription.maxModificationsPerCycle, allowOtherSubscriptionProducts: rulesVersion.rules.subscription.allowOtherSubscriptionProducts, allowHalfToOnePound: rulesVersion.rules.subscription.allowHalfToOnePound, allowOneToHalfPound: rulesVersion.rules.subscription.allowOneToHalfPound, allowMixedOnePound: rulesVersion.rules.subscription.allowMixedOnePound, allowQuantityChange: rulesVersion.rules.subscription.allowQuantityChange, maxItems: MEMBER_SUBSCRIPTION_MAX_ITEMS }} />
         </MemberMobileDisclosure>
         <MemberMobileDisclosure eyebrow="REFERRAL" title="推薦與回饋" summary={`直接推薦 ${commerce.referrals.length} 人・待入帳 NT$ ${commerce.pendingCredit.toLocaleString("zh-TW")}`}>
           <MemberReferralCenter />

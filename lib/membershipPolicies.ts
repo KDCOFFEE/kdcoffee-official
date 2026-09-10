@@ -1,5 +1,17 @@
 import type { MembershipBusinessRules, MoneyRoundingMode } from "./membershipBusinessRules";
 import { OWNER_DECISION_REQUIRED } from "./membershipBusinessRules";
+import {
+  isBeanSubscriptionItem,
+  type SubscriptionItem,
+} from "./subscriptionItemTypes";
+
+export {
+  isBeanSubscriptionItem,
+  type BeanSubscriptionItem,
+  type CompositionComponent,
+  type DripSubscriptionItem,
+  type SubscriptionItem,
+} from "./subscriptionItemTypes";
 
 export const TAIPEI_BUSINESS_TIME_ZONE = "Asia/Taipei" as const;
 const DATE_ONLY = /^(\d{4})-(\d{2})-(\d{2})$/;
@@ -184,36 +196,6 @@ export function referralRewardForMerchandise(input: { merchandiseAfterDiscounts:
   if (reward.mode === "fixed") return reward.amount;
   if (reward.mode === "per-eligible-item") return reward.amount * Math.max(0, input.eligibleItemCount ?? 0);
   return applyPercentage(base, reward.percent, input.rules.money.roundingMode);
-}
-
-export type CompositionComponent = {
-  productId: string;
-  skuId?: string;
-  weightHalfPounds: 1;
-};
-
-export type BeanSubscriptionItem = {
-  itemId: string;
-  /** Missing skuKind is the persisted legacy bean representation. */
-  skuKind?: "beans";
-  packageWeight: "half-pound" | "one-pound";
-  quantity: number;
-  roast: string;
-  components: CompositionComponent[];
-};
-
-export type DripSubscriptionItem = {
-  itemId: string;
-  skuKind: "drip";
-  productId: string;
-  skuId: string;
-  quantity: number;
-};
-
-export type SubscriptionItem = BeanSubscriptionItem | DripSubscriptionItem;
-
-export function isBeanSubscriptionItem(item: SubscriptionItem): item is BeanSubscriptionItem {
-  return item.skuKind !== "drip";
 }
 
 export function validateSubscriptionItem<T extends SubscriptionItem>(item: T): T {

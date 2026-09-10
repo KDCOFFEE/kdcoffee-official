@@ -140,7 +140,8 @@ export async function PATCH(request: Request) {
       if (!cycle) throw new MembershipCommerceError("找不到配送期次");
       const version = await getActiveMembershipRules();
       const website = await getLiveWebsiteData();
-      const requestedItems = Array.isArray(body.items)
+      const usesLegacySingleItemPayload = !Array.isArray(body.items);
+      const requestedItems = !usesLegacySingleItemPayload
         ? body.items
         : [{
             skuKind: "beans",
@@ -153,7 +154,13 @@ export async function PATCH(request: Request) {
           }];
       let items;
       try {
-        items = resolveMemberSubscriptionItems({ items: requestedItems, currentItems: cycle.itemsDraft, website, rules: version.rules });
+        items = resolveMemberSubscriptionItems({
+          items: requestedItems,
+          currentItems: cycle.itemsDraft,
+          website,
+          rules: version.rules,
+          legacyPositionalMatching: usesLegacySingleItemPayload,
+        });
       } catch (error) {
         throw new MembershipCommerceError(error instanceof Error ? error.message : "定期購商品設定不正確");
       }

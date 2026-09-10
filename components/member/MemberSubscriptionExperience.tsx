@@ -4,10 +4,67 @@ import { useState } from "react";
 import Link from "next/link";
 
 import StoreSelector from "@/components/commerce/StoreSelector";
-import type { MemberCreditHistoryEntry, Subscription, SubscriptionCycle } from "@/lib/membershipCommerce";
 import { addDateOnlyDays, ALLOWED_ROAST_LEVELS, getDateOnlyInTimeZone } from "@/lib/checkoutRules";
-import { isBeanSubscriptionItem } from "@/lib/membershipPolicies";
-import { subscriptionItemProductIds } from "@/lib/subscriptionSkuModel";
+import type { PricedSubscriptionItem } from "@/lib/subscriptionItemTypes";
+import {
+  changeBeanPackageWeight,
+  changeSubscriptionEditorItemKind,
+  createSubscriptionEditorItem,
+  effectiveMemberSubscriptionItemLimit,
+  initializeSubscriptionEditorItems,
+  removeSubscriptionEditorItem,
+  skuOption,
+  subscriptionEditorItemError,
+  subscriptionEditorItemPrices,
+  subscriptionEditorPayload,
+  subscriptionItemsSummary,
+  subscriptionPrice,
+  type MemberSubscriptionProduct,
+  type SubscriptionEditorItem,
+} from "@/components/member/memberSubscriptionEditorModel";
+
+type Subscription = {
+  subscriptionId: string;
+  status: "pending_activation" | "active" | "paused" | "terminated";
+  intervalDays: number;
+  storeSelection: { storeId: string; storeName: string } | null;
+  defaultItems: PricedSubscriptionItem[];
+  revision: number;
+};
+
+type SubscriptionCycle = {
+  cycleId: string;
+  subscriptionId: string;
+  kind: "scheduled" | "manual_replenishment";
+  status: string;
+  plannedDate: string;
+  modificationDeadline: string;
+  itemsDraft: PricedSubscriptionItem[];
+  pricingSnapshot: {
+    merchandiseOriginal: number;
+    subscriptionDiscountPercent: number;
+    subscriptionPrice: number;
+    campaignPrice: number | null;
+    selectedPriceSource: "subscription" | "campaign";
+    creditReserved: number;
+    shipping: number;
+    finalAmount: number;
+  } | null;
+  createdOrderId: string | null;
+  revision: number;
+  modificationCount?: number;
+};
+
+type MemberCreditHistoryEntry = {
+  creditEntryId: string;
+  amount: number;
+  remainingAmount: number;
+  expiresAt: string;
+  status: "available" | "reserved" | "consumed" | "expired";
+  direction: "grant" | "deduct";
+  sourceLabel: string;
+  orderRedemptions: Array<{ orderNumber: string; amount: number; status: "reserved" | "consumed" | "released" }>;
+};
 
 type Dashboard = {
   subscriptions: Subscription[];
@@ -17,11 +74,9 @@ type Dashboard = {
   referrals: Array<{ memberNumberReference: string; safeDisplayName: string; joined: boolean; qualifiedPurchases: number; rewards: number; status: string }>;
 };
 
-type Props = Dashboard & { products: Array<{ id: string; name: string; price: number; roast: string }>; rules: { intervalsDays: number[]; customCycleEnabled: boolean; customCycleMinDays: number; customCycleMaxDays: number; delayQuickOptionsDays: number[]; advanceQuickOptionsDays: number[]; preparationLeadDays: number; discountPercent: number; datePickerMode: "quick-and-calendar" | "calendar-only" | "suggestion-and-calendar"; maxModificationsPerCycle: number | null } };
+type Props = Dashboard & { products: MemberSubscriptionProduct[]; rules: { intervalsDays: number[]; customCycleEnabled: boolean; customCycleMinDays: number; customCycleMaxDays: number; delayQuickOptionsDays: number[]; advanceQuickOptionsDays: number[]; preparationLeadDays: number; discountPercent: number; datePickerMode: "quick-and-calendar" | "calendar-only" | "suggestion-and-calendar"; maxModificationsPerCycle: number | null; allowOtherSubscriptionProducts?: boolean; allowHalfToOnePound?: boolean; allowOneToHalfPound?: boolean; allowMixedOnePound?: boolean; allowQuantityChange?: boolean; maxItems?: number } };
 
 const money = (value: number) => `NT$ ${value.toLocaleString("zh-TW")}`;
-const subscriptionPrice = (value: number, percent: number) =>
-  Math.floor((value * percent + 50) / 100);
 const statusLabel = (value: Subscription["status"]) => ({ pending_activation: "等待首筆訂單取貨", active: "配送中", paused: "已暫停", terminated: "已停止" })[value];
 const redemptionLabel = (status: MemberCreditHistoryEntry["orderRedemptions"][number]["status"]) => status === "released" ? "訂單取消，抵用金已返還" : status === "reserved" ? "本筆已保留折抵" : "本筆已使用";
 const displayDate = (value?: string) => value ? value.replaceAll("-", "/") : "尚未排定";
@@ -38,6 +93,30 @@ function actionSuccessMessage(action: string, plannedDate?: string) {
   if (action === "terminate") return "未來定期配送已停止；已建立的本次配送不會自動取消。";
   if (action === "change-items") return "下一次配送內容已更新。";
   return "定期配送安排已更新。";
+}
+
+const skuChoiceValue = (productId: string, skuId: string) => JSON.stringify([productId, skuId]);
+
+function readSkuChoice(value: string) {
+  try {
+    const [productId, skuId] = JSON.parse(value) as unknown[];
+    return { productId: String(productId || ""), skuId: String(skuId || "") };
+  } catch {
+    return { productId: "", skuId: "" };
+  }
+}
+
+function ItemPricePreview({ item, products, discountPercent }: { item: SubscriptionEditorItem; products: MemberSubscriptionProduct[]; discountPercent: number }) {
+  const prices = subscriptionEditorItemPrices(item, products, discountPercent);
+  if (prices.regularUnit == null) return null;
+  return <div className="member-subscription-item-prices">
+    {prices.selections.map((selection, index) => <div className="member-subscription-component-price" key={`${selection.skuId}-${index}`}>
+      <span>{selection.productName}・{selection.label}{selection.detail ? `・${selection.detail}` : ""}</span>
+      <small>一般價 <del>{money(selection.price)}</del>　定期購價 <b>{money(subscriptionPrice(selection.price, discountPercent))}</b></small>
+    </div>)}
+    {item.kind === "beans" && item.packageWeight === "one-pound" && <div className="member-subscription-combined-price"><span>一磅組合</span><strong>一般價 <del>{money(prices.regularUnit)}</del>　定期購價 {money(prices.subscriptionUnit!)}</strong></div>}
+    {item.quantity > 1 && <div className="member-subscription-line-price"><span>本商品 × {item.quantity}</span><strong>一般價 <del>{money(prices.regularLine!)}</del>　定期購價 {money(prices.subscriptionLine!)}</strong></div>}
+  </div>;
 }
 
 export default function MemberSubscriptionExperience(initial: Props) {
@@ -59,8 +138,17 @@ export default function MemberSubscriptionExperience(initial: Props) {
   const [cancellationOtherReason, setCancellationOtherReason] = useState("");
   const [replacementDate, setReplacementDate] = useState("");
   const [showPriceDetails, setShowPriceDetails] = useState(false);
-  const [selectedProductA, setSelectedProductA] = useState("");
-  const [selectedProductB, setSelectedProductB] = useState("");
+  const initialEditorSubscription = initial.subscriptions.find((item) => item.status !== "terminated") ?? initial.subscriptions[0];
+  const initialEditorCycle = initialEditorSubscription ? initial.cycles.find((item) => item.subscriptionId === initialEditorSubscription.subscriptionId && ["scheduled", "modifiable"].includes(item.status)) : undefined;
+  const initialEditorSource = initialEditorCycle?.itemsDraft ?? initialEditorSubscription?.defaultItems ?? [];
+  const [editorItems, setEditorItems] = useState(() => initializeSubscriptionEditorItems(initialEditorSource, initial.products));
+  const [originalProductIds] = useState(() => new Set(initialEditorSource.flatMap((item) => item.skuKind === "drip" ? [item.productId] : item.components.map((component) => component.productId))));
+  const allowOtherSubscriptionProducts = initial.rules.allowOtherSubscriptionProducts === true;
+  const allowHalfToOnePound = initial.rules.allowHalfToOnePound === true;
+  const allowOneToHalfPound = initial.rules.allowOneToHalfPound === true;
+  const allowMixedOnePound = initial.rules.allowMixedOnePound === true;
+  const allowQuantityChange = initial.rules.allowQuantityChange === true;
+  const maxEditorItems = effectiveMemberSubscriptionItemLimit(initial.rules.maxItems);
   const resolvedCancellationReason = cancellationReason === "其他"
     ? cancellationOtherReason.trim()
       ? `其他：${cancellationOtherReason.trim()}`
@@ -101,9 +189,7 @@ export default function MemberSubscriptionExperience(initial: Props) {
   const manualArrangement = subscription ? dashboard.cycles.find((item) => item.subscriptionId === subscription.subscriptionId && item.kind === "manual_replenishment" && ["locked", "order_created"].includes(item.status)) : undefined;
   const currentArrangement = currentOrderCycle ?? manualArrangement;
   const availableCredit = dashboard.credits.filter((item) => item.status === "available").reduce((sum, item) => sum + item.remainingAmount, 0);
-  const productName = (id: string) => initial.products.find((product) => product.id === id)?.name ?? id;
   const nextItems = nextCycle?.itemsDraft ?? subscription?.defaultItems ?? [];
-  const editableBeanItem = nextItems.length === 1 && isBeanSubscriptionItem(nextItems[0]) ? nextItems[0] : null;
   const nextSubtotal = nextItems.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
   const expectedPayment = subscriptionPrice(
     nextSubtotal,
@@ -121,22 +207,26 @@ export default function MemberSubscriptionExperience(initial: Props) {
     displayedOriginal - displayedSubscriptionPrice,
   );
 
-  const selectedProductAInfo = initial.products.find(
-    (product) =>
-      product.id ===
-      (selectedProductA ||
-        editableBeanItem?.components[0]?.productId),
-  );
-
-  const selectedProductBInfo = initial.products.find(
-    (product) =>
-      product.id ===
-      (selectedProductB ||
-        editableBeanItem?.components[1]?.productId ||
-        editableBeanItem?.components[0]?.productId),
-  );
   const earliestDate = addDateOnlyDays(getDateOnlyInTimeZone(new Date()), initial.rules.preparationLeadDays);
   const remainingChanges = nextCycle && initial.rules.maxModificationsPerCycle !== null ? Math.max(0, initial.rules.maxModificationsPerCycle - (nextCycle.modificationCount ?? 0)) : null;
+  const allowedProductIds = allowOtherSubscriptionProducts ? undefined : originalProductIds;
+  const beanChoices = initial.products.flatMap((product) => allowedProductIds && !allowedProductIds.has(product.id) ? [] : product.options.filter((option) => option.kind === "beans").map((option) => ({ product, option })));
+  const dripProducts = initial.products.filter((product) => (!allowedProductIds || allowedProductIds.has(product.id)) && product.options.some((option) => option.kind === "drip"));
+  const editorErrors = editorItems.map((item) => subscriptionEditorItemError(item, initial.products) || (item.kind === "beans" && item.packageWeight === "one-pound" && !allowMixedOnePound && item.components[0]?.productId !== item.components[1]?.productId ? "目前一磅只開放同款 A+A 組合，請重新選擇第二款咖啡。" : ""));
+  const editorHasError = editorErrors.some(Boolean);
+  const editorAtLimit = editorItems.length >= maxEditorItems;
+  const editorModificationLocked = remainingChanges === 0;
+
+  function updateEditorItem(localKey: string, update: (item: SubscriptionEditorItem) => SubscriptionEditorItem) {
+    setEditorItems((items) => items.map((item) => item.localKey === localKey ? update(item) : item));
+  }
+
+  async function saveEditorItems() {
+    if (!nextCycle || editorHasError || !editorItems.length || editorModificationLocked) return;
+    const result = await mutate("change-items", { cycleId: nextCycle.cycleId, expectedRevision: nextCycle.revision, items: subscriptionEditorPayload(editorItems) });
+    const savedCycle = result?.cycles?.find((cycle: SubscriptionCycle) => cycle.cycleId === nextCycle.cycleId);
+    if (savedCycle?.itemsDraft) setEditorItems(initializeSubscriptionEditorItems(savedCycle.itemsDraft, initial.products));
+  }
 
   async function cancelCurrentDelivery(choice: "current" | "current-and-stop" | "current-and-reschedule") {
     if (!currentOrderCycle?.createdOrderId) return;
@@ -204,7 +294,7 @@ export default function MemberSubscriptionExperience(initial: Props) {
           <div><small>配送週期</small><strong>每 {subscription.intervalDays} 天</strong></div>
           <div><small>下次安排</small><strong>{nextCycle?.plannedDate ?? (subscription.status === "pending_activation" ? "首筆取貨後安排" : "尚未排定")}</strong></div>
           <div><small>取貨門市</small><strong>{subscription.storeSelection?.storeName ?? "工作室自取"}</strong></div>
-          <div><small>下一次咖啡</small><strong>{nextItems.flatMap(subscriptionItemProductIds).map(productName).join(" + ") || "尚未選擇"}</strong></div>
+          <div><small>下一次商品</small><strong>{subscriptionItemsSummary(nextItems, initial.products) || "尚未選擇"}</strong></div>
           <div><small>修改截止</small><strong>{nextCycle?.modificationDeadline ?? "啟動後顯示"}</strong></div>
           <div>
   <small>預估應付</small>
@@ -235,64 +325,56 @@ export default function MemberSubscriptionExperience(initial: Props) {
           {currentOrderCycle && <details><summary>取消本次配送</summary><div className="member-action-panel"><p>取消本次配送與停止未來定期配送是兩件不同的事。請明確選擇要處理的範圍。</p><label>取消原因<select required value={cancellationReason} onChange={(event) => { setCancellationReason(event.target.value); if (event.target.value !== "其他") setCancellationOtherReason(""); }}><option value="" disabled>請選擇取消原因</option><option value="單純想取消">單純想取消</option><option value="行程／取貨時間不方便">行程／取貨時間不方便</option><option value="咖啡還沒喝完，暫時不需要">咖啡還沒喝完，暫時不需要</option><option value="想更換咖啡／數量／烘焙度">想更換咖啡／數量／烘焙度</option><option value="重複下單或誤操作">重複下單或誤操作</option><option value="預算考量">預算考量</option><option value="其他">其他</option></select></label>{cancellationReason === "其他" && <label>其他取消原因<textarea maxLength={197} required value={cancellationOtherReason} onChange={(event) => setCancellationOtherReason(event.target.value)} placeholder="請簡單告訴我們取消原因" /></label>}<div className="member-action-buttons"><button className="member-danger-soft" disabled={Boolean(busy) || !resolvedCancellationReason} onClick={() => void cancelCurrentDelivery("current")}>只取消本次配送</button><button className="member-danger-soft" disabled={Boolean(busy) || !resolvedCancellationReason} onClick={() => void cancelCurrentDelivery("current-and-stop")}>取消本次配送，並停止之後的定期配送</button></div>{nextCycle && <><label>保留定期配送時的下一次配送日期<input type="date" min={earliestDate} value={replacementDate || nextCycle.plannedDate} onChange={(event) => setReplacementDate(event.target.value)} /></label><button disabled={Boolean(busy) || !resolvedCancellationReason} onClick={() => void cancelCurrentDelivery("current-and-reschedule")}>取消本次配送，保留定期配送並更新下次日期</button></>}<small>若此訂單已建立 7-ELEVEN 寄件資訊，送出後只是取消申請；KD Coffee 確認寄件單作廢前，訂單不會顯示為已取消，也不會回補庫存。</small></div></details>}
           {nextCycle && <details><summary>調整下一次日期</summary><div className="member-action-panel"><p>最早可配送日為 {earliestDate}。選好日期後，請決定只套用本次，或讓之後的定期購也從新日期重新計算。{remainingChanges === null ? "" : ` 本期還可修改 ${remainingChanges} 次。`}</p><label>新的配送日期<input type="date" id="member-next-date" min={earliestDate} defaultValue={nextCycle.plannedDate} /></label><div className="subscription-enrollment-summary"><span>新建立訂單日與修改截止日會在確認後依目前營運規則重新計算。</span></div><div className="member-action-buttons"><button disabled={Boolean(busy) || remainingChanges === 0} onClick={() => { const plannedDate = (document.getElementById("member-next-date") as HTMLInputElement).value; void mutate("change-date", { cycleId: nextCycle.cycleId, expectedRevision: nextCycle.revision, plannedDate, recalculateAnchor: false }); }}>只套用這一次</button><button disabled={Boolean(busy) || remainingChanges === 0} onClick={() => { const plannedDate = (document.getElementById("member-next-date") as HTMLInputElement).value; void mutate("change-date", { cycleId: nextCycle.cycleId, expectedRevision: nextCycle.revision, plannedDate, recalculateAnchor: true }); }}>之後也從新日期重新計算</button></div>{initial.rules.datePickerMode !== "calendar-only" && <div className="member-quick-delays">{initial.rules.advanceQuickOptionsDays.map((days) => <button key={`advance-${days}`} type="button" disabled={Boolean(busy) || remainingChanges === 0} onClick={() => void mutate("advance", { cycleId: nextCycle.cycleId, expectedRevision: nextCycle.revision, plannedDate: addDateOnlyDays(nextCycle.plannedDate, -days), recalculateAnchor: false })}>提前 {days} 天</button>)}{initial.rules.delayQuickOptionsDays.map((days) => <button key={`delay-${days}`} type="button" disabled={Boolean(busy) || remainingChanges === 0} onClick={() => void mutate("delay", { cycleId: nextCycle.cycleId, expectedRevision: nextCycle.revision, plannedDate: addDateOnlyDays(nextCycle.plannedDate, days), recalculateAnchor: false })}>延後 {days} 天</button>)}</div>}</div></details>}
           {nextCycle && <details><summary>跳過這一次</summary><div className="member-action-panel"><p>只跳過 {nextCycle.plannedDate} 這一次，不會改變後續配送週期。</p><button className="member-danger-soft" disabled={Boolean(busy)} onClick={() => void mutate("skip", { cycleId: nextCycle.cycleId, expectedRevision: nextCycle.revision })}>確認跳過</button></div></details>}
-          {nextCycle && editableBeanItem && initial.products.length > 0 && <details><summary>更換咖啡、份量或烘焙度</summary><form className="member-action-panel" onSubmit={(event) => { event.preventDefault(); const form = new FormData(event.currentTarget); void mutate("change-items", { cycleId: nextCycle.cycleId, expectedRevision: nextCycle.revision, packageWeight: form.get("packageWeight"), productA: form.get("productA"), productB: form.get("productB"), quantity: form.get("quantity"), roast: form.get("roast") }); }}><p>這裡只調整下一次配送。一磅可選同款 A+A，或兩款 A+B。</p><label>份量<select name="packageWeight" defaultValue={editableBeanItem.packageWeight}><option value="half-pound">半磅</option><option value="one-pound">一磅（兩個半磅組合）</option></select></label><label>
-  第一款咖啡
-  <select
-    name="productA"
-    defaultValue={editableBeanItem.components[0]?.productId}
-    onChange={(event) => setSelectedProductA(event.target.value)}
-  >
-    {initial.products.map((product) => (
-      <option key={product.id} value={product.id}>
-        {product.name}・半磅 {money(product.price)}
-      </option>
-    ))}
-  </select>
-  {selectedProductAInfo && (
-    <span className="member-subscription-price-preview">
-      一般價 <del>{money(selectedProductAInfo.price)}</del>
-      <b>
-        定期購價{" "}
-        {money(
-          subscriptionPrice(
-            selectedProductAInfo.price,
-            initial.rules.discountPercent,
-          ),
-        )}
-      </b>
-    </span>
-  )}
-</label><label>
-  第二款咖啡（一磅使用）
-  <select
-    name="productB"
-    defaultValue={
-      editableBeanItem.components[1]?.productId ??
-      editableBeanItem.components[0]?.productId
-    }
-    onChange={(event) => setSelectedProductB(event.target.value)}
-  >
-    {initial.products.map((product) => (
-      <option key={product.id} value={product.id}>
-        {product.name}・半磅 {money(product.price)}
-      </option>
-    ))}
-  </select>
-  {selectedProductBInfo && (
-    <span className="member-subscription-price-preview">
-      一般價 <del>{money(selectedProductBInfo.price)}</del>
-      <b>
-        定期購價{" "}
-        {money(
-          subscriptionPrice(
-            selectedProductBInfo.price,
-            initial.rules.discountPercent,
-          ),
-        )}
-      </b>
-    </span>
-  )}
-</label><label>數量<input name="quantity" type="number" min={1} max={12} defaultValue={editableBeanItem.quantity} /></label><label>烘焙度<select name="roast" defaultValue={editableBeanItem.roast}>{ALLOWED_ROAST_LEVELS.map((roast) => <option key={roast} value={roast}>{roast}</option>)}</select></label><button disabled={Boolean(busy)} type="submit">儲存下一次內容</button></form></details>}
+          {nextCycle && <details><summary>調整下一次配送商品</summary><form className="member-action-panel member-subscription-items-editor" onSubmit={(event) => { event.preventDefault(); void saveEditorItems(); }}>
+            <p>可調整下一次配送的商品、數量與咖啡豆烘焙設定。變更只套用目前這一期，除非現有產品流程明確另有規則。</p>
+            {editorModificationLocked && <p className="member-subscription-editor-warning">本期已達修改次數上限，無法再調整商品。</p>}
+            <div className="member-subscription-item-list">
+              {editorItems.map((item, index) => {
+                const itemError = editorErrors[index];
+                const selectedDripProduct = item.kind === "drip" ? initial.products.find((product) => product.id === item.productId) : null;
+                const availableDripSkus = selectedDripProduct?.options.filter((option) => option.kind === "drip") ?? [];
+                return <article className="member-subscription-item-card" key={item.localKey}>
+                  <header><div><small>SUBSCRIPTION ITEM</small><strong>商品 {index + 1}</strong></div>{editorItems.length > 1 && <button type="button" className="member-subscription-remove-item" disabled={Boolean(busy) || editorModificationLocked || !allowQuantityChange} title={!allowQuantityChange ? "目前規則未開放增減商品數量" : undefined} onClick={() => setEditorItems((items) => removeSubscriptionEditorItem(items, item.localKey))}>移除此商品</button>}</header>
+                  <div className="member-subscription-item-fields">
+                    <label>商品類型<select value={item.kind} disabled={Boolean(busy) || editorModificationLocked} onChange={(event) => updateEditorItem(item.localKey, (current) => changeSubscriptionEditorItemKind(current, event.target.value === "drip" ? "drip" : "beans", initial.products, allowedProductIds))}><option value="beans" disabled={!beanChoices.length}>咖啡豆</option><option value="drip" disabled={!dripProducts.length}>耳掛咖啡</option></select></label>
+                    {item.kind === "beans" ? <>
+                      <label>規格<select value={item.packageWeight} disabled={Boolean(busy) || editorModificationLocked} onChange={(event) => updateEditorItem(item.localKey, (current) => current.kind === "beans" ? changeBeanPackageWeight(current, event.target.value === "one-pound" ? "one-pound" : "half-pound") : current)}><option value="half-pound" disabled={item.originalPackageWeight === "one-pound" && !allowOneToHalfPound}>半磅</option><option value="one-pound" disabled={item.originalPackageWeight === "half-pound" && !allowHalfToOnePound}>一磅（兩個半磅組合）</option></select></label>
+                      {item.components.map((component, componentIndex) => {
+                        const choices = componentIndex === 1 && !allowMixedOnePound ? beanChoices.filter(({ product }) => product.id === item.components[0]?.productId) : beanChoices;
+                        const value = skuChoiceValue(component.productId, component.skuId);
+                        const available = choices.some(({ product, option }) => value === skuChoiceValue(product.id, option.skuId));
+                        return <label className="member-subscription-component-field" key={`${item.localKey}:component:${componentIndex}`}>{item.packageWeight === "one-pound" ? componentIndex === 0 ? "第一款半磅咖啡" : "第二款半磅咖啡" : "半磅咖啡"}<select value={value} disabled={Boolean(busy) || editorModificationLocked} onChange={(event) => {
+                          const selected = readSkuChoice(event.target.value);
+                          updateEditorItem(item.localKey, (current) => {
+                            if (current.kind !== "beans") return current;
+                            const components = current.components.map((entry, selectedIndex) => selectedIndex === componentIndex ? selected : entry);
+                            if (componentIndex === 0 && current.packageWeight === "one-pound" && !allowMixedOnePound) components[1] = { ...selected };
+                            return { ...current, components };
+                          });
+                        }}>{!available && <option value={value} disabled>原咖啡豆 SKU 已無法供應，請重新選擇</option>}{choices.map(({ product, option }) => <option value={skuChoiceValue(product.id, option.skuId)} key={`${product.id}:${option.skuId}`}>{product.name}・{option.label}{option.detail ? `・${option.detail}` : ""}</option>)}</select></label>;
+                      })}
+                      <label>烘焙度<select value={item.roast} disabled={Boolean(busy) || editorModificationLocked} onChange={(event) => updateEditorItem(item.localKey, (current) => current.kind === "beans" ? { ...current, roast: event.target.value } : current)}>{ALLOWED_ROAST_LEVELS.map((roast) => <option key={roast} value={roast}>{roast}</option>)}</select></label>
+                    </> : <>
+                      <label>咖啡作品<select value={item.productId} disabled={Boolean(busy) || editorModificationLocked} onChange={(event) => {
+                        const product = initial.products.find((entry) => entry.id === event.target.value);
+                        const option = product?.options.find((entry) => entry.kind === "drip");
+                        updateEditorItem(item.localKey, (current) => current.kind === "drip" ? { ...current, productId: product?.id ?? "", skuId: option?.skuId ?? "" } : current);
+                      }}>{!dripProducts.some((product) => product.id === item.productId) && <option value={item.productId} disabled>原耳掛商品已無法供應，請重新選擇</option>}{dripProducts.map((product) => <option value={product.id} key={product.id}>{product.name}</option>)}</select></label>
+                      <label>耳掛規格<select value={item.skuId} disabled={Boolean(busy) || editorModificationLocked || !selectedDripProduct} onChange={(event) => updateEditorItem(item.localKey, (current) => current.kind === "drip" ? { ...current, skuId: event.target.value } : current)}>{!skuOption(initial.products, item.productId, item.skuId, "drip") && <option value={item.skuId} disabled>原耳掛 SKU 已無法供應，請重新選擇</option>}{availableDripSkus.map((option) => <option value={option.skuId} key={option.skuId}>{option.label}{option.detail ? `・${option.detail}` : ""}</option>)}</select></label>
+                    </>}
+                    <label>數量<input type="number" min={1} max={12} value={item.quantity} disabled={Boolean(busy) || editorModificationLocked || (!allowQuantityChange && Boolean(item.persistedItemId))} onChange={(event) => updateEditorItem(item.localKey, (current) => ({ ...current, quantity: Number(event.target.value) }))} /></label>
+                  </div>
+                  <ItemPricePreview item={item} products={initial.products} discountPercent={initial.rules.discountPercent} />
+                  {itemError && <p className="member-subscription-editor-warning" role="alert">{itemError}</p>}
+                </article>;
+              })}
+            </div>
+            <div className="member-subscription-editor-actions"><button type="button" className="member-subscription-add-item" disabled={Boolean(busy) || editorModificationLocked || editorAtLimit || !allowQuantityChange || (!beanChoices.length && !dripProducts.length)} onClick={() => {
+              const kind = beanChoices.length ? "beans" : "drip";
+              setEditorItems((items) => [...items, createSubscriptionEditorItem(kind, initial.products, `new:${crypto.randomUUID()}`, allowedProductIds)]);
+            }}>＋ 新增商品</button><small>{editorItems.length} / {maxEditorItems} 項</small></div>
+            <button className="member-subscription-save-items" disabled={Boolean(busy) || editorModificationLocked || editorHasError || !editorItems.length} type="submit">儲存下一次配送商品</button>
+          </form></details>}
           <details><summary>更換 7-ELEVEN 門市</summary><form className="member-action-panel" onSubmit={(event) => { event.preventDefault(); const form = new FormData(event.currentTarget); void mutate("change-store", { subscriptionId: subscription.subscriptionId, expectedRevision: subscription.revision, storeId: form.get("storeId"), storeName: form.get("storeName") }); }}><StoreSelector initialStore={subscription.storeSelection ? { id: subscription.storeSelection.storeId, name: subscription.storeSelection.storeName, address: "" } : undefined} /><button disabled={Boolean(busy)} type="submit">儲存門市</button></form></details>
           <details><summary>暫停、恢復或停止未來定期配送</summary><div className="member-action-panel"><p>這裡只管理未來的定期配送；停止定期配送不會取消已建立的本次訂單。</p>{subscription.status === "active" && <button disabled={Boolean(busy)} onClick={() => void mutate("pause", { subscriptionId: subscription.subscriptionId, expectedRevision: subscription.revision })}>暫停未來定期配送</button>}{subscription.status === "paused" && <><label>恢復日期<input type="date" value={resumeDate} onChange={(event) => setResumeDate(event.target.value)} /></label><label>新的配送週期<select
   value={resumeIntervalMode === "custom" ? "custom" : resumeInterval}
