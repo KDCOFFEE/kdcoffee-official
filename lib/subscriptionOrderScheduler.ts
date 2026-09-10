@@ -66,7 +66,15 @@ export async function runSubscriptionOrderScheduler(options: { today?: string; n
         let state = await readMembershipCommerceState(options.stateFilePath);
         let cycle = state.cycles[candidate.cycleId];
         const subscription = state.subscriptions[cycle.subscriptionId];
-        if (!subscription || subscription.status !== "active" || !["scheduled", "modifiable", "locked"].includes(cycle.status)) {
+        if (
+          !subscription ||
+          !["scheduled", "modifiable", "locked"].includes(cycle.status) ||
+          (
+            subscription.status !== "active" &&
+            cycle.status !== "locked" &&
+            cycle.kind !== "manual_replenishment"
+          )
+        ) {
           summary.skipped += 1; summary.items.push({ cycleId: candidate.cycleId, result: "skipped", message: "定期購目前不符合自動建單條件" }); continue;
         }
         if (cycle.status !== "locked") {
