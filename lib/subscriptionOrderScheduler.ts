@@ -2,13 +2,15 @@ import { createHash } from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 
-import { createOrderFile } from "./orderFiles";
+import type { WebsiteData } from "../data/websiteData";
 import { withFileLock } from "./jsonFileStore";
 import { getDateOnlyInTimeZone } from "./checkoutRules";
+import { runInventoryOrderTransaction } from "./orderInventoryTransaction";
+import type { RequestedItem } from "./orderPricing";
 import { getActiveMembershipRules } from "./membershipBusinessRules";
 import { createOrderFromCycle, enqueueScheduledMembershipNotifications, lockSubscriptionCycle, readMembershipCommerceState, registerReferralQualificationOrder, type SubscriptionCycle } from "./membershipCommerce";
 import { readMember } from "./memberAuth";
-import { getOrdersDir } from "./storagePaths";
+import { getOrdersDir, getWebsiteDataFile } from "./storagePaths";
 
 export type SubscriptionSchedulerSummary = { processed: number; created: number; skipped: number; failed: number; notificationsQueued: number; items: Array<{ cycleId: string; result: "created" | "skipped" | "failed"; orderNumber?: string; message: string }> };
 
@@ -50,7 +52,56 @@ function schedulerOrder(cycle: SubscriptionCycle, subscription: Awaited<ReturnTy
   };
 }
 
-export async function runSubscriptionOrderScheduler(options: { today?: string; now?: Date; stateFilePath?: string; rulesFilePath?: string; orderDir?: string } = {}) {
+function subscriptionInventoryItems(
+  cycle: SubscriptionCycle,
+  website: WebsiteData,
+): RequestedItem[] {
+  if (!cycle.itemsSnapshot?.length) {
+    throw new Error("本期尚未完成商品快照");
+  }
+
+  return cycle.itemsSnapshot.flatMap((item) =>
+    item.components.map((component) => {
+      const product = website.menu.products.find(
+        (entry) => entry.slug === component.productId,
+      );
+
+      if (!product) {
+        throw new Error(`找不到定期購商品：${component.productId}`);
+      }
+
+      const source =
+        Array.isArray(product.skus) && product.skus.length
+          ? product.skus
+          : product.purchase;
+
+      const beanSkus = source.filter(
+        (sku) =>
+          sku.enabled !== false &&
+          sku.kind === "beans" &&
+          typeof sku.id === "string" &&
+          sku.id.trim(),
+      );
+
+      if (beanSkus.length !== 1) {
+        throw new Error(
+          `${product.name} 找不到唯一可用的半磅咖啡豆 SKU，未建立定期購訂單`,
+        );
+      }
+
+      const sku = beanSkus[0];
+
+      return {
+        slug: product.slug,
+        optionId: sku.id,
+        optionLabel: sku.label,
+        quotedUnitPrice: sku.price,
+        quantity: item.quantity,
+      };
+    }),
+  );
+}
+export async function runSubscriptionOrderScheduler(options: { today?: string; now?: Date; stateFilePath?: string; rulesFilePath?: string; orderDir?: string; websiteFilePath?: string } = {}) {
   const today = options.today ?? getDateOnlyInTimeZone(options.now ?? new Date());
   const orderDir = options.orderDir ?? getOrdersDir();
   await fs.mkdir(orderDir, { recursive: true });
@@ -87,7 +138,48 @@ export async function runSubscriptionOrderScheduler(options: { today?: string; n
         const order = schedulerOrder(state.cycles[cycle.cycleId], latestSubscription, await readMember(latestSubscription.memberId), options.now ?? new Date());
         const existing = await fs.readFile(path.join(orderDir, `${order.orderNumber}.json`), "utf8").then((content) => JSON.parse(content)).catch((error: NodeJS.ErrnoException) => error.code === "ENOENT" ? null : Promise.reject(error));
         if (existing && existing.subscriptionCycleId !== cycle.cycleId) throw new Error("自動訂單編號與其他訂單衝突");
-        if (!existing) await createOrderFile(orderDir, order.orderNumber, order, () => order.orderNumber);
+
+        if (existing) {
+          const inventoryTransaction =
+            existing.inventoryTransaction &&
+            typeof existing.inventoryTransaction === "object"
+              ? existing.inventoryTransaction as Record<string, unknown>
+              : null;
+
+          if (inventoryTransaction?.state !== "inventory_committed") {
+            throw new Error("既有定期購訂單的庫存交易尚未完成，請先人工確認");
+          }
+        } else {
+          const websiteFile = options.websiteFilePath ?? getWebsiteDataFile();
+          const website = JSON.parse(
+            await fs.readFile(websiteFile, "utf8"),
+          ) as WebsiteData;
+
+          const transaction = await runInventoryOrderTransaction({
+            websiteFile,
+            orderDir,
+            items: subscriptionInventoryItems(
+              state.cycles[cycle.cycleId],
+              website,
+            ),
+            initialOrderNumber: order.orderNumber,
+            generateOrderNumber: () => order.orderNumber,
+            buildOrder: (candidateOrderNumber) => ({
+              order: {
+                ...order,
+                orderNumber: candidateOrderNumber,
+              },
+              lineText: "",
+            }),
+          });
+
+          if (!transaction.finalized) {
+            throw new Error(
+              "定期購庫存已扣除，但訂單狀態尚未完成，請先人工確認",
+            );
+          }
+        }
+
         await createOrderFromCycle({ cycleId: cycle.cycleId, orderId: order.orderNumber, idempotencyKey: `scheduler-order:${cycle.cycleId}`, now: options.now, stateFilePath: options.stateFilePath, rulesFilePath: options.rulesFilePath });
         await registerReferralQualificationOrder({ memberId: latestSubscription.memberId, orderId: order.orderNumber, orderCreatedAt: order.createdAt, orderType: "subscription", idempotencyKey: `subscription-cycle:${cycle.cycleId}`, now: options.now, stateFilePath: options.stateFilePath, rulesFilePath: options.rulesFilePath });
         summary.created += existing ? 0 : 1;
