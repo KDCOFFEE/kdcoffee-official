@@ -95,7 +95,8 @@ try {
   check("N unrelated member cannot see this transaction", unrelatedProjection === null && !JSON.stringify(unrelatedDashboard).includes(order.orderNumber));
 
   const routeSource = await readFile(path.join(process.cwd(), "app", "api", "admin", "orders", "[orderNumber]", "route.ts"), "utf8");
-  check("cancellation route wires inventory return and idempotent credit release", routeSource.includes("returnCommittedInventoryForCancellation") && routeSource.includes("settleCreditReservationForOrder") && routeSource.includes("admin-cancel:${orderNumber}"));
+  const cancellationSource = await readFile(path.join(process.cwd(), "lib", "orderCancellation.ts"), "utf8");
+  check("cancellation route wires shared inventory return and idempotent credit release", routeSource.includes("cancelOrderCanonically") && cancellationSource.includes("returnCommittedInventoryForCancellation") && cancellationSource.includes("settleCreditReservationForOrder") && routeSource.includes("admin-cancel:${orderNumber}"));
 
   const realHashesAfter = await Promise.all(acceptanceFiles.map(hash));
   check("O isolated tests do not mutate real acceptance data", realHashesAfter.every((value, index) => value === realHashesBefore[index]));

@@ -68,7 +68,8 @@
     "test:phase-j2d2": "node scripts/test-phase-j2d2-homepage-section-order.mjs",
     "test:phase-j2d2a": "node scripts/test-phase-j2d2a-section-order-ux.mjs",
     "test:phase-j3a": "node scripts/test-phase-j3a-member-referral-invite.mjs",
-    "test:phase-j3a1": "node scripts/test-phase-j3a1-referral-member-completion.mjs"
+    "test:phase-j3a1": "node scripts/test-phase-j3a1-referral-member-completion.mjs",
+    "test:phase-j5d4a": "node --experimental-strip-types --import ./scripts/member-auth-test-bootstrap.mjs scripts/test-phase-j5d4a-member-cancellation.ts"
   },
   "dependencies": {
     "cloudinary": "^2.10.0",

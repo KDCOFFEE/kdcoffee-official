@@ -17,35 +17,9 @@ import { getActiveMembershipRules } from "@/lib/membershipBusinessRules";
 import { addTaipeiCalendarDays } from "@/lib/membershipPolicies";
 import { getLiveWebsiteData } from "@/data/websiteData";
 import { isAllowedRoastLevel } from "@/lib/checkoutRules";
+import { isSameOriginRequest } from "@/lib/requestSecurity";
 
 export const dynamic = "force-dynamic";
-
-function sameOrigin(request: Request) {
-  const origin = request.headers.get("origin");
-  if (!origin) return true;
-
-  let originUrl: URL;
-  try {
-    originUrl = new URL(origin);
-  } catch {
-    return false;
-  }
-
-  const requestUrl = new URL(request.url);
-  if (originUrl.origin === requestUrl.origin) return true;
-
-  // Reverse proxies such as Railway and ngrok expose the public browser
-  // origin through forwarded headers while Next.js can see an internal URL.
-  const forwardedHost = request.headers.get("x-forwarded-host")?.split(",")[0]?.trim();
-  const host = forwardedHost || request.headers.get("host")?.trim();
-  if (!host) return false;
-
-  const forwardedProto = request.headers.get("x-forwarded-proto")?.split(",")[0]?.trim();
-  const protocol = forwardedProto || requestUrl.protocol.replace(":", "");
-  if (protocol !== "http" && protocol !== "https") return false;
-
-  return originUrl.origin === `${protocol}://${host}`;
-}
 
 async function currentMember() {
   const member = await getCurrentMember();
@@ -64,20 +38,26 @@ export async function GET() {
 }
 
 export async function PATCH(request: Request) {
-  if (!sameOrigin(request)) return NextResponse.json({ error: "無法確認請求來源" }, { status: 403 });
+  if (!isSameOriginRequest(request)) return NextResponse.json({ error: "無法確認請求來源" }, { status: 403 });
   try {
     const member = await currentMember();
     const body = await request.json();
     const action = String(body.action || "");
     const idempotencyKey = String(body.idempotencyKey || "").slice(0, 120);
     if (!idempotencyKey) throw new MembershipCommerceError("操作識別遺失，請再試一次");
+    const actionResult: { action: string; plannedDate?: string; subscriptionId?: string } = { action };
 
     if (["advance", "delay", "change-date"].includes(action)) {
-      await modifyCycleDate({ memberId: member.id, cycleId: String(body.cycleId), expectedRevision: Number(body.expectedRevision), plannedDate: String(body.plannedDate), recalculateAnchor: Boolean(body.recalculateAnchor), idempotencyKey });
+      const cycle = await modifyCycleDate({ memberId: member.id, cycleId: String(body.cycleId), expectedRevision: Number(body.expectedRevision), plannedDate: String(body.plannedDate), recalculateAnchor: Boolean(body.recalculateAnchor), idempotencyKey });
+      actionResult.plannedDate = cycle.plannedDate;
+      actionResult.subscriptionId = cycle.subscriptionId;
     } else if (action === "skip") {
-      await memberSkipCycle({ memberId: member.id, cycleId: String(body.cycleId), expectedRevision: Number(body.expectedRevision), idempotencyKey });
+      const cycle = await memberSkipCycle({ memberId: member.id, cycleId: String(body.cycleId), expectedRevision: Number(body.expectedRevision), idempotencyKey });
+      actionResult.subscriptionId = cycle.subscriptionId;
     } else if (["pause", "resume", "terminate"].includes(action)) {
-      await setSubscriptionStatus({ memberId: member.id, subscriptionId: String(body.subscriptionId), expectedRevision: Number(body.expectedRevision), status: action === "pause" ? "paused" : action === "resume" ? "active" : "terminated", resumeDate: body.resumeDate ? String(body.resumeDate) : undefined, intervalDays: body.intervalDays == null ? undefined : Number(body.intervalDays), reason: action === "pause" ? "會員暫停配送" : action === "resume" ? "會員選擇新日期恢復配送" : "會員停止定期配送", idempotencyKey });
+      const subscription = await setSubscriptionStatus({ memberId: member.id, subscriptionId: String(body.subscriptionId), expectedRevision: Number(body.expectedRevision), status: action === "pause" ? "paused" : action === "resume" ? "active" : "terminated", resumeDate: body.resumeDate ? String(body.resumeDate) : undefined, intervalDays: body.intervalDays == null ? undefined : Number(body.intervalDays), reason: action === "pause" ? "會員暫停配送" : action === "resume" ? "會員選擇新日期恢復配送" : "會員停止定期配送", idempotencyKey });
+      actionResult.subscriptionId = subscription.subscriptionId;
+      if (action === "resume") actionResult.plannedDate = subscription.anchorDate;
     } else if (action === "replenish") {
       const dashboard = await getMemberCommerceDashboard(member.id);
       const subscription = dashboard.subscriptions.find((item) => item.subscriptionId === String(body.subscriptionId));
@@ -91,6 +71,8 @@ export async function PATCH(request: Request) {
         idempotencyKey: `${idempotencyKey}:lock`,
         shipping,
       });
+      actionResult.plannedDate = cycle.plannedDate;
+      actionResult.subscriptionId = cycle.subscriptionId;
     } else if (action === "change-store") {
       await updateSubscriptionPreferences({ memberId: member.id, subscriptionId: String(body.subscriptionId), expectedRevision: Number(body.expectedRevision), shippingMethod: "711_cod", storeSelection: { storeId: String(body.storeId || "").slice(0, 10), storeName: String(body.storeName || "").slice(0, 60) }, idempotencyKey });
     } else if (action === "change-items") {
@@ -118,7 +100,11 @@ export async function PATCH(request: Request) {
     } else {
       throw new MembershipCommerceError("不支援的操作");
     }
-    return NextResponse.json({ ok: true, ...(await getMemberCommerceDashboard(member.id)) });
+    const dashboard = await getMemberCommerceDashboard(member.id);
+    if (action === "skip" && actionResult.subscriptionId) {
+      actionResult.plannedDate = dashboard.cycles.find((cycle) => cycle.subscriptionId === actionResult.subscriptionId && ["scheduled", "modifiable"].includes(cycle.status))?.plannedDate;
+    }
+    return NextResponse.json({ ok: true, ...dashboard, actionResult });
   } catch (error) {
     const status = error instanceof MembershipRevisionConflictError ? 409 : error instanceof MembershipCommerceError ? 400 : 500;
     return NextResponse.json({ error: error instanceof Error ? error.message : "操作失敗" }, { status });

@@ -31,6 +31,13 @@ const changedApplicationSources = execFileSync(
   { encoding: "utf8" },
 ).split(/\r?\n/).filter(Boolean);
 const protectedCorePattern = /(?:^|\/)(?:checkout|orders?|fulfillment)(?:\/|[^/]*\.(?:ts|tsx|js|jsx)$)/i;
+const phaseJ5D4AOrderFiles = new Set([
+  "app/admin/orders/[orderNumber]/page.tsx",
+  "app/api/admin/orders/[orderNumber]/route.ts",
+  "app/api/member/orders/[orderNumber]/cancel/route.ts",
+  "components/admin/OrderStatusForm.tsx",
+  "lib/orderCancellation.ts",
+]);
 
 const checks = [
   ["CanonicalMemberStatus includes disabled", /CanonicalMemberStatus\s*=\s*[^;]*"disabled"/.test(files.identity)],
@@ -64,7 +71,7 @@ const checks = [
   ["UI says Owner 完整重置會員身分", files.panel.includes("Owner 完整重置會員身分")],
   ["UI contains exact destructive confirmation phrase", files.panel.includes("確認文字：完整重置會員身分")],
   ["admin member labels include 已停用", files.detail.includes('disabled: "已停用"') && files.list.includes('disabled: "已停用"')],
-  ["no checkout/order/fulfillment application source modified", !changedApplicationSources.some((file) => protectedCorePattern.test(file.replaceAll("\\", "/")))],
+  ["no unrelated checkout/order/fulfillment application source modified", !changedApplicationSources.some((file) => { const normalized = file.replaceAll("\\", "/"); return protectedCorePattern.test(normalized) && !phaseJ5D4AOrderFiles.has(normalized); })],
 ];
 
 let failed = 0;

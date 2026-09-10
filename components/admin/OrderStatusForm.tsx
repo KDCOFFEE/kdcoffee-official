@@ -19,6 +19,7 @@ type SaveOrderStatusInput = {
   status: string;
   trackingNumber: string;
   cancellationReason?: string;
+  confirmedExternalShipmentVoid?: boolean;
   refresh: () => void;
   setMessage: (message: string) => void;
   setSaving: (saving: boolean) => void;
@@ -36,6 +37,7 @@ export async function runOrderStatusSave({
   status,
   trackingNumber,
   cancellationReason = "",
+  confirmedExternalShipmentVoid = false,
   refresh,
   setMessage,
   setSaving,
@@ -50,7 +52,7 @@ export async function runOrderStatusSave({
     const response = await fetcher(`/api/admin/orders/${encodeURIComponent(orderNumber)}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status, trackingNumber, cancellationReason }),
+      body: JSON.stringify({ status, trackingNumber, cancellationReason, confirmedExternalShipmentVoid }),
     });
     const result = await response.json().catch(() => ({}));
     if (!response.ok) {
@@ -102,6 +104,7 @@ function OrderStatusFormInner({
   inventoryGuardMessage = "",
   cancellationAllowed = true,
   cancellationBlockedMessage = "",
+  manualShipmentVoidCompletionAvailable = false,
   customerNotificationCapability,
 }: {
   orderNumber: string;
@@ -114,6 +117,7 @@ function OrderStatusFormInner({
   inventoryGuardMessage?: string;
   cancellationAllowed?: boolean;
   cancellationBlockedMessage?: string;
+  manualShipmentVoidCompletionAvailable?: boolean;
   customerNotificationCapability: {
     lineAvailable: boolean;
     emailAvailable: boolean;
@@ -123,6 +127,7 @@ function OrderStatusFormInner({
   const [status, setStatus] = useState(initialStatus);
   const [trackingNumber, setTrackingNumber] = useState(initialTracking || "");
   const [cancellationReason, setCancellationReason] = useState("");
+  const [confirmedExternalShipmentVoid, setConfirmedExternalShipmentVoid] = useState(false);
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
   const [notifyCustomer, setNotifyCustomer] = useState(false);
@@ -131,10 +136,11 @@ function OrderStatusFormInner({
   const [notificationPhoto, setNotificationPhoto] = useState<File>();
   const [notificationActionId, setNotificationActionId] = useState(() => crypto.randomUUID());
   const statusIsKnown = (orderStatuses as readonly string[]).includes(status);
+  const cancellationCanBeCompleted = cancellationAllowed || manualShipmentVoidCompletionAvailable;
   const statusTransitionAllowed =
     statusIsKnown &&
     (status === "cancelled"
-      ? cancellationAllowed
+      ? cancellationCanBeCompleted
       : assessOrderStatusProgression(
           { status: initialStatus, orderMode },
           status as OrderStatus,
@@ -143,7 +149,9 @@ function OrderStatusFormInner({
     statusTransitionAllowed &&
     (!inventoryFulfillmentBlocked || status === "cancelled") &&
     (status !== "cancelled" ||
-      (cancellationAllowed && cancellationReason.trim().length > 0));
+      (cancellationCanBeCompleted &&
+        cancellationReason.trim().length > 0 &&
+        (!manualShipmentVoidCompletionAvailable || confirmedExternalShipmentVoid)));
   const notificationStatusSuggested =
     status === "confirmed" ||
     status === "ready_for_pickup" ||
@@ -159,7 +167,7 @@ function OrderStatusFormInner({
   async function save() {
     if (status === "cancelled") {
       const reason = cancellationReason.trim();
-      if (!cancellationAllowed) {
+      if (!cancellationCanBeCompleted) {
         setMessage(cancellationBlockedMessage || "此訂單目前不能使用一般取消操作。");
         return;
       }
@@ -171,7 +179,14 @@ function OrderStatusFormInner({
         setMessage(`取消原因最多 ${MAX_CANCELLATION_REASON_LENGTH} 個字。`);
         return;
       }
-      if (!window.confirm("取消訂單會將尚未出貨的已扣庫存商品回補。確定要取消此訂單嗎？")) {
+      if (manualShipmentVoidCompletionAvailable && !confirmedExternalShipmentVoid) {
+        setMessage("請先確認賣貨便／交貨便寄件單已作廢。");
+        return;
+      }
+      const confirmationMessage = manualShipmentVoidCompletionAvailable
+        ? "您已確認外部寄件單作廢。完成取消後會回補庫存並同步會員商務狀態，確定繼續嗎？"
+        : "取消訂單會將尚未出貨的已扣庫存商品回補。確定要取消此訂單嗎？";
+      if (!window.confirm(confirmationMessage)) {
         return;
       }
     }
@@ -181,6 +196,7 @@ function OrderStatusFormInner({
       status,
       trackingNumber,
       cancellationReason: cancellationReason.trim(),
+      confirmedExternalShipmentVoid: manualShipmentVoidCompletionAvailable && confirmedExternalShipmentVoid,
       refresh: router.refresh,
       setMessage,
       setSaving,
@@ -226,7 +242,7 @@ function OrderStatusFormInner({
               {orderStatusLabel(optionStatus)}
             </option>
           ))}
-          <option value="cancelled" disabled={!cancellationAllowed}>已取消</option>
+          <option value="cancelled" disabled={!cancellationCanBeCompleted}>已取消</option>
         </select>
       </label>
       {reactivationBlocked ? (
@@ -241,24 +257,36 @@ function OrderStatusFormInner({
           {inventoryGuardMessage || "庫存交易狀態尚未確認，一般履約狀態已停用。"}
         </p>
       ) : null}
-      {!cancellationAllowed && !reactivationBlocked ? (
+      {!cancellationCanBeCompleted && !reactivationBlocked ? (
         <p className="admin-save-message admin-cancellation-block-message">
           {cancellationBlockedMessage || "此訂單目前不能使用一般取消操作。"}
         </p>
       ) : null}
       {status === "cancelled" && initialStatus !== "cancelled" ? (
-        <label>
-          取消原因
-          <textarea
-            value={cancellationReason}
-            onChange={(event) => setCancellationReason(event.target.value)}
-            maxLength={MAX_CANCELLATION_REASON_LENGTH}
-            rows={3}
-            placeholder="請簡短說明取消原因"
-            required
-          />
-          <small>{cancellationReason.trim().length} / {MAX_CANCELLATION_REASON_LENGTH} 字</small>
-        </label>
+        <>
+          <label>
+            取消原因
+            <textarea
+              value={cancellationReason}
+              onChange={(event) => setCancellationReason(event.target.value)}
+              maxLength={MAX_CANCELLATION_REASON_LENGTH}
+              rows={3}
+              placeholder="請簡短說明取消原因"
+              required
+            />
+            <small>{cancellationReason.trim().length} / {MAX_CANCELLATION_REASON_LENGTH} 字</small>
+          </label>
+          {manualShipmentVoidCompletionAvailable ? (
+            <label className="admin-notify-toggle">
+              <input
+                type="checkbox"
+                checked={confirmedExternalShipmentVoid}
+                onChange={(event) => setConfirmedExternalShipmentVoid(event.target.checked)}
+              />
+              我已確認賣貨便／交貨便寄件單已作廢
+            </label>
+          ) : null}
+        </>
       ) : null}
       {orderMode === "711_cod" ? (
         <label>
@@ -313,7 +341,7 @@ function OrderStatusFormInner({
         )}
       </section>
       <button type="button" className="admin-primary-button" disabled={saving || !statusCanBeSaved || (notifyCustomer && selectedNotificationChannels.length === 0)} onClick={save}>
-        {saving ? "儲存中…" : "儲存變更"}
+        {saving ? "儲存中…" : status === "cancelled" && manualShipmentVoidCompletionAvailable ? "確認物流單已作廢並完成取消" : "儲存變更"}
       </button>
       {message && <p className="admin-save-message">{message}</p>}
     </div>
@@ -331,11 +359,12 @@ export default function OrderStatusForm(props: {
   inventoryGuardMessage?: string;
   cancellationAllowed?: boolean;
   cancellationBlockedMessage?: string;
+  manualShipmentVoidCompletionAvailable?: boolean;
   customerNotificationCapability: {
     lineAvailable: boolean;
     emailAvailable: boolean;
   };
 }) {
-  const refreshKey = `${props.orderNumber}:${props.initialStatus}:${props.initialTracking || ""}`;
+  const refreshKey = `${props.orderNumber}:${props.initialStatus}:${props.initialTracking || ""}:${props.manualShipmentVoidCompletionAvailable ? "manual-void" : "normal"}`;
   return <OrderStatusFormInner key={refreshKey} {...props} />;
 }

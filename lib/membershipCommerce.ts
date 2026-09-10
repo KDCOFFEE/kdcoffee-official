@@ -834,6 +834,27 @@ export async function transitionCycle(input: { cycleId: string; to: CycleStatus;
   }, { now: input.now, filePath: input.stateFilePath });
 }
 
+/** Synchronizes a canonically cancelled order with its linked subscription cycle. */
+export async function cancelSubscriptionCycleForOrder(input: { orderId: string; memberId?: string; reason: string; idempotencyKey: string; now?: Date; stateFilePath?: string; rulesFilePath?: string }) {
+  const state = await readMembershipCommerceState(input.stateFilePath);
+  const cycle = Object.values(state.cycles).find((item) => item.createdOrderId === input.orderId);
+  if (!cycle) return null;
+  const subscription = state.subscriptions[cycle.subscriptionId];
+  if (!subscription) throw new MembershipCommerceError("配送期次缺少定期購資料");
+  if (input.memberId && subscription.memberId !== input.memberId) throw new MembershipCommerceError("配送期次會員與訂單會員不一致");
+  if (cycle.status === "cancelled") return cycle;
+  if (cycle.status !== "order_created") throw new MembershipCommerceError(`已取消訂單的配送期次仍為 ${cycle.status}，無法安全同步`);
+  return transitionCycle({
+    cycleId: cycle.cycleId,
+    to: "cancelled",
+    reason: input.reason,
+    idempotencyKey: input.idempotencyKey,
+    now: input.now,
+    stateFilePath: input.stateFilePath,
+    rulesFilePath: input.rulesFilePath,
+  });
+}
+
 export async function handleCycleProductAvailability(input: { cycleId: string; availability: "out-of-stock" | "discontinued"; idempotencyKey: string; now?: Date; stateFilePath?: string; rulesFilePath?: string }) {
   const target: CycleStatus = input.availability === "out-of-stock" ? "blocked_stock" : "cancelled";
   return transitionCycle({ ...input, to: target, reason: input.availability === "out-of-stock" ? "定期購作品暫時缺貨，等待會員選擇" : "定期購作品已停售，停止此作品續訂" });
