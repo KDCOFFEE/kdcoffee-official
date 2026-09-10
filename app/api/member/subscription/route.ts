@@ -16,8 +16,8 @@ import {
 import { getActiveMembershipRules } from "@/lib/membershipBusinessRules";
 import { addTaipeiCalendarDays } from "@/lib/membershipPolicies";
 import { getLiveWebsiteData } from "@/data/websiteData";
-import { isAllowedRoastLevel } from "@/lib/checkoutRules";
 import { isSameOriginRequest } from "@/lib/requestSecurity";
+import { resolveMemberSubscriptionItems } from "@/lib/subscriptionSkuModel";
 
 export const dynamic = "force-dynamic";
 
@@ -139,23 +139,25 @@ export async function PATCH(request: Request) {
       const cycle = dashboard.cycles.find((item) => item.cycleId === String(body.cycleId));
       if (!cycle) throw new MembershipCommerceError("找不到配送期次");
       const version = await getActiveMembershipRules();
-      const current = cycle.itemsDraft[0];
-      const packageWeight = body.packageWeight === "one-pound" ? "one-pound" as const : "half-pound" as const;
-      if (current.packageWeight === "half-pound" && packageWeight === "one-pound" && !version.rules.subscription.allowHalfToOnePound) throw new MembershipCommerceError("目前未開放半磅改為一磅");
-      if (current.packageWeight === "one-pound" && packageWeight === "half-pound" && !version.rules.subscription.allowOneToHalfPound) throw new MembershipCommerceError("目前未開放一磅改為半磅");
-      const productA = String(body.productA || "");
-      const productB = packageWeight === "one-pound" ? String(body.productB || productA) : productA;
-      if (packageWeight === "one-pound" && productA !== productB && !version.rules.subscription.allowMixedOnePound) throw new MembershipCommerceError("目前一磅只開放同款組合");
-      const quantity = Number(body.quantity);
-      if ((!Number.isSafeInteger(quantity) || quantity < 1 || quantity > 12) || (quantity !== current.quantity && !version.rules.subscription.allowQuantityChange)) throw new MembershipCommerceError("數量設定不正確");
-      const roast = String(body.roast || "");
-      if (!isAllowedRoastLevel(roast)) throw new MembershipCommerceError("請選擇可用的烘焙度");
       const website = await getLiveWebsiteData();
-      const productMap = new Map(website.menu.products.filter((product) => product.active && product.purchasable !== false && product.status === "active").map((product) => { const sku = (product.skus || product.purchase || []).find((option) => option.kind === "beans" && option.enabled !== false && Number(option.stock ?? 1) > 0); return [product.slug, sku ? { name: product.name, price: Number(sku.price) } : null] as const; }).filter((entry): entry is [string, { name: string; price: number }] => Boolean(entry[1])));
-      const selectedA = productMap.get(productA); const selectedB = productMap.get(productB);
-      if (!selectedA || !selectedB) throw new MembershipCommerceError("選擇的咖啡目前不可加入定期配送");
-      const components = packageWeight === "one-pound" ? [{ productId: productA, weightHalfPounds: 1 as const }, { productId: productB, weightHalfPounds: 1 as const }] : [{ productId: productA, weightHalfPounds: 1 as const }];
-      await updateCycleItems({ memberId: member.id, cycleId: cycle.cycleId, expectedRevision: Number(body.expectedRevision), items: [{ itemId: `${productA}:${packageWeight}:${productB}`, packageWeight, quantity, roast, components, unitPrice: packageWeight === "one-pound" ? selectedA.price + selectedB.price : selectedA.price }], idempotencyKey });
+      const requestedItems = Array.isArray(body.items)
+        ? body.items
+        : [{
+            skuKind: "beans",
+            packageWeight: body.packageWeight === "one-pound" ? "one-pound" : "half-pound",
+            quantity: Number(body.quantity),
+            roast: String(body.roast || ""),
+            components: body.packageWeight === "one-pound"
+              ? [{ productId: String(body.productA || "") }, { productId: String(body.productB || body.productA || "") }]
+              : [{ productId: String(body.productA || "") }],
+          }];
+      let items;
+      try {
+        items = resolveMemberSubscriptionItems({ items: requestedItems, currentItems: cycle.itemsDraft, website, rules: version.rules });
+      } catch (error) {
+        throw new MembershipCommerceError(error instanceof Error ? error.message : "定期購商品設定不正確");
+      }
+      await updateCycleItems({ memberId: member.id, cycleId: cycle.cycleId, expectedRevision: Number(body.expectedRevision), items, idempotencyKey });
     } else {
       throw new MembershipCommerceError("不支援的操作");
     }

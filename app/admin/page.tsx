@@ -8,6 +8,7 @@ import { readFulfillmentStore } from "@/lib/fulfillment";
 import { readMembershipCommerceState } from "@/lib/membershipCommerce";
 import { getDateOnlyInTimeZone, addDateOnlyDays } from "@/lib/checkoutRules";
 import { readMember } from "@/lib/memberAuth";
+import { subscriptionItemProductIds } from "@/lib/subscriptionSkuModel";
 
 export const dynamic = "force-dynamic";
 
@@ -65,7 +66,7 @@ export default async function AdminPage() {
       <div className="admin-panel-head"><div><p className="eyebrow dark">TODAY</p><h2>今天要處理</h2></div><div><a href="/api/admin/fulfillment/export">匯出未來 7 天</a>　<Link href="/admin/fulfillment">逐筆處理</Link></div></div>
       <div className="admin-stats"><article><small>未完成訂單</small><strong>{pending.length}</strong></article><article><small>物流／人工確認</small><strong>{fulfillmentExceptions}</strong></article><article><small>疑似未取貨</small><strong>{unclaimedRisk}</strong></article><article><small>待處理通知</small><strong>{pendingNotifications}</strong></article></div>
       <p className="admin-empty">未來 7 天共有 {nextSevenDays.length} 個定期購配送期次，預估需準備 {giftDemand} 份贈品。高風險的未取貨確認必須逐筆處理。</p>
-      {upcomingRows.map(({ cycle, subscription, member }) => <Link href={cycle.createdOrderId ? `/admin/orders/${cycle.createdOrderId}` : "/admin/membership"} className="admin-order-row" key={cycle.cycleId}><div><strong>{cycle.plannedDate}・{cycle.createdOrderId || "尚未建立正式訂單"}</strong><span>{member?.displayName || member?.pickupName || "KD Coffee 會員"}・{cycle.itemsDraft.flatMap((item) => item.components.map((part) => part.productId)).join(" + ")}</span></div><div><span>{cycle.itemsDraft.reduce((sum, item) => sum + item.quantity, 0)} 份・{subscription?.shippingMethod === "711_cod" ? subscription.storeSelection?.storeName || "7-ELEVEN" : "工作室自取"}</span><b>{cycle.giftSnapshot?.eligible ? `贈品 ${cycle.giftSnapshot.quantity} 份` : "本期無贈品"}</b></div></Link>)}
+      {upcomingRows.map(({ cycle, subscription, member }) => <Link href={cycle.createdOrderId ? `/admin/orders/${cycle.createdOrderId}` : "/admin/membership"} className="admin-order-row" key={cycle.cycleId}><div><strong>{cycle.plannedDate}・{cycle.createdOrderId || "尚未建立正式訂單"}</strong><span>{member?.displayName || member?.pickupName || "KD Coffee 會員"}・{cycle.itemsDraft.flatMap(subscriptionItemProductIds).join(" + ")}</span></div><div><span>{cycle.itemsDraft.reduce((sum, item) => sum + item.quantity, 0)} 份・{subscription?.shippingMethod === "711_cod" ? subscription.storeSelection?.storeName || "7-ELEVEN" : "工作室自取"}</span><b>{cycle.giftSnapshot?.eligible ? `贈品 ${cycle.giftSnapshot.quantity} 份` : "本期無贈品"}</b></div></Link>)}
     </section>
     <section className="admin-stats">
       <article><small>今日訂單</small><strong>{todayOrders.length}</strong></article>

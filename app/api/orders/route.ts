@@ -27,6 +27,8 @@ import {
   getDateOnlyInTimeZone,
 } from "@/lib/checkoutRules";
 import { resolvePickupDateAvailability, resolveSubscriptionDateAvailability, resolveSubscriptionInterval } from "@/lib/membershipPolicies";
+import { getLiveWebsiteData } from "@/data/websiteData";
+import { subscriptionItemsFromStoredOrderItems } from "@/lib/subscriptionSkuModel";
 
 function clean(value: unknown, max = 200) { return String(value ?? "").trim().slice(0, max); }
 function validPhone(value: string) { return /^09\d{8}$/.test(value); }
@@ -240,7 +242,8 @@ export async function POST(request: Request) {
       if (subscriptionIntent) {
         try {
           const storedItems = Array.isArray(core.order.items) ? core.order.items as Array<Record<string, unknown>> : [];
-          await createSubscription({ memberId: member.id, startedFromOrderId: orderNumber, anchorDate: subscriptionIntent.firstRenewalDate, intervalDays: subscriptionIntent.intervalDays, shippingMethod: orderMode, storeSelection: favoriteStore ? { storeId: favoriteStore.id, storeName: favoriteStore.name } : undefined, defaultItems: storedItems.map((item, index) => { const label = String(item.optionLabel || ""); const onePound = /一磅|1\s*lb|1磅/i.test(label); const slug = String(item.slug || `item-${index}`); return { itemId: `${slug}:${String(item.optionId || label)}`, packageWeight: onePound ? "one-pound" as const : "half-pound" as const, quantity: Number(item.quantity), roast: String(item.roastLevel || item.preparationLabel || "工作室建議"), components: onePound ? [{ productId: slug, weightHalfPounds: 1 as const }, { productId: slug, weightHalfPounds: 1 as const }] : [{ productId: slug, weightHalfPounds: 1 as const }], unitPrice: Number(item.unitPrice) }; }), idempotencyKey: `checkout:${idempotencyKey}` });
+          const defaultItems = subscriptionItemsFromStoredOrderItems(storedItems, await getLiveWebsiteData());
+          await createSubscription({ memberId: member.id, startedFromOrderId: orderNumber, anchorDate: subscriptionIntent.firstRenewalDate, intervalDays: subscriptionIntent.intervalDays, shippingMethod: orderMode, storeSelection: favoriteStore ? { storeId: favoriteStore.id, storeName: favoriteStore.name } : undefined, defaultItems, idempotencyKey: `checkout:${idempotencyKey}` });
         } catch (error) {
           warnings.push("訂單已成立；定期配送申請已保存在訂單中，工作室將協助完成確認。");
           console.error(`Order ${orderNumber} saved but subscription enrollment failed:`, error);

@@ -3,7 +3,9 @@ import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import type { SubscriptionDefaultItem } from "../lib/membershipCommerce";
+import type { BeanSubscriptionItem } from "../lib/membershipPolicies";
+
+type BeanDefaultItem = BeanSubscriptionItem & { unitPrice: number };
 
 const testRoot = await mkdtemp(path.join(os.tmpdir(), "kd-membership-commerce-"));
 process.env.KD_DATA_DIR = testRoot;
@@ -22,7 +24,7 @@ function check(name: string, condition: unknown) {
   console.log(`PASS ${String(count).padStart(2, "0")} ${name}`);
 }
 
-function item(productId = "coffee-a", packageWeight: "half-pound" | "one-pound" = "half-pound", secondProductId = productId, quantity = 1, unitPrice = 1000): SubscriptionDefaultItem {
+function item(productId = "coffee-a", packageWeight: "half-pound" | "one-pound" = "half-pound", secondProductId = productId, quantity = 1, unitPrice = 1000): BeanDefaultItem {
   return {
     itemId: `${productId}-${packageWeight}`,
     packageWeight,
@@ -121,7 +123,7 @@ try {
   check("16. One-pound A+B composition is valid", policyModule.validateSubscriptionItem(item("a", "one-pound", "b")).components.map((part) => part.productId).join("+") === "a+b");
   const compositionCycle = await commerce.generateSubscriptionCycle({ subscriptionId: dateSub.subscriptionId, sequence: 2, plannedDate: "2026-03-07", idempotencyKey: "composition-cycle" });
   const changedComposition = await commerce.updateCycleItems({ cycleId: compositionCycle.cycleId, items: [item("b", "one-pound", "c")], idempotencyKey: "composition-change" });
-  check("17. Composition can change from A+A to B+C", changedComposition.itemsDraft[0].components.map((part) => part.productId).join("+") === "b+c");
+  check("17. Composition can change from A+A to B+C", policyModule.isBeanSubscriptionItem(changedComposition.itemsDraft[0]) && changedComposition.itemsDraft[0].components.map((part) => part.productId).join("+") === "b+c");
   const changedQuantity = await commerce.updateCycleItems({ cycleId: compositionCycle.cycleId, items: [item("b", "one-pound", "c", 3)], idempotencyKey: "quantity-change" });
   check("18. Quantity update is represented", changedQuantity.itemsDraft[0].quantity === 3);
 

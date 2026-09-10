@@ -188,26 +188,49 @@ export function referralRewardForMerchandise(input: { merchandiseAfterDiscounts:
 
 export type CompositionComponent = {
   productId: string;
+  skuId?: string;
   weightHalfPounds: 1;
 };
 
-export type SubscriptionItem = {
+export type BeanSubscriptionItem = {
   itemId: string;
+  /** Missing skuKind is the persisted legacy bean representation. */
+  skuKind?: "beans";
   packageWeight: "half-pound" | "one-pound";
   quantity: number;
   roast: string;
   components: CompositionComponent[];
 };
 
-export function validateSubscriptionItem(item: SubscriptionItem) {
-  if (!item.itemId || !Number.isSafeInteger(item.quantity) || item.quantity < 1 || item.quantity > 99 || !item.roast.trim()) throw new MembershipPolicyError("定期購商品設定不正確");
+export type DripSubscriptionItem = {
+  itemId: string;
+  skuKind: "drip";
+  productId: string;
+  skuId: string;
+  quantity: number;
+};
+
+export type SubscriptionItem = BeanSubscriptionItem | DripSubscriptionItem;
+
+export function isBeanSubscriptionItem(item: SubscriptionItem): item is BeanSubscriptionItem {
+  return item.skuKind !== "drip";
+}
+
+export function validateSubscriptionItem<T extends SubscriptionItem>(item: T): T {
+  if (typeof item.itemId !== "string" || !item.itemId.trim() || !Number.isSafeInteger(item.quantity) || item.quantity < 1 || item.quantity > 99) throw new MembershipPolicyError("定期購商品設定不正確");
+  if (item.skuKind != null && item.skuKind !== "beans" && item.skuKind !== "drip") throw new MembershipPolicyError("定期購 SKU 類型不正確");
+  if (item.skuKind === "drip") {
+    if (typeof item.productId !== "string" || !item.productId.trim() || typeof item.skuId !== "string" || !item.skuId.trim() || "packageWeight" in item || "components" in item || "roast" in item) throw new MembershipPolicyError("耳掛定期購商品必須指定有效商品與 SKU，且不可使用咖啡豆份量欄位");
+    return structuredClone(item);
+  }
+  if (typeof item.roast !== "string" || !item.roast.trim()) throw new MembershipPolicyError("定期購咖啡豆必須指定烘焙度");
   const requiredComponents = item.packageWeight === "half-pound" ? 1 : item.packageWeight === "one-pound" ? 2 : 0;
-  if (!requiredComponents || item.components.length !== requiredComponents || item.components.some((component) => !component.productId || component.weightHalfPounds !== 1)) throw new MembershipPolicyError(item.packageWeight === "one-pound" ? "一磅必須由兩個半磅作品組成" : "半磅必須包含一個半磅作品");
+  if (!requiredComponents || !Array.isArray(item.components) || item.components.length !== requiredComponents || item.components.some((component) => typeof component.productId !== "string" || !component.productId.trim() || (component.skuId != null && (typeof component.skuId !== "string" || !component.skuId.trim())) || component.weightHalfPounds !== 1)) throw new MembershipPolicyError(item.packageWeight === "one-pound" ? "一磅必須由兩個半磅作品組成" : "半磅必須包含一個半磅作品");
   return structuredClone(item);
 }
 
 export function giftQuantityForItems(items: SubscriptionItem[], rules: MembershipBusinessRules) {
-  return items.reduce((total, item) => total + item.quantity * (item.packageWeight === "one-pound" ? rules.gift.onePoundQuantity : rules.gift.halfPoundQuantity), 0);
+  return items.reduce((total, item) => total + (isBeanSubscriptionItem(item) ? item.quantity * (item.packageWeight === "one-pound" ? rules.gift.onePoundQuantity : rules.gift.halfPoundQuantity) : 0), 0);
 }
 
 export function giftEligibleAt(fulfillmentNumber: number, rules: MembershipBusinessRules) {

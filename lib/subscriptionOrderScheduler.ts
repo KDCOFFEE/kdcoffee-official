@@ -11,6 +11,7 @@ import { getActiveMembershipRules } from "./membershipBusinessRules";
 import { createOrderFromCycle, enqueueScheduledMembershipNotifications, lockSubscriptionCycle, readMembershipCommerceState, registerReferralQualificationOrder, type SubscriptionCycle } from "./membershipCommerce";
 import { readMember } from "./memberAuth";
 import { getOrdersDir, getWebsiteDataFile } from "./storagePaths";
+import { subscriptionItemsToRequestedItems, subscriptionOrderDisplayItems } from "./subscriptionSkuModel";
 
 export type SubscriptionSchedulerSummary = { processed: number; created: number; skipped: number; failed: number; notificationsQueued: number; items: Array<{ cycleId: string; result: "created" | "skipped" | "failed"; orderNumber?: string; message: string }> };
 
@@ -19,11 +20,11 @@ function deterministicOrderNumber(cycle: SubscriptionCycle) {
   return `KD${cycle.orderCreationDate.replaceAll("-", "")}-${String(digits).padStart(6, "0")}`;
 }
 
-function schedulerOrder(cycle: SubscriptionCycle, subscription: Awaited<ReturnType<typeof readMembershipCommerceState>>["subscriptions"][string], member: Awaited<ReturnType<typeof readMember>>, now: Date) {
+function schedulerOrder(cycle: SubscriptionCycle, subscription: Awaited<ReturnType<typeof readMembershipCommerceState>>["subscriptions"][string], member: Awaited<ReturnType<typeof readMember>>, now: Date, website: WebsiteData) {
   if (!cycle.itemsSnapshot || !cycle.pricingSnapshot || !cycle.shippingSnapshot || !cycle.rulesSnapshot) throw new Error("本期尚未完成商務快照");
   if (subscription.shippingMethod === "711_cod" && !subscription.storeSelection?.storeId) throw new Error("尚未設定 7-ELEVEN 取貨門市");
   const orderNumber = deterministicOrderNumber(cycle);
-  const items = cycle.itemsSnapshot.map((item) => ({ ...item, name: item.components.map((component) => component.productId).join(" + "), lineTotal: item.unitPrice * item.quantity }));
+  const items = subscriptionOrderDisplayItems(cycle.itemsSnapshot, website);
   return {
     orderNumber,
     createdAt: now.toISOString(),
@@ -52,7 +53,7 @@ function schedulerOrder(cycle: SubscriptionCycle, subscription: Awaited<ReturnTy
   };
 }
 
-function subscriptionInventoryItems(
+export function subscriptionInventoryItems(
   cycle: SubscriptionCycle,
   website: WebsiteData,
 ): RequestedItem[] {
@@ -60,46 +61,7 @@ function subscriptionInventoryItems(
     throw new Error("本期尚未完成商品快照");
   }
 
-  return cycle.itemsSnapshot.flatMap((item) =>
-    item.components.map((component) => {
-      const product = website.menu.products.find(
-        (entry) => entry.slug === component.productId,
-      );
-
-      if (!product) {
-        throw new Error(`找不到定期購商品：${component.productId}`);
-      }
-
-      const source =
-        Array.isArray(product.skus) && product.skus.length
-          ? product.skus
-          : product.purchase;
-
-      const beanSkus = source.filter(
-        (sku) =>
-          sku.enabled !== false &&
-          sku.kind === "beans" &&
-          typeof sku.id === "string" &&
-          sku.id.trim(),
-      );
-
-      if (beanSkus.length !== 1) {
-        throw new Error(
-          `${product.name} 找不到唯一可用的半磅咖啡豆 SKU，未建立定期購訂單`,
-        );
-      }
-
-      const sku = beanSkus[0];
-
-      return {
-        slug: product.slug,
-        optionId: sku.id,
-        optionLabel: sku.label,
-        quotedUnitPrice: sku.price,
-        quantity: item.quantity,
-      };
-    }),
-  );
+  return subscriptionItemsToRequestedItems(cycle.itemsSnapshot, website);
 }
 export async function runSubscriptionOrderScheduler(options: { today?: string; now?: Date; stateFilePath?: string; rulesFilePath?: string; orderDir?: string; websiteFilePath?: string } = {}) {
   const today = options.today ?? getDateOnlyInTimeZone(options.now ?? new Date());
@@ -135,7 +97,11 @@ export async function runSubscriptionOrderScheduler(options: { today?: string; n
         }
         state = await readMembershipCommerceState(options.stateFilePath);
         const latestSubscription = state.subscriptions[cycle.subscriptionId];
-        const order = schedulerOrder(state.cycles[cycle.cycleId], latestSubscription, await readMember(latestSubscription.memberId), options.now ?? new Date());
+        const websiteFile = options.websiteFilePath ?? getWebsiteDataFile();
+        const website = JSON.parse(
+          await fs.readFile(websiteFile, "utf8"),
+        ) as WebsiteData;
+        const order = schedulerOrder(state.cycles[cycle.cycleId], latestSubscription, await readMember(latestSubscription.memberId), options.now ?? new Date(), website);
         const existing = await fs.readFile(path.join(orderDir, `${order.orderNumber}.json`), "utf8").then((content) => JSON.parse(content)).catch((error: NodeJS.ErrnoException) => error.code === "ENOENT" ? null : Promise.reject(error));
         if (existing && existing.subscriptionCycleId !== cycle.cycleId) throw new Error("自動訂單編號與其他訂單衝突");
 
@@ -150,11 +116,6 @@ export async function runSubscriptionOrderScheduler(options: { today?: string; n
             throw new Error("既有定期購訂單的庫存交易尚未完成，請先人工確認");
           }
         } else {
-          const websiteFile = options.websiteFilePath ?? getWebsiteDataFile();
-          const website = JSON.parse(
-            await fs.readFile(websiteFile, "utf8"),
-          ) as WebsiteData;
-
           const transaction = await runInventoryOrderTransaction({
             websiteFile,
             orderDir,

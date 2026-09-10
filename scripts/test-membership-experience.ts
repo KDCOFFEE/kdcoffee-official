@@ -3,7 +3,9 @@ import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import type { SubscriptionDefaultItem } from "../lib/membershipCommerce";
+import type { BeanSubscriptionItem } from "../lib/membershipPolicies";
+
+type BeanDefaultItem = BeanSubscriptionItem & { unitPrice: number };
 
 const testRoot = await mkdtemp(path.join(os.tmpdir(), "kd-membership-i2-"));
 process.env.KD_DATA_DIR = testRoot;
@@ -21,7 +23,7 @@ function check(code: string, name: string, condition: unknown) {
   console.log(`PASS ${code.padEnd(2)} ${name}`);
 }
 
-function item(productId = "a", weight: "half-pound" | "one-pound" = "half-pound", second = productId, quantity = 1, unitPrice = 1390): SubscriptionDefaultItem {
+function item(productId = "a", weight: "half-pound" | "one-pound" = "half-pound", second = productId, quantity = 1, unitPrice = 1390): BeanDefaultItem {
   return { itemId: `${productId}-${weight}`, packageWeight: weight, quantity, roast: "淺中焙", unitPrice, components: weight === "one-pound" ? [{ productId, weightHalfPounds: 1 }, { productId: second, weightHalfPounds: 1 }] : [{ productId, weightHalfPounds: 1 }] };
 }
 
