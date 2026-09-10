@@ -55,9 +55,68 @@ export async function PATCH(request: Request) {
       const cycle = await memberSkipCycle({ memberId: member.id, cycleId: String(body.cycleId), expectedRevision: Number(body.expectedRevision), idempotencyKey });
       actionResult.subscriptionId = cycle.subscriptionId;
     } else if (["pause", "resume", "terminate"].includes(action)) {
-      const subscription = await setSubscriptionStatus({ memberId: member.id, subscriptionId: String(body.subscriptionId), expectedRevision: Number(body.expectedRevision), status: action === "pause" ? "paused" : action === "resume" ? "active" : "terminated", resumeDate: body.resumeDate ? String(body.resumeDate) : undefined, intervalDays: body.intervalDays == null ? undefined : Number(body.intervalDays), reason: action === "pause" ? "會員暫停配送" : action === "resume" ? "會員選擇新日期恢復配送" : "會員停止定期配送", idempotencyKey });
+      const beforeDashboard = action === "resume"
+        ? await getMemberCommerceDashboard(member.id)
+        : null;
+
+      const subscription = await setSubscriptionStatus({
+        memberId: member.id,
+        subscriptionId: String(body.subscriptionId),
+        expectedRevision: Number(body.expectedRevision),
+        status: action === "pause" ? "paused" : action === "resume" ? "active" : "terminated",
+        resumeDate: body.resumeDate ? String(body.resumeDate) : undefined,
+        intervalDays: body.intervalDays == null ? undefined : Number(body.intervalDays),
+        reason: action === "pause"
+          ? "會員暫停配送"
+          : action === "resume"
+            ? "會員選擇新日期恢復配送"
+            : "會員停止定期配送",
+        idempotencyKey,
+      });
+
       actionResult.subscriptionId = subscription.subscriptionId;
-      if (action === "resume") actionResult.plannedDate = subscription.anchorDate;
+
+      if (action === "resume") {
+        const scheduledCycles = (beforeDashboard?.cycles ?? [])
+          .filter((cycle) =>
+            cycle.subscriptionId === subscription.subscriptionId &&
+            cycle.kind === "scheduled"
+          );
+
+        const editableCycle = scheduledCycles
+          .filter((cycle) => ["scheduled", "modifiable"].includes(cycle.status))
+          .sort((a, b) => b.sequence - a.sequence)[0];
+
+        const committedCycle = scheduledCycles.some((cycle) =>
+          ["locked", "order_created", "shipped", "ready_for_pickup", "blocked_stock"].includes(cycle.status)
+        );
+
+        if (editableCycle) {
+          await modifyCycleDate({
+            memberId: member.id,
+            cycleId: editableCycle.cycleId,
+            expectedRevision: editableCycle.revision,
+            plannedDate: subscription.anchorDate,
+            recalculateAnchor: false,
+            idempotencyKey: `${idempotencyKey}:resume-cycle-date`,
+          });
+        } else if (!committedCycle) {
+          const maxScheduledSequence = scheduledCycles.reduce(
+            (maximum, cycle) => Math.max(maximum, cycle.sequence),
+            0,
+          );
+
+          await generateSubscriptionCycle({
+            subscriptionId: subscription.subscriptionId,
+            sequence: maxScheduledSequence + 1,
+            plannedDate: subscription.anchorDate,
+            kind: "scheduled",
+            idempotencyKey: `${idempotencyKey}:resume-cycle`,
+          });
+        }
+
+        actionResult.plannedDate = subscription.anchorDate;
+      }
     } else if (action === "replenish") {
       const dashboard = await getMemberCommerceDashboard(member.id);
       const subscription = dashboard.subscriptions.find((item) => item.subscriptionId === String(body.subscriptionId));
