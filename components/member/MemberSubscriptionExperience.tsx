@@ -18,6 +18,8 @@ type Dashboard = {
 type Props = Dashboard & { products: Array<{ id: string; name: string; price: number; roast: string }>; rules: { intervalsDays: number[]; customCycleEnabled: boolean; customCycleMinDays: number; customCycleMaxDays: number; delayQuickOptionsDays: number[]; advanceQuickOptionsDays: number[]; preparationLeadDays: number; discountPercent: number; datePickerMode: "quick-and-calendar" | "calendar-only" | "suggestion-and-calendar"; maxModificationsPerCycle: number | null } };
 
 const money = (value: number) => `NT$ ${value.toLocaleString("zh-TW")}`;
+const subscriptionPrice = (value: number, percent: number) =>
+  Math.floor((value * percent + 50) / 100);
 const statusLabel = (value: Subscription["status"]) => ({ pending_activation: "等待首筆訂單取貨", active: "配送中", paused: "已暫停", terminated: "已停止" })[value];
 const redemptionLabel = (status: MemberCreditHistoryEntry["orderRedemptions"][number]["status"]) => status === "released" ? "訂單取消，抵用金已返還" : status === "reserved" ? "本筆已保留折抵" : "本筆已使用";
 const displayDate = (value?: string) => value ? value.replaceAll("-", "/") : "尚未排定";
@@ -54,6 +56,9 @@ export default function MemberSubscriptionExperience(initial: Props) {
   const [cancellationReason, setCancellationReason] = useState("");
   const [cancellationOtherReason, setCancellationOtherReason] = useState("");
   const [replacementDate, setReplacementDate] = useState("");
+  const [showPriceDetails, setShowPriceDetails] = useState(false);
+  const [selectedProductA, setSelectedProductA] = useState("");
+  const [selectedProductB, setSelectedProductB] = useState("");
   const resolvedCancellationReason = cancellationReason === "其他"
     ? cancellationOtherReason.trim()
       ? `其他：${cancellationOtherReason.trim()}`
@@ -97,7 +102,36 @@ export default function MemberSubscriptionExperience(initial: Props) {
   const productName = (id: string) => initial.products.find((product) => product.id === id)?.name ?? id;
   const nextItems = nextCycle?.itemsDraft ?? subscription?.defaultItems ?? [];
   const nextSubtotal = nextItems.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
-  const expectedPayment = Math.floor((nextSubtotal * initial.rules.discountPercent + 50) / 100);
+  const expectedPayment = subscriptionPrice(
+    nextSubtotal,
+    initial.rules.discountPercent,
+  );
+
+  const lockedPricing = nextCycle?.pricingSnapshot ?? null;
+  const displayedOriginal = lockedPricing?.merchandiseOriginal ?? nextSubtotal;
+  const displayedSubscriptionPrice =
+    lockedPricing?.subscriptionPrice ?? expectedPayment;
+  const displayedFinal =
+    lockedPricing?.finalAmount ?? displayedSubscriptionPrice;
+  const subscriptionSaving = Math.max(
+    0,
+    displayedOriginal - displayedSubscriptionPrice,
+  );
+
+  const selectedProductAInfo = initial.products.find(
+    (product) =>
+      product.id ===
+      (selectedProductA ||
+        nextItems[0]?.components[0]?.productId),
+  );
+
+  const selectedProductBInfo = initial.products.find(
+    (product) =>
+      product.id ===
+      (selectedProductB ||
+        nextItems[0]?.components[1]?.productId ||
+        nextItems[0]?.components[0]?.productId),
+  );
   const earliestDate = addDateOnlyDays(getDateOnlyInTimeZone(new Date()), initial.rules.preparationLeadDays);
   const remainingChanges = nextCycle && initial.rules.maxModificationsPerCycle !== null ? Math.max(0, initial.rules.maxModificationsPerCycle - (nextCycle.modificationCount ?? 0)) : null;
 
@@ -169,7 +203,27 @@ export default function MemberSubscriptionExperience(initial: Props) {
           <div><small>取貨門市</small><strong>{subscription.storeSelection?.storeName ?? "工作室自取"}</strong></div>
           <div><small>下一次咖啡</small><strong>{nextItems.flatMap((item) => item.components.map((part) => productName(part.productId))).join(" + ") || "尚未選擇"}</strong></div>
           <div><small>修改截止</small><strong>{nextCycle?.modificationDeadline ?? "啟動後顯示"}</strong></div>
-          <div><small>預估應付</small><strong>{nextCycle ? money(expectedPayment) : "啟動後計算"}</strong><span>未使用抵用金；活動適用時會自動採較優惠價格</span></div>
+          <div>
+  <small>預估應付</small>
+  <strong>{nextCycle ? money(displayedFinal) : "啟動後計算"}</strong>
+  {nextCycle && (
+    <>
+      <span>
+        原價 {money(displayedOriginal)} → 定期購
+        {lockedPricing?.subscriptionDiscountPercent ??
+          initial.rules.discountPercent}
+        折 {money(displayedSubscriptionPrice)}
+      </span>
+      <button
+        type="button"
+        className="member-price-detail-button"
+        onClick={() => setShowPriceDetails(true)}
+      >
+        查看金額明細
+      </button>
+    </>
+  )}
+</div>
         </article>
 
         {currentArrangement && <div className="member-commerce-callout"><strong>目前配送安排</strong><p>{currentArrangement.kind === "manual_replenishment" ? "立即補貨" : "定期配送"}：{displayDate(currentArrangement.plannedDate)}{currentArrangement.createdOrderId ? `（訂單 ${currentArrangement.createdOrderId}）` : "（尚未建立訂單）"}</p></div>}
@@ -178,7 +232,64 @@ export default function MemberSubscriptionExperience(initial: Props) {
           {currentOrderCycle && <details><summary>取消本次配送</summary><div className="member-action-panel"><p>取消本次配送與停止未來定期配送是兩件不同的事。請明確選擇要處理的範圍。</p><label>取消原因<select required value={cancellationReason} onChange={(event) => { setCancellationReason(event.target.value); if (event.target.value !== "其他") setCancellationOtherReason(""); }}><option value="" disabled>請選擇取消原因</option><option value="單純想取消">單純想取消</option><option value="行程／取貨時間不方便">行程／取貨時間不方便</option><option value="咖啡還沒喝完，暫時不需要">咖啡還沒喝完，暫時不需要</option><option value="想更換咖啡／數量／烘焙度">想更換咖啡／數量／烘焙度</option><option value="重複下單或誤操作">重複下單或誤操作</option><option value="預算考量">預算考量</option><option value="其他">其他</option></select></label>{cancellationReason === "其他" && <label>其他取消原因<textarea maxLength={197} required value={cancellationOtherReason} onChange={(event) => setCancellationOtherReason(event.target.value)} placeholder="請簡單告訴我們取消原因" /></label>}<div className="member-action-buttons"><button className="member-danger-soft" disabled={Boolean(busy) || !resolvedCancellationReason} onClick={() => void cancelCurrentDelivery("current")}>只取消本次配送</button><button className="member-danger-soft" disabled={Boolean(busy) || !resolvedCancellationReason} onClick={() => void cancelCurrentDelivery("current-and-stop")}>取消本次配送，並停止之後的定期配送</button></div>{nextCycle && <><label>保留定期配送時的下一次配送日期<input type="date" min={earliestDate} value={replacementDate || nextCycle.plannedDate} onChange={(event) => setReplacementDate(event.target.value)} /></label><button disabled={Boolean(busy) || !resolvedCancellationReason} onClick={() => void cancelCurrentDelivery("current-and-reschedule")}>取消本次配送，保留定期配送並更新下次日期</button></>}<small>若此訂單已建立 7-ELEVEN 寄件資訊，送出後只是取消申請；KD Coffee 確認寄件單作廢前，訂單不會顯示為已取消，也不會回補庫存。</small></div></details>}
           {nextCycle && <details><summary>調整下一次日期</summary><div className="member-action-panel"><p>最早可配送日為 {earliestDate}。選好日期後，請決定只套用本次，或讓之後的定期購也從新日期重新計算。{remainingChanges === null ? "" : ` 本期還可修改 ${remainingChanges} 次。`}</p><label>新的配送日期<input type="date" id="member-next-date" min={earliestDate} defaultValue={nextCycle.plannedDate} /></label><div className="subscription-enrollment-summary"><span>新建立訂單日與修改截止日會在確認後依目前營運規則重新計算。</span></div><div className="member-action-buttons"><button disabled={Boolean(busy) || remainingChanges === 0} onClick={() => { const plannedDate = (document.getElementById("member-next-date") as HTMLInputElement).value; void mutate("change-date", { cycleId: nextCycle.cycleId, expectedRevision: nextCycle.revision, plannedDate, recalculateAnchor: false }); }}>只套用這一次</button><button disabled={Boolean(busy) || remainingChanges === 0} onClick={() => { const plannedDate = (document.getElementById("member-next-date") as HTMLInputElement).value; void mutate("change-date", { cycleId: nextCycle.cycleId, expectedRevision: nextCycle.revision, plannedDate, recalculateAnchor: true }); }}>之後也從新日期重新計算</button></div>{initial.rules.datePickerMode !== "calendar-only" && <div className="member-quick-delays">{initial.rules.advanceQuickOptionsDays.map((days) => <button key={`advance-${days}`} type="button" disabled={Boolean(busy) || remainingChanges === 0} onClick={() => void mutate("advance", { cycleId: nextCycle.cycleId, expectedRevision: nextCycle.revision, plannedDate: addDateOnlyDays(nextCycle.plannedDate, -days), recalculateAnchor: false })}>提前 {days} 天</button>)}{initial.rules.delayQuickOptionsDays.map((days) => <button key={`delay-${days}`} type="button" disabled={Boolean(busy) || remainingChanges === 0} onClick={() => void mutate("delay", { cycleId: nextCycle.cycleId, expectedRevision: nextCycle.revision, plannedDate: addDateOnlyDays(nextCycle.plannedDate, days), recalculateAnchor: false })}>延後 {days} 天</button>)}</div>}</div></details>}
           {nextCycle && <details><summary>跳過這一次</summary><div className="member-action-panel"><p>只跳過 {nextCycle.plannedDate} 這一次，不會改變後續配送週期。</p><button className="member-danger-soft" disabled={Boolean(busy)} onClick={() => void mutate("skip", { cycleId: nextCycle.cycleId, expectedRevision: nextCycle.revision })}>確認跳過</button></div></details>}
-          {nextCycle && initial.products.length > 0 && <details><summary>更換咖啡、份量或烘焙度</summary><form className="member-action-panel" onSubmit={(event) => { event.preventDefault(); const form = new FormData(event.currentTarget); void mutate("change-items", { cycleId: nextCycle.cycleId, expectedRevision: nextCycle.revision, packageWeight: form.get("packageWeight"), productA: form.get("productA"), productB: form.get("productB"), quantity: form.get("quantity"), roast: form.get("roast") }); }}><p>這裡只調整下一次配送。一磅可選同款 A+A，或兩款 A+B。</p><label>份量<select name="packageWeight" defaultValue={nextItems[0]?.packageWeight ?? "half-pound"}><option value="half-pound">半磅</option><option value="one-pound">一磅（兩個半磅組合）</option></select></label><label>第一款咖啡<select name="productA" defaultValue={nextItems[0]?.components[0]?.productId}>{initial.products.map((product) => <option key={product.id} value={product.id}>{product.name}・半磅 {money(product.price)}</option>)}</select></label><label>第二款咖啡（一磅使用）<select name="productB" defaultValue={nextItems[0]?.components[1]?.productId ?? nextItems[0]?.components[0]?.productId}>{initial.products.map((product) => <option key={product.id} value={product.id}>{product.name}・半磅 {money(product.price)}</option>)}</select></label><label>數量<input name="quantity" type="number" min={1} max={12} defaultValue={nextItems[0]?.quantity ?? 1} /></label><label>烘焙度<select name="roast" defaultValue={nextItems[0]?.roast || "淺中焙"}>{ALLOWED_ROAST_LEVELS.map((roast) => <option key={roast} value={roast}>{roast}</option>)}</select></label><button disabled={Boolean(busy)} type="submit">儲存下一次內容</button></form></details>}
+          {nextCycle && initial.products.length > 0 && <details><summary>更換咖啡、份量或烘焙度</summary><form className="member-action-panel" onSubmit={(event) => { event.preventDefault(); const form = new FormData(event.currentTarget); void mutate("change-items", { cycleId: nextCycle.cycleId, expectedRevision: nextCycle.revision, packageWeight: form.get("packageWeight"), productA: form.get("productA"), productB: form.get("productB"), quantity: form.get("quantity"), roast: form.get("roast") }); }}><p>這裡只調整下一次配送。一磅可選同款 A+A，或兩款 A+B。</p><label>份量<select name="packageWeight" defaultValue={nextItems[0]?.packageWeight ?? "half-pound"}><option value="half-pound">半磅</option><option value="one-pound">一磅（兩個半磅組合）</option></select></label><label>
+  第一款咖啡
+  <select
+    name="productA"
+    defaultValue={nextItems[0]?.components[0]?.productId}
+    onChange={(event) => setSelectedProductA(event.target.value)}
+  >
+    {initial.products.map((product) => (
+      <option key={product.id} value={product.id}>
+        {product.name}・半磅 {money(product.price)}
+      </option>
+    ))}
+  </select>
+  {selectedProductAInfo && (
+    <span className="member-subscription-price-preview">
+      一般價 <del>{money(selectedProductAInfo.price)}</del>
+      <b>
+        定期購價{" "}
+        {money(
+          subscriptionPrice(
+            selectedProductAInfo.price,
+            initial.rules.discountPercent,
+          ),
+        )}
+      </b>
+    </span>
+  )}
+</label><label>
+  第二款咖啡（一磅使用）
+  <select
+    name="productB"
+    defaultValue={
+      nextItems[0]?.components[1]?.productId ??
+      nextItems[0]?.components[0]?.productId
+    }
+    onChange={(event) => setSelectedProductB(event.target.value)}
+  >
+    {initial.products.map((product) => (
+      <option key={product.id} value={product.id}>
+        {product.name}・半磅 {money(product.price)}
+      </option>
+    ))}
+  </select>
+  {selectedProductBInfo && (
+    <span className="member-subscription-price-preview">
+      一般價 <del>{money(selectedProductBInfo.price)}</del>
+      <b>
+        定期購價{" "}
+        {money(
+          subscriptionPrice(
+            selectedProductBInfo.price,
+            initial.rules.discountPercent,
+          ),
+        )}
+      </b>
+    </span>
+  )}
+</label><label>數量<input name="quantity" type="number" min={1} max={12} defaultValue={nextItems[0]?.quantity ?? 1} /></label><label>烘焙度<select name="roast" defaultValue={nextItems[0]?.roast || "淺中焙"}>{ALLOWED_ROAST_LEVELS.map((roast) => <option key={roast} value={roast}>{roast}</option>)}</select></label><button disabled={Boolean(busy)} type="submit">儲存下一次內容</button></form></details>}
           <details><summary>更換 7-ELEVEN 門市</summary><form className="member-action-panel" onSubmit={(event) => { event.preventDefault(); const form = new FormData(event.currentTarget); void mutate("change-store", { subscriptionId: subscription.subscriptionId, expectedRevision: subscription.revision, storeId: form.get("storeId"), storeName: form.get("storeName") }); }}><StoreSelector initialStore={subscription.storeSelection ? { id: subscription.storeSelection.storeId, name: subscription.storeSelection.storeName, address: "" } : undefined} /><button disabled={Boolean(busy)} type="submit">儲存門市</button></form></details>
           <details><summary>暫停、恢復或停止未來定期配送</summary><div className="member-action-panel"><p>這裡只管理未來的定期配送；停止定期配送不會取消已建立的本次訂單。</p>{subscription.status === "active" && <button disabled={Boolean(busy)} onClick={() => void mutate("pause", { subscriptionId: subscription.subscriptionId, expectedRevision: subscription.revision })}>暫停未來定期配送</button>}{subscription.status === "paused" && <><label>恢復日期<input type="date" value={resumeDate} onChange={(event) => setResumeDate(event.target.value)} /></label><label>新的配送週期<select
   value={resumeIntervalMode === "custom" ? "custom" : resumeInterval}
@@ -219,6 +330,112 @@ export default function MemberSubscriptionExperience(initial: Props) {
       </div>}
     </section>
 
+    {showPriceDetails && nextCycle && (
+      <div
+        className="member-price-modal-backdrop"
+        role="presentation"
+        onClick={() => setShowPriceDetails(false)}
+      >
+        <div
+          className="member-price-modal"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="member-price-detail-title"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <div className="member-price-modal-head">
+            <div>
+              <small>SUBSCRIPTION PRICE</small>
+              <h3 id="member-price-detail-title">本期金額明細</h3>
+            </div>
+            <button
+              type="button"
+              aria-label="關閉"
+              onClick={() => setShowPriceDetails(false)}
+            >
+              ×
+            </button>
+          </div>
+
+          <div className="member-price-breakdown">
+            <div>
+              <span>商品原價</span>
+              <strong>{money(displayedOriginal)}</strong>
+            </div>
+
+            <div>
+              <span>
+                定期購優惠（
+                {lockedPricing?.subscriptionDiscountPercent ??
+                  initial.rules.discountPercent}
+                折）
+              </span>
+              <strong>− {money(subscriptionSaving)}</strong>
+            </div>
+
+            <div>
+              <span>定期購價格</span>
+              <strong>{money(displayedSubscriptionPrice)}</strong>
+            </div>
+
+            {lockedPricing?.campaignPrice != null && (
+              <div>
+                <span>活動價格</span>
+                <strong>{money(lockedPricing.campaignPrice)}</strong>
+              </div>
+            )}
+
+            <div>
+              <span>本期採用</span>
+              <strong>
+                {lockedPricing
+                  ? lockedPricing.selectedPriceSource === "campaign"
+                    ? "活動優惠價"
+                    : "定期購優惠價"
+                  : "鎖定本期時自動比較較優惠價格"}
+              </strong>
+            </div>
+
+            {lockedPricing && (
+              <>
+                <div>
+                  <span>配送費</span>
+                  <strong>{money(lockedPricing.shipping)}</strong>
+                </div>
+
+                <div>
+                  <span>抵用金</span>
+                  <strong>
+                    − {money(lockedPricing.creditReserved)}
+                  </strong>
+                </div>
+              </>
+            )}
+          </div>
+
+          <div className="member-price-modal-total">
+            <span>
+              {lockedPricing ? "本期應付" : "目前預估應付"}
+            </span>
+            <strong>{money(displayedFinal)}</strong>
+          </div>
+
+          {!lockedPricing && (
+            <p className="member-price-modal-note">
+              此期尚未鎖定。活動優惠、配送費與抵用金會在本期鎖定時依正式規則重新計算，系統會自動採用較優惠的商品價格。
+            </p>
+          )}
+
+          <button
+            type="button"
+            className="member-price-modal-close"
+            onClick={() => setShowPriceDetails(false)}
+          >
+            我知道了
+          </button>
+        </div>
+      </div>
+    )}
     <section className="member-commerce-section" id="credit"><div className="member-section-head"><div><p className="eyebrow dark">CREDIT</p><h2>我的抵用金</h2></div><strong>{money(availableCredit)}</strong></div><div className="member-credit-summary"><div><small>現在可用</small><strong>{money(availableCredit)}</strong></div><div><small>待符合資格</small><strong>{money(dashboard.pendingCredit)}</strong></div></div>{dashboard.credits.length ? <div className="member-credit-history">{dashboard.credits.map((entry) => <article key={entry.creditEntryId}><div><strong>{entry.direction === "deduct" ? "−" : "+"} {money(Math.abs(entry.amount))}</strong><small>{entry.sourceLabel}</small>{entry.orderRedemptions.map((redemption) => <span className={`member-credit-redemption ${redemption.status}`} key={`${entry.creditEntryId}-${redemption.orderNumber}`}><b>{redemptionLabel(redemption.status)} {money(redemption.amount)}</b><Link href={`/orders/${encodeURIComponent(redemption.orderNumber)}`}>訂單 {redemption.orderNumber}</Link></span>)}</div><div><span>餘額 {money(entry.remainingAmount)}</span>{entry.amount > 0 ? <small>到期 {entry.expiresAt.slice(0, 10)}</small> : null}</div></article>)}</div> : <div className="member-commerce-empty compact"><strong>目前沒有抵用金紀錄</strong><p>有抵用金時，結帳會讓您自行選擇是否使用，並優先使用最快到期的額度。</p></div>}</section>
 
     <section className="member-commerce-section" id="referral-summary"><div className="member-section-head"><div><p className="eyebrow dark">REFERRAL</p><h2>推薦紀錄摘要</h2></div><span>{dashboard.referrals.length} 位</span></div>{dashboard.referrals.length ? <div className="member-referral-list">{dashboard.referrals.map((item) => <article key={item.memberNumberReference}><div><strong>{item.safeDisplayName || "KD Coffee 會員"}</strong><small>已加入會員</small></div><div><span>符合 {item.qualifiedPurchases} 次</span><strong>{money(item.rewards)}</strong></div></article>)}</div> : <div className="member-commerce-empty compact"><strong>還沒有推薦紀錄</strong><p>這裡只會顯示安全的會員稱呼、是否加入與回饋進度，不會顯示對方的聯絡資料。</p></div>}</section>
