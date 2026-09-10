@@ -6,6 +6,7 @@ import {
   MembershipRevisionConflictError,
   generateSubscriptionCycle,
   getMemberCommerceDashboard,
+  lockSubscriptionCycle,
   memberSkipCycle,
   modifyCycleDate,
   setSubscriptionStatus,
@@ -83,7 +84,13 @@ export async function PATCH(request: Request) {
       if (!subscription) throw new MembershipCommerceError("找不到定期購");
       const version = await getActiveMembershipRules();
       const plannedDate = addTaipeiCalendarDays(new Date().toISOString().slice(0, 10), version.rules.subscription.preparationLeadDays);
-      await generateSubscriptionCycle({ subscriptionId: subscription.subscriptionId, sequence: Date.now(), plannedDate, kind: "manual_replenishment", idempotencyKey });
+      const cycle = await generateSubscriptionCycle({ subscriptionId: subscription.subscriptionId, sequence: Date.now(), plannedDate, kind: "manual_replenishment", idempotencyKey });
+      const shipping = version.rules.shipping.subscriptionFreeShipping ? 0 : version.rules.shipping.subscriptionShippingFee;
+      await lockSubscriptionCycle({
+        cycleId: cycle.cycleId,
+        idempotencyKey: `${idempotencyKey}:lock`,
+        shipping,
+      });
     } else if (action === "change-store") {
       await updateSubscriptionPreferences({ memberId: member.id, subscriptionId: String(body.subscriptionId), expectedRevision: Number(body.expectedRevision), shippingMethod: "711_cod", storeSelection: { storeId: String(body.storeId || "").slice(0, 10), storeName: String(body.storeName || "").slice(0, 60) }, idempotencyKey });
     } else if (action === "change-items") {
