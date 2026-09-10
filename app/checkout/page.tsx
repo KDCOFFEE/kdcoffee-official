@@ -38,6 +38,7 @@ export default function CheckoutPage() {
   const [pickupDate, setPickupDate] = useState("");
   const [joinSubscription, setJoinSubscription] = useState(false);
   const [subscriptionInterval, setSubscriptionInterval] = useState(30);
+  const [subscriptionIntervalMode, setSubscriptionIntervalMode] = useState<"preset" | "custom">("preset");
   const [subscriptionStartDate, setSubscriptionStartDate] = useState("");
   const [operationalRules, setOperationalRules] = useState<{ pickup: { earliestStandardDate: string; earliestCustomRoastDate: string; blockedDates: string[] }; subscription: { intervalsDays: number[]; customCycleEnabled: boolean; customCycleMinDays: number; customCycleMaxDays: number; earliestDate: string }; credit: { uiMode: "amount-and-maximum" | "use-or-not" | "automatic-maximum" | "custom-amount"; showAmountInput: boolean; showMaximumButton: boolean; automaticallyUseMaximum: boolean; allowZeroTotal: boolean; appliesToShipping: boolean } } | null>(null);
   const [creditQuote, setCreditQuote] = useState<{ availableBalance: number; maximumUsable: number; minimumPayable: number } | null>(null);
@@ -57,7 +58,16 @@ export default function CheckoutPage() {
     fetch("/api/commerce/operational-rules", { cache: "no-store" }).then((response) => response.ok ? response.json() : null).then((result) => {
       if (!result) return;
       setOperationalRules(result);
-      if (Array.isArray(result.subscription?.intervalsDays) && result.subscription.intervalsDays.length) setSubscriptionInterval(result.subscription.intervalsDays[0]);
+      if (
+        Array.isArray(result.subscription?.intervalsDays) &&
+        result.subscription.intervalsDays.length
+      ) {
+        const defaultInterval = result.subscription.intervalsDays.includes(30)
+          ? 30
+          : result.subscription.intervalsDays[0];
+        setSubscriptionIntervalMode("preset");
+        setSubscriptionInterval(defaultInterval);
+      }
     }).catch(() => undefined);
   }, []);
   useEffect(() => {
@@ -162,8 +172,21 @@ export default function CheckoutPage() {
           {mode === "studio_pickup" && <section className="form-card"><div className="form-card-head"><span>03</span><h2>工作室自取</h2></div><div className="delivery-notice"><strong>KD Coffee 咖啡藝術工坊自取</strong><p>{hasCustomRoast ? `本訂單含專屬烘焙，需預留製作時間，最早可於 ${earliestPickupDate} 取貨。` : `最早可於 ${earliestPickupDate} 取貨。請選擇希望日期，工作室確認後會通知你。`}</p></div><div className="store-selector-grid"><label>希望取貨日期<input type="date" name="pickupDate" min={earliestPickupDate} value={pickupDate} onChange={event=>setPickupDate(event.target.value)} required /><span className="field-help">第一版只需選日期，不需要選上午／下午時段。</span></label></div></section>}
           {member && creditQuote && creditQuote.availableBalance > 0 && <section className="form-card"><div className="form-card-head"><span>04</span><h2>會員抵用金</h2></div><div className="delivery-notice"><strong>目前可用 NT$ {creditQuote.availableBalance.toLocaleString("zh-TW")}</strong><p>本次最多可折 NT$ {creditQuote.maximumUsable.toLocaleString("zh-TW")}；系統會優先使用較早到期的額度。</p></div>{operationalRules?.credit.uiMode === "use-or-not" ? <label className="terms-check"><input type="checkbox" checked={useCredit} onChange={(event) => { setUseCredit(event.target.checked); setRequestedCredit(event.target.checked ? creditQuote.maximumUsable : 0); }} />使用本次可折抵的最高金額</label> : operationalRules?.credit.uiMode === "automatic-maximum" ? <p className="member-notice">已自動套用最大折抵 NT$ {creditQuote.maximumUsable.toLocaleString("zh-TW")}</p> : <div className="subscription-enrollment-fields"><label>本次折抵金額<input type="number" min={0} max={creditQuote.maximumUsable} value={requestedCredit} onChange={(event) => setRequestedCredit(Math.min(creditQuote.maximumUsable, Math.max(0, Number(event.target.value) || 0)))} /></label>{operationalRules?.credit.showMaximumButton && <button type="button" onClick={() => setRequestedCredit(creditQuote.maximumUsable)}>最大折抵</button>}</div>}<div className="subscription-enrollment-summary"><span>折抵後預計應付 NT$ {Math.max(0, subtotal + shipping - requestedCredit).toLocaleString("zh-TW")}</span></div></section>}
           <section className="form-card"><div className="form-card-head"><span>04</span><h2>備註</h2></div><label>其他說明 <small>選填</small><textarea name="note" maxLength={300} rows={4} placeholder="有需要我們特別注意的事項，請寫在這裡" /></label></section>
-          {member && joinSubscription && operationalRules?.subscription.customCycleEnabled && <button type="button" className="text-link" onClick={() => setSubscriptionInterval(operationalRules.subscription.customCycleMinDays)}>改用自訂配送週期</button>}
-          {member && <section className="form-card subscription-enrollment-card"><div className="form-card-head"><span>05</span><h2>從這次開始定期配送</h2></div><label className="terms-check"><input type="checkbox" checked={joinSubscription} onChange={(event) => setJoinSubscription(event.target.checked)} />我想在這筆訂單成功取貨後，開始定期配送</label>{joinSubscription && <div className="subscription-enrollment-fields"><div className="delivery-notice"><strong>這筆仍以一般原價購買</strong><p>成功取貨後才啟動；第一次續訂起享定期價格。開啟或返回此頁都不會自動建立訂單。</p></div><label>配送週期<select value={(operationalRules?.subscription.intervalsDays ?? []).includes(subscriptionInterval) ? subscriptionInterval : "custom"} onChange={(event) => { if (event.target.value !== "custom") setSubscriptionInterval(Number(event.target.value)); }}>{(operationalRules?.subscription.intervalsDays ?? [30,45,60,75,90]).map((days) => <option value={days} key={days}>每 {days} 天</option>)}{operationalRules?.subscription.customCycleEnabled && <option value="custom">自訂天數</option>}</select></label>{operationalRules?.subscription.customCycleEnabled && !(operationalRules.subscription.intervalsDays ?? []).includes(subscriptionInterval) && <label>自訂配送週期<input type="number" min={operationalRules.subscription.customCycleMinDays} max={operationalRules.subscription.customCycleMaxDays} value={subscriptionInterval} onChange={(event) => setSubscriptionInterval(Number(event.target.value))} /><small>可設定 {operationalRules.subscription.customCycleMinDays}～{operationalRules.subscription.customCycleMaxDays} 天；伺服器會再次驗證。</small></label>}<label>希望第一次續訂日期<input type="date" value={subscriptionStartDate} min={operationalRules?.subscription.earliestDate ?? addDateOnlyDays(today, 3)} onChange={(event) => setSubscriptionStartDate(event.target.value)} required={joinSubscription} /></label><div className="subscription-enrollment-summary"><strong>加入內容確認</strong><span>{items.length} 組作品・每 {subscriptionInterval} 天</span><span>首筆原價 {`NT$ ${subtotal.toLocaleString("zh-TW")}`}；取貨成功後才生效</span></div></div>}</section>}
+          {member && joinSubscription && operationalRules?.subscription.customCycleEnabled && <button type="button" className="text-link" onClick={() => { setSubscriptionIntervalMode("custom"); setSubscriptionInterval(operationalRules.subscription.customCycleMinDays); }}>改用自訂配送週期</button>}
+          {member && <section className="form-card subscription-enrollment-card"><div className="form-card-head"><span>05</span><h2>從這次開始定期配送</h2></div><label className="terms-check"><input type="checkbox" checked={joinSubscription} onChange={(event) => setJoinSubscription(event.target.checked)} />我想在這筆訂單成功取貨後，開始定期配送</label>{joinSubscription && <div className="subscription-enrollment-fields"><div className="delivery-notice"><strong>這筆仍以一般原價購買</strong><p>成功取貨後才啟動；第一次續訂起享定期價格。開啟或返回此頁都不會自動建立訂單。</p></div><label>配送週期<select
+  value={subscriptionIntervalMode === "custom" ? "custom" : subscriptionInterval}
+  onChange={(event) => {
+    if (event.target.value === "custom") {
+      setSubscriptionIntervalMode("custom");
+      setSubscriptionInterval(
+        operationalRules?.subscription.customCycleMinDays ?? 20
+      );
+      return;
+    }
+    setSubscriptionIntervalMode("preset");
+    setSubscriptionInterval(Number(event.target.value));
+  }}
+>{(operationalRules?.subscription.intervalsDays ?? [30,45,60,75,90]).map((days) => <option value={days} key={days}>每 {days} 天</option>)}{operationalRules?.subscription.customCycleEnabled && <option value="custom">自訂天數</option>}</select></label>{operationalRules?.subscription.customCycleEnabled && subscriptionIntervalMode === "custom" && <label>自訂配送週期<input type="number" min={operationalRules.subscription.customCycleMinDays} max={operationalRules.subscription.customCycleMaxDays} value={subscriptionInterval} onChange={(event) => setSubscriptionInterval(Number(event.target.value))} /><small>可設定 {operationalRules.subscription.customCycleMinDays}～{operationalRules.subscription.customCycleMaxDays} 天；伺服器會再次驗證。</small></label>}<label>希望第一次續訂日期<input type="date" value={subscriptionStartDate} min={operationalRules?.subscription.earliestDate ?? addDateOnlyDays(today, 3)} onChange={(event) => setSubscriptionStartDate(event.target.value)} required={joinSubscription} /></label><div className="subscription-enrollment-summary"><strong>加入內容確認</strong><span>{items.length} 組作品・每 {subscriptionInterval} 天</span><span>首筆原價 {`NT$ ${subtotal.toLocaleString("zh-TW")}`}；取貨成功後才生效</span></div></div>}</section>}
           <label className="terms-check"><input type="checkbox" required />我已確認聯絡資料正確，並同意 KD Coffee 為處理本次訂購而聯絡我。</label>
           {error && <p className="form-error">{error}</p>}{warning && <p className="form-error">{warning}</p>}
         </div>

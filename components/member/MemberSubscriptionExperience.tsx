@@ -41,7 +41,16 @@ export default function MemberSubscriptionExperience(initial: Props) {
   const [busy, setBusy] = useState("");
   const [message, setMessage] = useState("");
   const [resumeDate, setResumeDate] = useState("");
-  const [resumeInterval, setResumeInterval] = useState(initial.rules.intervalsDays[0] ?? 30);
+  const initialResumeInterval =
+    initial.subscriptions[0]?.intervalDays ??
+    initial.rules.intervalsDays[0] ??
+    30;
+  const [resumeInterval, setResumeInterval] = useState(initialResumeInterval);
+  const [resumeIntervalMode, setResumeIntervalMode] = useState<"preset" | "custom">(
+    initial.rules.intervalsDays.includes(initialResumeInterval)
+      ? "preset"
+      : "custom",
+  );
   const [cancellationReason, setCancellationReason] = useState("");
   const [cancellationOtherReason, setCancellationOtherReason] = useState("");
   const [replacementDate, setReplacementDate] = useState("");
@@ -171,7 +180,40 @@ export default function MemberSubscriptionExperience(initial: Props) {
           {nextCycle && <details><summary>跳過這一次</summary><div className="member-action-panel"><p>只跳過 {nextCycle.plannedDate} 這一次，不會改變後續配送週期。</p><button className="member-danger-soft" disabled={Boolean(busy)} onClick={() => void mutate("skip", { cycleId: nextCycle.cycleId, expectedRevision: nextCycle.revision })}>確認跳過</button></div></details>}
           {nextCycle && initial.products.length > 0 && <details><summary>更換咖啡、份量或烘焙度</summary><form className="member-action-panel" onSubmit={(event) => { event.preventDefault(); const form = new FormData(event.currentTarget); void mutate("change-items", { cycleId: nextCycle.cycleId, expectedRevision: nextCycle.revision, packageWeight: form.get("packageWeight"), productA: form.get("productA"), productB: form.get("productB"), quantity: form.get("quantity"), roast: form.get("roast") }); }}><p>這裡只調整下一次配送。一磅可選同款 A+A，或兩款 A+B。</p><label>份量<select name="packageWeight" defaultValue={nextItems[0]?.packageWeight ?? "half-pound"}><option value="half-pound">半磅</option><option value="one-pound">一磅（兩個半磅組合）</option></select></label><label>第一款咖啡<select name="productA" defaultValue={nextItems[0]?.components[0]?.productId}>{initial.products.map((product) => <option key={product.id} value={product.id}>{product.name}・半磅 {money(product.price)}</option>)}</select></label><label>第二款咖啡（一磅使用）<select name="productB" defaultValue={nextItems[0]?.components[1]?.productId ?? nextItems[0]?.components[0]?.productId}>{initial.products.map((product) => <option key={product.id} value={product.id}>{product.name}・半磅 {money(product.price)}</option>)}</select></label><label>數量<input name="quantity" type="number" min={1} max={12} defaultValue={nextItems[0]?.quantity ?? 1} /></label><label>烘焙度<select name="roast" defaultValue={nextItems[0]?.roast || "淺中焙"}>{ALLOWED_ROAST_LEVELS.map((roast) => <option key={roast} value={roast}>{roast}</option>)}</select></label><button disabled={Boolean(busy)} type="submit">儲存下一次內容</button></form></details>}
           <details><summary>更換 7-ELEVEN 門市</summary><form className="member-action-panel" onSubmit={(event) => { event.preventDefault(); const form = new FormData(event.currentTarget); void mutate("change-store", { subscriptionId: subscription.subscriptionId, expectedRevision: subscription.revision, storeId: form.get("storeId"), storeName: form.get("storeName") }); }}><StoreSelector initialStore={subscription.storeSelection ? { id: subscription.storeSelection.storeId, name: subscription.storeSelection.storeName, address: "" } : undefined} /><button disabled={Boolean(busy)} type="submit">儲存門市</button></form></details>
-          <details><summary>暫停、恢復或停止未來定期配送</summary><div className="member-action-panel"><p>這裡只管理未來的定期配送；停止定期配送不會取消已建立的本次訂單。</p>{subscription.status === "active" && <button disabled={Boolean(busy)} onClick={() => void mutate("pause", { subscriptionId: subscription.subscriptionId, expectedRevision: subscription.revision })}>暫停未來定期配送</button>}{subscription.status === "paused" && <><label>恢復日期<input type="date" value={resumeDate} onChange={(event) => setResumeDate(event.target.value)} /></label><label>新的配送週期<select value={resumeInterval} onChange={(event) => setResumeInterval(Number(event.target.value))}>{initial.rules.intervalsDays.map((days) => <option key={days} value={days}>每 {days} 天</option>)}</select></label><button disabled={Boolean(busy) || !resumeDate} onClick={() => void mutate("resume", { subscriptionId: subscription.subscriptionId, expectedRevision: subscription.revision, resumeDate, intervalDays: resumeInterval })}>確認恢復</button></>}<button className="member-danger-soft" disabled={Boolean(busy)} onClick={() => void mutate("terminate", { subscriptionId: subscription.subscriptionId, expectedRevision: subscription.revision })}>只停止之後的定期配送，本次配送照常</button></div></details>
+          <details><summary>暫停、恢復或停止未來定期配送</summary><div className="member-action-panel"><p>這裡只管理未來的定期配送；停止定期配送不會取消已建立的本次訂單。</p>{subscription.status === "active" && <button disabled={Boolean(busy)} onClick={() => void mutate("pause", { subscriptionId: subscription.subscriptionId, expectedRevision: subscription.revision })}>暫停未來定期配送</button>}{subscription.status === "paused" && <><label>恢復日期<input type="date" value={resumeDate} onChange={(event) => setResumeDate(event.target.value)} /></label><label>新的配送週期<select
+  value={resumeIntervalMode === "custom" ? "custom" : resumeInterval}
+  onChange={(event) => {
+    if (event.target.value === "custom") {
+      setResumeIntervalMode("custom");
+      setResumeInterval(initial.rules.customCycleMinDays);
+      return;
+    }
+    setResumeIntervalMode("preset");
+    setResumeInterval(Number(event.target.value));
+  }}
+>
+{initial.rules.intervalsDays.map((days) => <option key={days} value={days}>每 {days} 天</option>)}
+{initial.rules.customCycleEnabled && <option value="custom">自訂天數</option>}
+</select>
+</label>
+{initial.rules.customCycleEnabled && resumeIntervalMode === "custom" && (
+  <label>
+    自訂配送週期
+    <input
+      type="number"
+      min={initial.rules.customCycleMinDays}
+      max={initial.rules.customCycleMaxDays}
+      value={resumeInterval}
+      onChange={(event) =>
+        setResumeInterval(Number(event.target.value))
+      }
+    />
+    <small>
+      可設定 {initial.rules.customCycleMinDays}～{initial.rules.customCycleMaxDays} 天
+    </small>
+  </label>
+)}
+<button disabled={Boolean(busy) || !resumeDate} onClick={() => void mutate("resume", { subscriptionId: subscription.subscriptionId, expectedRevision: subscription.revision, resumeDate, intervalDays: resumeInterval })}>確認恢復</button></>}<button className="member-danger-soft" disabled={Boolean(busy)} onClick={() => void mutate("terminate", { subscriptionId: subscription.subscriptionId, expectedRevision: subscription.revision })}>只停止之後的定期配送，本次配送照常</button></div></details>
           {subscription.status === "active" && <button className="member-replenish-button" disabled={Boolean(busy)} onClick={() => void mutate("replenish", { subscriptionId: subscription.subscriptionId })}>立即補貨（不改下次日期）</button>}
         </div>}
       </div>}
