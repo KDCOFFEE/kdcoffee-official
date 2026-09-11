@@ -48,7 +48,7 @@ export async function PATCH(request: Request) {
     const actionResult: { action: string; plannedDate?: string; subscriptionId?: string } = { action };
 
     if (["advance", "delay", "change-date"].includes(action)) {
-      const cycle = await modifyCycleDate({ memberId: member.id, cycleId: String(body.cycleId), expectedRevision: Number(body.expectedRevision), plannedDate: String(body.plannedDate), recalculateAnchor: Boolean(body.recalculateAnchor), idempotencyKey });
+      const cycle = await modifyCycleDate({ memberId: member.id, cycleId: String(body.cycleId), expectedRevision: Number(body.expectedRevision), plannedDate: String(body.plannedDate), recalculateAnchor: Boolean(body.recalculateAnchor), rushWarningAcknowledged: body.rushWarningAcknowledged === true, idempotencyKey });
       actionResult.plannedDate = cycle.plannedDate;
       actionResult.subscriptionId = cycle.subscriptionId;
     } else if (action === "skip") {
@@ -164,7 +164,7 @@ export async function PATCH(request: Request) {
       } catch (error) {
         throw new MembershipCommerceError(error instanceof Error ? error.message : "定期購商品設定不正確");
       }
-      await updateCycleItems({ memberId: member.id, cycleId: cycle.cycleId, expectedRevision: Number(body.expectedRevision), items, idempotencyKey });
+      await updateCycleItems({ memberId: member.id, cycleId: cycle.cycleId, expectedRevision: Number(body.expectedRevision), items, rushWarningAcknowledged: body.rushWarningAcknowledged === true, idempotencyKey });
     } else {
       throw new MembershipCommerceError("不支援的操作");
     }

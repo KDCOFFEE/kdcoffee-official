@@ -10,18 +10,27 @@ import {
   changeBeanPackageWeight,
   changeSubscriptionEditorItemKind,
   createSubscriptionEditorItem,
+  editorDedicatedRoastProducts,
   effectiveMemberSubscriptionItemLimit,
   initializeSubscriptionEditorItems,
+  normalizeSubscriptionEditorDedicatedRoasts,
   removeSubscriptionEditorItem,
+  setSubscriptionEditorDedicatedRoast,
   skuOption,
   subscriptionEditorItemError,
   subscriptionEditorItemPrices,
+  subscriptionEditorHasDedicatedRoast,
   subscriptionEditorPayload,
   subscriptionItemsSummary,
   subscriptionPrice,
   type MemberSubscriptionProduct,
   type SubscriptionEditorItem,
 } from "@/components/member/memberSubscriptionEditorModel";
+import {
+  DEDICATED_ROAST_STANDARD_PREPARATION_DAYS,
+  dedicatedRoastRushRequired,
+  subscriptionHasDedicatedRoast,
+} from "@/lib/subscriptionRoastPolicy";
 
 type Subscription = {
   subscriptionId: string;
@@ -74,6 +83,11 @@ type Dashboard = {
   referrals: Array<{ memberNumberReference: string; safeDisplayName: string; joined: boolean; qualifiedPurchases: number; rewards: number; status: string }>;
 };
 
+type PendingRushConfirmation =
+  | { kind: "items" }
+  | { kind: "date"; action: "advance" | "delay" | "change-date"; payload: Record<string, unknown> }
+  | { kind: "cancel-reschedule" };
+
 type Props = Dashboard & { products: MemberSubscriptionProduct[]; rules: { intervalsDays: number[]; customCycleEnabled: boolean; customCycleMinDays: number; customCycleMaxDays: number; delayQuickOptionsDays: number[]; advanceQuickOptionsDays: number[]; preparationLeadDays: number; discountPercent: number; datePickerMode: "quick-and-calendar" | "calendar-only" | "suggestion-and-calendar"; maxModificationsPerCycle: number | null; allowOtherSubscriptionProducts?: boolean; allowHalfToOnePound?: boolean; allowOneToHalfPound?: boolean; allowMixedOnePound?: boolean; allowQuantityChange?: boolean; maxItems?: number } };
 
 const money = (value: number) => `NT$ ${value.toLocaleString("zh-TW")}`;
@@ -104,6 +118,10 @@ function readSkuChoice(value: string) {
   } catch {
     return { productId: "", skuId: "" };
   }
+}
+
+function initialDedicatedRoastLevel(configuredRoast: string) {
+  return ALLOWED_ROAST_LEVELS.find((level) => level === configuredRoast) ?? ALLOWED_ROAST_LEVELS[0];
 }
 
 function ItemPricePreview({ item, products, discountPercent }: { item: SubscriptionEditorItem; products: MemberSubscriptionProduct[]; discountPercent: number }) {
@@ -138,6 +156,7 @@ export default function MemberSubscriptionExperience(initial: Props) {
   const [cancellationOtherReason, setCancellationOtherReason] = useState("");
   const [replacementDate, setReplacementDate] = useState("");
   const [showPriceDetails, setShowPriceDetails] = useState(false);
+  const [rushConfirmation, setRushConfirmation] = useState<PendingRushConfirmation | null>(null);
   const initialEditorSubscription = initial.subscriptions.find((item) => item.status !== "terminated") ?? initial.subscriptions[0];
   const initialEditorCycle = initialEditorSubscription ? initial.cycles.find((item) => item.subscriptionId === initialEditorSubscription.subscriptionId && ["scheduled", "modifiable"].includes(item.status)) : undefined;
   const initialEditorSource = initialEditorCycle?.itemsDraft ?? initialEditorSubscription?.defaultItems ?? [];
@@ -207,7 +226,10 @@ export default function MemberSubscriptionExperience(initial: Props) {
     displayedOriginal - displayedSubscriptionPrice,
   );
 
-  const earliestDate = addDateOnlyDays(getDateOnlyInTimeZone(new Date()), initial.rules.preparationLeadDays);
+  const today = getDateOnlyInTimeZone(new Date());
+  const earliestDate = addDateOnlyDays(today, initial.rules.preparationLeadDays);
+  const nextCycleHasDedicatedRoast = subscriptionHasDedicatedRoast(nextItems);
+  const nextDateMinimum = nextCycleHasDedicatedRoast ? today : earliestDate;
   const remainingChanges = nextCycle && initial.rules.maxModificationsPerCycle !== null ? Math.max(0, initial.rules.maxModificationsPerCycle - (nextCycle.modificationCount ?? 0)) : null;
   const allowedProductIds = allowOtherSubscriptionProducts ? undefined : originalProductIds;
   const beanChoices = initial.products.flatMap((product) => allowedProductIds && !allowedProductIds.has(product.id) ? [] : product.options.filter((option) => option.kind === "beans").map((option) => ({ product, option })));
@@ -216,22 +238,51 @@ export default function MemberSubscriptionExperience(initial: Props) {
   const editorHasError = editorErrors.some(Boolean);
   const editorAtLimit = editorItems.length >= maxEditorItems;
   const editorModificationLocked = remainingChanges === 0;
+  const dedicatedRoastProducts = editorDedicatedRoastProducts(editorItems, initial.products);
 
   function updateEditorItem(localKey: string, update: (item: SubscriptionEditorItem) => SubscriptionEditorItem) {
-    setEditorItems((items) => items.map((item) => item.localKey === localKey ? update(item) : item));
+    setEditorItems((items) => normalizeSubscriptionEditorDedicatedRoasts(items.map((item) => item.localKey === localKey ? update(item) : item)));
   }
 
-  async function saveEditorItems() {
+  async function saveEditorItems(rushWarningAcknowledged = false) {
     if (!nextCycle || editorHasError || !editorItems.length || editorModificationLocked) return;
-    const result = await mutate("change-items", { cycleId: nextCycle.cycleId, expectedRevision: nextCycle.revision, items: subscriptionEditorPayload(editorItems) });
+    const rushRequired = dedicatedRoastRushRequired({ hasDedicatedRoast: subscriptionEditorHasDedicatedRoast(editorItems), plannedDate: nextCycle.plannedDate, today });
+    if (rushRequired && !rushWarningAcknowledged) {
+      setRushConfirmation({ kind: "items" });
+      return;
+    }
+    const result = await mutate("change-items", { cycleId: nextCycle.cycleId, expectedRevision: nextCycle.revision, items: subscriptionEditorPayload(editorItems), rushWarningAcknowledged });
     const savedCycle = result?.cycles?.find((cycle: SubscriptionCycle) => cycle.cycleId === nextCycle.cycleId);
     if (savedCycle?.itemsDraft) setEditorItems(initializeSubscriptionEditorItems(savedCycle.itemsDraft, initial.products));
   }
 
-  async function cancelCurrentDelivery(choice: "current" | "current-and-stop" | "current-and-reschedule") {
+  async function requestDateMutation(action: "advance" | "delay" | "change-date", payload: Record<string, unknown>, rushWarningAcknowledged = false) {
+    const plannedDate = String(payload.plannedDate || "");
+    const rushRequired = dedicatedRoastRushRequired({ hasDedicatedRoast: nextCycleHasDedicatedRoast, plannedDate, today });
+    if (rushRequired && !rushWarningAcknowledged) {
+      setRushConfirmation({ kind: "date", action, payload });
+      return;
+    }
+    await mutate(action, { ...payload, rushWarningAcknowledged });
+  }
+
+  async function continueRushAction() {
+    const pending = rushConfirmation;
+    if (!pending) return;
+    setRushConfirmation(null);
+    if (pending.kind === "items") await saveEditorItems(true);
+    else if (pending.kind === "cancel-reschedule") await cancelCurrentDelivery("current-and-reschedule", true);
+    else await requestDateMutation(pending.action, pending.payload, true);
+  }
+
+  async function cancelCurrentDelivery(choice: "current" | "current-and-stop" | "current-and-reschedule", rushWarningAcknowledged = false) {
     if (!currentOrderCycle?.createdOrderId) return;
     if (!resolvedCancellationReason) {
       setMessage(cancellationReason === "其他" ? "請填寫其他取消原因。" : "請選擇取消本次配送的原因。");
+      return;
+    }
+    if (choice === "current-and-reschedule" && nextCycle && dedicatedRoastRushRequired({ hasDedicatedRoast: nextCycleHasDedicatedRoast, plannedDate: replacementDate || nextCycle.plannedDate, today }) && !rushWarningAcknowledged) {
+      setRushConfirmation({ kind: "cancel-reschedule" });
       return;
     }
     setBusy("cancel-current");
@@ -261,7 +312,7 @@ export default function MemberSubscriptionExperience(initial: Props) {
         if (result.result === "requires_manual_shipment_void") {
           finalMessage = `${finalMessage} 物流單作廢確認前，尚未變更下一次配送日期。`;
         } else if (nextCycle) {
-          const changed = await mutate("change-date", { cycleId: nextCycle.cycleId, expectedRevision: nextCycle.revision, plannedDate: replacementDate || nextCycle.plannedDate, recalculateAnchor: false }, { rethrow: true });
+          const changed = await mutate("change-date", { cycleId: nextCycle.cycleId, expectedRevision: nextCycle.revision, plannedDate: replacementDate || nextCycle.plannedDate, recalculateAnchor: false, rushWarningAcknowledged }, { rethrow: true });
           finalMessage = `本次配送已取消，定期配送保留。下一次配送日期：${displayDate(changed.actionResult?.plannedDate)}。`;
         }
       } else {
@@ -322,8 +373,8 @@ export default function MemberSubscriptionExperience(initial: Props) {
         {currentArrangement && <div className="member-commerce-callout"><strong>目前配送安排</strong><p>{currentArrangement.kind === "manual_replenishment" ? "立即補貨" : "定期配送"}：{displayDate(currentArrangement.plannedDate)}{currentArrangement.createdOrderId ? `（訂單 ${currentArrangement.createdOrderId}）` : "（尚未建立訂單）"}</p></div>}
 
         {subscription.status === "pending_activation" ? <div className="member-commerce-callout"><strong>目前不會自動建立下一張訂單</strong><p>等首筆原價訂單成功取貨後，才會正式啟動。您可以先在這裡確認內容。</p></div> : <div className="member-subscription-actions">
-          {currentOrderCycle && <details><summary>取消本次配送</summary><div className="member-action-panel"><p>取消本次配送與停止未來定期配送是兩件不同的事。請明確選擇要處理的範圍。</p><label>取消原因<select required value={cancellationReason} onChange={(event) => { setCancellationReason(event.target.value); if (event.target.value !== "其他") setCancellationOtherReason(""); }}><option value="" disabled>請選擇取消原因</option><option value="單純想取消">單純想取消</option><option value="行程／取貨時間不方便">行程／取貨時間不方便</option><option value="咖啡還沒喝完，暫時不需要">咖啡還沒喝完，暫時不需要</option><option value="想更換咖啡／數量／烘焙度">想更換咖啡／數量／烘焙度</option><option value="重複下單或誤操作">重複下單或誤操作</option><option value="預算考量">預算考量</option><option value="其他">其他</option></select></label>{cancellationReason === "其他" && <label>其他取消原因<textarea maxLength={197} required value={cancellationOtherReason} onChange={(event) => setCancellationOtherReason(event.target.value)} placeholder="請簡單告訴我們取消原因" /></label>}<div className="member-action-buttons"><button className="member-danger-soft" disabled={Boolean(busy) || !resolvedCancellationReason} onClick={() => void cancelCurrentDelivery("current")}>只取消本次配送</button><button className="member-danger-soft" disabled={Boolean(busy) || !resolvedCancellationReason} onClick={() => void cancelCurrentDelivery("current-and-stop")}>取消本次配送，並停止之後的定期配送</button></div>{nextCycle && <><label>保留定期配送時的下一次配送日期<input type="date" min={earliestDate} value={replacementDate || nextCycle.plannedDate} onChange={(event) => setReplacementDate(event.target.value)} /></label><button disabled={Boolean(busy) || !resolvedCancellationReason} onClick={() => void cancelCurrentDelivery("current-and-reschedule")}>取消本次配送，保留定期配送並更新下次日期</button></>}<small>若此訂單已建立 7-ELEVEN 寄件資訊，送出後只是取消申請；KD Coffee 確認寄件單作廢前，訂單不會顯示為已取消，也不會回補庫存。</small></div></details>}
-          {nextCycle && <details><summary>調整下一次日期</summary><div className="member-action-panel"><p>最早可配送日為 {earliestDate}。選好日期後，請決定只套用本次，或讓之後的定期購也從新日期重新計算。{remainingChanges === null ? "" : ` 本期還可修改 ${remainingChanges} 次。`}</p><label>新的配送日期<input type="date" id="member-next-date" min={earliestDate} defaultValue={nextCycle.plannedDate} /></label><div className="subscription-enrollment-summary"><span>新建立訂單日與修改截止日會在確認後依目前營運規則重新計算。</span></div><div className="member-action-buttons"><button disabled={Boolean(busy) || remainingChanges === 0} onClick={() => { const plannedDate = (document.getElementById("member-next-date") as HTMLInputElement).value; void mutate("change-date", { cycleId: nextCycle.cycleId, expectedRevision: nextCycle.revision, plannedDate, recalculateAnchor: false }); }}>只套用這一次</button><button disabled={Boolean(busy) || remainingChanges === 0} onClick={() => { const plannedDate = (document.getElementById("member-next-date") as HTMLInputElement).value; void mutate("change-date", { cycleId: nextCycle.cycleId, expectedRevision: nextCycle.revision, plannedDate, recalculateAnchor: true }); }}>之後也從新日期重新計算</button></div>{initial.rules.datePickerMode !== "calendar-only" && <div className="member-quick-delays">{initial.rules.advanceQuickOptionsDays.map((days) => <button key={`advance-${days}`} type="button" disabled={Boolean(busy) || remainingChanges === 0} onClick={() => void mutate("advance", { cycleId: nextCycle.cycleId, expectedRevision: nextCycle.revision, plannedDate: addDateOnlyDays(nextCycle.plannedDate, -days), recalculateAnchor: false })}>提前 {days} 天</button>)}{initial.rules.delayQuickOptionsDays.map((days) => <button key={`delay-${days}`} type="button" disabled={Boolean(busy) || remainingChanges === 0} onClick={() => void mutate("delay", { cycleId: nextCycle.cycleId, expectedRevision: nextCycle.revision, plannedDate: addDateOnlyDays(nextCycle.plannedDate, days), recalculateAnchor: false })}>延後 {days} 天</button>)}</div>}</div></details>}
+          {currentOrderCycle && <details><summary>取消本次配送</summary><div className="member-action-panel"><p>取消本次配送與停止未來定期配送是兩件不同的事。請明確選擇要處理的範圍。</p><label>取消原因<select required value={cancellationReason} onChange={(event) => { setCancellationReason(event.target.value); if (event.target.value !== "其他") setCancellationOtherReason(""); }}><option value="" disabled>請選擇取消原因</option><option value="單純想取消">單純想取消</option><option value="行程／取貨時間不方便">行程／取貨時間不方便</option><option value="咖啡還沒喝完，暫時不需要">咖啡還沒喝完，暫時不需要</option><option value="想更換咖啡／數量／烘焙度">想更換咖啡／數量／烘焙度</option><option value="重複下單或誤操作">重複下單或誤操作</option><option value="預算考量">預算考量</option><option value="其他">其他</option></select></label>{cancellationReason === "其他" && <label>其他取消原因<textarea maxLength={197} required value={cancellationOtherReason} onChange={(event) => setCancellationOtherReason(event.target.value)} placeholder="請簡單告訴我們取消原因" /></label>}<div className="member-action-buttons"><button className="member-danger-soft" disabled={Boolean(busy) || !resolvedCancellationReason} onClick={() => void cancelCurrentDelivery("current")}>只取消本次配送</button><button className="member-danger-soft" disabled={Boolean(busy) || !resolvedCancellationReason} onClick={() => void cancelCurrentDelivery("current-and-stop")}>取消本次配送，並停止之後的定期配送</button></div>{nextCycle && <><label>保留定期配送時的下一次配送日期<input type="date" min={nextDateMinimum} value={replacementDate || nextCycle.plannedDate} onChange={(event) => setReplacementDate(event.target.value)} /></label><button disabled={Boolean(busy) || !resolvedCancellationReason} onClick={() => void cancelCurrentDelivery("current-and-reschedule")}>取消本次配送，保留定期配送並更新下次日期</button></>}<small>若此訂單已建立 7-ELEVEN 寄件資訊，送出後只是取消申請；KD Coffee 確認寄件單作廢前，訂單不會顯示為已取消，也不會回補庫存。</small></div></details>}
+          {nextCycle && <details><summary>調整下一次日期</summary><div className="member-action-panel"><p>{nextCycleHasDedicatedRoast ? `本期含專屬烘焙；距配送不足 ${DEDICATED_ROAST_STANDARD_PREPARATION_DAYS} 天時會先顯示提醒，但仍可確認送出。` : `最早可配送日為 ${earliestDate}。`} 選好日期後，請決定只套用本次，或讓之後的定期購也從新日期重新計算。{remainingChanges === null ? "" : ` 本期還可修改 ${remainingChanges} 次。`}</p><label>新的配送日期<input type="date" id="member-next-date" min={nextDateMinimum} defaultValue={nextCycle.plannedDate} /></label><div className="subscription-enrollment-summary"><span>新建立訂單日與修改截止日會在確認後依目前營運規則重新計算。</span></div><div className="member-action-buttons"><button disabled={Boolean(busy) || remainingChanges === 0} onClick={() => { const plannedDate = (document.getElementById("member-next-date") as HTMLInputElement).value; void requestDateMutation("change-date", { cycleId: nextCycle.cycleId, expectedRevision: nextCycle.revision, plannedDate, recalculateAnchor: false }); }}>只套用這一次</button><button disabled={Boolean(busy) || remainingChanges === 0} onClick={() => { const plannedDate = (document.getElementById("member-next-date") as HTMLInputElement).value; void requestDateMutation("change-date", { cycleId: nextCycle.cycleId, expectedRevision: nextCycle.revision, plannedDate, recalculateAnchor: true }); }}>之後也從新日期重新計算</button></div>{initial.rules.datePickerMode !== "calendar-only" && <div className="member-quick-delays">{initial.rules.advanceQuickOptionsDays.map((days) => <button key={`advance-${days}`} type="button" disabled={Boolean(busy) || remainingChanges === 0} onClick={() => void requestDateMutation("advance", { cycleId: nextCycle.cycleId, expectedRevision: nextCycle.revision, plannedDate: addDateOnlyDays(nextCycle.plannedDate, -days), recalculateAnchor: false })}>提前 {days} 天</button>)}{initial.rules.delayQuickOptionsDays.map((days) => <button key={`delay-${days}`} type="button" disabled={Boolean(busy) || remainingChanges === 0} onClick={() => void requestDateMutation("delay", { cycleId: nextCycle.cycleId, expectedRevision: nextCycle.revision, plannedDate: addDateOnlyDays(nextCycle.plannedDate, days), recalculateAnchor: false })}>延後 {days} 天</button>)}</div>}</div></details>}
           {nextCycle && <details><summary>跳過這一次</summary><div className="member-action-panel"><p>只跳過 {nextCycle.plannedDate} 這一次，不會改變後續配送週期。</p><button className="member-danger-soft" disabled={Boolean(busy)} onClick={() => void mutate("skip", { cycleId: nextCycle.cycleId, expectedRevision: nextCycle.revision })}>確認跳過</button></div></details>}
           {nextCycle && <details><summary>調整下一次配送商品</summary><form className="member-action-panel member-subscription-items-editor" onSubmit={(event) => { event.preventDefault(); void saveEditorItems(); }}>
             <p>可調整下一次配送的商品、數量與咖啡豆烘焙設定。變更只套用目前這一期，除非現有產品流程明確另有規則。</p>
@@ -343,17 +394,18 @@ export default function MemberSubscriptionExperience(initial: Props) {
                         const choices = componentIndex === 1 && !allowMixedOnePound ? beanChoices.filter(({ product }) => product.id === item.components[0]?.productId) : beanChoices;
                         const value = skuChoiceValue(component.productId, component.skuId);
                         const available = choices.some(({ product, option }) => value === skuChoiceValue(product.id, option.skuId));
+                        const selectedBeanProduct = initial.products.find((product) => product.id === component.productId);
                         return <label className="member-subscription-component-field" key={`${item.localKey}:component:${componentIndex}`}>{item.packageWeight === "one-pound" ? componentIndex === 0 ? "第一款半磅咖啡" : "第二款半磅咖啡" : "半磅咖啡"}<select value={value} disabled={Boolean(busy) || editorModificationLocked} onChange={(event) => {
                           const selected = readSkuChoice(event.target.value);
                           updateEditorItem(item.localKey, (current) => {
                             if (current.kind !== "beans") return current;
                             const components = current.components.map((entry, selectedIndex) => selectedIndex === componentIndex ? selected : entry);
                             if (componentIndex === 0 && current.packageWeight === "one-pound" && !allowMixedOnePound) components[1] = { ...selected };
-                            return { ...current, components };
+                            const selectedProduct = initial.products.find((product) => product.id === selected.productId);
+                            return { ...current, roast: componentIndex === 0 ? selectedProduct?.roast || "工作室建議" : current.roast, components };
                           });
-                        }}>{!available && <option value={value} disabled>原咖啡豆 SKU 已無法供應，請重新選擇</option>}{choices.map(({ product, option }) => <option value={skuChoiceValue(product.id, option.skuId)} key={`${product.id}:${option.skuId}`}>{product.name}・{option.label}{option.detail ? `・${option.detail}` : ""}</option>)}</select></label>;
+                        }}>{!available && <option value={value} disabled>原咖啡豆 SKU 已無法供應，請重新選擇</option>}{choices.map(({ product, option }) => <option value={skuChoiceValue(product.id, option.skuId)} key={`${product.id}:${option.skuId}`}>{product.name}・{option.label}{option.detail ? `・${option.detail}` : ""}</option>)}</select><small>預設烘焙：{selectedBeanProduct?.roast || "工作室建議"}</small></label>;
                       })}
-                      <label>烘焙度<select value={item.roast} disabled={Boolean(busy) || editorModificationLocked} onChange={(event) => updateEditorItem(item.localKey, (current) => current.kind === "beans" ? { ...current, roast: event.target.value } : current)}>{ALLOWED_ROAST_LEVELS.map((roast) => <option key={roast} value={roast}>{roast}</option>)}</select></label>
                     </> : <>
                       <label>咖啡作品<select value={item.productId} disabled={Boolean(busy) || editorModificationLocked} onChange={(event) => {
                         const product = initial.products.find((entry) => entry.id === event.target.value);
@@ -369,6 +421,7 @@ export default function MemberSubscriptionExperience(initial: Props) {
                 </article>;
               })}
             </div>
+            {dedicatedRoastProducts.length > 0 && <section className="member-subscription-dedicated-roast"><div><strong>專屬烘焙</strong><p>同一款咖啡累積達 2 磅，可選擇專屬烘焙；不同咖啡不合併計算。</p></div>{dedicatedRoastProducts.map(({ product, halfPoundUnits, customRoast, roastLevel }) => <div className="member-subscription-dedicated-roast-option" key={product.id}><label className="member-subscription-dedicated-roast-switch"><input type="checkbox" checked={customRoast} disabled={Boolean(busy) || editorModificationLocked} onChange={(event) => setEditorItems((items) => setSubscriptionEditorDedicatedRoast(items, product.id, event.target.checked, event.target.checked ? initialDedicatedRoastLevel(product.roast) : undefined))} /><span>使用專屬烘焙｜{product.name}（{halfPoundUnits / 2} 磅）</span></label>{customRoast && <label>指定烘焙度<select value={roastLevel} disabled={Boolean(busy) || editorModificationLocked} onChange={(event) => setEditorItems((items) => setSubscriptionEditorDedicatedRoast(items, product.id, true, event.target.value))}>{ALLOWED_ROAST_LEVELS.map((level) => <option key={level} value={level}>{level}</option>)}</select></label>}</div>)}<small>專屬烘焙標準排程需要至少 {DEDICATED_ROAST_STANDARD_PREPARATION_DAYS} 天準備時間。</small></section>}
             <div className="member-subscription-editor-actions"><button type="button" className="member-subscription-add-item" disabled={Boolean(busy) || editorModificationLocked || editorAtLimit || !allowQuantityChange || (!beanChoices.length && !dripProducts.length)} onClick={() => {
               const kind = beanChoices.length ? "beans" : "drip";
               setEditorItems((items) => [...items, createSubscriptionEditorItem(kind, initial.products, `new:${crypto.randomUUID()}`, allowedProductIds)]);
@@ -414,6 +467,17 @@ export default function MemberSubscriptionExperience(initial: Props) {
         </div>}
       </div>}
     </section>
+
+    {rushConfirmation && (
+      <div className="member-price-modal-backdrop" role="presentation" onClick={() => setRushConfirmation(null)}>
+        <div className="member-price-modal member-rush-warning-modal" role="dialog" aria-modal="true" aria-labelledby="member-rush-warning-title" onClick={(event) => event.stopPropagation()}>
+          <p className="eyebrow dark">DEDICATED ROAST</p>
+          <h2 id="member-rush-warning-title">專屬烘焙準備時間提醒</h2>
+          <p>專屬烘焙標準排程需要至少 {DEDICATED_ROAST_STANDARD_PREPARATION_DAYS} 天準備時間。<br />您目前選擇的配送日期較近，我們仍會接受這次訂單並盡力安排，但實際配送時間可能因此延後。</p>
+          <div className="member-rush-warning-actions"><button type="button" className="member-danger-soft" onClick={() => setRushConfirmation(null)}>返回修改日期</button><button type="button" disabled={Boolean(busy)} onClick={() => void continueRushAction()}>我了解，繼續下單</button></div>
+        </div>
+      </div>
+    )}
 
     {showPriceDetails && nextCycle && (
       <div

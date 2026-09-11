@@ -4,6 +4,8 @@ export type CompositionComponent = {
   productId: string;
   skuId?: string;
   weightHalfPounds: 1;
+  customRoast?: boolean;
+  roastLevel?: string;
 };
 
 export type BeanSubscriptionItem = {
@@ -12,6 +14,7 @@ export type BeanSubscriptionItem = {
   skuKind?: "beans";
   packageWeight: "half-pound" | "one-pound";
   quantity: number;
+  /** Configured/default roast snapshot. Dedicated roast is recorded per component. */
   roast: string;
   components: CompositionComponent[];
 };

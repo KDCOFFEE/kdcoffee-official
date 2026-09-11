@@ -208,6 +208,7 @@ export function validateSubscriptionItem<T extends SubscriptionItem>(item: T): T
   if (typeof item.roast !== "string" || !item.roast.trim()) throw new MembershipPolicyError("定期購咖啡豆必須指定烘焙度");
   const requiredComponents = item.packageWeight === "half-pound" ? 1 : item.packageWeight === "one-pound" ? 2 : 0;
   if (!requiredComponents || !Array.isArray(item.components) || item.components.length !== requiredComponents || item.components.some((component) => typeof component.productId !== "string" || !component.productId.trim() || (component.skuId != null && (typeof component.skuId !== "string" || !component.skuId.trim())) || component.weightHalfPounds !== 1)) throw new MembershipPolicyError(item.packageWeight === "one-pound" ? "一磅必須由兩個半磅作品組成" : "半磅必須包含一個半磅作品");
+  if (item.components.some((component) => (component.customRoast != null && typeof component.customRoast !== "boolean") || (component.customRoast === true ? typeof component.roastLevel !== "string" || !component.roastLevel.trim() : component.roastLevel != null))) throw new MembershipPolicyError("專屬烘焙設定不正確");
   return structuredClone(item);
 }
 

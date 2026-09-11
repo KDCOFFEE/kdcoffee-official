@@ -3,6 +3,11 @@ import {
   MEMBER_SUBSCRIPTION_MAX_ITEMS,
   type PricedSubscriptionItem,
 } from "@/lib/subscriptionItemTypes";
+import {
+  beanHalfPoundUnitsByProduct,
+  DEDICATED_ROAST_MIN_HALF_POUND_UNITS,
+} from "@/lib/subscriptionRoastPolicy";
+import { isAllowedRoastLevel } from "@/lib/checkoutRules";
 
 export type MemberSubscriptionSkuOption = {
   skuId: string;
@@ -38,7 +43,7 @@ export type BeanEditorItem = EditorIdentity & {
   packageWeight: "half-pound" | "one-pound";
   quantity: number;
   roast: string;
-  components: Array<{ productId: string; skuId: string }>;
+  components: Array<{ productId: string; skuId: string; customRoast?: boolean; roastLevel?: string }>;
 };
 
 export type DripEditorItem = EditorIdentity & {
@@ -74,13 +79,20 @@ function firstChoice(products: MemberSubscriptionProduct[], kind: "beans" | "dri
 }
 
 function componentFromStored(
-  component: { productId: string; skuId?: string },
+  component: { productId: string; skuId?: string; customRoast?: boolean; roastLevel?: string },
   products: MemberSubscriptionProduct[],
 ) {
-  if (component.skuId) return { productId: component.productId, skuId: component.skuId };
+  const dedicatedRoast = component.customRoast === true
+    ? { customRoast: true as const, roastLevel: component.roastLevel }
+    : {};
+  if (component.skuId) return { productId: component.productId, skuId: component.skuId, ...dedicatedRoast };
   const product = products.find((entry) => entry.id === component.productId);
   const beanOptions = product?.options.filter((entry) => entry.kind === "beans") ?? [];
-  return { productId: component.productId, skuId: beanOptions.length === 1 ? beanOptions[0].skuId : "" };
+  return { productId: component.productId, skuId: beanOptions.length === 1 ? beanOptions[0].skuId : "", ...dedicatedRoast };
+}
+
+function configuredRoast(products: MemberSubscriptionProduct[], productId: string) {
+  return products.find((product) => product.id === productId)?.roast || "工作室建議";
 }
 
 export function initializeSubscriptionEditorItems(
@@ -117,7 +129,7 @@ export function createSubscriptionEditorItem(
 ): SubscriptionEditorItem {
   const choice = firstChoice(products, kind, allowedProductIds);
   if (kind === "drip") return { localKey, kind, productId: choice.productId, skuId: choice.skuId, quantity: 1 };
-  return { localKey, kind, packageWeight: "half-pound", quantity: 1, roast: "淺中焙", components: [choice] };
+  return { localKey, kind, packageWeight: "half-pound", quantity: 1, roast: configuredRoast(products, choice.productId), components: [choice] };
 }
 
 export function changeSubscriptionEditorItemKind(
@@ -145,7 +157,49 @@ export function changeBeanPackageWeight(item: BeanEditorItem, packageWeight: "ha
 }
 
 export function removeSubscriptionEditorItem(items: SubscriptionEditorItem[], localKey: string) {
-  return items.filter((item) => item.localKey !== localKey);
+  return normalizeSubscriptionEditorDedicatedRoasts(items.filter((item) => item.localKey !== localKey));
+}
+
+export function editorBeanHalfPoundUnitsByProduct(items: SubscriptionEditorItem[]) {
+  return beanHalfPoundUnitsByProduct(items.filter((item): item is BeanEditorItem => item.kind === "beans").map((item) => ({
+    quantity: item.quantity,
+    components: item.components,
+  })));
+}
+
+export function editorDedicatedRoastProducts(items: SubscriptionEditorItem[], products: MemberSubscriptionProduct[]) {
+  const totals = editorBeanHalfPoundUnitsByProduct(items);
+  return products.flatMap((product) => {
+    const halfPoundUnits = totals.get(product.id) ?? 0;
+    if (halfPoundUnits < DEDICATED_ROAST_MIN_HALF_POUND_UNITS) return [];
+    const selectedComponent = items.flatMap((item) => item.kind === "beans" ? item.components : []).find((component) => component.productId === product.id && component.customRoast === true);
+    return [{ product, halfPoundUnits, customRoast: Boolean(selectedComponent), roastLevel: selectedComponent?.roastLevel ?? "" }];
+  });
+}
+
+export function subscriptionEditorHasDedicatedRoast(items: SubscriptionEditorItem[]) {
+  return items.some((item) => item.kind === "beans" && item.components.some((component) => component.customRoast === true));
+}
+
+export function setSubscriptionEditorDedicatedRoast(items: SubscriptionEditorItem[], productId: string, enabled: boolean, roastLevel?: string) {
+  return items.map((item) => item.kind !== "beans" ? item : {
+    ...item,
+    components: item.components.map((component) => component.productId !== productId
+      ? component
+      : enabled
+        ? { ...component, customRoast: true as const, roastLevel }
+        : { productId: component.productId, skuId: component.skuId }),
+  });
+}
+
+export function normalizeSubscriptionEditorDedicatedRoasts(items: SubscriptionEditorItem[]) {
+  const totals = editorBeanHalfPoundUnitsByProduct(items);
+  return items.map((item) => item.kind !== "beans" ? item : {
+    ...item,
+    components: item.components.map((component) => (totals.get(component.productId) ?? 0) >= DEDICATED_ROAST_MIN_HALF_POUND_UNITS
+      ? component
+      : { productId: component.productId, skuId: component.skuId }),
+  });
 }
 
 export function subscriptionEditorItemError(item: SubscriptionEditorItem, products: MemberSubscriptionProduct[]) {
@@ -153,8 +207,8 @@ export function subscriptionEditorItemError(item: SubscriptionEditorItem, produc
   if (item.kind === "drip") {
     return skuOption(products, item.productId, item.skuId, "drip") ? "" : "原耳掛商品或 SKU 已無法供應，請選擇新的耳掛規格。";
   }
-  if (!item.roast) return "請選擇咖啡豆烘焙度。";
   if (item.components.length !== (item.packageWeight === "one-pound" ? 2 : 1)) return "咖啡豆組合不完整。";
+  if (item.components.some((component) => component.customRoast === true && !isAllowedRoastLevel(component.roastLevel))) return "請選擇正確的專屬烘焙度。";
   return item.components.every((component) => skuOption(products, component.productId, component.skuId, "beans"))
     ? ""
     : "原咖啡豆商品或 SKU 已無法供應，請選擇新的咖啡豆規格。";
@@ -175,7 +229,9 @@ export function subscriptionEditorPayload(items: SubscriptionEditorItem[]) {
         packageWeight: item.packageWeight,
         quantity: item.quantity,
         roast: item.roast,
-        components: item.components.map((component) => ({ ...component })),
+        components: item.components.map((component) => component.customRoast === true
+          ? { productId: component.productId, skuId: component.skuId, customRoast: true as const, roastLevel: component.roastLevel }
+          : { productId: component.productId, skuId: component.skuId }),
       });
 }
 

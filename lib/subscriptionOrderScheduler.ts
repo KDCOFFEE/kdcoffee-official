@@ -11,7 +11,7 @@ import { getActiveMembershipRules } from "./membershipBusinessRules";
 import { createOrderFromCycle, enqueueScheduledMembershipNotifications, lockSubscriptionCycle, readMembershipCommerceState, registerReferralQualificationOrder, type SubscriptionCycle } from "./membershipCommerce";
 import { readMember } from "./memberAuth";
 import { getOrdersDir, getWebsiteDataFile } from "./storagePaths";
-import { subscriptionItemsToRequestedItems, subscriptionOrderDisplayItems } from "./subscriptionSkuModel";
+import { subscriptionDedicatedRoastOperationalSummary, subscriptionItemsToRequestedItems, subscriptionOrderDisplayItems } from "./subscriptionSkuModel";
 
 export type SubscriptionSchedulerSummary = { processed: number; created: number; skipped: number; failed: number; notificationsQueued: number; items: Array<{ cycleId: string; result: "created" | "skipped" | "failed"; orderNumber?: string; message: string }> };
 
@@ -48,6 +48,7 @@ function schedulerOrder(cycle: SubscriptionCycle, subscription: Awaited<ReturnTy
     giftSnapshot: cycle.giftSnapshot,
     shippingSnapshot: cycle.shippingSnapshot,
     rulesSnapshot: cycle.rulesSnapshot,
+    dedicatedRoast: subscriptionDedicatedRoastOperationalSummary(cycle.itemsSnapshot, website, cycle.dedicatedRoastRush),
     lineNotification: { sent: false, status: "pending" },
     idempotencyKey: `subscription-cycle:${cycle.cycleId}`,
   };

@@ -33,6 +33,11 @@ import {
 } from "./membershipPolicies";
 import { projectOrderFinancialBreakdown } from "./orderFinancialProjection";
 import { getMembershipCommerceStateFile } from "./storagePaths";
+import {
+  DEDICATED_ROAST_STANDARD_PREPARATION_DAYS,
+  dedicatedRoastRushRequired,
+  subscriptionHasDedicatedRoast,
+} from "./subscriptionRoastPolicy";
 
 export const MEMBERSHIP_COMMERCE_SCHEMA_VERSION = 1 as const;
 
@@ -93,6 +98,7 @@ export type SubscriptionCycle = {
   updatedAt: string;
   revision: number;
   modificationCount?: number;
+  dedicatedRoastRush?: { warningAcknowledged: boolean; acknowledgedAt?: string; plannedDate: string; standardPreparationDays: number } | null;
 };
 
 export type ReferralRelationship = {
@@ -683,7 +689,7 @@ export async function generateSubscriptionCycle(input: { subscriptionId: string;
     const dates = cycleDates(input.plannedDate, version.rules.subscription.modificationCutoffDays, version.rules.subscription.orderCreationLeadDays);
     const cycleId = id("cycle");
     const timestamp = nowIso(now);
-    const cycle: SubscriptionCycle = { cycleId, subscriptionId: subscription.subscriptionId, sequence: input.sequence, kind, ...dates, status: "modifiable", itemsDraft: cloneItems(subscription.defaultItems), itemsSnapshot: null, pricingSnapshot: null, giftSnapshot: null, shippingSnapshot: null, rulesSnapshot: null, createdOrderId: null, createdAt: timestamp, updatedAt: timestamp, revision: 0, modificationCount: 0 };
+    const cycle: SubscriptionCycle = { cycleId, subscriptionId: subscription.subscriptionId, sequence: input.sequence, kind, ...dates, status: "modifiable", itemsDraft: cloneItems(subscription.defaultItems), itemsSnapshot: null, pricingSnapshot: null, giftSnapshot: null, shippingSnapshot: null, rulesSnapshot: null, createdOrderId: null, createdAt: timestamp, updatedAt: timestamp, revision: 0, modificationCount: 0, dedicatedRoastRush: null };
     state.cycles[cycleId] = cycle;
     remember(state, key, cycleId, now);
     audit(state, { actor: "system", action: "cycle-generated", entityType: "cycle", entityId: cycleId, before: {}, after: { status: cycle.status, sequence: cycle.sequence }, reason: kind === "scheduled" ? "依配送週期建立" : "會員立即補貨", sourceEvent: input.idempotencyKey }, now);
@@ -691,7 +697,7 @@ export async function generateSubscriptionCycle(input: { subscriptionId: string;
   }, { now: input.now, filePath: input.stateFilePath });
 }
 
-export async function modifyCycleDate(input: { cycleId: string; plannedDate: string; recalculateAnchor: boolean; idempotencyKey: string; memberId?: string; expectedRevision?: number; now?: Date; stateFilePath?: string; rulesFilePath?: string }) {
+export async function modifyCycleDate(input: { cycleId: string; plannedDate: string; recalculateAnchor: boolean; idempotencyKey: string; memberId?: string; expectedRevision?: number; rushWarningAcknowledged?: boolean; now?: Date; stateFilePath?: string; rulesFilePath?: string }) {
   const version = await getActiveMembershipRules(input.now, input.rulesFilePath);
   const key = `cycle:date:${input.idempotencyKey}`;
   return transaction((state, now) => {
@@ -705,14 +711,20 @@ export async function modifyCycleDate(input: { cycleId: string; plannedDate: str
     const today = nowIso(now).slice(0, 10);
     const modificationCount = cycle.modificationCount ?? 0;
     const maximum = version.rules.subscription.maxModificationsPerCycle;
+    const hasDedicatedRoast = subscriptionHasDedicatedRoast(cycle.itemsDraft);
+    const rushRequired = dedicatedRoastRushRequired({ hasDedicatedRoast, plannedDate: input.plannedDate, today });
     if (input.memberId) {
       if (today > cycle.modificationDeadline) throw new MembershipCommerceError("本期已超過修改截止日");
       if (maximum !== null && modificationCount >= maximum) throw new MembershipCommerceError(`本期最多可修改 ${maximum} 次`);
       const availability = resolveSubscriptionDateAvailability({ requestedDate: input.plannedDate, today, customRoast: false, rules: version.rules });
       if (!availability.allowed) throw new MembershipCommerceError(`最早可選擇 ${availability.earliestDate} 配送`);
+      if (rushRequired && input.rushWarningAcknowledged !== true) throw new MembershipCommerceError("專屬烘焙配送日期少於標準 3 天準備時間，請先確認急件提醒");
     }
     const before = cycle.plannedDate;
     Object.assign(cycle, cycleDates(input.plannedDate, version.rules.subscription.modificationCutoffDays, version.rules.subscription.orderCreationLeadDays));
+    cycle.dedicatedRoastRush = rushRequired
+      ? { warningAcknowledged: input.rushWarningAcknowledged === true, ...(input.rushWarningAcknowledged === true ? { acknowledgedAt: nowIso(now) } : {}), plannedDate: input.plannedDate, standardPreparationDays: DEDICATED_ROAST_STANDARD_PREPARATION_DAYS }
+      : null;
     cycle.modificationCount = modificationCount + 1;
     if (input.recalculateAnchor) {
       subscription.anchorDate = input.plannedDate;
@@ -720,6 +732,7 @@ export async function modifyCycleDate(input: { cycleId: string; plannedDate: str
         if (future.cycleId === cycle.cycleId || future.subscriptionId !== subscription.subscriptionId || future.sequence <= cycle.sequence || !["scheduled", "modifiable"].includes(future.status)) continue;
         const futureDate = addTaipeiCalendarDays(input.plannedDate, subscription.intervalDays * (future.sequence - cycle.sequence));
         Object.assign(future, cycleDates(futureDate, version.rules.subscription.modificationCutoffDays, version.rules.subscription.orderCreationLeadDays));
+        future.dedicatedRoastRush = null;
         touch(future, now);
       }
     }
@@ -731,7 +744,7 @@ export async function modifyCycleDate(input: { cycleId: string; plannedDate: str
   }, { now: input.now, filePath: input.stateFilePath });
 }
 
-export async function updateCycleItems(input: { cycleId: string; items: SubscriptionDefaultItem[]; idempotencyKey: string; memberId?: string; expectedRevision?: number; now?: Date; stateFilePath?: string }) {
+export async function updateCycleItems(input: { cycleId: string; items: SubscriptionDefaultItem[]; idempotencyKey: string; memberId?: string; expectedRevision?: number; rushWarningAcknowledged?: boolean; now?: Date; stateFilePath?: string }) {
   const items = cloneItems(input.items);
   const key = `cycle:items:${input.idempotencyKey}`;
   return transaction((state, now) => {
@@ -741,7 +754,13 @@ export async function updateCycleItems(input: { cycleId: string; items: Subscrip
     if (!["scheduled", "modifiable"].includes(cycle.status)) throw new MembershipCommerceError("本期已截止修改");
     assertMemberOwns(state.subscriptions[cycle.subscriptionId], input.memberId);
     assertRevision(cycle, input.expectedRevision);
+    const today = nowIso(now).slice(0, 10);
+    const rushRequired = dedicatedRoastRushRequired({ hasDedicatedRoast: subscriptionHasDedicatedRoast(items), plannedDate: cycle.plannedDate, today });
+    if (input.memberId && rushRequired && input.rushWarningAcknowledged !== true) throw new MembershipCommerceError("專屬烘焙配送日期少於標準 3 天準備時間，請先確認急件提醒");
     cycle.itemsDraft = items;
+    cycle.dedicatedRoastRush = rushRequired
+      ? { warningAcknowledged: input.rushWarningAcknowledged === true, ...(input.rushWarningAcknowledged === true ? { acknowledgedAt: nowIso(now) } : {}), plannedDate: cycle.plannedDate, standardPreparationDays: DEDICATED_ROAST_STANDARD_PREPARATION_DAYS }
+      : null;
     touch(cycle, now);
     remember(state, key, cycle.cycleId, now);
     return cycle;

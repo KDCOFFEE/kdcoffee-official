@@ -10,6 +10,11 @@ import {
 } from "./membershipPolicies";
 import type { RequestedItem } from "./orderPricing";
 import { MEMBER_SUBSCRIPTION_MAX_ITEMS } from "./subscriptionItemTypes";
+import {
+  DEDICATED_ROAST_MIN_HALF_POUND_UNITS,
+  DEDICATED_ROAST_STANDARD_PREPARATION_DAYS,
+  subscriptionBeanHalfPoundUnitsByProduct,
+} from "./subscriptionRoastPolicy";
 
 export { MEMBER_SUBSCRIPTION_MAX_ITEMS } from "./subscriptionItemTypes";
 
@@ -128,17 +133,34 @@ export function subscriptionItemsFromStoredOrderItems(
             skuId: String(component.skuId || "") || undefined,
             kind: "beans",
           });
-          return { productId: resolved.product.slug, skuId: resolved.sku.id, weightHalfPounds: 1 };
+          return {
+            productId: resolved.product.slug,
+            skuId: resolved.sku.id,
+            weightHalfPounds: 1,
+            ...(item.customRoast === true ? { customRoast: true as const, roastLevel: String(item.roastLevel || "").trim() } : {}),
+          };
         })
-      : [{ productId: product.slug, skuId: sku.id, weightHalfPounds: 1 }];
+      : [{
+          productId: product.slug,
+          skuId: sku.id,
+          weightHalfPounds: 1,
+          ...(item.customRoast === true ? { customRoast: true as const, roastLevel: String(item.roastLevel || "").trim() } : {}),
+        }];
     const packageWeight = onePound ? "one-pound" as const : "half-pound" as const;
+    const componentProducts = components.map((component) => activeProduct(website, component.productId));
+    const configuredRoasts = [...new Map(componentProducts.map((entry) => [entry.slug, {
+      productName: entry.name,
+      roast: String(entry.roast || "工作室建議").trim() || "工作室建議",
+    }])).values()];
     return {
       ...validateSubscriptionItem({
         itemId: `beans:${packageWeight}:${components.map((component) => component.skuId).join("+")}:${index}`,
         skuKind: "beans",
         packageWeight,
         quantity,
-        roast: String(item.roastLevel || item.preparationLabel || "工作室建議"),
+        roast: configuredRoasts.length === 1
+          ? configuredRoasts[0].roast
+          : configuredRoasts.map((entry) => `${entry.productName}：${entry.roast}`).join("／"),
         components,
       }),
       unitPrice,
@@ -157,13 +179,12 @@ export function subscriptionItemProductIds(item: SubscriptionItem) {
 type AllocateSubscriptionItemId = (baseId: string) => string;
 
 function resolveMemberBeanItem(rawItem: Record<string, unknown>, website: WebsiteData, persistedItemId: string | undefined, allocateItemId: AllocateSubscriptionItemId) {
+  if (rawItem.customRoast != null || rawItem.roastLevel != null || rawItem.roastNote != null) throw new Error("專屬烘焙必須依咖啡品項設定");
   const packageWeight = rawItem.packageWeight === "one-pound" ? "one-pound" as const : rawItem.packageWeight === "half-pound" ? "half-pound" as const : null;
   if (!packageWeight) throw new Error("咖啡豆份量設定不正確");
   const rawComponents = Array.isArray(rawItem.components) ? rawItem.components.map(record) : [];
   const requiredComponents = packageWeight === "one-pound" ? 2 : 1;
   if (rawComponents.length !== requiredComponents) throw new Error(packageWeight === "one-pound" ? "一磅必須由兩個半磅作品組成" : "半磅必須包含一個半磅作品");
-  const roast = String(rawItem.roast || "").trim();
-  if (!isAllowedRoastLevel(roast)) throw new Error("請選擇可用的烘焙度");
   const resolved = rawComponents.map((component) => resolveSubscriptionSku({
     website,
     productId: String(component.productId || "").trim(),
@@ -171,7 +192,23 @@ function resolveMemberBeanItem(rawItem: Record<string, unknown>, website: Websit
     kind: "beans",
     requireStock: true,
   }));
-  const components = resolved.map(({ product, sku }) => ({ productId: product.slug, skuId: sku.id, weightHalfPounds: 1 as const }));
+  const components = resolved.map(({ product, sku }, componentIndex) => {
+    const requested = rawComponents[componentIndex];
+    if ((requested.customRoast != null && typeof requested.customRoast !== "boolean") || (requested.customRoast !== true && requested.roastLevel != null)) throw new Error("專屬烘焙設定不正確");
+    return {
+      productId: product.slug,
+      skuId: sku.id,
+      weightHalfPounds: 1 as const,
+      ...(requested.customRoast === true ? { customRoast: true as const, roastLevel: String(requested.roastLevel || "").trim() } : {}),
+    };
+  });
+  const configuredRoasts = [...new Map(resolved.map(({ product }) => [product.slug, {
+    productName: product.name,
+    roast: String(product.roast || "工作室建議").trim() || "工作室建議",
+  }])).values()];
+  const roast = configuredRoasts.length === 1
+    ? configuredRoasts[0].roast
+    : configuredRoasts.map((entry) => `${entry.productName}：${entry.roast}`).join("／");
   const quantity = Number(rawItem.quantity);
   const itemId = persistedItemId ?? allocateItemId(`beans:${packageWeight}:${components.map((component) => component.skuId).join("+")}`);
   const item = validateSubscriptionItem({
@@ -186,6 +223,7 @@ function resolveMemberBeanItem(rawItem: Record<string, unknown>, website: Websit
 }
 
 function resolveMemberDripItem(rawItem: Record<string, unknown>, website: WebsiteData, persistedItemId: string | undefined, allocateItemId: AllocateSubscriptionItemId) {
+  if (rawItem.customRoast != null || rawItem.roastLevel != null || rawItem.roastNote != null) throw new Error("耳掛咖啡不可使用專屬烘焙");
   const productId = String(rawItem.productId || "").trim();
   const skuId = String(rawItem.skuId || "").trim();
   if (!skuId) throw new Error("耳掛定期購商品必須指定 SKU");
@@ -246,6 +284,20 @@ export function resolveMemberSubscriptionItems(input: {
   });
   if (new Set(items.map((item) => item.itemId)).size !== items.length) throw new Error("定期購商品識別重複");
   if (items.some((item) => item.quantity > 12)) throw new Error("數量設定不正確");
+  const halfPoundUnits = subscriptionBeanHalfPoundUnitsByProduct(items);
+  const componentsByProduct = new Map<string, CompositionComponent[]>();
+  for (const item of items) {
+    if (!isBeanSubscriptionItem(item)) continue;
+    for (const component of item.components) componentsByProduct.set(component.productId, [...(componentsByProduct.get(component.productId) ?? []), component]);
+  }
+  for (const [productId, components] of componentsByProduct) {
+    const dedicated = components.filter((component) => component.customRoast === true);
+    if (!dedicated.length) continue;
+    if ((halfPoundUnits.get(productId) ?? 0) < DEDICATED_ROAST_MIN_HALF_POUND_UNITS) throw new Error("同一款咖啡需累積至少 2 磅才可使用專屬烘焙");
+    if (dedicated.length !== components.length) throw new Error("同一款咖啡的專屬烘焙設定必須一致");
+    const roastLevels = new Set(dedicated.map((component) => component.roastLevel));
+    if (roastLevels.size !== 1 || !isAllowedRoastLevel(dedicated[0].roastLevel)) throw new Error("請選擇正確的專屬烘焙度");
+  }
 
   if (!input.rules.subscription.allowQuantityChange && (
     items.length !== input.currentItems.length ||
@@ -278,7 +330,7 @@ export function subscriptionItemsToRequestedItems(items: PricedSubscriptionItem[
     }
     return item.components.map((component) => {
       const { product, sku } = resolveSubscriptionSku({ website, productId: component.productId, skuId: component.skuId, kind: "beans" });
-      return { slug: product.slug, optionId: sku.id, optionLabel: sku.label, quotedUnitPrice: sku.price, quantity: item.quantity };
+      return { slug: product.slug, optionId: sku.id, optionLabel: sku.label, quotedUnitPrice: sku.price, quantity: item.quantity, ...(component.customRoast === true ? { customRoast: true, roastLevel: component.roastLevel } : {}) };
     });
   });
 }
@@ -290,6 +342,31 @@ export function subscriptionOrderDisplayItems(items: PricedSubscriptionItem[], w
       return { ...item, slug: product.slug, name: product.name, optionId: sku.id, optionLabel: sku.label, optionDetail: sku.detail, lineTotal: item.unitPrice * item.quantity };
     }
     const products = item.components.map((component) => activeProduct(website, component.productId));
-    return { ...item, slug: products[0].slug, name: products.map((product) => product.name).join(" + "), optionLabel: item.packageWeight === "one-pound" ? "一磅咖啡豆組合" : "半磅咖啡豆", preparationLabel: item.roast, lineTotal: item.unitPrice * item.quantity };
+    const dedicated = item.components.filter((component) => component.customRoast === true);
+    return { ...item, slug: products[0].slug, name: products.map((product) => product.name).join(" + "), optionLabel: item.packageWeight === "one-pound" ? "一磅咖啡豆組合" : "半磅咖啡豆", preparationLabel: item.roast, customRoast: dedicated.length > 0, roastLevel: [...new Set(dedicated.map((component) => component.roastLevel).filter(Boolean))].join("／") || undefined, lineTotal: item.unitPrice * item.quantity };
   });
+}
+
+export function subscriptionDedicatedRoastOperationalSummary(
+  items: PricedSubscriptionItem[],
+  website: WebsiteData,
+  rushAcknowledgement?: { warningAcknowledged: boolean; acknowledgedAt?: string; plannedDate: string; standardPreparationDays: number } | null,
+) {
+  const selections = new Map<string, string>();
+  for (const item of items) {
+    if (!isBeanSubscriptionItem(item)) continue;
+    for (const component of item.components) {
+      if (component.customRoast === true && component.roastLevel) selections.set(component.productId, component.roastLevel);
+    }
+  }
+  if (!selections.size) return null;
+  return {
+    enabled: true as const,
+    products: [...selections].map(([productId, roastLevel]) => ({ productId, productName: activeProduct(website, productId).name, roastLevel })),
+    standardPreparationDays: DEDICATED_ROAST_STANDARD_PREPARATION_DAYS,
+    rush: Boolean(rushAcknowledgement),
+    rushWarningAcknowledged: rushAcknowledgement?.warningAcknowledged === true,
+    rushWarningAcknowledgedAt: rushAcknowledgement?.acknowledgedAt,
+    plannedDate: rushAcknowledgement?.plannedDate,
+  };
 }

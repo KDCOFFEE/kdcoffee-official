@@ -85,13 +85,18 @@ export function priceOrderFromWebsiteData(live: WebsiteData, items: RequestedIte
     };
   });
 
+  const customRoastQuantityByProduct = new Map<string, number>();
+  for (const item of resolved) {
+    if (!item.pricedItem.customRoast || !item.customRoastSku) continue;
+    customRoastQuantityByProduct.set(item.pricedItem.slug, (customRoastQuantityByProduct.get(item.pricedItem.slug) ?? 0) + item.pricedItem.quantity);
+  }
   for (const item of resolved) {
     if (!item.pricedItem.customRoast) continue;
     if (
       !item.customRoastSku ||
-      item.pricedItem.quantity < CUSTOM_ROAST_MIN_QUANTITY
+      (customRoastQuantityByProduct.get(item.pricedItem.slug) ?? 0) < CUSTOM_ROAST_MIN_QUANTITY
     ) {
-      throw new Error(`${item.pricedItem.name} 的專屬烘焙需單一規格達 4 包（2 磅）`);
+      throw new Error(`${item.pricedItem.name} 的專屬烘焙需同一款咖啡累積達 4 個半磅單位（2 磅）`);
     }
 
     const roastLevel = String(item.sourceItem.roastLevel || "").trim();
