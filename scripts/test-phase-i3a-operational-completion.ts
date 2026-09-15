@@ -30,6 +30,7 @@ const now = new Date("2026-08-28T02:00:00.000Z");
 const stateFilePath = path.join(testRoot, "membership-commerce", "commerce-state.json");
 const rulesFilePath = path.join(testRoot, "membership-commerce", "business-rules.json");
 const orderDir = storage.getOrdersDir();
+const websiteFilePath = storage.getWebsiteDataFile();
 const item = { itemId: "coffee-half", packageWeight: "half-pound" as const, quantity: 1, roast: "淺中焙", unitPrice: 1000, components: [{ productId: "coffee", weightHalfPounds: 1 as const }] };
 
 async function member(subject: string) {
@@ -62,6 +63,23 @@ function mail(cm: string, messageId: string, from = "7-ELEVEN 賣貨便 <no-repl
 }
 
 try {
+  await mkdir(path.dirname(websiteFilePath), { recursive: true });
+  await writeFile(websiteFilePath, JSON.stringify({
+    version: 1,
+    updatedAt: now.toISOString(),
+    menu: {
+      products: [{
+        active: true,
+        status: "active",
+        purchasable: true,
+        slug: "coffee",
+        name: "Scheduler Test Coffee",
+        stock: 10,
+        purchase: [{ id: "coffee-half", label: "半磅咖啡豆", detail: "227g", price: 1000, stock: 10, enabled: true, kind: "beans" }],
+        skus: [{ id: "coffee-half", label: "半磅咖啡豆", detail: "227g", price: 1000, stock: 10, enabled: true, kind: "beans" }],
+      }],
+    },
+  }, null, 2), "utf8");
   await saveRules((rules) => { rules.money.roundingMode = "round-half-up"; rules.subscription.pauseResumeAnchorPolicy = "keep-original"; });
   const memberA = await member("phase-i3a-a@example.test");
   const memberB = await member("phase-i3a-b@example.test");

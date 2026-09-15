@@ -558,6 +558,78 @@ function cloneItems(items: SubscriptionDefaultItem[]) {
   return items.map((item) => ({ ...validateSubscriptionItem(item), unitPrice: assertIntegerMoney(item.unitPrice, "商品原價") }));
 }
 
+function createSubscriptionCycleRecord(input: {
+  state: MembershipCommerceState;
+  subscription: Subscription;
+  sequence: number;
+  plannedDate: string;
+  kind: CycleKind;
+  version: RulesVersion;
+  now: Date;
+  reason: string;
+  sourceEvent: string;
+  dedicatedRoastReferenceDate?: string;
+}) {
+  const duplicate = Object.values(input.state.cycles).find((cycle) =>
+    cycle.subscriptionId === input.subscription.subscriptionId &&
+    cycle.sequence === input.sequence &&
+    cycle.kind === input.kind
+  );
+  if (duplicate) return { cycle: duplicate, created: false as const };
+
+  const dates = cycleDates(
+    input.plannedDate,
+    input.version.rules.subscription.modificationCutoffDays,
+    input.version.rules.subscription.orderCreationLeadDays,
+  );
+  const cycleId = id("cycle");
+  const timestamp = nowIso(input.now);
+  const hasDedicatedRoast = subscriptionHasDedicatedRoast(input.subscription.defaultItems);
+  const dedicatedRoastRush = input.dedicatedRoastReferenceDate && dedicatedRoastRushRequired({
+    hasDedicatedRoast,
+    plannedDate: input.plannedDate,
+    today: input.dedicatedRoastReferenceDate,
+  })
+    ? {
+        warningAcknowledged: false,
+        plannedDate: input.plannedDate,
+        standardPreparationDays: DEDICATED_ROAST_STANDARD_PREPARATION_DAYS,
+      }
+    : null;
+  const cycle: SubscriptionCycle = {
+    cycleId,
+    subscriptionId: input.subscription.subscriptionId,
+    sequence: input.sequence,
+    kind: input.kind,
+    ...dates,
+    status: "modifiable",
+    itemsDraft: cloneItems(input.subscription.defaultItems),
+    itemsSnapshot: null,
+    pricingSnapshot: null,
+    giftSnapshot: null,
+    shippingSnapshot: null,
+    rulesSnapshot: null,
+    createdOrderId: null,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+    revision: 0,
+    modificationCount: 0,
+    dedicatedRoastRush,
+  };
+  input.state.cycles[cycleId] = cycle;
+  audit(input.state, {
+    actor: "system",
+    action: "cycle-generated",
+    entityType: "cycle",
+    entityId: cycleId,
+    before: {},
+    after: { status: cycle.status, sequence: cycle.sequence },
+    reason: input.reason,
+    sourceEvent: input.sourceEvent,
+  }, input.now);
+  return { cycle, created: true as const };
+}
+
 function assertMemberOwns(subscription: Subscription, memberId?: string) {
   if (memberId && subscription.memberId !== memberId) throw new MembershipCommerceError("無法存取其他會員的定期購");
 }
@@ -620,6 +692,78 @@ export async function activateSubscriptionFromPickup(input: { subscriptionId: st
   }, { now: input.now, filePath: input.stateFilePath });
 }
 
+async function activateSubscriptionFromCompletedFirstOrder(input: {
+  subscriptionId: string;
+  orderId: string;
+  idempotencyKey: string;
+  now?: Date;
+  stateFilePath?: string;
+  rulesFilePath?: string;
+}) {
+  const version = await getActiveMembershipRules(input.now, input.rulesFilePath);
+  const key = `subscription:activate-first-cycle:${input.idempotencyKey}`;
+  return transaction((state, now) => {
+    const subscription = state.subscriptions[input.subscriptionId];
+    if (!subscription) throw new MembershipCommerceError("找不到定期購");
+    if (subscription.startedFromOrderId !== input.orderId) throw new MembershipCommerceError("首筆訂單與定期購不一致");
+
+    const existingScheduledCycle = Object.values(state.cycles)
+      .filter((cycle) => cycle.subscriptionId === subscription.subscriptionId && cycle.kind === "scheduled")
+      .sort((a, b) => a.sequence - b.sequence)[0];
+    const rememberedCycleId = remembered(state, key);
+    if (rememberedCycleId) {
+      return {
+        subscription,
+        cycle: state.cycles[rememberedCycleId] ?? existingScheduledCycle ?? null,
+      };
+    }
+
+    if (subscription.status !== "pending_activation" && subscription.status !== "active") {
+      throw new MembershipCommerceError("只有等待首筆取貨的定期購可以啟動");
+    }
+
+    const completionDate = getDateOnlyInTimeZone(now);
+    if (subscription.status === "pending_activation") {
+      const previousAnchorDate = subscription.anchorDate;
+      subscription.status = "active";
+      subscription.statusReason = "首筆原價訂單成功取貨";
+      subscription.anchorDate = completionDate;
+      touch(subscription, now);
+      const fulfillment = event(state, "qualifying_fulfillment", { fulfillmentNumber: 1, originalPriceOrder: true }, now, { memberId: subscription.memberId, subscriptionId: subscription.subscriptionId, orderId: input.orderId });
+      audit(state, {
+        actor: "system",
+        action: "subscription-activated",
+        entityType: "subscription",
+        entityId: subscription.subscriptionId,
+        before: { status: "pending_activation", anchorDate: previousAnchorDate },
+        after: { status: "active", anchorDate: completionDate, giftProgress: 1 },
+        reason: "首筆原價訂單成功取貨",
+        sourceEvent: fulfillment.eventId,
+      }, now);
+      if (giftEligibleAt(1, version.rules)) notify(state, version.rules, "gift_eligible", fulfillment.eventId, now, { memberId: subscription.memberId, safeData: { fulfillmentNumber: 1 } });
+    }
+
+    let firstCycle = existingScheduledCycle;
+    if (!firstCycle) {
+      firstCycle = createSubscriptionCycleRecord({
+        state,
+        subscription,
+        sequence: 1,
+        plannedDate: nextScheduledDate(completionDate, subscription.intervalDays, 1),
+        kind: "scheduled",
+        version,
+        now,
+        reason: "首筆原價訂單完成後建立首期定期配送",
+        sourceEvent: input.orderId,
+        dedicatedRoastReferenceDate: completionDate,
+      }).cycle;
+    }
+
+    remember(state, key, firstCycle.cycleId, now);
+    return { subscription, cycle: firstCycle };
+  }, { now: input.now, filePath: input.stateFilePath });
+}
+
 /** One membership entry point for canonical order outcomes. */
 export async function handleCanonicalOrderOutcome(input: { orderId: string; outcome: "completed" | "uncollected"; memberId?: string; merchandiseAmount: number; basePV?: number; effectivePV?: number; discountRatio?: number; eligibleItemCount?: number; idempotencyKey: string; now?: Date; stateFilePath?: string; rulesFilePath?: string }) {
   const snapshot = await readMembershipCommerceState(input.stateFilePath);
@@ -631,7 +775,7 @@ export async function handleCanonicalOrderOutcome(input: { orderId: string; outc
 
   if (input.outcome === "completed") {
     if (subscription?.status === "pending_activation") {
-      await activateSubscriptionFromPickup({ subscriptionId: subscription.subscriptionId, orderId: input.orderId, idempotencyKey: `${input.idempotencyKey}:activate`, now: input.now, stateFilePath: input.stateFilePath, rulesFilePath: input.rulesFilePath });
+      await activateSubscriptionFromCompletedFirstOrder({ subscriptionId: subscription.subscriptionId, orderId: input.orderId, idempotencyKey: `${input.idempotencyKey}:activate`, now: input.now, stateFilePath: input.stateFilePath, rulesFilePath: input.rulesFilePath });
     }
     if (cycle) {
       await recordCycleFulfillment({ cycleId: cycle.cycleId, orderId: input.orderId, idempotencyKey: `${input.idempotencyKey}:cycle`, now: input.now, stateFilePath: input.stateFilePath, rulesFilePath: input.rulesFilePath });
@@ -684,15 +828,18 @@ export async function generateSubscriptionCycle(input: { subscriptionId: string;
     if (!subscription) throw new MembershipCommerceError("找不到定期購");
     if (subscription.status !== "active") throw new MembershipCommerceError("目前定期購不會建立新一期");
     const kind = input.kind ?? "scheduled";
-    const duplicate = Object.values(state.cycles).find((cycle) => cycle.subscriptionId === input.subscriptionId && cycle.sequence === input.sequence && cycle.kind === kind);
-    if (duplicate) { remember(state, key, duplicate.cycleId, now); return duplicate; }
-    const dates = cycleDates(input.plannedDate, version.rules.subscription.modificationCutoffDays, version.rules.subscription.orderCreationLeadDays);
-    const cycleId = id("cycle");
-    const timestamp = nowIso(now);
-    const cycle: SubscriptionCycle = { cycleId, subscriptionId: subscription.subscriptionId, sequence: input.sequence, kind, ...dates, status: "modifiable", itemsDraft: cloneItems(subscription.defaultItems), itemsSnapshot: null, pricingSnapshot: null, giftSnapshot: null, shippingSnapshot: null, rulesSnapshot: null, createdOrderId: null, createdAt: timestamp, updatedAt: timestamp, revision: 0, modificationCount: 0, dedicatedRoastRush: null };
-    state.cycles[cycleId] = cycle;
-    remember(state, key, cycleId, now);
-    audit(state, { actor: "system", action: "cycle-generated", entityType: "cycle", entityId: cycleId, before: {}, after: { status: cycle.status, sequence: cycle.sequence }, reason: kind === "scheduled" ? "依配送週期建立" : "會員立即補貨", sourceEvent: input.idempotencyKey }, now);
+    const cycle = createSubscriptionCycleRecord({
+      state,
+      subscription,
+      sequence: input.sequence,
+      plannedDate: input.plannedDate,
+      kind,
+      version,
+      now,
+      reason: kind === "scheduled" ? "依配送週期建立" : "會員立即補貨",
+      sourceEvent: input.idempotencyKey,
+    }).cycle;
+    remember(state, key, cycle.cycleId, now);
     return cycle;
   }, { now: input.now, filePath: input.stateFilePath });
 }
