@@ -932,14 +932,25 @@ export async function updateSubscriptionPreferences(input: { memberId: string; s
     assertMemberOwns(subscription, input.memberId);
     assertRevision(subscription, input.expectedRevision);
     if (!["active", "paused"].includes(subscription.status)) throw new MembershipCommerceError("目前無法修改定期購內容");
+    const beforeShippingMethod = subscription.shippingMethod;
     const beforeStore = subscription.storeSelection?.storeId ?? "none";
-    if (input.shippingMethod) subscription.shippingMethod = input.shippingMethod;
-    if (input.storeSelection !== undefined) subscription.storeSelection = structuredClone(input.storeSelection);
+    if (input.shippingMethod !== undefined || input.storeSelection !== undefined) {
+      const shippingMethod = input.shippingMethod ?? subscription.shippingMethod;
+      if (!["studio_pickup", "711_cod"].includes(shippingMethod)) throw new MembershipCommerceError("不支援的取貨方式");
+      const requestedStore = input.storeSelection !== undefined
+        ? structuredClone(input.storeSelection)
+        : structuredClone(subscription.storeSelection);
+      if (shippingMethod === "711_cod" && (!requestedStore?.storeId.trim() || !requestedStore.storeName.trim())) {
+        throw new MembershipCommerceError("請先選擇有效的 7-ELEVEN 取貨門市");
+      }
+      subscription.shippingMethod = shippingMethod;
+      subscription.storeSelection = shippingMethod === "studio_pickup" ? null : requestedStore;
+    }
     if (items) subscription.defaultItems = items;
     touch(subscription, now);
     remember(state, key, subscription.subscriptionId, now);
-    const source = event(state, "subscription_preferences_changed", { storeChanged: beforeStore !== (subscription.storeSelection?.storeId ?? "none"), itemsChanged: Boolean(items) }, now, { memberId: input.memberId, subscriptionId: subscription.subscriptionId });
-    audit(state, { actor: "member", action: "subscription-preferences-changed", entityType: "subscription", entityId: subscription.subscriptionId, before: { storeId: beforeStore }, after: { storeId: subscription.storeSelection?.storeId ?? "none" }, reason: "會員修改後續配送設定", sourceEvent: source.eventId }, now);
+    const source = event(state, "subscription_preferences_changed", { shippingMethodChanged: beforeShippingMethod !== subscription.shippingMethod, storeChanged: beforeStore !== (subscription.storeSelection?.storeId ?? "none"), itemsChanged: Boolean(items) }, now, { memberId: input.memberId, subscriptionId: subscription.subscriptionId });
+    audit(state, { actor: "member", action: "subscription-preferences-changed", entityType: "subscription", entityId: subscription.subscriptionId, before: { shippingMethod: beforeShippingMethod, storeId: beforeStore }, after: { shippingMethod: subscription.shippingMethod, storeId: subscription.storeSelection?.storeId ?? "none" }, reason: "會員修改後續配送設定", sourceEvent: source.eventId }, now);
     return subscription;
   }, { now: input.now, filePath: input.stateFilePath });
 }

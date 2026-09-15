@@ -159,7 +159,7 @@ try {
   const adminFormSource = await readFile(path.join(process.cwd(), "components", "admin", "OrderStatusForm.tsx"), "utf8");
   const adminRouteSource = await readFile(path.join(process.cwd(), "app", "api", "admin", "orders", "[orderNumber]", "route.ts"), "utf8");
   const commerceSource = await readFile(path.join(process.cwd(), "lib", "membershipCommerce.ts"), "utf8");
-  check("subscription UI uses action-specific success messages", ["定期配送已暫停。", "定期配送已恢復。下一次配送日期", "已跳過本次配送。下一次配送日期", "下一次配送日期已更新。新的配送日期", "7-ELEVEN 取貨門市已更新。", "補貨安排已建立。預計配送日期"].every((text) => memberUiSource.includes(text)) && !memberUiSource.includes("已完成，最新安排已更新。"));
+  check("subscription UI uses action-specific success messages", ["定期配送已暫停。", "定期配送已恢復。下一次配送日期", "已跳過本次配送。下一次配送日期", "下一次配送日期已更新。新的配送日期", "未來定期配送的取貨方式已更新。", "補貨安排已建立。預計配送日期"].every((text) => memberUiSource.includes(text)) && !memberUiSource.includes("已完成，最新安排已更新。"));
   check("subscription success dates come from server action results", subscriptionRouteSource.includes("actionResult.plannedDate") && memberUiSource.includes("result.actionResult?.plannedDate"));
   check("member UI separates current cancellation from future termination", ["只取消本次配送", "取消本次配送，並停止之後的定期配送", "取消本次配送，保留定期配送並更新下次日期", "只停止之後的定期配送，本次配送照常"].every((text) => memberUiSource.includes(text)));
   check("Admin sees manual-void evidence and explicit warning", adminSource.includes("會員要求取消本次配送") && adminSource.includes("請先至賣貨便／交貨便確認寄件單已作廢，再完成正式取消。") && adminSource.includes("externalShipmentId"));

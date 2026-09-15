@@ -132,8 +132,14 @@ export async function PATCH(request: Request) {
       });
       actionResult.plannedDate = cycle.plannedDate;
       actionResult.subscriptionId = cycle.subscriptionId;
-    } else if (action === "change-store") {
-      await updateSubscriptionPreferences({ memberId: member.id, subscriptionId: String(body.subscriptionId), expectedRevision: Number(body.expectedRevision), shippingMethod: "711_cod", storeSelection: { storeId: String(body.storeId || "").slice(0, 10), storeName: String(body.storeName || "").slice(0, 60) }, idempotencyKey });
+    } else if (["change-shipping", "change-store"].includes(action)) {
+      const shippingMethod = action === "change-store" ? "711_cod" : String(body.shippingMethod || "");
+      if (!["studio_pickup", "711_cod"].includes(shippingMethod)) throw new MembershipCommerceError("不支援的取貨方式");
+      const storeSelection = shippingMethod === "711_cod"
+        ? { storeId: String(body.storeId || "").trim().slice(0, 10), storeName: String(body.storeName || "").trim().slice(0, 60) }
+        : null;
+      if (shippingMethod === "711_cod" && (!storeSelection?.storeId || !storeSelection.storeName)) throw new MembershipCommerceError("請先選擇有效的 7-ELEVEN 取貨門市");
+      await updateSubscriptionPreferences({ memberId: member.id, subscriptionId: String(body.subscriptionId), expectedRevision: Number(body.expectedRevision), shippingMethod, storeSelection, idempotencyKey });
     } else if (action === "change-items") {
       const dashboard = await getMemberCommerceDashboard(member.id);
       const cycle = dashboard.cycles.find((item) => item.cycleId === String(body.cycleId));

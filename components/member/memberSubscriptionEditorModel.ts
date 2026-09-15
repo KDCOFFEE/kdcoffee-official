@@ -257,6 +257,18 @@ export function subscriptionItemsSummary(items: PricedSubscriptionItem[], produc
       return selected ? `${selected.product.name}・${selected.option.label} × ${item.quantity}` : `已無法供應的耳掛商品 × ${item.quantity}`;
     }
     const names = item.components.map((component) => skuOption(products, component.productId, component.skuId ?? "", "beans")?.product.name ?? products.find((product) => product.id === component.productId)?.name ?? "已無法供應的咖啡豆");
-    return `${names.join(" + ")}・${item.packageWeight === "one-pound" ? "一磅" : "半磅"} × ${item.quantity}`;
+    const dedicatedRoasts = item.components.flatMap((component) => {
+      if (!component.customRoast || !component.roastLevel) return [];
+      const productName = skuOption(products, component.productId, component.skuId ?? "", "beans")?.product.name
+        ?? products.find((product) => product.id === component.productId)?.name
+        ?? "咖啡豆";
+      return [{ productName, roastLevel: component.roastLevel }];
+    }).filter((entry, index, entries) => entries.findIndex((candidate) => candidate.productName === entry.productName && candidate.roastLevel === entry.roastLevel) === index);
+    const dedicatedRoastSummary = dedicatedRoasts.length === 1
+      ? `・專屬烘焙：${dedicatedRoasts[0].roastLevel}`
+      : dedicatedRoasts.length > 1
+        ? `・專屬烘焙：${dedicatedRoasts.map((entry) => `${entry.productName} ${entry.roastLevel}`).join("、")}`
+        : "";
+    return `${names.join(" + ")}・${item.packageWeight === "one-pound" ? "一磅" : "半磅"} × ${item.quantity}${dedicatedRoastSummary}`;
   }).join("、");
 }

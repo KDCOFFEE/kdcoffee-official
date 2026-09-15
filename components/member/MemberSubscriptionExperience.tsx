@@ -27,6 +27,13 @@ import {
   type SubscriptionEditorItem,
 } from "@/components/member/memberSubscriptionEditorModel";
 import {
+  currentSubscriptionArrangement,
+  defaultSubscriptionId,
+  latestCreatedOrderCycle,
+  subscriptionSelectorLabel,
+  subscriptionStatusLabel,
+} from "@/components/member/memberSubscriptionDashboardModel";
+import {
   DEDICATED_ROAST_STANDARD_PREPARATION_DAYS,
   dedicatedRoastRushRequired,
   subscriptionHasDedicatedRoast,
@@ -36,9 +43,12 @@ type Subscription = {
   subscriptionId: string;
   status: "pending_activation" | "active" | "paused" | "terminated";
   intervalDays: number;
+  shippingMethod: string;
   storeSelection: { storeId: string; storeName: string } | null;
   defaultItems: PricedSubscriptionItem[];
   revision: number;
+  createdAt?: string;
+  updatedAt?: string;
 };
 
 type SubscriptionCycle = {
@@ -47,6 +57,7 @@ type SubscriptionCycle = {
   kind: "scheduled" | "manual_replenishment";
   status: string;
   plannedDate: string;
+  orderCreationDate?: string;
   modificationDeadline: string;
   itemsDraft: PricedSubscriptionItem[];
   pricingSnapshot: {
@@ -62,6 +73,7 @@ type SubscriptionCycle = {
   createdOrderId: string | null;
   revision: number;
   modificationCount?: number;
+  createdAt?: string;
 };
 
 type MemberCreditHistoryEntry = {
@@ -91,7 +103,6 @@ type PendingRushConfirmation =
 type Props = Dashboard & { products: MemberSubscriptionProduct[]; rules: { intervalsDays: number[]; customCycleEnabled: boolean; customCycleMinDays: number; customCycleMaxDays: number; delayQuickOptionsDays: number[]; advanceQuickOptionsDays: number[]; preparationLeadDays: number; discountPercent: number; datePickerMode: "quick-and-calendar" | "calendar-only" | "suggestion-and-calendar"; maxModificationsPerCycle: number | null; allowOtherSubscriptionProducts?: boolean; allowHalfToOnePound?: boolean; allowOneToHalfPound?: boolean; allowMixedOnePound?: boolean; allowQuantityChange?: boolean; maxItems?: number } };
 
 const money = (value: number) => `NT$ ${value.toLocaleString("zh-TW")}`;
-const statusLabel = (value: Subscription["status"]) => ({ pending_activation: "等待首筆訂單取貨", active: "配送中", paused: "已暫停", terminated: "已停止" })[value];
 const redemptionLabel = (status: MemberCreditHistoryEntry["orderRedemptions"][number]["status"]) => status === "released" ? "訂單取消，抵用金已返還" : status === "reserved" ? "本筆已保留折抵" : "本筆已使用";
 const displayDate = (value?: string) => value ? value.replaceAll("-", "/") : "尚未排定";
 
@@ -102,7 +113,7 @@ function actionSuccessMessage(action: string, plannedDate?: string) {
     ? `已跳過本次配送。下一次配送日期：${displayDate(plannedDate)}，原配送週期維持不變。`
     : "已跳過本次配送。原配送週期維持不變。";
   if (["advance", "delay", "change-date"].includes(action)) return `下一次配送日期已更新。新的配送日期：${displayDate(plannedDate)}。`;
-  if (action === "change-store") return "7-ELEVEN 取貨門市已更新。";
+  if (["change-shipping", "change-store"].includes(action)) return "未來定期配送的取貨方式已更新。";
   if (action === "replenish") return `補貨安排已建立。預計配送日期：${displayDate(plannedDate)}。`;
   if (action === "terminate") return "未來定期配送已停止；已建立的本次配送不會自動取消。";
   if (action === "change-items") return "下一次配送內容已更新。";
@@ -138,12 +149,17 @@ function ItemPricePreview({ item, products, discountPercent }: { item: Subscript
 }
 
 export default function MemberSubscriptionExperience(initial: Props) {
+  const initialSubscriptionId = defaultSubscriptionId(initial.subscriptions);
+  const initialEditorSubscription = initial.subscriptions.find((item) => item.subscriptionId === initialSubscriptionId) ?? initial.subscriptions[0];
+  const initialEditorCycle = initialEditorSubscription ? initial.cycles.find((item) => item.subscriptionId === initialEditorSubscription.subscriptionId && ["scheduled", "modifiable"].includes(item.status)) : undefined;
+  const initialEditorSource = initialEditorCycle?.itemsDraft ?? initialEditorSubscription?.defaultItems ?? [];
   const [dashboard, setDashboard] = useState<Dashboard>(initial);
+  const [selectedSubscriptionId, setSelectedSubscriptionId] = useState(initialSubscriptionId);
   const [busy, setBusy] = useState("");
   const [message, setMessage] = useState("");
   const [resumeDate, setResumeDate] = useState("");
   const initialResumeInterval =
-    initial.subscriptions[0]?.intervalDays ??
+    initialEditorSubscription?.intervalDays ??
     initial.rules.intervalsDays[0] ??
     30;
   const [resumeInterval, setResumeInterval] = useState(initialResumeInterval);
@@ -157,11 +173,9 @@ export default function MemberSubscriptionExperience(initial: Props) {
   const [replacementDate, setReplacementDate] = useState("");
   const [showPriceDetails, setShowPriceDetails] = useState(false);
   const [rushConfirmation, setRushConfirmation] = useState<PendingRushConfirmation | null>(null);
-  const initialEditorSubscription = initial.subscriptions.find((item) => item.status !== "terminated") ?? initial.subscriptions[0];
-  const initialEditorCycle = initialEditorSubscription ? initial.cycles.find((item) => item.subscriptionId === initialEditorSubscription.subscriptionId && ["scheduled", "modifiable"].includes(item.status)) : undefined;
-  const initialEditorSource = initialEditorCycle?.itemsDraft ?? initialEditorSubscription?.defaultItems ?? [];
+  const [shippingMethodDraft, setShippingMethodDraft] = useState<"studio_pickup" | "711_cod">(initialEditorSubscription?.shippingMethod === "711_cod" ? "711_cod" : "studio_pickup");
+  const [terminateConfirmationId, setTerminateConfirmationId] = useState("");
   const [editorItems, setEditorItems] = useState(() => initializeSubscriptionEditorItems(initialEditorSource, initial.products));
-  const [originalProductIds] = useState(() => new Set(initialEditorSource.flatMap((item) => item.skuKind === "drip" ? [item.productId] : item.components.map((component) => component.productId))));
   const allowOtherSubscriptionProducts = initial.rules.allowOtherSubscriptionProducts === true;
   const allowHalfToOnePound = initial.rules.allowHalfToOnePound === true;
   const allowOneToHalfPound = initial.rules.allowOneToHalfPound === true;
@@ -202,13 +216,16 @@ export default function MemberSubscriptionExperience(initial: Props) {
     return result as Dashboard;
   }
 
-  const subscription = dashboard.subscriptions.find((item) => item.status !== "terminated") ?? dashboard.subscriptions[0];
+  const subscription = dashboard.subscriptions.find((item) => item.subscriptionId === selectedSubscriptionId)
+    ?? dashboard.subscriptions.find((item) => item.subscriptionId === defaultSubscriptionId(dashboard.subscriptions))
+    ?? dashboard.subscriptions[0];
   const nextCycle = subscription ? dashboard.cycles.find((item) => item.subscriptionId === subscription.subscriptionId && ["scheduled", "modifiable"].includes(item.status)) : undefined;
-  const currentOrderCycle = subscription ? dashboard.cycles.find((item) => item.subscriptionId === subscription.subscriptionId && item.status === "order_created" && Boolean(item.createdOrderId)) : undefined;
-  const manualArrangement = subscription ? dashboard.cycles.find((item) => item.subscriptionId === subscription.subscriptionId && item.kind === "manual_replenishment" && ["locked", "order_created"].includes(item.status)) : undefined;
-  const currentArrangement = currentOrderCycle ?? manualArrangement;
+  const currentOrderCycle = subscription ? latestCreatedOrderCycle(dashboard.cycles, subscription.subscriptionId) : undefined;
+  const currentArrangement = subscription ? currentSubscriptionArrangement(dashboard.cycles, subscription.subscriptionId) : undefined;
+  const otherSubscription = subscription ? dashboard.subscriptions.find((item) => item.subscriptionId !== subscription.subscriptionId) : undefined;
   const availableCredit = dashboard.credits.filter((item) => item.status === "available").reduce((sum, item) => sum + item.remainingAmount, 0);
   const nextItems = nextCycle?.itemsDraft ?? subscription?.defaultItems ?? [];
+  const originalProductIds = new Set(nextItems.flatMap((item) => item.skuKind === "drip" ? [item.productId] : item.components.map((component) => component.productId)));
   const nextSubtotal = nextItems.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
   const expectedPayment = subscriptionPrice(
     nextSubtotal,
@@ -239,6 +256,31 @@ export default function MemberSubscriptionExperience(initial: Props) {
   const editorAtLimit = editorItems.length >= maxEditorItems;
   const editorModificationLocked = remainingChanges === 0;
   const dedicatedRoastProducts = editorDedicatedRoastProducts(editorItems, initial.products);
+
+  function selectSubscription(subscriptionId: string) {
+    const selected = dashboard.subscriptions.find((item) => item.subscriptionId === subscriptionId);
+    if (!selected) return;
+    const editableCycle = dashboard.cycles.find((item) => item.subscriptionId === selected.subscriptionId && ["scheduled", "modifiable"].includes(item.status));
+    const editorSource = editableCycle?.itemsDraft ?? selected.defaultItems;
+    setSelectedSubscriptionId(selected.subscriptionId);
+    setShippingMethodDraft(selected.shippingMethod === "711_cod" ? "711_cod" : "studio_pickup");
+    setResumeInterval(selected.intervalDays);
+    setResumeIntervalMode(initial.rules.intervalsDays.includes(selected.intervalDays) ? "preset" : "custom");
+    setEditorItems(initializeSubscriptionEditorItems(editorSource, initial.products));
+    setMessage("");
+    setShowPriceDetails(false);
+    setRushConfirmation(null);
+    setTerminateConfirmationId("");
+  }
+
+  async function confirmTermination() {
+    const target = dashboard.subscriptions.find((item) => item.subscriptionId === terminateConfirmationId);
+    if (!target) return;
+    const result = await mutate("terminate", { subscriptionId: target.subscriptionId, expectedRevision: target.revision });
+    if (!result) return;
+    setSelectedSubscriptionId(target.subscriptionId);
+    setTerminateConfirmationId("");
+  }
 
   function updateEditorItem(localKey: string, update: (item: SubscriptionEditorItem) => SubscriptionEditorItem) {
     setEditorItems((items) => normalizeSubscriptionEditorDedicatedRoasts(items.map((item) => item.localKey === localKey ? update(item) : item)));
@@ -302,7 +344,9 @@ export default function MemberSubscriptionExperience(initial: Props) {
       }
       currentCancellationCompleted = result.result === "cancelled" || result.result === "already_cancelled";
 
-      let finalMessage = String(result.customerMessage || "取消申請已處理。");
+      let finalMessage = result.result === "cancelled" || result.result === "already_cancelled"
+        ? "取消處理已送出；請以重新整理後的訂單狀態為準。"
+        : String(result.customerMessage || "取消處理已送出；請以重新整理後的訂單狀態為準。");
       if (choice === "current-and-stop") {
         await mutate("terminate", { subscriptionId: subscription!.subscriptionId, expectedRevision: subscription!.revision }, { rethrow: true });
         finalMessage = result.result === "requires_manual_shipment_void"
@@ -338,13 +382,14 @@ export default function MemberSubscriptionExperience(initial: Props) {
 
   return <>
     <section className="member-commerce-section" id="subscription">
-      <div className="member-section-head"><div><p className="eyebrow dark">SUBSCRIPTION</p><h2>我的定期配送</h2></div>{subscription && <span className={`member-subscription-status ${subscription.status}`}>{statusLabel(subscription.status)}</span>}</div>
+      <div className="member-section-head"><div><p className="eyebrow dark">SUBSCRIPTION</p><h2>我的定期配送</h2></div>{subscription && <span className={`member-subscription-status ${subscription.status}`}>{subscriptionStatusLabel(subscription.status)}</span>}</div>
       {message && <p className="member-notice" role="status">{message}</p>}
       {!subscription ? <div className="member-commerce-empty"><strong>還沒有定期配送</strong><p>第一次購買時可勾選加入。首筆仍是原價，成功取貨後才會開始定期配送與續訂優惠。</p><Link href="/works">挑選咖啡作品</Link></div> : <div className="member-subscription-grid">
+        {dashboard.subscriptions.length > 1 && <div className="member-subscription-selector"><label htmlFor="member-subscription-selector">選擇定期配送<select id="member-subscription-selector" value={subscription.subscriptionId} onChange={(event) => selectSubscription(event.target.value)}>{dashboard.subscriptions.map((item) => <option value={item.subscriptionId} key={item.subscriptionId}>{subscriptionSelectorLabel(item, initial.products)}</option>)}</select></label><small>每筆定期配送分開保存；切換後可查看各自狀態與安排。</small></div>}
         <article className="member-subscription-summary">
           <div><small>配送週期</small><strong>每 {subscription.intervalDays} 天</strong></div>
           <div><small>下次安排</small><strong>{nextCycle?.plannedDate ?? (subscription.status === "pending_activation" ? "首筆取貨後安排" : "尚未排定")}</strong></div>
-          <div><small>取貨門市</small><strong>{subscription.storeSelection?.storeName ?? "工作室自取"}</strong></div>
+          <div><small>取貨方式／門市</small><strong>{subscription.shippingMethod === "711_cod" ? `7-ELEVEN・${subscription.storeSelection?.storeName || "尚未選擇門市"}` : "工作室自取"}</strong></div>
           <div><small>下一次商品</small><strong>{subscriptionItemsSummary(nextItems, initial.products) || "尚未選擇"}</strong></div>
           <div><small>修改截止</small><strong>{nextCycle?.modificationDeadline ?? "啟動後顯示"}</strong></div>
           <div>
@@ -370,9 +415,9 @@ export default function MemberSubscriptionExperience(initial: Props) {
 </div>
         </article>
 
-        {currentArrangement && <div className="member-commerce-callout"><strong>目前配送安排</strong><p>{currentArrangement.kind === "manual_replenishment" ? "立即補貨" : "定期配送"}：{displayDate(currentArrangement.plannedDate)}{currentArrangement.createdOrderId ? `（訂單 ${currentArrangement.createdOrderId}）` : "（尚未建立訂單）"}</p></div>}
+        {currentArrangement && <div className="member-commerce-callout member-current-arrangement"><strong>目前配送安排</strong><p>{currentArrangement.kind === "manual_replenishment" ? "立即補貨" : "定期配送"}：{displayDate(currentArrangement.plannedDate)}</p>{currentArrangement.createdOrderId ? <p>訂單：{currentArrangement.createdOrderId}</p> : <><p>狀態：等待建立訂單</p>{currentArrangement.orderCreationDate && <p>預計建立訂單：{displayDate(currentArrangement.orderCreationDate)}</p>}</>}</div>}
 
-        {subscription.status === "pending_activation" ? <div className="member-commerce-callout"><strong>目前不會自動建立下一張訂單</strong><p>等首筆原價訂單成功取貨後，才會正式啟動。您可以先在這裡確認內容。</p></div> : <div className="member-subscription-actions">
+        {subscription.status === "pending_activation" ? <div className="member-commerce-callout"><strong>目前不會自動建立下一張訂單</strong><p>等首筆原價訂單成功取貨後，才會正式啟動。您可以先在這裡確認內容。</p></div> : subscription.status === "terminated" ? <div className="member-subscription-termination-receipt" role="status"><strong>此定期配送已停止</strong><p>已建立的本次配送仍照常。</p>{otherSubscription && <button type="button" onClick={() => selectSubscription(otherSubscription.subscriptionId)}>查看其他定期配送</button>}</div> : <div className="member-subscription-actions">
           {currentOrderCycle && <details><summary>取消本次配送</summary><div className="member-action-panel"><p>取消本次配送與停止未來定期配送是兩件不同的事。請明確選擇要處理的範圍。</p><label>取消原因<select required value={cancellationReason} onChange={(event) => { setCancellationReason(event.target.value); if (event.target.value !== "其他") setCancellationOtherReason(""); }}><option value="" disabled>請選擇取消原因</option><option value="單純想取消">單純想取消</option><option value="行程／取貨時間不方便">行程／取貨時間不方便</option><option value="咖啡還沒喝完，暫時不需要">咖啡還沒喝完，暫時不需要</option><option value="想更換咖啡／數量／烘焙度">想更換咖啡／數量／烘焙度</option><option value="重複下單或誤操作">重複下單或誤操作</option><option value="預算考量">預算考量</option><option value="其他">其他</option></select></label>{cancellationReason === "其他" && <label>其他取消原因<textarea maxLength={197} required value={cancellationOtherReason} onChange={(event) => setCancellationOtherReason(event.target.value)} placeholder="請簡單告訴我們取消原因" /></label>}<div className="member-action-buttons"><button className="member-danger-soft" disabled={Boolean(busy) || !resolvedCancellationReason} onClick={() => void cancelCurrentDelivery("current")}>只取消本次配送</button><button className="member-danger-soft" disabled={Boolean(busy) || !resolvedCancellationReason} onClick={() => void cancelCurrentDelivery("current-and-stop")}>取消本次配送，並停止之後的定期配送</button></div>{nextCycle && <><label>保留定期配送時的下一次配送日期<input type="date" min={nextDateMinimum} value={replacementDate || nextCycle.plannedDate} onChange={(event) => setReplacementDate(event.target.value)} /></label><button disabled={Boolean(busy) || !resolvedCancellationReason} onClick={() => void cancelCurrentDelivery("current-and-reschedule")}>取消本次配送，保留定期配送並更新下次日期</button></>}<small>若此訂單已建立 7-ELEVEN 寄件資訊，送出後只是取消申請；KD Coffee 確認寄件單作廢前，訂單不會顯示為已取消，也不會回補庫存。</small></div></details>}
           {nextCycle && <details><summary>調整下一次日期</summary><div className="member-action-panel"><p>{nextCycleHasDedicatedRoast ? `本期含專屬烘焙；距配送不足 ${DEDICATED_ROAST_STANDARD_PREPARATION_DAYS} 天時會先顯示提醒，但仍可確認送出。` : `最早可配送日為 ${earliestDate}。`} 選好日期後，請決定只套用本次，或讓之後的定期購也從新日期重新計算。{remainingChanges === null ? "" : ` 本期還可修改 ${remainingChanges} 次。`}</p><label>新的配送日期<input type="date" id="member-next-date" min={nextDateMinimum} defaultValue={nextCycle.plannedDate} /></label><div className="subscription-enrollment-summary"><span>新建立訂單日與修改截止日會在確認後依目前營運規則重新計算。</span></div><div className="member-action-buttons"><button disabled={Boolean(busy) || remainingChanges === 0} onClick={() => { const plannedDate = (document.getElementById("member-next-date") as HTMLInputElement).value; void requestDateMutation("change-date", { cycleId: nextCycle.cycleId, expectedRevision: nextCycle.revision, plannedDate, recalculateAnchor: false }); }}>只套用這一次</button><button disabled={Boolean(busy) || remainingChanges === 0} onClick={() => { const plannedDate = (document.getElementById("member-next-date") as HTMLInputElement).value; void requestDateMutation("change-date", { cycleId: nextCycle.cycleId, expectedRevision: nextCycle.revision, plannedDate, recalculateAnchor: true }); }}>之後也從新日期重新計算</button></div>{initial.rules.datePickerMode !== "calendar-only" && <div className="member-quick-delays">{initial.rules.advanceQuickOptionsDays.map((days) => <button key={`advance-${days}`} type="button" disabled={Boolean(busy) || remainingChanges === 0} onClick={() => void requestDateMutation("advance", { cycleId: nextCycle.cycleId, expectedRevision: nextCycle.revision, plannedDate: addDateOnlyDays(nextCycle.plannedDate, -days), recalculateAnchor: false })}>提前 {days} 天</button>)}{initial.rules.delayQuickOptionsDays.map((days) => <button key={`delay-${days}`} type="button" disabled={Boolean(busy) || remainingChanges === 0} onClick={() => void requestDateMutation("delay", { cycleId: nextCycle.cycleId, expectedRevision: nextCycle.revision, plannedDate: addDateOnlyDays(nextCycle.plannedDate, days), recalculateAnchor: false })}>延後 {days} 天</button>)}</div>}</div></details>}
           {nextCycle && <details><summary>跳過這一次</summary><div className="member-action-panel"><p>只跳過 {nextCycle.plannedDate} 這一次，不會改變後續配送週期。</p><button className="member-danger-soft" disabled={Boolean(busy)} onClick={() => void mutate("skip", { cycleId: nextCycle.cycleId, expectedRevision: nextCycle.revision })}>確認跳過</button></div></details>}
@@ -428,7 +473,7 @@ export default function MemberSubscriptionExperience(initial: Props) {
             }}>＋ 新增商品</button><small>{editorItems.length} / {maxEditorItems} 項</small></div>
             <button className="member-subscription-save-items" disabled={Boolean(busy) || editorModificationLocked || editorHasError || !editorItems.length} type="submit">儲存下一次配送商品</button>
           </form></details>}
-          <details><summary>更換 7-ELEVEN 門市</summary><form className="member-action-panel" onSubmit={(event) => { event.preventDefault(); const form = new FormData(event.currentTarget); void mutate("change-store", { subscriptionId: subscription.subscriptionId, expectedRevision: subscription.revision, storeId: form.get("storeId"), storeName: form.get("storeName") }); }}><StoreSelector initialStore={subscription.storeSelection ? { id: subscription.storeSelection.storeId, name: subscription.storeSelection.storeName, address: "" } : undefined} /><button disabled={Boolean(busy)} type="submit">儲存門市</button></form></details>
+          <details><summary>變更取貨方式</summary><form className="member-action-panel" onSubmit={(event) => { event.preventDefault(); const form = new FormData(event.currentTarget); void mutate("change-shipping", { subscriptionId: subscription.subscriptionId, expectedRevision: subscription.revision, shippingMethod: shippingMethodDraft, storeId: form.get("storeId"), storeName: form.get("storeName") }); }}><fieldset className="member-shipping-method-options"><legend>未來定期配送取貨方式</legend><label><input type="radio" name="shippingMethodChoice" value="studio_pickup" checked={shippingMethodDraft === "studio_pickup"} onChange={() => setShippingMethodDraft("studio_pickup")} />工作室自取</label><label><input type="radio" name="shippingMethodChoice" value="711_cod" checked={shippingMethodDraft === "711_cod"} onChange={() => setShippingMethodDraft("711_cod")} />7-ELEVEN 取貨</label></fieldset>{shippingMethodDraft === "711_cod" && <StoreSelector key={`${subscription.subscriptionId}:${subscription.storeSelection?.storeId ?? "new"}`} initialStore={subscription.storeSelection ? { id: subscription.storeSelection.storeId, name: subscription.storeSelection.storeName, address: "" } : undefined} />}<small>此變更只套用未來配送；已建立的訂單仍保留原取貨快照。</small><button disabled={Boolean(busy)} type="submit">儲存取貨方式</button></form></details>
           <details><summary>暫停、恢復或停止未來定期配送</summary><div className="member-action-panel"><p>這裡只管理未來的定期配送；停止定期配送不會取消已建立的本次訂單。</p>{subscription.status === "active" && <button disabled={Boolean(busy)} onClick={() => void mutate("pause", { subscriptionId: subscription.subscriptionId, expectedRevision: subscription.revision })}>暫停未來定期配送</button>}{subscription.status === "paused" && <><label>恢復日期<input type="date" value={resumeDate} onChange={(event) => setResumeDate(event.target.value)} /></label><label>新的配送週期<select
   value={resumeIntervalMode === "custom" ? "custom" : resumeInterval}
   onChange={(event) => {
@@ -462,11 +507,22 @@ export default function MemberSubscriptionExperience(initial: Props) {
     </small>
   </label>
 )}
-<button disabled={Boolean(busy) || !resumeDate} onClick={() => void mutate("resume", { subscriptionId: subscription.subscriptionId, expectedRevision: subscription.revision, resumeDate, intervalDays: resumeInterval })}>確認恢復</button></>}<button className="member-danger-soft" disabled={Boolean(busy)} onClick={() => void mutate("terminate", { subscriptionId: subscription.subscriptionId, expectedRevision: subscription.revision })}>只停止之後的定期配送，本次配送照常</button></div></details>
+<button disabled={Boolean(busy) || !resumeDate} onClick={() => void mutate("resume", { subscriptionId: subscription.subscriptionId, expectedRevision: subscription.revision, resumeDate, intervalDays: resumeInterval })}>確認恢復</button></>}<button className="member-danger-soft" disabled={Boolean(busy)} onClick={() => setTerminateConfirmationId(subscription.subscriptionId)}>只停止之後的定期配送，本次配送照常</button></div></details>
           {subscription.status === "active" && <button className="member-replenish-button" disabled={Boolean(busy)} onClick={() => void mutate("replenish", { subscriptionId: subscription.subscriptionId })}>立即補貨（不改下次日期）</button>}
         </div>}
       </div>}
     </section>
+
+    {terminateConfirmationId && (
+      <div className="member-price-modal-backdrop" role="presentation" onClick={() => { if (!busy) setTerminateConfirmationId(""); }}>
+        <div className="member-price-modal member-terminate-confirmation-modal" role="dialog" aria-modal="true" aria-labelledby="member-terminate-confirmation-title" onClick={(event) => event.stopPropagation()}>
+          <p className="eyebrow dark">SUBSCRIPTION</p>
+          <h2 id="member-terminate-confirmation-title">停止未來定期配送？</h2>
+          <p>停止後，系統將不再自動建立之後的定期配送。<br />已建立的本次配送不會取消。</p>
+          <div className="member-rush-warning-actions"><button type="button" className="member-danger-soft" disabled={Boolean(busy)} onClick={() => setTerminateConfirmationId("")}>返回</button><button type="button" disabled={Boolean(busy)} onClick={() => void confirmTermination()}>確認停止未來定期配送</button></div>
+        </div>
+      </div>
+    )}
 
     {rushConfirmation && (
       <div className="member-price-modal-backdrop" role="presentation" onClick={() => setRushConfirmation(null)}>
