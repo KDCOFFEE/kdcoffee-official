@@ -74,7 +74,7 @@ async function main() {
   const result = await backupModule.createMemberBackup({ source: "test", now: new Date(now), testOnlyAllowNonProduction: true });
   const manifest = result.manifest;
   assert.equal(manifest.status, "verified");
-  assert.equal(manifest.backupVersion, "J.5D.5A-v1");
+  assert.equal(manifest.backupVersion, "J.5D.5A-H1-v1");
   assert.equal(manifest.environment, "test");
   assert.equal(manifest.dataRoot.replaceAll("\\", "/"), root.replaceAll("\\", "/"));
   assert.equal(manifest.gitCommit, "e7bf9d5-test");
@@ -91,6 +91,11 @@ async function main() {
   assert.equal(manifest.sourceRevisions.fulfillmentRevision, 5);
   assert.equal(manifest.datasets.length, 10);
   assert.deepEqual(new Set(manifest.datasets.map((item) => item.id)), new Set(["members", "member_identity", "membership_commerce", "membership_business_rules", "orders", "fulfillment_state", "fulfillment_settings", "member_avatars", "order_notifications", "website_data"]));
+  const capturedAvatars = manifest.datasets.find((item) => item.id === "member_avatars");
+  assert.deepEqual(
+    { required: capturedAvatars?.required, present: capturedAvatars?.present, empty: capturedAvatars?.empty, status: capturedAvatars?.status, fileCount: capturedAvatars?.fileCount },
+    { required: true, present: true, empty: false, status: "captured", fileCount: 1 },
+  );
 
   for (const required of [
     "manifest.json", "checksums.sha256", "organization-tree.json", "organization.html", "readable/members.csv", "readable/organization.csv",
@@ -147,6 +152,38 @@ async function main() {
   });
   assert.equal(graph.validation.valid, false);
   for (const key of ["duplicate_member_id", "multiple_active_parent", "missing_parent", "orphan", "self_referral", "cycle"] as const) assert.ok(graph.validation.findingCounts[key] > 0, `${key} must be detected`);
+
+  const validEmptyAvatarRoot = path.join(workspace, "valid-empty-avatar");
+  await fs.mkdir(validEmptyAvatarRoot, { recursive: true });
+  await prepareFixture(validEmptyAvatarRoot);
+  const providerProfilePath = path.join(validEmptyAvatarRoot, "members", "m_a.json");
+  const providerProfile = JSON.parse(await fs.readFile(providerProfilePath, "utf8"));
+  providerProfile.pictureUrl = "https://profile.example.test/provider-avatar.jpg";
+  await writeJson(providerProfilePath, providerProfile);
+  await fs.rm(path.join(validEmptyAvatarRoot, "uploads", "member-avatars"), { recursive: true, force: true });
+  process.env.KD_DATA_DIR = validEmptyAvatarRoot;
+  const validEmptyAvatarBackup = await backupModule.createMemberBackup({ source: "test", testOnlyAllowNonProduction: true });
+  const validEmptyAvatars = validEmptyAvatarBackup.manifest.datasets.find((item) => item.id === "member_avatars");
+  assert.equal(validEmptyAvatarBackup.manifest.validation.criticalDatasetsPresent, false);
+  assert.equal(validEmptyAvatarBackup.manifest.validation.criticalDatasetsSatisfied, true);
+  assert.deepEqual(
+    { required: validEmptyAvatars?.required, present: validEmptyAvatars?.present, empty: validEmptyAvatars?.empty, status: validEmptyAvatars?.status, fileCount: validEmptyAvatars?.fileCount },
+    { required: true, present: false, empty: true, status: "valid-empty", fileCount: 0 },
+  );
+
+  const missingReferencedAvatarRoot = path.join(workspace, "missing-referenced-avatar");
+  await fs.mkdir(missingReferencedAvatarRoot, { recursive: true });
+  await prepareFixture(missingReferencedAvatarRoot);
+  await fs.rm(path.join(missingReferencedAvatarRoot, "uploads", "member-avatars"), { recursive: true, force: true });
+  const referencedProfilePath = path.join(missingReferencedAvatarRoot, "members", "m_a.json");
+  const referencedProfile = JSON.parse(await fs.readFile(referencedProfilePath, "utf8"));
+  referencedProfile.avatarUrl = "/uploads/member-avatars/m_a/avatar.webp?v=1";
+  await writeJson(referencedProfilePath, referencedProfile);
+  process.env.KD_DATA_DIR = missingReferencedAvatarRoot;
+  await expectReject(
+    () => backupModule.createMemberBackup({ source: "test", testOnlyAllowNonProduction: true }),
+    /Member avatar dataset is missing while canonical member profiles contain avatarUrl references: m_a/,
+  );
 
   const missingRoot = path.join(workspace, "missing");
   await fs.mkdir(missingRoot, { recursive: true });

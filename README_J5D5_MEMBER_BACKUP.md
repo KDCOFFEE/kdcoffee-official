@@ -28,7 +28,9 @@ Production backup root:
 `/data/backups/members/<backupId>/`
 
 Every dataset above is critical. A missing dataset or malformed critical JSON
-fails the backup; there is no optional Production fallback.
+fails the backup, except that a missing `member-avatars` directory is recorded
+as `valid-empty` only when canonical member profiles contain no non-empty
+`avatarUrl`. Provider `pictureUrl` values do not refer to this local directory.
 
 ## Safety properties
 

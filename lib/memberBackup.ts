@@ -24,7 +24,7 @@ import {
 const packageJson = createRequire(import.meta.url)("../package.json") as { version: string };
 
 export const MEMBER_BACKUP_FORMAT_VERSION = 2 as const;
-export const MEMBER_BACKUP_VERSION = "J.5D.5A-v1" as const;
+export const MEMBER_BACKUP_VERSION = "J.5D.5A-H1-v1" as const;
 
 type JsonRecord = Record<string, unknown>;
 type BackupSource = "manual_admin" | "railway_cron" | "test";
@@ -129,13 +129,18 @@ export type MemberBackupManifest = {
     sourcePath: string;
     backupPath: string;
     kind: "file" | "directory";
+    required: true;
+    present: boolean;
+    empty: boolean;
+    status: "captured" | "valid-empty";
     fileCount: number;
     byteCount: number;
     contentSha256: string;
   }>;
   files: Array<{ path: string; sha256: string; bytes: number }>;
   validation: {
-    criticalDatasetsPresent: true;
+    criticalDatasetsPresent: boolean;
+    criticalDatasetsSatisfied: true;
     jsonReadable: true;
     sourceStableDuringSnapshot: true;
     copiedContentMatchesSource: true;
@@ -181,6 +186,9 @@ type SnapshotFile = {
 
 type DatasetSnapshot = {
   spec: DatasetSpec;
+  present: boolean;
+  empty: boolean;
+  status: "captured" | "valid-empty";
   files: SnapshotFile[];
   contentSha256: string;
   byteCount: number;
@@ -345,9 +353,39 @@ async function assertJsonReadable(filePath: string) {
   }
 }
 
+function memberAvatarReferences(parsedJson: Map<string, unknown>) {
+  const references: Array<{ memberId: string; avatarUrl: string }> = [];
+  for (const [backupPath, parsed] of parsedJson.entries()) {
+    if (!backupPath.startsWith("raw/members/") || !backupPath.endsWith(".json")) continue;
+    const profile = asRecord(parsed);
+    const avatarUrl = typeof profile.avatarUrl === "string" ? profile.avatarUrl.trim() : "";
+    if (!avatarUrl) continue;
+    references.push({
+      memberId: String(profile.id ?? profile.memberId ?? path.basename(backupPath, ".json")),
+      avatarUrl,
+    });
+  }
+  return references;
+}
+
 async function captureDataset(spec: DatasetSpec, parsedJson: Map<string, unknown>): Promise<DatasetSnapshot> {
   const stat = await fs.lstat(spec.sourcePath).catch(() => null);
-  if (!stat) throw new Error(`Critical backup dataset is missing: ${spec.sourcePath}`);
+  if (!stat) {
+    if (spec.id !== "member_avatars") throw new Error(`Critical backup dataset is missing: ${spec.sourcePath}`);
+    const references = memberAvatarReferences(parsedJson);
+    if (references.length) {
+      throw new Error(`Member avatar dataset is missing while canonical member profiles contain avatarUrl references: ${references.map((item) => item.memberId).join(", ")}`);
+    }
+    return {
+      spec,
+      present: false,
+      empty: true,
+      status: "valid-empty",
+      files: [],
+      contentSha256: sha256("member-avatars:valid-empty:missing"),
+      byteCount: 0,
+    };
+  }
   if (stat.isSymbolicLink()) throw new Error(`Critical backup dataset must not be a symbolic link: ${spec.sourcePath}`);
   if (spec.kind === "file" && !stat.isFile()) throw new Error(`Critical backup dataset is not a file: ${spec.sourcePath}`);
   if (spec.kind === "directory" && !stat.isDirectory()) throw new Error(`Critical backup dataset is not a directory: ${spec.sourcePath}`);
@@ -365,7 +403,15 @@ async function captureDataset(spec: DatasetSpec, parsedJson: Map<string, unknown
     files.push({ sourcePath, relativePath, backupPath, bytes: fileStat.size, sha256: hash });
   }
   const signature = files.map((file) => `${file.relativePath}\0${file.bytes}\0${file.sha256}`).join("\n");
-  return { spec, files, contentSha256: sha256(signature), byteCount: files.reduce((sum, file) => sum + file.bytes, 0) };
+  return {
+    spec,
+    present: true,
+    empty: files.length === 0,
+    status: "captured",
+    files,
+    contentSha256: sha256(signature),
+    byteCount: files.reduce((sum, file) => sum + file.bytes, 0),
+  };
 }
 
 async function captureCatalog(specs: DatasetSpec[]) {
@@ -378,7 +424,7 @@ async function captureCatalog(specs: DatasetSpec[]) {
 function assertCatalogStable(before: SnapshotCatalog, after: SnapshotCatalog) {
   for (const dataset of before.datasets) {
     const later = after.datasets.find((item) => item.spec.id === dataset.spec.id);
-    if (!later || dataset.contentSha256 !== later.contentSha256 || dataset.files.length !== later.files.length || dataset.byteCount !== later.byteCount) {
+    if (!later || dataset.present !== later.present || dataset.empty !== later.empty || dataset.status !== later.status || dataset.contentSha256 !== later.contentSha256 || dataset.files.length !== later.files.length || dataset.byteCount !== later.byteCount) {
       throw new Error(`Critical source changed during member backup: ${dataset.spec.id}`);
     }
   }
@@ -635,7 +681,19 @@ async function removeStaging(target: string, expectedRoot: string) {
 }
 
 function manifestDatasetRows(catalog: SnapshotCatalog): MemberBackupManifest["datasets"] {
-  return catalog.datasets.map((dataset) => ({ id: dataset.spec.id, sourcePath: normalizeSlashes(dataset.spec.sourcePath), backupPath: dataset.spec.backupPath, kind: dataset.spec.kind, fileCount: dataset.files.length, byteCount: dataset.byteCount, contentSha256: dataset.contentSha256 }));
+  return catalog.datasets.map((dataset) => ({
+    id: dataset.spec.id,
+    sourcePath: normalizeSlashes(dataset.spec.sourcePath),
+    backupPath: dataset.spec.backupPath,
+    kind: dataset.spec.kind,
+    required: true,
+    present: dataset.present,
+    empty: dataset.empty,
+    status: dataset.status,
+    fileCount: dataset.files.length,
+    byteCount: dataset.byteCount,
+    contentSha256: dataset.contentSha256,
+  }));
 }
 
 export async function createMemberBackup(options: MemberBackupOptions = {}) {
@@ -711,14 +769,17 @@ export async function createMemberBackup(options: MemberBackupOptions = {}) {
       datasets: manifestDatasetRows(catalog),
       files: tracked.sort((a, b) => a.path.localeCompare(b.path)),
       validation: {
-        criticalDatasetsPresent: true,
+        criticalDatasetsPresent: catalog.datasets.every((dataset) => dataset.present),
+        criticalDatasetsSatisfied: true,
         jsonReadable: true,
         sourceStableDuringSnapshot: true,
         copiedContentMatchesSource: true,
         checksumsVerified: true,
         organizationGraphValid: organization.validation.valid,
         organizationFindingCount: organization.validation.findings.length,
-        summary: organization.validation.valid ? "All critical datasets, JSON documents, source stability, copied bytes, checksums, and organization graph validations passed." : `Backup bytes are verified; organization graph contains ${organization.validation.findings.length} recorded finding(s).`,
+        summary: organization.validation.valid
+          ? "All critical datasets are captured or explicitly validated empty; JSON, source stability, copied bytes, checksums, and organization graph validations passed."
+          : `Backup bytes are verified; organization graph contains ${organization.validation.findings.length} recorded finding(s).`,
       },
     };
     const manifestText = `${JSON.stringify(manifest, null, 2)}\n`;
