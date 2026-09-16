@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server";
-import { adminCookieName, createAdminSessionValue } from "@/lib/adminAuth";
+import {
+  adminCookieName,
+  createAdminSessionValue,
+  isAdminPasswordConfigured,
+  verifyAdminPassword,
+} from "@/lib/adminAuth";
 
 function getSiteUrl(request: Request) {
   return (
@@ -11,17 +16,16 @@ function getSiteUrl(request: Request) {
 export async function POST(request: Request) {
   const form = await request.formData();
   const password = String(form.get("password") || "");
-  const expected = (process.env.ADMIN_PASSWORD || "").trim();
   const siteUrl = getSiteUrl(request);
 
-  if (!expected) {
+  if (!isAdminPasswordConfigured()) {
     return NextResponse.redirect(
       `${siteUrl}/admin/login?error=not_configured`,
       303,
     );
   }
 
-  if (password !== expected) {
+  if (!verifyAdminPassword(password)) {
     return NextResponse.redirect(
       `${siteUrl}/admin/login?error=invalid`,
       303,
