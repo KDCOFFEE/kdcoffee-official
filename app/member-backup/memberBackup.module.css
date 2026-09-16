@@ -1,0 +1,239 @@
+.page {
+  min-height: 100svh;
+  background: #f4efe7;
+  color: #251b16;
+  font-family: var(--font-body);
+}
+
+.skipLink {
+  position: fixed;
+  top: 0.75rem;
+  left: 0.75rem;
+  z-index: 100;
+  padding: 0.75rem 1rem;
+  background: #251b16;
+  color: #fffaf2;
+  transform: translateY(-160%);
+}
+
+.skipLink:focus {
+  transform: translateY(0);
+}
+
+.header {
+  border-bottom: 1px solid rgba(69, 47, 35, 0.18);
+  background: rgba(244, 239, 231, 0.96);
+}
+
+.headerInner,
+.footerInner {
+  width: min(calc(100% - 2rem), 960px);
+  margin: 0 auto;
+}
+
+.headerInner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 74px;
+  gap: 1.5rem;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.65rem;
+  color: #251b16;
+}
+
+.brand strong {
+  font-family: Georgia, var(--font-display);
+  font-size: 1.35rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+}
+
+.brand span,
+.headerLabel {
+  color: #775b3e;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+.main {
+  width: min(calc(100% - 2rem), 820px);
+  margin: 0 auto;
+  padding: clamp(4rem, 8vw, 7rem) 0 clamp(5rem, 9vw, 8rem);
+}
+
+.eyebrow {
+  margin-bottom: 1.25rem;
+  color: #866744;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+}
+
+.main h1 {
+  max-width: 760px;
+  font-family: Georgia, var(--font-display);
+  font-size: clamp(2.55rem, 7vw, 4.8rem);
+  font-weight: 400;
+  letter-spacing: -0.035em;
+  line-height: 1.08;
+}
+
+.lead {
+  max-width: 710px;
+  margin-top: 1.75rem;
+  color: #5f5148;
+  font-size: clamp(1.05rem, 2vw, 1.22rem);
+  line-height: 1.95;
+}
+
+.updated {
+  display: block;
+  margin-top: 1.25rem;
+  color: #7a6d63;
+  font-size: 0.82rem;
+}
+
+.section {
+  margin-top: clamp(3rem, 7vw, 5rem);
+  padding-top: clamp(2rem, 5vw, 3.25rem);
+  border-top: 1px solid rgba(69, 47, 35, 0.18);
+}
+
+.section h2 {
+  margin-bottom: 1.15rem;
+  font-family: Georgia, var(--font-display);
+  font-size: clamp(1.55rem, 4vw, 2.2rem);
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+.section p,
+.section li {
+  color: #554840;
+  font-size: 1rem;
+  line-height: 1.9;
+}
+
+.section p + p {
+  margin-top: 1rem;
+}
+
+.section ul {
+  margin: 1.25rem 0 0;
+  padding-left: 1.25rem;
+}
+
+.section li + li {
+  margin-top: 0.6rem;
+}
+
+.scope {
+  display: inline-block;
+  max-width: 100%;
+  margin-top: 1rem;
+  padding: 0.8rem 1rem;
+  border: 1px solid rgba(119, 91, 62, 0.28);
+  background: #ebe1d3;
+  color: #402e24;
+  font-family: Consolas, "SFMono-Regular", monospace;
+  font-size: 0.82rem;
+  overflow-wrap: anywhere;
+}
+
+.notice {
+  margin-top: clamp(3rem, 7vw, 5rem);
+  padding: clamp(1.5rem, 4vw, 2.25rem);
+  border-left: 3px solid #9a754a;
+  background: #e9dfd1;
+}
+
+.notice strong {
+  display: block;
+  margin-bottom: 0.6rem;
+  font-family: Georgia, var(--font-display);
+  font-size: 1.25rem;
+  font-weight: 500;
+}
+
+.notice p {
+  color: #5b4c43;
+  line-height: 1.85;
+}
+
+.actionLink,
+.inlineLink {
+  color: #5f432b;
+  text-decoration: underline;
+  text-decoration-color: rgba(95, 67, 43, 0.45);
+  text-underline-offset: 0.3em;
+}
+
+.actionLink {
+  display: inline-flex;
+  margin-top: 1.4rem;
+  padding: 0.85rem 0;
+  font-weight: 700;
+}
+
+.actionLink:hover,
+.inlineLink:hover {
+  color: #2b1d15;
+  text-decoration-color: currentColor;
+}
+
+.actionLink:focus-visible,
+.inlineLink:focus-visible,
+.brand:focus-visible {
+  outline: 3px solid #9b784e;
+  outline-offset: 4px;
+}
+
+.contactLinks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.5rem;
+  margin-top: 1.25rem;
+}
+
+.footer {
+  border-top: 1px solid rgba(69, 47, 35, 0.18);
+  background: #211915;
+  color: #e9dfd4;
+}
+
+.footerInner {
+  display: flex;
+  justify-content: space-between;
+  gap: 1.5rem;
+  padding: 2rem 0;
+  color: #c7b9ad;
+  font-size: 0.78rem;
+  line-height: 1.7;
+}
+
+@media (max-width: 600px) {
+  .headerInner {
+    min-height: 66px;
+  }
+
+  .brand span,
+  .headerLabel {
+    font-size: 0.58rem;
+    letter-spacing: 0.13em;
+  }
+
+  .main {
+    width: min(calc(100% - 2rem), 820px);
+  }
+
+  .footerInner {
+    flex-direction: column;
+  }
+}
