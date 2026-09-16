@@ -3,6 +3,7 @@ import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { Readable } from "node:stream";
+import { Script } from "node:vm";
 
 const ORIGINAL_ENV = {
   NODE_ENV: process.env.NODE_ENV,
@@ -62,6 +63,63 @@ async function prepareFixture(root: string) {
 
 async function expectReject(run: () => Promise<unknown>, pattern: RegExp) {
   await assert.rejects(run, pattern);
+}
+
+type OfflineTestHandler = (event: unknown) => void;
+
+type OfflineTestElement = {
+  hidden: boolean;
+  innerHTML: string;
+  value: string;
+  textContent: string;
+  style: Record<string, string>;
+  onclick: (() => void) | null;
+  handlers: Map<string, OfflineTestHandler>;
+  addEventListener: (type: string, handler: OfflineTestHandler) => void;
+  querySelector: (selector: string) => { focus: () => void } | null;
+  scrollTo: () => void;
+  setPointerCapture: () => void;
+  classList: { add: () => void; remove: () => void };
+};
+
+function executeOfflineScript(source: string) {
+  const ids = ["forest", "stage", "viewport", "zoom", "minus", "plus", "reset", "expand", "search", "find", "results", "profile", "shade"];
+  const elements = new Map<string, OfflineTestElement>();
+  let scrollCount = 0;
+  for (const id of ids) {
+    const handlers = new Map<string, OfflineTestHandler>();
+    elements.set(id, {
+      hidden: ["results", "profile", "shade"].includes(id),
+      innerHTML: "",
+      value: "",
+      textContent: "",
+      style: {},
+      onclick: null,
+      handlers,
+      addEventListener(type, handler) { handlers.set(type, handler); },
+      querySelector(selector) { return id === "profile" && selector === ".profile-close" ? { focus() {} } : null; },
+      scrollTo() { scrollCount += 1; },
+      setPointerCapture() {},
+      classList: { add() {}, remove() {} },
+    });
+  }
+  const documentHandlers = new Map<string, OfflineTestHandler>();
+  const document = {
+    getElementById(id: string) { return elements.get(id) ?? null; },
+    querySelector() { return null; },
+    querySelectorAll() { return []; },
+    addEventListener(type: string, handler: OfflineTestHandler) { documentHandlers.set(type, handler); },
+    createElement() { return { value: "", select() {}, remove() {} }; },
+    execCommand() { return true; },
+    body: { appendChild() {} },
+  };
+  new Script(source, { filename: "organization-inline.js" }).runInNewContext({
+    document,
+    navigator: {},
+    CSS: { escape: (value: string) => value },
+    console,
+  });
+  return { elements, documentHandlers, get scrollCount() { return scrollCount; } };
 }
 
 async function main() {
@@ -138,13 +196,67 @@ async function main() {
   assert.doesNotMatch(html, /https?:\/\//);
   assert.doesNotMatch(html, /fetch\s*\(/);
   assert.doesNotMatch(html, /XMLHttpRequest/u);
+  assert.doesNotMatch(html, /(?:file:|<iframe\b|window\.location|location\.href|window\.open|href\s*=|src\s*=)/iu);
+  const inlineScripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/gu)].map((match) => match[1]);
+  assert.equal(inlineScripts.length, 1);
+  const inlineScript = inlineScripts[0];
+  assert.equal(inlineScript.includes("/[s-()]/g"), false, "generated HTML must not contain the Owner-observed malformed phone regex");
+  assert.equal(inlineScript.includes("/[\\s\\-()]/g"), true, "generated phone regex must preserve template backslashes");
+  assert.doesNotThrow(() => new Script(inlineScript, { filename: "organization-inline.js" }));
+  const runtime = executeOfflineScript(inlineScript);
+  const forestElement = runtime.elements.get("forest");
+  const searchElement = runtime.elements.get("search");
+  const findElement = runtime.elements.get("find");
+  const resultsElement = runtime.elements.get("results");
+  const profileElement = runtime.elements.get("profile");
+  const zoomElement = runtime.elements.get("zoom");
+  assert.ok(forestElement && searchElement && findElement && resultsElement && profileElement && zoomElement);
+  assert.match(forestElement.innerHTML, /data-id="m_a"/);
+  const assertUniqueSearch = (query: string, expectedProfileText: RegExp) => {
+    searchElement.value = query;
+    findElement.onclick?.();
+    assert.equal(profileElement.hidden, false);
+    assert.match(profileElement.innerHTML, expectedProfileText);
+    runtime.documentHandlers.get("keydown")?.({ key: "Escape" });
+    assert.equal(profileElement.hidden, true);
+  };
+  assertUniqueSearch("196200001", /王小明/);
+  assertUniqueSearch("M_A", /王小明/);
+  assertUniqueSearch("0912-345-678", /王小明/);
+  assertUniqueSearch("0912 345 678", /王小明/);
+  assertUniqueSearch("(0912)345678", /王小明/);
+  assertUniqueSearch("0912345678", /王小明/);
+  assertUniqueSearch("ALICE@EXAMPLE.TEST", /王小明/);
+  searchElement.value = "美玲";
+  findElement.onclick?.();
+  assert.equal(resultsElement.hidden, false);
+  assert.equal((resultsElement.innerHTML.match(/class="result"/gu) ?? []).length, 2);
+  const nodeList = { dataset: { id: "m_b" } };
+  const nodeCard = { closest: (selector: string) => selector === "li" ? nodeList : null };
+  runtime.elements.get("forest")?.handlers.get("click")?.({ target: { closest: (selector: string) => selector === ".node" ? nodeCard : null } });
+  assert.equal(profileElement.hidden, false);
+  assert.match(profileElement.innerHTML, /陳美玲/);
+  runtime.documentHandlers.get("keydown")?.({ key: "Escape" });
+  assert.equal(profileElement.hidden, true);
+  assertUniqueSearch("196200001", /王小明/);
+  profileElement.handlers.get("click")?.({ target: { closest: (selector: string) => selector === "[data-back]" ? {} : null } });
+  assert.equal(profileElement.hidden, true);
+  assert.equal(zoomElement.textContent, "100%");
+  runtime.elements.get("plus")?.onclick?.();
+  assert.equal(zoomElement.textContent, "110%");
+  runtime.elements.get("reset")?.onclick?.();
+  assert.equal(zoomElement.textContent, "100%");
+  assert.ok(runtime.scrollCount > 0);
   const embeddedMatch = /const DATA=([\s\S]+?);const byId=/u.exec(html);
   assert.ok(embeddedMatch, "offline member index must be embedded");
   const embedded = JSON.parse(embeddedMatch[1]) as { members: Array<import("../lib/memberBackup").OfflineMemberIndexEntry> };
   const find = (query: string) => backupModule.searchOfflineMembers(embedded.members, query);
   assert.equal(find("196200001")[0]?.member.memberId, "m_a");
   assert.equal(find("M_A")[0]?.member.memberId, "m_a");
+  assert.equal(find("0912-345-678")[0]?.member.memberId, "m_a");
   assert.equal(find("0912 345 678")[0]?.member.memberId, "m_a");
+  assert.equal(find("(0912)345678")[0]?.member.memberId, "m_a");
+  assert.equal(find("0912345678")[0]?.member.memberId, "m_a");
   assert.equal(find("ALICE@EXAMPLE.TEST")[0]?.member.memberId, "m_a");
   assert.equal(find("美玲").length, 2);
   assert.equal(find("不存在的會員").length, 0);
@@ -276,7 +388,7 @@ async function main() {
   const adminRoute = await fs.readFile(path.join(process.cwd(), "app/api/admin/member-backups/route.ts"), "utf8");
   assert.doesNotMatch(adminRoute, /pruneMemberBackups/);
 
-  console.log("J.5D.5A-H2 offline member backup tests: PASS");
+  console.log("J.5D.5A-H3 offline member backup runtime tests: PASS");
   await fs.rm(workspace, { recursive: true, force: true });
 }
 

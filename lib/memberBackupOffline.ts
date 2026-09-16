@@ -408,7 +408,7 @@ function escapeHtml(value: unknown) {
 
 export function buildOfflineOrganizationHtml(tree: OrganizationTreeLike, members: OfflineMemberIndexEntry[]) {
   const embedded = JSON.stringify({ roots: tree.roots, nodes: tree.nodes, members }).replaceAll("<", "\\u003c");
-  return `<!doctype html>
+  return String.raw`<!doctype html>
 <html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>KD Coffee 會員組織圖備份 ${escapeHtml(tree.createdAt)}</title>
 <style>
