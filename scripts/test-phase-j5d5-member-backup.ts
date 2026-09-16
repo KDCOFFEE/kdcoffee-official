@@ -22,9 +22,10 @@ async function prepareFixture(root: string) {
   const requiredDirs = ["members", "member-identity", "membership-commerce", "orders", "fulfillment", "uploads/member-avatars/m_a", "uploads/order-notifications", "store"];
   await Promise.all(requiredDirs.map((item) => fs.mkdir(path.join(root, item), { recursive: true })));
   for (const member of [
-    { id: "m_a", displayName: "王小明", phone: "0912-345-678", email: "Alice@Example.test", loginEmail: "login-a@example.test", authProvider: "email", pictureUrl: "https://profile.example.test/a.jpg", createdAt: now, lastLoginAt: now, updatedAt: now },
-    { id: "m_b", displayName: "陳美玲", phone: "0988 111 222", email: "mei.b@example.test", avatarUrl: "/uploads/member-avatars/m_a/avatar.webp", authProvider: "line", createdAt: now, lastLoginAt: now, updatedAt: now },
-    { id: "m_c", displayName: "陳美玲", phone: "(0977)333444", email: "mei.c@example.test", createdAt: now, lastLoginAt: now, updatedAt: now },
+    { id: "m_a", displayName: "小丁", phone: "0912-345-678", email: "junny17880522@yahoo.com.tw", loginEmail: "login-a@example.test", authProvider: "email", pictureUrl: "https://profile.example.test/a.jpg", createdAt: now, lastLoginAt: now, updatedAt: now },
+    { id: "m_b", displayName: "陳美玲", phone: "0988 111 222", email: "1@gmail.com", avatarUrl: "/uploads/member-avatars/m_a/avatar.webp", authProvider: "line", createdAt: now, lastLoginAt: now, updatedAt: now },
+    { id: "m_c", displayName: "陳美玲", phone: "(0977)333444", email: "other@yahoo.com", createdAt: now, lastLoginAt: now, updatedAt: now },
+    { id: "member_7ob_5Y2A97lrj159ucZ-GQ", displayName: "小丁老師", phone: "0966-555-444", email: "2@gmail.com", createdAt: now, lastLoginAt: now, updatedAt: now },
   ]) await writeJson(path.join(root, "members", `${member.id}.json`), member);
 
   await writeJson(path.join(root, "member-identity", "registry.json"), {
@@ -32,7 +33,8 @@ async function prepareFixture(root: string) {
     members: {
       m_a: { memberId: "m_a", memberNumber: "196200001", status: "active", createdAt: now, updatedAt: now },
       m_b: { memberId: "m_b", memberNumber: "196200002", status: "active", createdAt: now, updatedAt: now },
-      m_c: { memberId: "m_c", memberNumber: "196200003", status: "active", createdAt: now, updatedAt: now },
+      m_c: { memberId: "m_c", memberNumber: "KD-000002", status: "active", createdAt: now, updatedAt: now },
+      "member_7ob_5Y2A97lrj159ucZ-GQ": { memberId: "member_7ob_5Y2A97lrj159ucZ-GQ", memberNumber: "KD-000004", status: "active", createdAt: now, updatedAt: now },
     }, identities: {
       identity_a: { identityId: "identity_a", memberId: "m_a", provider: "email", subjectHash: "hidden" },
       identity_b: { identityId: "identity_b", memberId: "m_b", provider: "line", subjectHash: "hidden" },
@@ -146,7 +148,7 @@ async function main() {
   assert.equal(manifest.environment, "test");
   assert.equal(manifest.dataRoot.replaceAll("\\", "/"), root.replaceAll("\\", "/"));
   assert.equal(manifest.gitCommit, "e7bf9d5-test");
-  assert.equal(manifest.counts.canonicalMembers, 3);
+  assert.equal(manifest.counts.canonicalMembers, 4);
   assert.equal(manifest.counts.activeReferrals, 2);
   assert.equal(manifest.counts.totalReferrals, 2);
   assert.equal(manifest.counts.subscriptions, 1);
@@ -172,7 +174,7 @@ async function main() {
   ]) await fs.access(path.join(result.path, ...required.split("/")));
 
   const tree = JSON.parse(await fs.readFile(path.join(result.path, "organization-tree.json"), "utf8"));
-  assert.deepEqual(tree.roots, ["m_a"]);
+  assert.deepEqual(tree.roots, ["m_a", "member_7ob_5Y2A97lrj159ucZ-GQ"]);
   assert.equal(tree.nodes.find((node: { memberId: string }) => node.memberId === "m_a").teamCount, 2);
   assert.equal(tree.nodes.find((node: { memberId: string }) => node.memberId === "m_b").depth, 1);
   assert.equal(tree.validation.valid, true);
@@ -220,17 +222,36 @@ async function main() {
     runtime.documentHandlers.get("keydown")?.({ key: "Escape" });
     assert.equal(profileElement.hidden, true);
   };
-  assertUniqueSearch("196200001", /王小明/);
-  assertUniqueSearch("M_A", /王小明/);
-  assertUniqueSearch("0912-345-678", /王小明/);
-  assertUniqueSearch("0912 345 678", /王小明/);
-  assertUniqueSearch("(0912)345678", /王小明/);
-  assertUniqueSearch("0912345678", /王小明/);
-  assertUniqueSearch("ALICE@EXAMPLE.TEST", /王小明/);
+  assertUniqueSearch("196200001", /小丁/);
+  assertUniqueSearch("M_A", /小丁/);
+  assertUniqueSearch("0912-345-678", /小丁/);
+  assertUniqueSearch("0912 345 678", /小丁/);
+  assertUniqueSearch("(0912)345678", /小丁/);
+  assertUniqueSearch("0912345678", /小丁/);
+  assertUniqueSearch("JUNNY17880522@YAHOO.COM.TW", /小丁/);
   searchElement.value = "美玲";
   findElement.onclick?.();
   assert.equal(resultsElement.hidden, false);
   assert.equal((resultsElement.innerHTML.match(/class="result"/gu) ?? []).length, 2);
+  assert.match(resultsElement.innerHTML, /命中：姓名/);
+  resultsElement.handlers.get("click")?.({ target: { closest: (selector: string) => selector === "[data-member]" ? { dataset: { member: "m_c" } } : null } });
+  assert.equal(profileElement.hidden, false);
+  assert.match(profileElement.innerHTML, /KD-000002/);
+  runtime.documentHandlers.get("keydown")?.({ key: "Escape" });
+  searchElement.value = "j";
+  findElement.onclick?.();
+  assert.match(resultsElement.innerHTML, /196200001/);
+  assert.doesNotMatch(resultsElement.innerHTML, /KD-000004/);
+  assert.match(resultsElement.innerHTML, /命中：Email/);
+  searchElement.value = "a";
+  findElement.onclick?.();
+  assert.match(resultsElement.innerHTML, /找不到符合的會員/);
+  assertUniqueSearch("KD-000002", /KD-000002/);
+  assertUniqueSearch("000002", /KD-000002/);
+  searchElement.value = "@gmail.com";
+  findElement.onclick?.();
+  assert.equal((resultsElement.innerHTML.match(/class="result"/gu) ?? []).length, 2);
+  assert.match(resultsElement.innerHTML, /命中：Email/);
   const viewportElement = runtime.elements.get("viewport");
   assert.ok(viewportElement);
   const nodeList = { dataset: { id: "m_b" } };
@@ -298,8 +319,22 @@ async function main() {
   assert.equal(find("0912 345 678")[0]?.member.memberId, "m_a");
   assert.equal(find("(0912)345678")[0]?.member.memberId, "m_a");
   assert.equal(find("0912345678")[0]?.member.memberId, "m_a");
-  assert.equal(find("ALICE@EXAMPLE.TEST")[0]?.member.memberId, "m_a");
+  assert.equal(find("JUNNY17880522@YAHOO.COM.TW")[0]?.member.memberId, "m_a");
   assert.equal(find("美玲").length, 2);
+  const singleJ = find("j");
+  assert.equal(singleJ[0]?.member.memberId, "m_a");
+  assert.equal(singleJ[0]?.reason, "Email");
+  assert.equal(singleJ.some((result) => result.member.memberId === "member_7ob_5Y2A97lrj159ucZ-GQ"), false);
+  assert.equal(find("a").length, 0);
+  assert.equal(find("小").some((result) => result.member.memberId === "m_a" && result.reason === "姓名"), true);
+  assert.equal(find("KD-000002")[0]?.member.memberId, "m_c");
+  assert.equal(find("000002")[0]?.member.memberId, "m_c");
+  assert.equal(find("@gmail.com").length, 2);
+  assert.equal(find("@gmail.com").every((result) => result.reason === "Email"), true);
+  assert.equal(find("5Y2A")[0]?.member.memberId, "member_7ob_5Y2A97lrj159ucZ-GQ");
+  assert.equal(find("小丁")[0]?.member.memberId, "m_a");
+  assert.equal(find("小丁")[0]?.exact, true);
+  assert.equal(find("小丁")[1]?.member.memberId, "member_7ob_5Y2A97lrj159ucZ-GQ");
   assert.equal(find("不存在的會員").length, 0);
   const memberA = embedded.members.find((member) => member.memberId === "m_a");
   const memberB = embedded.members.find((member) => member.memberId === "m_b");
@@ -429,7 +464,7 @@ async function main() {
   const adminRoute = await fs.readFile(path.join(process.cwd(), "app/api/admin/member-backups/route.ts"), "utf8");
   assert.doesNotMatch(adminRoute, /pruneMemberBackups/);
 
-  console.log("J.5D.5A-H4 direct node detail interaction tests: PASS");
+  console.log("J.5D.5A-H5 field-aware member search tests: PASS");
   await fs.rm(workspace, { recursive: true, force: true });
 }
 

@@ -48,10 +48,13 @@ export type OfflineMemberIndexEntry = {
   search: {
     memberId: string;
     memberNumber: string;
+    memberNumberNormalized: string;
     displayName: string;
     phoneNormalized: string;
     emailNormalized: string;
+    emailLocalPart: string;
     loginEmailNormalized: string;
+    loginEmailLocalPart: string;
   };
   identity: {
     createdAt: string;
@@ -114,6 +117,7 @@ export type OfflineMemberSearchResult = {
   member: OfflineMemberIndexEntry;
   score: number;
   exact: boolean;
+  reason: "姓名" | "會員編號" | "Email" | "手機" | "Member ID";
 };
 
 function asRecord(value: unknown): JsonRecord {
@@ -158,6 +162,14 @@ export function normalizeOfflineEmail(value: string) {
 
 function normalizeText(value: string) {
   return value.trim().toLocaleLowerCase("zh-Hant");
+}
+
+function normalizeMemberNumber(value: string) {
+  return normalizeText(value).replace(/^kd[-\s]?/u, "").replace(/[\s-]/gu, "");
+}
+
+function emailLocalPart(value: string) {
+  return value.split("@", 1)[0] ?? "";
 }
 
 export function maskOfflinePhone(value: string) {
@@ -332,10 +344,13 @@ export function buildOfflineMemberIndex(input: {
       search: {
         memberId: normalizeText(memberId),
         memberNumber: normalizeText(memberNumber),
+        memberNumberNormalized: normalizeMemberNumber(memberNumber),
         displayName: normalizeText(displayName),
         phoneNormalized: normalizeOfflinePhone(phone),
         emailNormalized: normalizeOfflineEmail(email),
+        emailLocalPart: emailLocalPart(normalizeOfflineEmail(email)),
         loginEmailNormalized: normalizeOfflineEmail(loginEmail),
+        loginEmailLocalPart: emailLocalPart(normalizeOfflineEmail(loginEmail)),
       },
       identity: {
         createdAt: text(profile.createdAt, canonical.createdAt),
@@ -380,24 +395,39 @@ export function searchOfflineMembers(index: OfflineMemberIndexEntry[], query: st
   const normalized = normalizeText(query);
   const phone = normalizeOfflinePhone(query);
   const email = normalizeOfflineEmail(query);
+  const number = normalizeMemberNumber(query);
+  const emailSyntax = normalized.includes("@");
   if (!normalized) return [];
   const results: OfflineMemberSearchResult[] = [];
   for (const member of index) {
-    const exactFields = [member.search.memberNumber, member.search.memberId, member.search.displayName, member.search.emailNormalized, member.search.loginEmailNormalized];
-    const exactPhone = Boolean(phone && member.search.phoneNormalized === phone);
-    const exact = exactPhone || exactFields.some((value) => Boolean(value && value === normalized));
-    let score = exact ? 100 : 0;
-    if (member.search.memberNumber === normalized) score = 130;
-    else if (member.search.memberId === normalized) score = 125;
-    else if (member.search.phoneNormalized === phone && phone) score = 120;
-    else if ([member.search.emailNormalized, member.search.loginEmailNormalized].includes(email) && email) score = 115;
-    else if (member.search.displayName === normalized) score = 110;
-    if (!score && member.search.displayName.includes(normalized)) score = 80;
-    if (!score && member.search.memberNumber.includes(normalized)) score = 75;
-    if (!score && member.search.memberId.includes(normalized)) score = 70;
-    if (!score && normalized.length >= 3 && [member.search.emailNormalized, member.search.loginEmailNormalized].some((value) => value.includes(email))) score = 65;
-    if (!score && phone.length >= 4 && member.search.phoneNormalized.includes(phone)) score = 60;
-    if (score) results.push({ member, score, exact });
+    const fields = member.search;
+    const matches: Array<{ score: number; exact: boolean; reason: OfflineMemberSearchResult["reason"] }> = [];
+    const add = (score: number, exact: boolean, reason: OfflineMemberSearchResult["reason"]) => matches.push({ score, exact, reason });
+    if (fields.displayName === normalized) add(500, true, "姓名");
+    else if (fields.displayName.startsWith(normalized)) add(400, false, "姓名");
+    else if (normalized.length >= 2 && fields.displayName.includes(normalized)) add(300, false, "姓名");
+    if (fields.memberNumber === normalized || Boolean(number && fields.memberNumberNormalized === number)) add(490, true, "會員編號");
+    else if (normalized.length >= 2 && number.length >= 2 && (fields.memberNumber.startsWith(normalized) || fields.memberNumberNormalized.startsWith(number))) add(390, false, "會員編號");
+    else if (normalized.length >= 3 && number.length >= 3 && (fields.memberNumber.includes(normalized) || fields.memberNumberNormalized.includes(number))) add(290, false, "會員編號");
+    const fullEmails = [fields.emailNormalized, fields.loginEmailNormalized].filter(Boolean);
+    const localParts = [fields.emailLocalPart, fields.loginEmailLocalPart].filter(Boolean);
+    if (emailSyntax) {
+      if (fullEmails.includes(email)) add(480, true, "Email");
+      else if (fullEmails.some((value) => value.startsWith(email))) add(380, false, "Email");
+      else if (fullEmails.some((value) => value.includes(email))) add(280, false, "Email");
+    } else {
+      if (localParts.includes(email)) add(480, true, "Email");
+      else if (localParts.some((value) => value.startsWith(email))) add(380, false, "Email");
+      else if (normalized.length >= 2 && localParts.some((value) => value.includes(email))) add(280, false, "Email");
+    }
+    if (phone.length >= 4 && fields.phoneNormalized === phone) add(470, true, "手機");
+    else if (phone.length >= 4 && fields.phoneNormalized.startsWith(phone)) add(370, false, "手機");
+    else if (phone.length >= 4 && fields.phoneNormalized.includes(phone)) add(270, false, "手機");
+    if (fields.memberId === normalized) add(460, true, "Member ID");
+    else if (normalized.length >= 2 && fields.memberId.startsWith(normalized)) add(360, false, "Member ID");
+    else if (normalized.length >= 4 && fields.memberId.includes(normalized)) add(260, false, "Member ID");
+    const best = matches.sort((a, b) => b.score - a.score)[0];
+    if (best) results.push({ member, ...best });
   }
   return results.sort((a, b) => b.score - a.score || a.member.memberNumber.localeCompare(b.member.memberNumber) || a.member.memberId.localeCompare(b.member.memberId));
 }
@@ -457,9 +487,19 @@ function stop(){drag=null;vp.classList.remove('dragging')}
 function finishPointer(){if(!drag)return;const memberId=!drag.moved?drag.nodeId:null;stop();if(memberId)showProfile(memberId)}
 vp.addEventListener('pointerup',finishPointer);vp.addEventListener('pointercancel',stop);
 vp.addEventListener('wheel',function(e){if(!e.ctrlKey)return;e.preventDefault();setScale(scale+(e.deltaY<0?.08:-.08))},{passive:false});
-function scoreMember(m,q){const textQ=q.trim().toLocaleLowerCase('zh-Hant'),phone=q.trim().replace(/[\s\-()]/g,''),email=q.trim().toLowerCase();const fields=m.search;if(!textQ)return null;let score=0,exact=false;if(fields.memberNumber===textQ){score=130;exact=true}else if(fields.memberId===textQ){score=125;exact=true}else if(phone&&fields.phoneNormalized===phone){score=120;exact=true}else if(email&&(fields.emailNormalized===email||fields.loginEmailNormalized===email)){score=115;exact=true}else if(fields.displayName===textQ){score=110;exact=true}else if(fields.displayName.includes(textQ))score=80;else if(fields.memberNumber.includes(textQ))score=75;else if(fields.memberId.includes(textQ))score=70;else if(textQ.length>=3&&(fields.emailNormalized.includes(email)||fields.loginEmailNormalized.includes(email)))score=65;else if(phone.length>=4&&fields.phoneNormalized.includes(phone))score=60;return score?{m:m,score:score,exact:exact}:null}
+function scoreMember(m,q){
+  const textQ=q.trim().toLocaleLowerCase('zh-Hant'),phone=q.trim().replace(/[\s\-()]/g,''),email=q.trim().toLowerCase(),number=textQ.replace(/^kd[-\s]?/,'').replace(/[\s-]/g,''),emailSyntax=textQ.includes('@'),f=m.search,matches=[];
+  if(!textQ)return null;const add=function(score,exact,reason){matches.push({score:score,exact:exact,reason:reason})};
+  if(f.displayName===textQ)add(500,true,'姓名');else if(f.displayName.startsWith(textQ))add(400,false,'姓名');else if(textQ.length>=2&&f.displayName.includes(textQ))add(300,false,'姓名');
+  if(f.memberNumber===textQ||(number&&f.memberNumberNormalized===number))add(490,true,'會員編號');else if(textQ.length>=2&&number.length>=2&&(f.memberNumber.startsWith(textQ)||f.memberNumberNormalized.startsWith(number)))add(390,false,'會員編號');else if(textQ.length>=3&&number.length>=3&&(f.memberNumber.includes(textQ)||f.memberNumberNormalized.includes(number)))add(290,false,'會員編號');
+  const fullEmails=[f.emailNormalized,f.loginEmailNormalized].filter(Boolean),localParts=[f.emailLocalPart,f.loginEmailLocalPart].filter(Boolean);
+  if(emailSyntax){if(fullEmails.includes(email))add(480,true,'Email');else if(fullEmails.some(function(v){return v.startsWith(email)}))add(380,false,'Email');else if(fullEmails.some(function(v){return v.includes(email)}))add(280,false,'Email')}else{if(localParts.includes(email))add(480,true,'Email');else if(localParts.some(function(v){return v.startsWith(email)}))add(380,false,'Email');else if(textQ.length>=2&&localParts.some(function(v){return v.includes(email)}))add(280,false,'Email')}
+  if(phone.length>=4&&f.phoneNormalized===phone)add(470,true,'手機');else if(phone.length>=4&&f.phoneNormalized.startsWith(phone))add(370,false,'手機');else if(phone.length>=4&&f.phoneNormalized.includes(phone))add(270,false,'手機');
+  if(f.memberId===textQ)add(460,true,'Member ID');else if(textQ.length>=2&&f.memberId.startsWith(textQ))add(360,false,'Member ID');else if(textQ.length>=4&&f.memberId.includes(textQ))add(260,false,'Member ID');
+  const best=matches.sort(function(a,b){return b.score-a.score})[0];return best?{m:m,score:best.score,exact:best.exact,reason:best.reason}:null;
+}
 const results=document.getElementById('results');
-function renderResults(matches){results.hidden=false;if(!matches.length){results.innerHTML='<p class="result-empty">找不到符合的會員</p>';return}results.innerHTML=matches.map(function(r){const m=r.m;return'<button class="result" type="button" data-member="'+esc(m.memberId)+'"><strong>'+esc(m.displayName||'未提供姓名')+'｜'+esc(m.memberNumber||'未編號')+'</strong><small>'+esc(m.maskedPhone||'無手機')+'｜'+esc(m.maskedEmail||'無 Email')+'｜直推 '+m.organization.directReferralCount+'／團隊 '+m.organization.teamCount+'</small></button>'}).join('')}
+function renderResults(matches){results.hidden=false;if(!matches.length){results.innerHTML='<p class="result-empty">找不到符合的會員</p>';return}results.innerHTML=matches.map(function(r){const m=r.m;return'<button class="result" type="button" data-member="'+esc(m.memberId)+'"><strong>'+esc(m.displayName||'未提供姓名')+'｜'+esc(m.memberNumber||'未編號')+'</strong><small>命中：'+esc(r.reason)+'｜'+esc(m.maskedPhone||'無手機')+'｜'+esc(m.maskedEmail||'無 Email')+'｜直推 '+m.organization.directReferralCount+'／團隊 '+m.organization.teamCount+'</small></button>'}).join('')}
 function find(){const q=document.getElementById('search').value;const matches=DATA.members.map(function(m){return scoreMember(m,q)}).filter(Boolean).sort(function(a,b){return b.score-a.score||a.m.memberNumber.localeCompare(b.m.memberNumber)||a.m.memberId.localeCompare(b.m.memberId)});const exact=matches.filter(function(r){return r.exact});if(exact.length===1){results.hidden=true;showProfile(exact[0].m.memberId);return}renderResults(matches)}
 document.getElementById('find').onclick=find;
 document.getElementById('search').addEventListener('input',function(e){if(!e.target.value.trim())results.hidden=true;else find()});
