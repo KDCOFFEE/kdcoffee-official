@@ -47,9 +47,24 @@ as `valid-empty` only when canonical member profiles contain no non-empty
 - The global referral graph is preserved without the Member UI depth or
   per-parent display limits. Integrity findings are recorded in
   `organization-tree.json` and the manifest.
+- `organization.html` embeds a private member index and remains a single-file,
+  fully offline viewer. It can search by name, normalized phone, normalized
+  email, member number, or Member ID; duplicate matches are shown as a result
+  list instead of silently selecting the first member.
+- Graph nodes and search results show masked contact data only. Selecting a
+  member opens an explicitly labelled private detail panel with canonical-ID
+  joins for identity, organization, subscriptions, recorded commerce rights,
+  orders, and fulfillment. Unresolvable records are not guessed from names,
+  phone numbers, or email addresses.
+- The offline viewer makes no API, CDN, font, fetch, or XHR request. Search,
+  profile inspection, copy controls, expand/collapse, zoom, pan, reset, and
+  root navigation all run from data embedded in the backup HTML.
 - No restore endpoint is included.
 - ZIP download is Admin-authenticated, backup-ID-only, path-boundary checked,
   checksum-revalidated, private, and `no-store`.
+- The verifier continues to accept immutable `J.5D.5A-H1-v1` backups while
+  newly generated snapshots identify the enhanced offline viewer as
+  `J.5D.5A-H2-v1`.
 - Admin API requires existing Admin authentication.
 - Cron API requires a dedicated `MEMBER_BACKUP_CRON_SECRET`.
 - Retention defaults to 90 days and never accepts less than 7 days.

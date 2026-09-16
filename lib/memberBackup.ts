@@ -20,11 +20,25 @@ import {
   getWebsiteDataFile,
   type StorageRootContract,
 } from "./storagePaths";
+import {
+  buildOfflineMemberIndex,
+  buildOfflineOrganizationHtml,
+  type OfflineMemberIndexEntry,
+} from "./memberBackupOffline";
+
+export {
+  buildOfflineMemberIndex,
+  searchOfflineMembers,
+  type OfflineMemberIndexEntry,
+  type OfflineMemberSearchResult,
+} from "./memberBackupOffline";
 
 const packageJson = createRequire(import.meta.url)("../package.json") as { version: string };
 
 export const MEMBER_BACKUP_FORMAT_VERSION = 2 as const;
-export const MEMBER_BACKUP_VERSION = "J.5D.5A-H1-v1" as const;
+export const MEMBER_BACKUP_VERSION = "J.5D.5A-H2-v1" as const;
+export const MEMBER_BACKUP_LEGACY_VERSIONS = ["J.5D.5A-H1-v1"] as const;
+type MemberBackupVersion = typeof MEMBER_BACKUP_VERSION | (typeof MEMBER_BACKUP_LEGACY_VERSIONS)[number];
 
 type JsonRecord = Record<string, unknown>;
 type BackupSource = "manual_admin" | "railway_cron" | "test";
@@ -88,7 +102,7 @@ type DatasetId =
 
 export type MemberBackupManifest = {
   formatVersion: typeof MEMBER_BACKUP_FORMAT_VERSION;
-  backupVersion: typeof MEMBER_BACKUP_VERSION;
+  backupVersion: MemberBackupVersion;
   backupId: string;
   createdAt: string;
   completedAt: string;
@@ -263,6 +277,10 @@ function backupIdFor(date: Date) {
 
 export function isValidMemberBackupId(value: string) {
   return /^\d{8}T\d{6}Z_[a-f0-9]{8}$/u.test(value);
+}
+
+export function isSupportedMemberBackupVersion(value: unknown): value is MemberBackupVersion {
+  return value === MEMBER_BACKUP_VERSION || MEMBER_BACKUP_LEGACY_VERSIONS.some((version) => version === value);
 }
 
 export function validateProductionBackupProvenance(input: {
@@ -641,7 +659,8 @@ function escapeHtml(value: unknown) {
   return String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
 }
 
-function buildOrganizationHtml(tree: OrganizationTreeSnapshot) {
+function buildOrganizationHtml(tree: OrganizationTreeSnapshot, members?: OfflineMemberIndexEntry[]) {
+  if (members) return buildOfflineOrganizationHtml(tree, members);
   const embedded = JSON.stringify({ roots: tree.roots, nodes: tree.nodes }).replaceAll("<", "\\u003c");
   return `<!doctype html>
 <html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -720,11 +739,12 @@ export async function createMemberBackup(options: MemberBackupOptions = {}) {
     const profiles = profileRecords(catalog);
     const organization = buildOrganizationTree({ identity, commerce, profiles: profiles.members, duplicateProfileIds: profiles.duplicates, createdAt: now.toISOString() });
     const members = memberReadableRows(identity, profiles.members, organization);
+    const offlineMembers = buildOfflineMemberIndex({ tree: organization, identity, commerce, fulfillment, profiles: profiles.members, parsedOrders: catalog.parsedJson });
 
     await writeTracked(staging, "readable/members.csv", rowsToCsv(["memberId", "memberNumber", "displayName", "email", "phone", "status", "parentId", "directReferralCount", "teamCount", "createdAt", "updatedAt"], members), tracked);
     await writeTracked(staging, "readable/organization.csv", rowsToCsv(["relationshipId", "referrerMemberId", "referrerMemberNumber", "referredMemberId", "referredMemberNumber", "status", "createdAt"], organization.relationships), tracked);
     await writeTracked(staging, "organization-tree.json", `${JSON.stringify(organization, null, 2)}\n`, tracked);
-    await writeTracked(staging, "organization.html", buildOrganizationHtml(organization), tracked);
+    await writeTracked(staging, "organization.html", buildOrganizationHtml(organization, offlineMembers), tracked);
 
     await options.beforeStabilityCheck?.();
     const after = await captureCatalog(specs);
@@ -817,7 +837,7 @@ async function verifyBackupDirectory(directory: string, expectedBackupId: string
   const checksumPath = path.join(directory, "checksums.sha256");
   const manifestText = await fs.readFile(manifestPath, "utf8");
   const manifest = JSON.parse(manifestText) as MemberBackupManifest;
-  if (manifest.backupId !== expectedBackupId || manifest.status !== "verified" || manifest.backupVersion !== MEMBER_BACKUP_VERSION || manifest.formatVersion !== MEMBER_BACKUP_FORMAT_VERSION) throw new Error("Backup manifest identity or verified status is invalid");
+  if (manifest.backupId !== expectedBackupId || manifest.status !== "verified" || !isSupportedMemberBackupVersion(manifest.backupVersion) || manifest.formatVersion !== MEMBER_BACKUP_FORMAT_VERSION) throw new Error("Backup manifest identity or verified status is invalid");
   const checksums = parseChecksums(await fs.readFile(checksumPath, "utf8"));
   if (checksums.get("manifest.json") !== sha256(manifestText)) throw new Error("Backup manifest checksum mismatch");
   const expectedPaths = new Set(manifest.files.map((file) => safeRelativePath(file.path)));

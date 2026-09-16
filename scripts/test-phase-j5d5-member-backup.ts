@@ -21,9 +21,9 @@ async function prepareFixture(root: string) {
   const requiredDirs = ["members", "member-identity", "membership-commerce", "orders", "fulfillment", "uploads/member-avatars/m_a", "uploads/order-notifications", "store"];
   await Promise.all(requiredDirs.map((item) => fs.mkdir(path.join(root, item), { recursive: true })));
   for (const member of [
-    { id: "m_a", displayName: "A", email: "a@example.test", createdAt: now, updatedAt: now },
-    { id: "m_b", displayName: "B", email: "b@example.test", createdAt: now, updatedAt: now },
-    { id: "m_c", displayName: "C", email: "c@example.test", createdAt: now, updatedAt: now },
+    { id: "m_a", displayName: "王小明", phone: "0912-345-678", email: "Alice@Example.test", loginEmail: "login-a@example.test", authProvider: "email", pictureUrl: "https://profile.example.test/a.jpg", createdAt: now, lastLoginAt: now, updatedAt: now },
+    { id: "m_b", displayName: "陳美玲", phone: "0988 111 222", email: "mei.b@example.test", avatarUrl: "/uploads/member-avatars/m_a/avatar.webp", authProvider: "line", createdAt: now, lastLoginAt: now, updatedAt: now },
+    { id: "m_c", displayName: "陳美玲", phone: "(0977)333444", email: "mei.c@example.test", createdAt: now, lastLoginAt: now, updatedAt: now },
   ]) await writeJson(path.join(root, "members", `${member.id}.json`), member);
 
   await writeJson(path.join(root, "member-identity", "registry.json"), {
@@ -32,21 +32,28 @@ async function prepareFixture(root: string) {
       m_a: { memberId: "m_a", memberNumber: "196200001", status: "active", createdAt: now, updatedAt: now },
       m_b: { memberId: "m_b", memberNumber: "196200002", status: "active", createdAt: now, updatedAt: now },
       m_c: { memberId: "m_c", memberNumber: "196200003", status: "active", createdAt: now, updatedAt: now },
-    }, identities: {}, legacyAliases: {}, linkTransactions: {}, auditLog: [],
+    }, identities: {
+      identity_a: { identityId: "identity_a", memberId: "m_a", provider: "email", subjectHash: "hidden" },
+      identity_b: { identityId: "identity_b", memberId: "m_b", provider: "line", subjectHash: "hidden" },
+    }, legacyAliases: {}, linkTransactions: {}, auditLog: [],
   });
   await writeJson(path.join(root, "membership-commerce", "commerce-state.json"), {
     schemaVersion: 1, revision: 11, createdAt: now, updatedAt: now,
-    subscriptions: { sub1: { subscriptionId: "sub1" } }, cycles: {},
+    subscriptions: { sub1: { subscriptionId: "sub1", memberId: "m_b", status: "active", anchorDate: "2026-09-15", intervalDays: 7, shippingMethod: "711_cod", storeSelection: { storeId: "S1", storeName: "港明" }, createdAt: now } },
+    cycles: { cycle1: { cycleId: "cycle1", subscriptionId: "sub1", kind: "scheduled", status: "modifiable", plannedDate: "2026-09-22", orderCreationDate: "2026-09-19", modificationDeadline: "2026-09-18", createdOrderId: null, pricingSnapshot: { finalAmount: 475 }, createdAt: now } },
     referrals: {
       r1: { relationshipId: "r1", referrerMemberId: "m_a", referredMemberId: "m_b", status: "registered", createdAt: now },
       r2: { relationshipId: "r2", referrerMemberId: "m_b", referredMemberId: "m_c", status: "qualified", createdAt: now },
     },
-    referralConversions: {}, referralRewards: { rr1: { rewardId: "rr1" } }, validConsumptionEvents: {}, qualificationRounds: {}, referralRewardCoverages: {}, referralRewardMaturations: {},
-    creditEntries: { c1: { creditEntryId: "c1" } }, creditReservations: { cr1: { reservationId: "cr1" } }, events: [], notifications: [], audit: [], idempotency: {},
+    referralConversions: {}, referralRewards: { rr1: { rewardId: "rr1", beneficiaryMemberId: "m_b", status: "released", calculatedCreditAmount: 50, projectedCreditAmount: 50, effectivePV: 100 } },
+    validConsumptionEvents: { vc1: { eventId: "vc1", memberId: "m_b", validConsumptionAmount: 475 } },
+    qualificationRounds: { qr1: { roundId: "qr1", memberId: "m_b" } }, referralRewardCoverages: {}, referralRewardMaturations: {},
+    creditEntries: { c1: { creditEntryId: "c1", memberId: "m_b", status: "available", remainingAmount: 50 } },
+    creditReservations: { cr1: { reservationId: "cr1", memberId: "m_b", orderId: "ORD-1", status: "reserved" } }, events: [], notifications: [], audit: [], idempotency: {},
   });
   await writeJson(path.join(root, "membership-commerce", "business-rules.json"), { schemaVersion: 1, revision: 3 });
-  await writeJson(path.join(root, "orders", "ORD-1.json"), { orderNumber: "ORD-1", memberId: "m_b", total: 475 });
-  await writeJson(path.join(root, "fulfillment", "state.json"), { schemaVersion: 1, revision: 5, records: { "ORD-1": { currentState: "completed" } } });
+  await writeJson(path.join(root, "orders", "ORD-1.json"), { orderNumber: "ORD-1", member: { memberId: "m_b" }, createdAt: now, status: "completed", orderMode: "711_cod", total: 475, store: { id: "S1", name: "港明", address: "測試地址" }, items: [{ name: "莫內花語", optionLabel: "半磅", quantity: 1 }] });
+  await writeJson(path.join(root, "fulfillment", "state.json"), { schemaVersion: 1, revision: 5, records: { "ORD-1": { orderId: "ORD-1", currentState: "completed", updatedAt: now, events: [{ state: "completed", occurredAt: now, source: "admin" }] } } });
   await writeJson(path.join(root, "fulfillment", "settings.json"), { schemaVersion: 1, revision: 2, pickupDeadlineDays: 7 });
   await writeJson(path.join(root, "store", "website-data.json"), { menu: { products: [] }, revision: 9 });
   await fs.writeFile(path.join(root, "uploads", "member-avatars", "m_a", "avatar.webp"), Buffer.from([1, 2, 3, 4]));
@@ -66,6 +73,9 @@ async function main() {
   delete process.env.RAILWAY_VOLUME_MOUNT_PATH;
 
   const backupModule = await import("../lib/memberBackup");
+  assert.equal(backupModule.isSupportedMemberBackupVersion("J.5D.5A-H1-v1"), true);
+  assert.equal(backupModule.isSupportedMemberBackupVersion("J.5D.5A-H2-v1"), true);
+  assert.equal(backupModule.isSupportedMemberBackupVersion("unknown"), false);
   assert.deepEqual(backupModule.validateProductionBackupProvenance({ nodeEnv: "production", kdDataDir: "/data", railwayVolumeMountPath: "/data", contract: { root: "/data", source: "KD_DATA_DIR", railwayMountPath: "/data" } }), []);
   assert.ok(backupModule.validateProductionBackupProvenance({ nodeEnv: "production", kdDataDir: root, railwayVolumeMountPath: "/data", contract: { root, source: "KD_DATA_DIR", railwayMountPath: "/data" } }).length >= 1);
   await expectReject(() => backupModule.createMemberBackup({ source: "manual_admin" }), /Production member backup refused/);
@@ -74,7 +84,7 @@ async function main() {
   const result = await backupModule.createMemberBackup({ source: "test", now: new Date(now), testOnlyAllowNonProduction: true });
   const manifest = result.manifest;
   assert.equal(manifest.status, "verified");
-  assert.equal(manifest.backupVersion, "J.5D.5A-H1-v1");
+  assert.equal(manifest.backupVersion, "J.5D.5A-H2-v1");
   assert.equal(manifest.environment, "test");
   assert.equal(manifest.dataRoot.replaceAll("\\", "/"), root.replaceAll("\\", "/"));
   assert.equal(manifest.gitCommit, "e7bf9d5-test");
@@ -110,10 +120,55 @@ async function main() {
   assert.equal(tree.validation.valid, true);
   const html = await fs.readFile(path.join(result.path, "organization.html"), "utf8");
   assert.match(html, /196200001/);
-  assert.match(html, /搜尋會員編號/);
+  assert.match(html, /搜尋姓名、手機、Email、會員編號或 Member ID/);
   assert.match(html, /回到 root/);
+  assert.match(html, /離線備份資料｜含會員個資/);
+  assert.match(html, /data-copy/);
+  assert.match(html, /maskedPhone/);
+  assert.match(html, /maskedEmail/);
+  assert.match(html, /copyRow\('手機',m\.phone\)/);
+  assert.match(html, /function branch/);
+  assert.match(html, /showProfile/);
+  assert.match(html, /pointerdown/);
+  assert.match(html, /addEventListener\('wheel'/);
+  assert.match(html, /data-back/);
+  assert.match(html, /e\.key==='Escape'/);
+  const branchSource = html.match(/function branch[\s\S]+?const forest=/u)?.[0] ?? "";
+  assert.doesNotMatch(branchSource, /\.phone|\.email/u);
   assert.doesNotMatch(html, /https?:\/\//);
   assert.doesNotMatch(html, /fetch\s*\(/);
+  assert.doesNotMatch(html, /XMLHttpRequest/u);
+  const embeddedMatch = /const DATA=([\s\S]+?);const byId=/u.exec(html);
+  assert.ok(embeddedMatch, "offline member index must be embedded");
+  const embedded = JSON.parse(embeddedMatch[1]) as { members: Array<import("../lib/memberBackup").OfflineMemberIndexEntry> };
+  const find = (query: string) => backupModule.searchOfflineMembers(embedded.members, query);
+  assert.equal(find("196200001")[0]?.member.memberId, "m_a");
+  assert.equal(find("M_A")[0]?.member.memberId, "m_a");
+  assert.equal(find("0912 345 678")[0]?.member.memberId, "m_a");
+  assert.equal(find("ALICE@EXAMPLE.TEST")[0]?.member.memberId, "m_a");
+  assert.equal(find("美玲").length, 2);
+  assert.equal(find("不存在的會員").length, 0);
+  const memberA = embedded.members.find((member) => member.memberId === "m_a");
+  const memberB = embedded.members.find((member) => member.memberId === "m_b");
+  const memberC = embedded.members.find((member) => member.memberId === "m_c");
+  assert.ok(memberA && memberB && memberC);
+  assert.equal(memberA.identity.providerTypes[0], "email");
+  assert.equal(memberA.identity.providerPicture, true);
+  assert.equal(memberB.identity.customAvatar, true);
+  assert.equal(memberB.organization.parentId, "m_a");
+  assert.equal(memberB.organization.children[0]?.memberId, "m_c");
+  assert.equal(memberB.organization.directReferralCount, 1);
+  assert.equal(memberB.organization.teamCount, 1);
+  assert.equal(memberB.organization.descendantCount, 1);
+  assert.equal(memberB.orders.totalCount, 1);
+  assert.equal(memberB.orders.recent[0]?.orderNumber, "ORD-1");
+  assert.equal(memberB.subscriptions[0]?.subscriptionId, "sub1");
+  assert.equal(memberB.subscriptions[0]?.nextCycle?.plannedDate, "2026-09-22");
+  assert.equal(memberB.fulfillment[0]?.currentState, "completed");
+  assert.equal(memberB.commerce.recordedRemainingCredit, 50);
+  assert.equal(memberB.commerce.rewardCount, 1);
+  assert.equal(memberC.subscriptions.length, 0);
+  assert.equal(memberC.orders.totalCount, 0);
 
   const fakeStaging = path.join(root, "backups", "members", `.staging-${manifest.backupId}`);
   await fs.mkdir(fakeStaging, { recursive: true });
@@ -160,6 +215,10 @@ async function main() {
   const providerProfile = JSON.parse(await fs.readFile(providerProfilePath, "utf8"));
   providerProfile.pictureUrl = "https://profile.example.test/provider-avatar.jpg";
   await writeJson(providerProfilePath, providerProfile);
+  const customAvatarProfilePath = path.join(validEmptyAvatarRoot, "members", "m_b.json");
+  const customAvatarProfile = JSON.parse(await fs.readFile(customAvatarProfilePath, "utf8"));
+  delete customAvatarProfile.avatarUrl;
+  await writeJson(customAvatarProfilePath, customAvatarProfile);
   await fs.rm(path.join(validEmptyAvatarRoot, "uploads", "member-avatars"), { recursive: true, force: true });
   process.env.KD_DATA_DIR = validEmptyAvatarRoot;
   const validEmptyAvatarBackup = await backupModule.createMemberBackup({ source: "test", testOnlyAllowNonProduction: true });
@@ -217,7 +276,7 @@ async function main() {
   const adminRoute = await fs.readFile(path.join(process.cwd(), "app/api/admin/member-backups/route.ts"), "utf8");
   assert.doesNotMatch(adminRoute, /pruneMemberBackups/);
 
-  console.log("J.5D.5A production-proof member backup tests: PASS");
+  console.log("J.5D.5A-H2 offline member backup tests: PASS");
   await fs.rm(workspace, { recursive: true, force: true });
 }
 
