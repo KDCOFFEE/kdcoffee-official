@@ -231,23 +231,64 @@ async function main() {
   findElement.onclick?.();
   assert.equal(resultsElement.hidden, false);
   assert.equal((resultsElement.innerHTML.match(/class="result"/gu) ?? []).length, 2);
+  const viewportElement = runtime.elements.get("viewport");
+  assert.ok(viewportElement);
   const nodeList = { dataset: { id: "m_b" } };
   const nodeCard = { closest: (selector: string) => selector === "li" ? nodeList : null };
-  runtime.elements.get("forest")?.handlers.get("click")?.({ target: { closest: (selector: string) => selector === ".node" ? nodeCard : null } });
+  const nodeTarget = { closest: (selector: string) => selector === ".node" ? nodeCard : null };
+  searchElement.value = "196200002";
+  findElement.onclick?.();
+  const searchOpenedDetail = profileElement.innerHTML;
+  runtime.documentHandlers.get("keydown")?.({ key: "Escape" });
+  viewportElement.handlers.get("pointerdown")?.({ target: nodeTarget, clientX: 100, clientY: 100, pointerId: 1 });
+  viewportElement.handlers.get("pointermove")?.({ clientX: 102, clientY: 102 });
+  viewportElement.handlers.get("pointerup")?.({ clientX: 102, clientY: 102 });
   assert.equal(profileElement.hidden, false);
   assert.match(profileElement.innerHTML, /陳美玲/);
+  assert.equal(profileElement.innerHTML, searchOpenedDetail);
   runtime.documentHandlers.get("keydown")?.({ key: "Escape" });
   assert.equal(profileElement.hidden, true);
-  assertUniqueSearch("196200001", /王小明/);
+  viewportElement.handlers.get("pointerdown")?.({ target: nodeTarget, clientX: 100, clientY: 100, pointerId: 2 });
+  viewportElement.handlers.get("pointermove")?.({ clientX: 120, clientY: 112 });
+  viewportElement.handlers.get("pointerup")?.({ clientX: 120, clientY: 112 });
+  assert.equal(profileElement.hidden, true, "dragging a node must pan without opening detail");
+  assert.match(runtime.elements.get("stage")?.style.transform ?? "", /translate\(20px,12px\)/);
+  const branchState = new Set<string>();
+  const branchList = { classList: { toggle: (name: string) => branchState.has(name) ? branchState.delete(name) : branchState.add(name), contains: (name: string) => branchState.has(name) } };
+  const branchToggle = { textContent: "收合分支", closest: (selector: string) => selector === "li" ? branchList : null };
+  let branchPrevented = false;
+  let branchStopped = false;
+  runtime.elements.get("forest")?.handlers.get("click")?.({
+    target: { closest: (selector: string) => selector === ".branch-toggle" ? branchToggle : null },
+    preventDefault: () => { branchPrevented = true; },
+    stopPropagation: () => { branchStopped = true; },
+  });
+  assert.equal(branchState.has("collapsed"), true);
+  assert.equal(branchToggle.textContent, "展開分支");
+  assert.equal(branchPrevented, true);
+  assert.equal(branchStopped, true);
+  assert.equal(profileElement.hidden, true, "branch toggle must not open detail");
+  viewportElement.handlers.get("pointerdown")?.({ target: { closest: (selector: string) => selector === "button,input" ? branchToggle : null }, clientX: 10, clientY: 10, pointerId: 3 });
+  viewportElement.handlers.get("pointerup")?.({ clientX: 10, clientY: 10 });
+  assert.equal(profileElement.hidden, true, "branch control pointer sequence must not open detail");
+  searchElement.value = "196200001";
+  findElement.onclick?.();
+  assert.equal(profileElement.hidden, false);
   profileElement.handlers.get("click")?.({ target: { closest: (selector: string) => selector === "[data-back]" ? {} : null } });
+  assert.equal(profileElement.hidden, true);
+  searchElement.value = "196200001";
+  findElement.onclick?.();
+  assert.equal(profileElement.hidden, false);
+  profileElement.handlers.get("click")?.({ target: { closest: (selector: string) => selector === ".profile-close" ? {} : null } });
   assert.equal(profileElement.hidden, true);
   assert.equal(zoomElement.textContent, "100%");
   runtime.elements.get("plus")?.onclick?.();
   assert.equal(zoomElement.textContent, "110%");
   runtime.elements.get("reset")?.onclick?.();
   assert.equal(zoomElement.textContent, "100%");
+  runtime.elements.get("expand")?.onclick?.();
   assert.ok(runtime.scrollCount > 0);
-  const embeddedMatch = /const DATA=([\s\S]+?);const byId=/u.exec(html);
+  const embeddedMatch = /const DATA=([\s\S]+?);\s*const byId=/u.exec(html);
   assert.ok(embeddedMatch, "offline member index must be embedded");
   const embedded = JSON.parse(embeddedMatch[1]) as { members: Array<import("../lib/memberBackup").OfflineMemberIndexEntry> };
   const find = (query: string) => backupModule.searchOfflineMembers(embedded.members, query);
@@ -388,7 +429,7 @@ async function main() {
   const adminRoute = await fs.readFile(path.join(process.cwd(), "app/api/admin/member-backups/route.ts"), "utf8");
   assert.doesNotMatch(adminRoute, /pruneMemberBackups/);
 
-  console.log("J.5D.5A-H3 offline member backup runtime tests: PASS");
+  console.log("J.5D.5A-H4 direct node detail interaction tests: PASS");
   await fs.rm(workspace, { recursive: true, force: true });
 }
 
