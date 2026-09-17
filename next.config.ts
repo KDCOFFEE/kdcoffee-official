@@ -10,6 +10,7 @@ const nextConfig: NextConfig = {
     "10.38.190.89",
   ],
   experimental: {
+    authInterrupts: true,
     serverActions: {
       allowedOrigins: [
         "slit-gorged-decibel.ngrok-free.dev",

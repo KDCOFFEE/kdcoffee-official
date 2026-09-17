@@ -1,0 +1,269 @@
+.root {
+  --ink: #261d17;
+  --paper: #f6f0e6;
+  --line: rgba(54, 39, 29, .18);
+  min-height: 100vh;
+  padding: 24px;
+  color: var(--ink);
+  background: #e9e1d4;
+}
+
+.header { display: flex; align-items: end; justify-content: space-between; gap: 24px; margin-bottom: 18px; }
+.header p { margin: 0 0 6px; font-size: 11px; letter-spacing: .2em; }
+.header h1 { margin: 0; font-family: var(--font-serif, serif); font-size: clamp(28px, 3vw, 46px); font-weight: 500; }
+.header span { display: block; margin-top: 8px; color: #67584c; }
+.header a { color: inherit; white-space: nowrap; }
+.summary { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px; padding: 12px 16px; border: 1px solid var(--line); background: rgba(255,255,255,.45); }
+.summary span { font-size: 13px; }
+.summary b { font-size: 18px; }
+.summary small { margin-left: auto; color: #75695f; }
+.fatal, .loading { padding: 28px; background: var(--paper); border: 1px solid var(--line); }
+.fatal strong { color: #8f2d24; }
+
+.workspace {
+  position: relative;
+  display: flex;
+  min-height: 620px;
+  height: calc(100vh - 184px);
+  margin-top: 12px;
+  flex-direction: column;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  overflow: hidden;
+}
+
+.workspaceToolbar {
+  position: relative;
+  z-index: 18;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(246,240,230,.98);
+}
+
+.directoryTrigger {
+  display: inline-flex;
+  min-height: 40px;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid #b8a58e;
+  border-radius: 4px;
+  background: #fffdfa;
+  color: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.directoryTrigger:hover, .directoryTrigger:focus-visible { border-color: #8e6333; background: #f1e5d4; }
+.directoryTrigger span { min-width: 22px; padding: 2px 6px; border-radius: 999px; background: #e8dccb; font-size: 11px; font-variant-numeric: tabular-nums; }
+
+.drawer {
+  position: absolute;
+  z-index: 25;
+  top: 61px;
+  bottom: 0;
+  background: #fffdfa;
+  box-shadow: 0 18px 52px rgba(38,29,23,.24);
+}
+
+.directoryDrawer {
+  left: 0;
+  display: flex;
+  width: min(380px, calc(100vw - 48px));
+  flex-direction: column;
+  border-right: 1px solid var(--line);
+}
+
+.detailDrawer {
+  right: 0;
+  width: min(440px, calc(100vw - 48px));
+  border-left: 1px solid var(--line);
+}
+
+.drawerHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px;
+  border-bottom: 1px solid var(--line);
+}
+.drawerHeader small { letter-spacing: .12em; color: #856b50; }
+.drawerHeader h2 { margin: 3px 0 0; font-family: var(--font-serif, serif); font-size: 21px; font-weight: 500; }
+.drawerHeader p { margin: 4px 0 0; color: #77695c; font-size: 12px; }
+.drawerHeader button { border: 0; background: transparent; color: inherit; font-size: 28px; line-height: 1; cursor: pointer; }
+
+.root :global(.member-search) { position: relative; width: min(620px, 100%); flex: 1 1 420px; }
+.root :global(.member-search label) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.root :global(.member-search input) { width: 100%; min-height: 40px; border: 1px solid var(--line); border-radius: 4px; padding: 9px 11px; background: white; color: inherit; }
+.root :global(.member-search input:focus-visible) { outline: 2px solid rgba(142,99,51,.3); outline-offset: 1px; border-color: #8e6333; }
+.root :global(.member-search-results) { position: absolute; z-index: 40; top: calc(100% + 6px); left: 0; right: 0; max-height: 340px; overflow: auto; border: 1px solid #9f8c76; background: white; box-shadow: 0 12px 30px rgba(38,29,23,.2); }
+.root :global(.member-search-results button) { display: grid; grid-template-columns: 1fr auto; width: 100%; padding: 10px; border: 0; border-bottom: 1px solid var(--line); background: transparent; color: inherit; text-align: left; cursor: pointer; }
+.root :global(.member-search-results button:hover), .root :global(.member-search-results button:focus-visible) { background: #f0e5d5; }
+.root :global(.member-search-results small) { grid-column: 1 / -1; color: #80613e; }
+.root :global(.member-search-results p) { padding: 12px; }
+
+.root :global(.directory-list) { min-height: 0; flex: 1; overflow-y: auto; padding: 8px 10px 16px; }
+.root :global(.directory-list button) { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; min-height: 68px; margin-bottom: 6px; padding: 9px 10px; border: 1px solid transparent; border-bottom-color: var(--line); background: transparent; color: inherit; text-align: left; cursor: pointer; }
+.root :global(.directory-list button:hover), .root :global(.directory-list button:focus-visible), .root :global(.directory-list button.selected) { border-color: #9b7447; background: #efe3d2; }
+.root :global(.directory-list span) { display: grid; gap: 4px; }
+.root :global(.directory-list span:last-child) { text-align: right; }
+.root :global(.directory-list small) { color: #77695c; }
+.root :global(.directory-list b) { font-size: 11px; font-weight: 600; }
+
+.root :global(.organization-panel) { display: flex; min-width: 0; min-height: 0; flex: 1; flex-direction: column; overflow: hidden; background-image: radial-gradient(rgba(75,56,39,.08) .7px, transparent .7px); background-size: 12px 12px; }
+.root :global(.graph-toolbar) { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; padding: 9px; border-bottom: 1px solid var(--line); background: rgba(246,240,230,.94); }
+.root :global(.graph-toolbar label) { display: flex; align-items: center; gap: 5px; font-size: 11px; }
+.root :global(.graph-toolbar select) { max-width: 220px; padding: 6px; }
+.root :global(.graph-toolbar button) { border: 1px solid var(--line); padding: 6px 8px; background: white; color: inherit; cursor: pointer; }
+.root :global(.graph-toolbar output) { min-width: 38px; text-align: center; font-size: 11px; }
+.root :global(.graph-diagnostics), .root :global(.graph-ok) { margin: 8px 10px 0; padding: 8px; border: 1px solid rgba(137,76,38,.25); background: rgba(255,248,235,.92); font-size: 11px; }
+.root :global(.graph-diagnostics ul) { max-height: 110px; overflow: auto; }
+.root :global(.graph-viewport) { min-height: 0; flex: 1; overflow: auto; cursor: grab; touch-action: none; }
+.root :global(.graph-viewport:active) { cursor: grabbing; }
+.root :global(.graph-stage) { width: max-content; min-width: 100%; min-height: 100%; padding: 34px 44px; transform-origin: 0 0; }
+.root :global(.organization-forest) { display: flex; align-items: flex-start; justify-content: center; gap: 42px; width: max-content; min-width: 100%; }
+/* H7B: explicit connector elements.
+   Geometry:
+   parent card -> 18px center stem -> sibling rail -> 18px drop -> child card.
+   Each branch is centered on its own subtree, so half-width rail segments meet
+   exactly between adjacent branches even when descendants make a subtree wider. */
+.root :global(.organization-tree),
+.root :global(.organization-tree ul) {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 18px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.root :global(.organization-tree .organization-branch) {
+  position: relative;
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* Children start 36px below the parent card:
+   18px parent stem + 18px rail-to-card drop. */
+.root :global(.organization-tree .organization-children) {
+  position: relative;
+  padding-top: 36px;
+}
+
+/* Parent card down to the sibling rail. */
+.root :global(.organization-tree .organization-branch > .organization-children::before) {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 1px;
+  height: 18px;
+  background: #a9947d;
+  content: "";
+  transform: translateX(-.5px);
+  pointer-events: none;
+}
+
+/* Explicit child connector elements are hidden on roots by default. */
+.root :global(.organization-connector) {
+  display: none;
+  position: absolute;
+  z-index: 2;
+  pointer-events: none;
+}
+
+/* Every immediate child gets a vertical drop from the rail into its card. */
+.root :global(.organization-children > .organization-branch > .organization-connector-drop) {
+  display: block;
+  top: -18px;
+  left: 50%;
+  width: 1px;
+  height: 18px;
+  background: #a9947d;
+  transform: translateX(-.5px);
+}
+
+/* Horizontal rail: each child owns half of the distance to its neighbors.
+   The extra 9px is half of the 18px flex gap. */
+.root :global(.organization-children > .organization-branch > .organization-connector-left),
+.root :global(.organization-children > .organization-branch > .organization-connector-right) {
+  display: block;
+  top: -18px;
+  height: 1px;
+  background: #a9947d;
+}
+
+.root :global(.organization-children > .organization-branch > .organization-connector-left) {
+  right: 50%;
+  width: calc(50% + 9px);
+}
+
+.root :global(.organization-children > .organization-branch > .organization-connector-right) {
+  left: 50%;
+  width: calc(50% + 9px);
+}
+
+/* Do not extend the rail beyond the first / last sibling. */
+.root :global(.organization-children > .organization-branch:first-child > .organization-connector-left),
+.root :global(.organization-children > .organization-branch:last-child > .organization-connector-right) {
+  display: none;
+}
+
+/* A single child needs only one continuous vertical connection. */
+.root :global(.organization-children > .organization-branch:only-child > .organization-connector-left),
+.root :global(.organization-children > .organization-branch:only-child > .organization-connector-right) {
+  display: none;
+}
+
+.root :global(.organization-node) { position: relative; display: flex; align-items: center; justify-content: space-between; gap: 14px; width: 220px; min-height: 70px; padding: 10px 36px 10px 12px; border: 1px solid #c5b49f; border-radius: 5px; background: #fffdfa; box-shadow: 0 4px 12px rgba(64,45,31,.08); cursor: pointer; user-select: none; }
+.root :global(.organization-node.selected) { outline: 3px solid rgba(155,116,71,.3); border-color: #8e6333; background: #f3e6d2; }
+.root :global(.organization-node.anomaly) { border-color: #a54338; }
+.root :global(.organization-node span) { display: grid; gap: 4px; }
+.root :global(.organization-node span:last-of-type) { text-align: right; }
+.root :global(.organization-node small) { max-width: 115px; overflow: hidden; color: #77695c; font-size: 10px; text-overflow: ellipsis; }
+.root :global(.organization-node b) { font-size: 10px; }
+.root :global(.organization-node > button) { position: absolute; right: 7px; width: 24px; height: 24px; border: 1px solid var(--line); border-radius: 50%; background: #f5ecdf; cursor: pointer; }
+
+.root :global(.detail-panel) { height: 100%; min-width: 0; background: #fffdfa; overflow: hidden; }
+.root :global(.detail-panel.empty) { display: none; }
+.root :global(.detail-panel > header) { display: flex; align-items: flex-start; justify-content: space-between; padding: 15px; border-bottom: 1px solid var(--line); }
+.root :global(.detail-panel > header small) { letter-spacing: .12em; color: #856b50; }
+.root :global(.detail-panel h2) { margin: 4px 0 0; font-family: var(--font-serif, serif); font-weight: 500; }
+.root :global(.detail-panel > header button) { border: 0; background: transparent; font-size: 26px; cursor: pointer; }
+.root :global(.detail-scroll) { height: calc(100% - 72px); overflow-y: auto; padding: 0 15px 30px; }
+.root :global(.detail-scroll section) { padding: 14px 0; border-bottom: 1px solid var(--line); }
+.root :global(.detail-scroll h3) { margin: 0 0 9px; font-size: 14px; }
+.root :global(.detail-scroll h4) { margin-bottom: 6px; font-size: 12px; }
+.root :global(.detail-scroll dl) { margin: 0; }
+.root :global(.detail-scroll dl div) { display: grid; grid-template-columns: minmax(105px, .8fr) minmax(0, 1.2fr); gap: 8px; padding: 5px 0; border-bottom: 1px dotted rgba(54,39,29,.12); }
+.root :global(.detail-scroll dt) { color: #77695c; font-size: 11px; }
+.root :global(.detail-scroll dd) { margin: 0; overflow-wrap: anywhere; font-size: 12px; }
+.root :global(.detail-scroll ul) { margin: 7px 0; padding-left: 18px; font-size: 11px; }
+.root :global(.detail-card) { display: grid; gap: 4px; margin: 7px 0; padding: 9px; border: 1px solid var(--line); background: #f8f2e8; font-size: 11px; }
+.root :global(.detail-card b), .root :global(.detail-error), .root :global(.detail-warnings) { color: #9a3026; }
+
+@media (max-width: 900px) {
+  .workspace { height: calc(100vh - 205px); min-height: 560px; }
+  .drawer { top: 61px; }
+  .directoryDrawer, .detailDrawer { width: min(92vw, 440px); }
+}
+
+@media (max-width: 720px) {
+  .root { padding: 12px; }
+  .header { align-items: flex-start; flex-direction: column; }
+  .summary small { width: 100%; margin-left: 0; }
+  .workspace { height: calc(100vh - 260px); min-height: 520px; }
+  .workspaceToolbar { align-items: stretch; flex-direction: column; }
+  .directoryTrigger { justify-content: center; }
+  .drawer { top: 111px; }
+  .directoryDrawer, .detailDrawer { left: 0; right: 0; width: 100%; }
+  .root :global(.graph-toolbar) { align-items: stretch; }
+  .root :global(.graph-toolbar label) { width: 100%; }
+  .root :global(.graph-toolbar select) { max-width: none; flex: 1; }
+  .root :global(.graph-stage) { padding: 28px; }
+}
