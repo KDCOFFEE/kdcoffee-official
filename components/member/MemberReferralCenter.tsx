@@ -9,6 +9,17 @@ type Center = {
   referralUrl: string;
   pointDisplayName: string;
   pvDisclosure: string | null;
+  displayRules: {
+    pointDisplayName: string;
+    pvRewardMoneyValue: number;
+    payoutQualification: {
+      mode: "general" | "subscription" | "either" | "both";
+      generalMember: { windowDays: number; threshold: number };
+      activeSubscriptionMember: { windowDays: number; threshold: number };
+    };
+    baseWaitingDays: number;
+    returnProtectionDays: number;
+  };
   summaries: Array<{
     level: number;
     members: number;
@@ -52,7 +63,8 @@ type Center = {
   }>;
 };
 
-const money = (value: number) => `NT$ ${value.toLocaleString("zh-TW")}`;
+const pointValue = (value: number, label: string) => `${value.toLocaleString("zh-TW")} ${label}`;
+const creditValue = (value: number) => `${value.toLocaleString("zh-TW")} 元`;
 const formatDate = (value: string | null) => {
   if (!value) return "日期未記錄";
   const date = new Date(value);
@@ -168,8 +180,10 @@ export default function MemberReferralCenter() {
     } catch { window.open(qrUrl, "_blank", "noopener,noreferrer"); setMessage("已開啟 QR Code 圖片，您可以長按或另存圖片。"); }
   };
 
+  const displayPointName = /^[A-Za-z]+$/.test(data.pointDisplayName || "")
+    ? data.pointDisplayName.toUpperCase()
+    : (data.pointDisplayName || "KD點");
   const directMembers = data.summaries[0]?.members ?? 0;
-  const releasedTotal = data.summaries.reduce((sum, item) => sum + item.releasedCredit, 0);
   const rootMemberNumber = data.nodes.find((node) => node.level === 1)?.parentMemberNumber ?? "";
   const currentTeamParent = teamPath.at(-1) ?? null;
   const currentParentNumber = currentTeamParent?.memberNumber ?? rootMemberNumber;
@@ -178,13 +192,13 @@ export default function MemberReferralCenter() {
 
   const releasedRewards = data.rewards.filter((reward) => reward.status === "released");
   const pendingRewards = data.rewards.filter((reward) => !["released", "cancelled", "reversed"].includes(reward.status));
-  const releasedRewardTotal = releasedRewards.reduce((sum, reward) => sum + reward.creditAmount, 0);
-  const pendingRewardTotal = pendingRewards.reduce((sum, reward) => sum + reward.projectedCreditAmount, 0);
-  const totalRewardValue = releasedRewardTotal + pendingRewardTotal;
+  const releasedRewardPoints = releasedRewards.reduce((sum, reward) => sum + reward.rewardPV, 0);
+  const pendingRewardPoints = pendingRewards.reduce((sum, reward) => sum + reward.rewardPV, 0);
+  const totalRewardPoints = releasedRewardPoints + pendingRewardPoints;
   const currentTaipeiMonth = taipeiMonthKey(new Date());
-  const currentMonthRewardTotal = releasedRewards
+  const currentMonthRewardPoints = releasedRewards
     .filter((reward) => reward.releasedAt && taipeiMonthKey(reward.releasedAt) === currentTaipeiMonth)
-    .reduce((sum, reward) => sum + reward.creditAmount, 0);
+    .reduce((sum, reward) => sum + reward.rewardPV, 0);
 
   const filteredRewards = data.rewards.filter((reward) => {
     const statusMatch = rewardFilter === "all"
@@ -242,7 +256,7 @@ export default function MemberReferralCenter() {
 
       {message && <p className="member-notice success" role="status" aria-live="polite">{message}</p>}
 
-      <section className="member-referral-results-v2"><div className="member-referral-subhead"><p className="eyebrow dark">MY RESULTS</p><h3>我的推薦成果</h3></div><div className="member-referral-kpis"><article><small>直接分享加入</small><strong>{directMembers}</strong><span>人</span></article><article><small>團隊人數</small><strong>{data.nodes.length}</strong><span>人</span></article><article><small>已發放推薦回饋</small><strong>{money(releasedTotal)}</strong></article></div>{data.pvDisclosure && <details className="member-referral-policy"><summary>推薦回饋如何計算？</summary><p>{data.pvDisclosure}</p><p>加入推薦團隊不等於立即產生回饋；仍須依活動、消費與成功取貨條件判定。</p></details>}</section>
+      <section className="member-referral-results-v2"><div className="member-referral-subhead"><p className="eyebrow dark">MY RESULTS</p><h3>我的推薦成果</h3></div><div className="member-referral-kpis"><article><small>直接分享加入</small><strong>{directMembers}</strong><span>人</span></article><article><small>團隊人數</small><strong>{data.nodes.length}</strong><span>人</span></article><article><small>已發放回饋點數</small><strong>{pointValue(releasedRewardPoints, displayPointName)}</strong></article></div>{data.pvDisclosure && <details className="member-referral-policy"><summary>推薦回饋如何計算？</summary><p>{data.pvDisclosure}</p><p>加入推薦團隊不等於立即產生回饋；仍須依活動、消費與成功取貨條件判定。</p></details>}</section>
 
       <section className="member-referral-team-v2">
         <div className="member-referral-team-title-row">
@@ -270,12 +284,12 @@ export default function MemberReferralCenter() {
       <MemberReferralOrgChart open={orgChartOpen} data={data.orgChart} onClose={() => setOrgChartOpen(false)} />
 
       <section className="member-referral-reward-ledger" aria-labelledby="member-reward-ledger-title">
-        <div className="member-referral-subhead"><p className="eyebrow dark">REWARD HISTORY</p><h3 id="member-reward-ledger-title">推薦回饋</h3><p>所有金額與狀態直接取自正式 Reward Engine 回饋紀錄；會員頁不另外計算回饋規則。</p></div>
-        <div className="member-reward-summary-grid" aria-label="推薦回饋總覽">
-          <article><small>累計推薦回饋</small><strong>{money(totalRewardValue)}</strong><span>已入帳＋有效待入帳</span></article>
-          <article><small>已入帳</small><strong>{money(releasedRewardTotal)}</strong><span>{releasedRewards.length} 筆</span></article>
-          <article><small>待入帳</small><strong>{money(pendingRewardTotal)}</strong><span>{pendingRewards.length} 筆</span></article>
-          <article><small>本月回饋</small><strong>{money(currentMonthRewardTotal)}</strong><span>本月已入帳</span></article>
+        <div className="member-referral-subhead"><p className="eyebrow dark">REWARD HISTORY</p><h3 id="member-reward-ledger-title">推薦與會員回饋</h3><p>回饋點數、資格狀態與折抵價值均直接取自正式 Reward Engine；會員頁不自行重算帳務。</p></div>
+        <div className="member-reward-summary-grid" aria-label="回饋點數總覽">
+          <article><small>累計回饋點數</small><strong>{pointValue(totalRewardPoints, displayPointName)}</strong><span>已入帳＋有效待入帳</span></article>
+          <article><small>已入帳點數</small><strong>{pointValue(releasedRewardPoints, displayPointName)}</strong><span>{releasedRewards.length} 筆</span></article>
+          <article><small>待入帳點數</small><strong>{pointValue(pendingRewardPoints, displayPointName)}</strong><span>{pendingRewards.length} 筆</span></article>
+          <article><small>本月已入帳</small><strong>{pointValue(currentMonthRewardPoints, displayPointName)}</strong><span>本月正式發放</span></article>
         </div>
         <div className="member-mobile-reward-toggle-row">
           <button
@@ -303,7 +317,26 @@ export default function MemberReferralCenter() {
           {pagedRewards.length ? <div className="member-reward-ledger-list">{pagedRewards.map((reward) => {
           const qualificationLabel = reward.qualificationStatus === "awaiting_order" ? "待完成資格消費" : reward.qualificationStatus === "awaiting_completion" ? "等待訂單完成" : reward.qualificationStatus === "qualified" ? "已取得資格・等待發放" : reward.qualificationStatus === "expired" ? "資格已逾期" : "歷史獎勵";
           const itemText = reward.sourceItems.length ? reward.sourceItems.map((item) => `${item.name}${item.optionLabel ? `・${item.optionLabel}` : ""}${item.optionDetail ? ` ${item.optionDetail}` : ""}${item.preparationLabel ? `・${item.preparationLabel}` : ""} × ${item.quantity}`).join("、") : "來源訂單商品明細未保留";
-          const basis = reward.calculationMode === "pv" ? `${reward.effectivePV.toLocaleString("zh-TW")} ${data.pointDisplayName || "KD點"} × ${reward.rewardRate.toLocaleString("zh-TW", { maximumFractionDigits: 2 })}%` : `依正式回饋規則 × ${reward.rewardRate.toLocaleString("zh-TW", { maximumFractionDigits: 2 })}%`;
+          const basis = reward.calculationMode === "pv" ? `${reward.effectivePV.toLocaleString("zh-TW")} ${displayPointName} × ${reward.rewardRate.toLocaleString("zh-TW", { maximumFractionDigits: 2 })}%` : `依正式回饋規則 × ${reward.rewardRate.toLocaleString("zh-TW", { maximumFractionDigits: 2 })}%`;
+          const q = data.displayRules.payoutQualification;
+          const qualificationRuleText = q.mode === "general"
+            ? `最近 ${q.generalMember.windowDays} 天累積有效消費達 ${q.generalMember.threshold.toLocaleString("zh-TW")}。`
+            : q.mode === "subscription"
+              ? `有效定期配送會員最近 ${q.activeSubscriptionMember.windowDays} 天累積有效消費達 ${q.activeSubscriptionMember.threshold.toLocaleString("zh-TW")}。`
+              : q.mode === "both"
+                ? `需同時符合一般會員最近 ${q.generalMember.windowDays} 天有效消費 ${q.generalMember.threshold.toLocaleString("zh-TW")}，以及有效定期配送會員最近 ${q.activeSubscriptionMember.windowDays} 天有效消費 ${q.activeSubscriptionMember.threshold.toLocaleString("zh-TW")}。`
+                : `一般會員最近 ${q.generalMember.windowDays} 天有效消費達 ${q.generalMember.threshold.toLocaleString("zh-TW")}，或有效定期配送會員最近 ${q.activeSubscriptionMember.windowDays} 天有效消費達 ${q.activeSubscriptionMember.threshold.toLocaleString("zh-TW")}，任一條件符合即可。`;
+          const qualificationDetail = reward.qualificationStatus === "awaiting_order"
+            ? "尚待完成符合資格的有效消費，系統會在符合條件的訂單完成後自動判定。"
+            : reward.qualificationStatus === "awaiting_completion"
+              ? `資格訂單${reward.qualificationOrderNumber ? ` ${reward.qualificationOrderNumber}` : ""} 已建立，等待訂單完成。`
+              : reward.qualificationStatus === "qualified"
+                ? `資格已完成，正在等待發放安全期。基礎等待 ${data.displayRules.baseWaitingDays} 天＋退貨保護 ${data.displayRules.returnProtectionDays} 天。`
+                : reward.qualificationStatus === "expired"
+                  ? "本筆回饋資格期限已結束。"
+                  : "本筆依建立時保存的歷史回饋規則處理。";
+          const lifecycleStage = reward.status === "released" ? 4 : reward.qualificationStatus === "qualified" ? 3 : 2;
+          const actualCreditValue = reward.status === "released" ? reward.creditAmount : reward.projectedCreditAmount;
           return <article className="member-reward-ledger-card member-reward-ledger-item" key={reward.rewardId}>
             <header className="member-reward-ledger-meta"><time>{formatDate(reward.releasedAt || reward.sourceOrderCreatedAt)}</time><span className={`member-reward-status is-${reward.status}`}>{rewardStatusLabel(reward, qualificationLabel)}</span></header>
             <div className="member-reward-ledger-body">
@@ -317,9 +350,49 @@ export default function MemberReferralCenter() {
               </div>
               <div className="member-reward-ledger-math member-reward-ledger-bottom">
                 <span><small>回饋計算</small>{basis}</span>
-                <strong><small>本筆回饋</small>+ {money(reward.creditAmount)}</strong>
+                <strong><small>本筆回饋</small>+ {pointValue(reward.rewardPV, displayPointName)}</strong>
               </div>
-              {reward.releaseEligibleBusinessDate && reward.status === "scheduled" ? <small className="member-reward-release-note">預計符合發放條件日期：{reward.releaseEligibleBusinessDate.replaceAll("-", "/")}</small> : null}
+
+              <details className="member-reward-transparency" open={reward.status === "scheduled"}>
+                <summary>這筆 {pointValue(reward.rewardPV, displayPointName)} 怎麼來？</summary>
+
+                <div className="member-reward-transparency-grid">
+                  <div>
+                    <small>① 回饋來源</small>
+                    <strong>{reward.rewardType === "self_purchase" ? "自己的消費" : `第 ${reward.referralLevel} 層推薦消費`}</strong>
+                    <span>{basis}</span>
+                  </div>
+                  <div>
+                    <small>② 預計取得</small>
+                    <strong>{pointValue(reward.rewardPV, displayPointName)}</strong>
+                    <span>點數依正式 Reward Engine 保存結果顯示</span>
+                  </div>
+                  <div>
+                    <small>③ 折抵價值</small>
+                    <strong>{creditValue(actualCreditValue)}</strong>
+                    <span>目前後台換算參考：1 {displayPointName} = {data.displayRules.pvRewardMoneyValue.toLocaleString("zh-TW")} 元</span>
+                  </div>
+                </div>
+
+                <div className="member-reward-qualification-explain">
+                  <strong>我要怎麼符合資格？</strong>
+                  <p>{qualificationRuleText}</p>
+                  <p><b>目前狀態：</b>{qualificationDetail}</p>
+                  {reward.qualificationExpiresAt ? <p><b>資格期限：</b>{formatDate(reward.qualificationExpiresAt)}</p> : null}
+                  {reward.releaseEligibleBusinessDate && reward.status === "scheduled" ? <p><b>預計可發放日期：</b>{reward.releaseEligibleBusinessDate.replaceAll("-", "/")}</p> : null}
+                </div>
+
+                <div className="member-reward-lifecycle" aria-label="回饋入帳進度">
+                  {["回饋產生", "資格確認", "安全等待", "正式入帳"].map((label, index) => {
+                    const step = index + 1;
+                    return <span key={label} className={step < lifecycleStage ? "is-done" : step === lifecycleStage ? "is-current" : ""}><i>{step < lifecycleStage ? "✓" : step}</i>{label}</span>;
+                  })}
+                </div>
+
+                <small className="member-reward-conversion-note">
+                  實際折抵價值以這筆回饋在 Reward Engine 中已保存的正式結果為準；之後修改後台換算比例，不會在會員頁自行重算歷史回饋。
+                </small>
+              </details>
             </div>
           </article>;
         })}</div> : <div className="member-commerce-empty compact"><strong>沒有符合目前篩選條件的回饋紀錄</strong><p>可切換狀態或代數查看其他紀錄。</p></div>}

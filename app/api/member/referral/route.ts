@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentMember } from "@/lib/memberAuth";
 import { assignReferralByCode, getMemberReferralCenter, MembershipCommerceError } from "@/lib/membershipCommerce";
+import { getActiveMembershipRules } from "@/lib/membershipBusinessRules";
 
 export const dynamic = "force-dynamic";
 
@@ -49,7 +50,34 @@ function sameOrigin(request: Request) {
 export async function GET(request: Request) {
   const member = await getCurrentMember();
   if (!member) return NextResponse.json({ error: "請先登入會員" }, { status: 401 });
-  return NextResponse.json(await getMemberReferralCenter(member.id, { baseUrl: resolvePublicOrigin(request) }));
+
+  const [center, version] = await Promise.all([
+    getMemberReferralCenter(member.id, { baseUrl: resolvePublicOrigin(request) }),
+    getActiveMembershipRules(),
+  ]);
+
+  const referral = version.rules.referral;
+
+  return NextResponse.json({
+    ...center,
+    displayRules: {
+      pointDisplayName: referral.pointDisplayName,
+      pvRewardMoneyValue: referral.pvRewardMoneyValue,
+      payoutQualification: {
+        mode: referral.payoutQualification.mode,
+        generalMember: {
+          windowDays: referral.payoutQualification.generalMember.rollingWindowDays,
+          threshold: referral.payoutQualification.generalMember.cumulativeValidConsumptionThreshold,
+        },
+        activeSubscriptionMember: {
+          windowDays: referral.payoutQualification.activeSubscriptionMember.rollingWindowDays,
+          threshold: referral.payoutQualification.activeSubscriptionMember.cumulativeValidConsumptionThreshold,
+        },
+      },
+      baseWaitingDays: referral.referralRewardBaseWaitingDays,
+      returnProtectionDays: referral.referralRewardReturnProtectionDays,
+    },
+  });
 }
 
 export async function POST(request: Request) {

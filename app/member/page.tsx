@@ -12,7 +12,7 @@ import MemberMobileDisclosure from "@/components/member/MemberMobileDisclosure";
 import MemberSectionNav from "@/components/member/MemberSectionNav";
 import MemberSubscriptionExperience from "@/components/member/MemberSubscriptionExperience";
 import MemberReferralCenter from "@/components/member/MemberReferralCenter";
-import { getMemberCommerceDashboard } from "@/lib/membershipCommerce";
+import { getMemberCommerceDashboard, getMemberReferralCenter } from "@/lib/membershipCommerce";
 import { getActiveMembershipRules } from "@/lib/membershipBusinessRules";
 import { fulfillmentRecordForOrder, readFulfillmentStore } from "@/lib/fulfillment";
 import { fulfillmentStateLabels, type FulfillmentState } from "@/lib/fulfillmentTypes";
@@ -353,10 +353,23 @@ export default async function MemberPage({
       member.id,
     );
   const memberName = member.pickupName?.trim() || member.displayName?.trim() || "";
-  const [loginMethods, commerce, rulesVersion, subscriptionProducts] = await Promise.all([getMemberLoginMethods(member), getMemberCommerceDashboard(member.id), getActiveMembershipRules(), getSubscriptionProducts()]);
+  const [loginMethods, commerce, rulesVersion, subscriptionProducts, referralCenter] = await Promise.all([
+    getMemberLoginMethods(member),
+    getMemberCommerceDashboard(member.id),
+    getActiveMembershipRules(),
+    getSubscriptionProducts(),
+    getMemberReferralCenter(member.id, { baseUrl: process.env.MEMBER_SITE_URL || process.env.NEXT_PUBLIC_SITE_URL || "" }),
+  ]);
   const availableCredit = commerce.credits
     .filter((item) => item.status === "available")
     .reduce((sum, item) => sum + item.remainingAmount, 0);
+  const rawPointDisplayName = rulesVersion.rules.referral.pointDisplayName || "KD點";
+  const pointDisplayName = /^[A-Za-z]+$/.test(rawPointDisplayName)
+    ? rawPointDisplayName.toUpperCase()
+    : rawPointDisplayName;
+  const pendingRewardPoints = referralCenter.rewards
+    .filter((reward) => reward.status === "scheduled" && reward.qualificationStatus !== "expired")
+    .reduce((sum, reward) => sum + reward.rewardPV, 0);
   const latestOrder = orders[0];
 
   return (
@@ -402,14 +415,14 @@ export default async function MemberPage({
         <section className="member-dashboard" aria-label="會員總覽">
           <div className="member-dashboard-grid">
             <a className="member-dashboard-card" href="#credit">
-              <small>可用抵用金</small>
-              <strong>NT$ {availableCredit.toLocaleString("zh-TW")}</strong>
-              <span>結帳時可自行選擇使用</span>
+              <small>可用折抵額</small>
+              <strong>{availableCredit.toLocaleString("zh-TW")} 元</strong>
+              <span>已正式入帳，結帳時可自行選擇使用</span>
             </a>
-            <a className="member-dashboard-card" href="#credit">
+            <a className="member-dashboard-card" href="#referral">
               <small>待入帳回饋</small>
-              <strong>NT$ {commerce.pendingCredit.toLocaleString("zh-TW")}</strong>
-              <span>符合目前規則後轉為可用抵用金</span>
+              <strong>{pendingRewardPoints.toLocaleString("zh-TW")} {pointDisplayName}</strong>
+              <span>查看點數來源、資格條件與折抵價值</span>
             </a>
             <a className="member-dashboard-card" href="#referral">
               <small>直接推薦</small>
@@ -428,8 +441,14 @@ export default async function MemberPage({
         <section className="member-qualification-banner">
           <div>
             <small>MEMBER STATUS</small>
-            <strong>{commerce.pendingCredit > 0 ? "目前有推薦回饋等待入帳" : "會員帳戶已啟用"}</strong>
-            <span>推薦資格與回饋狀態可在下方「推薦與回饋」查看完整資訊。</span>
+            <strong>
+              {pendingRewardPoints > 0 ? (
+                <>目前有 {pendingRewardPoints.toLocaleString("zh-TW")} <span className="member-point-display-name">{pointDisplayName}</span> 等待入帳</>
+              ) : (
+                "會員帳戶已啟用"
+              )}
+            </strong>
+            <span>回饋來源、資格條件、折抵價值與入帳狀態可在下方「推薦與回饋」查看。</span>
           </div>
           <a href="#referral">查看推薦與回饋 <b>→</b></a>
         </section>
@@ -487,7 +506,7 @@ export default async function MemberPage({
         <MemberMobileDisclosure eyebrow="SUBSCRIPTION" title="定期配送與抵用金" summary="配送安排、抵用金與推薦摘要">
           <MemberSubscriptionExperience {...commerce} products={subscriptionProducts} rules={{ intervalsDays: rulesVersion.rules.subscription.intervalOptions.filter((item) => item.enabled).map((item) => item.days), customCycleEnabled: rulesVersion.rules.subscription.customCycleEnabled, customCycleMinDays: rulesVersion.rules.subscription.customCycleMinDays, customCycleMaxDays: rulesVersion.rules.subscription.customCycleMaxDays, delayQuickOptionsDays: rulesVersion.rules.subscription.delayQuickOptionsDays, advanceQuickOptionsDays: rulesVersion.rules.subscription.advanceQuickOptionsDays, preparationLeadDays: rulesVersion.rules.subscription.preparationLeadDays, discountPercent: rulesVersion.rules.subscription.discountPercent, datePickerMode: rulesVersion.rules.subscription.datePickerMode, maxModificationsPerCycle: rulesVersion.rules.subscription.maxModificationsPerCycle, allowOtherSubscriptionProducts: rulesVersion.rules.subscription.allowOtherSubscriptionProducts, allowHalfToOnePound: rulesVersion.rules.subscription.allowHalfToOnePound, allowOneToHalfPound: rulesVersion.rules.subscription.allowOneToHalfPound, allowMixedOnePound: rulesVersion.rules.subscription.allowMixedOnePound, allowQuantityChange: rulesVersion.rules.subscription.allowQuantityChange, maxItems: MEMBER_SUBSCRIPTION_MAX_ITEMS }} />
         </MemberMobileDisclosure>
-        <MemberMobileDisclosure eyebrow="REFERRAL" title="推薦與回饋" summary={`直接推薦 ${commerce.referrals.length} 人・待入帳 NT$ ${commerce.pendingCredit.toLocaleString("zh-TW")}`}>
+        <MemberMobileDisclosure eyebrow="REFERRAL" title="推薦與回饋" summary={`直接推薦 ${commerce.referrals.length} 人・待入帳 ${pendingRewardPoints.toLocaleString("zh-TW")} ${pointDisplayName}`}>
           <MemberReferralCenter />
         </MemberMobileDisclosure>
 

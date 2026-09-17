@@ -5960,3 +5960,178 @@ button.member-lifecycle-action:disabled,
   cursor: not-allowed !important;
   transform: none !important;
 }
+
+
+/* J.5D.6A A1 — Reward Transparency UX */
+
+.member-reward-transparency {
+  margin-top: 14px;
+  border: 1px solid rgba(39, 48, 42, 0.14);
+  border-radius: 16px;
+  background: rgba(247, 245, 239, 0.72);
+  overflow: hidden;
+}
+
+.member-reward-transparency > summary {
+  cursor: pointer;
+  padding: 14px 16px;
+  font-weight: 750;
+  color: #263129;
+  list-style-position: inside;
+}
+
+.member-reward-transparency[open] > summary {
+  border-bottom: 1px solid rgba(39, 48, 42, 0.10);
+}
+
+.member-reward-transparency-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  padding: 14px 16px 0;
+}
+
+.member-reward-transparency-grid > div {
+  min-width: 0;
+  padding: 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.76);
+}
+
+.member-reward-transparency-grid small,
+.member-reward-transparency-grid strong,
+.member-reward-transparency-grid span {
+  display: block;
+}
+
+.member-reward-transparency-grid small {
+  margin-bottom: 6px;
+  color: rgba(38, 49, 41, 0.62);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+.member-reward-transparency-grid strong {
+  color: #263129;
+  font-size: 17px;
+}
+
+.member-reward-transparency-grid span {
+  margin-top: 6px;
+  color: rgba(38, 49, 41, 0.70);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.member-reward-qualification-explain {
+  margin: 12px 16px 0;
+  padding: 14px 16px;
+  border-left: 3px solid rgba(81, 103, 85, 0.52);
+  background: rgba(255, 255, 255, 0.58);
+}
+
+.member-reward-qualification-explain > strong {
+  display: block;
+  margin-bottom: 8px;
+  color: #263129;
+}
+
+.member-reward-qualification-explain p {
+  margin: 5px 0;
+  color: rgba(38, 49, 41, 0.76);
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.member-reward-lifecycle {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  padding: 16px;
+}
+
+.member-reward-lifecycle span {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 7px;
+  color: rgba(38, 49, 41, 0.48);
+  font-size: 12px;
+}
+
+.member-reward-lifecycle span::after {
+  content: "";
+  position: absolute;
+  top: 12px;
+  left: 29px;
+  right: -6px;
+  height: 1px;
+  background: rgba(38, 49, 41, 0.13);
+}
+
+.member-reward-lifecycle span:last-child::after {
+  display: none;
+}
+
+.member-reward-lifecycle i {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(38, 49, 41, 0.18);
+  border-radius: 999px;
+  background: #fff;
+  font-style: normal;
+  font-size: 11px;
+}
+
+.member-reward-lifecycle .is-done,
+.member-reward-lifecycle .is-current {
+  color: #263129;
+  font-weight: 700;
+}
+
+.member-reward-lifecycle .is-done i,
+.member-reward-lifecycle .is-current i {
+  border-color: rgba(81, 103, 85, 0.55);
+  background: rgba(225, 231, 222, 0.92);
+}
+
+.member-reward-conversion-note {
+  display: block;
+  padding: 0 16px 16px;
+  color: rgba(38, 49, 41, 0.58);
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+@media (max-width: 700px) {
+  .member-reward-transparency-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .member-reward-lifecycle {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .member-reward-lifecycle span::after {
+    display: none;
+  }
+}
+
+
+/* J.5D.6A A1.2 — Reward UI polish */
+
+.member-point-display-name {
+  text-transform: none;
+}
+
+.member-credit-summary > div:only-child {
+  grid-column: 1 / -1;
+  width: 100%;
+}
