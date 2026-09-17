@@ -191,7 +191,9 @@ export default function MemberReferralCenter() {
   const visibleNodes = data.nodes.filter((node) => node.level === currentTeamLevel && node.parentMemberNumber === currentParentNumber);
 
   const releasedRewards = data.rewards.filter((reward) => reward.status === "released");
-  const pendingRewards = data.rewards.filter((reward) => !["released", "cancelled", "reversed"].includes(reward.status));
+  const pendingRewards = data.rewards.filter(
+    (reward) => reward.status === "scheduled" && reward.qualificationStatus !== "expired",
+  );
   const releasedRewardPoints = releasedRewards.reduce((sum, reward) => sum + reward.rewardPV, 0);
   const pendingRewardPoints = pendingRewards.reduce((sum, reward) => sum + reward.rewardPV, 0);
   const totalRewardPoints = releasedRewardPoints + pendingRewardPoints;
@@ -203,7 +205,11 @@ export default function MemberReferralCenter() {
   const filteredRewards = data.rewards.filter((reward) => {
     const statusMatch = rewardFilter === "all"
       || (rewardFilter === "released" && reward.status === "released")
-      || (rewardFilter === "pending" && !["released", "cancelled", "reversed"].includes(reward.status));
+      || (
+        rewardFilter === "pending"
+        && reward.status === "scheduled"
+        && reward.qualificationStatus !== "expired"
+      );
     return statusMatch && (rewardLevel === 0 || reward.referralLevel === rewardLevel);
   });
   const rewardPageCount = Math.max(1, Math.ceil(filteredRewards.length / rewardsPerPage));
@@ -335,8 +341,34 @@ export default function MemberReferralCenter() {
                 : reward.qualificationStatus === "expired"
                   ? "本筆回饋資格期限已結束。"
                   : "本筆依建立時保存的歷史回饋規則處理。";
-          const lifecycleStage = reward.status === "released" ? 4 : reward.qualificationStatus === "qualified" ? 3 : 2;
-          const actualCreditValue = reward.status === "released" ? reward.creditAmount : reward.projectedCreditAmount;
+          const lifecycleStage = reward.status === "released"
+            ? 4
+            : reward.qualificationStatus === "qualified"
+              ? 3
+              : 2;
+          const rewardCanStillRelease =
+            reward.status === "scheduled"
+            && reward.qualificationStatus !== "expired";
+          const actualCreditValue =
+            reward.status === "released" || reward.status === "reversed"
+              ? reward.creditAmount
+              : reward.projectedCreditAmount;
+          const creditDisplayLabel =
+            reward.status === "released"
+              ? "已入帳折抵額"
+              : reward.status === "reversed"
+                ? "已沖回折抵額"
+                : rewardCanStillRelease
+                  ? "預計折抵價值"
+                  : "原預估折抵價值";
+          const creditDisplayNote =
+            reward.status === "released"
+              ? "本筆已正式入帳，可用狀態仍以抵用金帳本為準"
+              : reward.status === "reversed"
+                ? "本筆曾入帳，後續已依正式規則沖回"
+                : rewardCanStillRelease
+                  ? `目前換算設定參考：1 ${displayPointName} = ${data.displayRules.pvRewardMoneyValue.toLocaleString("zh-TW")} 元`
+                  : "僅保留歷史計算結果，不代表目前仍可入帳";
           return <article className="member-reward-ledger-card member-reward-ledger-item" key={reward.rewardId}>
             <header className="member-reward-ledger-meta"><time>{formatDate(reward.releasedAt || reward.sourceOrderCreatedAt)}</time><span className={`member-reward-status is-${reward.status}`}>{rewardStatusLabel(reward, qualificationLabel)}</span></header>
             <div className="member-reward-ledger-body">
@@ -353,7 +385,7 @@ export default function MemberReferralCenter() {
                 <strong><small>本筆回饋</small>+ {pointValue(reward.rewardPV, displayPointName)}</strong>
               </div>
 
-              <details className="member-reward-transparency" open={reward.status === "scheduled"}>
+              <details className="member-reward-transparency" open={rewardCanStillRelease}>
                 <summary>這筆 {pointValue(reward.rewardPV, displayPointName)} 怎麼來？</summary>
 
                 <div className="member-reward-transparency-grid">
@@ -368,15 +400,15 @@ export default function MemberReferralCenter() {
                     <span>點數依正式 Reward Engine 保存結果顯示</span>
                   </div>
                   <div>
-                    <small>③ 折抵價值</small>
+                    <small>③ {creditDisplayLabel}</small>
                     <strong>{creditValue(actualCreditValue)}</strong>
-                    <span>目前後台換算參考：1 {displayPointName} = {data.displayRules.pvRewardMoneyValue.toLocaleString("zh-TW")} 元</span>
+                    <span>{creditDisplayNote}</span>
                   </div>
                 </div>
 
                 <div className="member-reward-qualification-explain">
-                  <strong>我要怎麼符合資格？</strong>
-                  <p>{qualificationRuleText}</p>
+                  <strong>{reward.qualificationStatus === "expired" ? "資格結果" : "我要怎麼符合資格？"}</strong>
+                  <p><b>目前規則參考：</b>{qualificationRuleText}</p>
                   <p><b>目前狀態：</b>{qualificationDetail}</p>
                   {reward.qualificationExpiresAt ? <p><b>資格期限：</b>{formatDate(reward.qualificationExpiresAt)}</p> : null}
                   {reward.releaseEligibleBusinessDate && reward.status === "scheduled" ? <p><b>預計可發放日期：</b>{reward.releaseEligibleBusinessDate.replaceAll("-", "/")}</p> : null}
