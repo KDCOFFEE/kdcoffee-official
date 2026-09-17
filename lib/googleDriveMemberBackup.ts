@@ -3,11 +3,21 @@ import {
   createMemberBackupZipArtifact,
   getVerifiedMemberBackupForDownload,
   isValidMemberBackupId,
-  pruneMemberBackups,
+  listMemberBackups,
   type MemberBackupManifest,
+  type MemberBackupSummary,
   type MemberBackupZipArtifact,
   type VerifiedMemberBackup,
 } from "./memberBackup";
+import {
+  applyLocalCronRetention,
+  ensureAutomaticBackupStorage,
+  planGoogleDriveMemberBackupRetention,
+  readMemberBackupStorageMetrics,
+  type DriveRetentionPlan,
+  type LocalRetentionResult,
+  type MemberBackupStorageMetrics,
+} from "./memberBackupRetention";
 
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const GOOGLE_DRIVE_FILES_URL = "https://www.googleapis.com/drive/v3/files";
@@ -208,6 +218,138 @@ async function findExistingDriveFile(input: {
   return null;
 }
 
+async function resolveVerifiedDriveIdentity(
+  backupId: string,
+  options: {
+    fetcher?: Fetcher;
+    environment?: DriveEnvironment;
+    testOnlyAllowNonProduction?: boolean;
+    resolveVerifiedBackup?: (backupId: string) => Promise<VerifiedMemberBackup>;
+    createZipArtifact?: (verified: VerifiedMemberBackup) => Promise<MemberBackupZipArtifact>;
+  } = {},
+) {
+  if (!isValidMemberBackupId(backupId)) throw new GoogleDriveMemberBackupError("verification-failed", "Member backup ID is invalid");
+  const environment = configuredEnvironment(options.environment ?? process.env);
+  const fetcher = options.fetcher ?? fetch;
+  const resolveVerified = options.resolveVerifiedBackup ?? ((id: string) => getVerifiedMemberBackupForDownload(id, { testOnlyAllowNonProduction: options.testOnlyAllowNonProduction }));
+  let verified: VerifiedMemberBackup;
+  try { verified = await resolveVerified(backupId); }
+  catch (error) { throw new GoogleDriveMemberBackupError("verification-failed", "Local member backup is not verified", { cause: error, backupId }); }
+  if (verified.manifest.backupId !== backupId || verified.manifest.status !== "verified") {
+    throw new GoogleDriveMemberBackupError("verification-failed", "Local member backup identity is invalid", { backupId });
+  }
+  const artifact = await (options.createZipArtifact ?? createMemberBackupZipArtifact)(verified).catch((error) => {
+    throw new GoogleDriveMemberBackupError("verification-failed", "Verified member backup ZIP could not be generated", { cause: error, backupId });
+  });
+  if (!Number.isSafeInteger(artifact.bytes) || artifact.bytes < 1) throw new GoogleDriveMemberBackupError("verification-failed", "Verified member backup ZIP size is invalid", { backupId });
+  return { environment, fetcher, verified, artifact };
+}
+
+export async function findVerifiedMemberBackupOnGoogleDrive(
+  backupId: string,
+  options: Parameters<typeof resolveVerifiedDriveIdentity>[1] = {},
+) {
+  const resolved = await resolveVerifiedDriveIdentity(backupId, options);
+  const accessToken = await refreshAccessToken(resolved.fetcher, resolved.environment);
+  const name = expectedFileName(backupId);
+  const file = await findExistingDriveFile({
+    fetcher: resolved.fetcher,
+    accessToken,
+    folderId: resolved.environment.GOOGLE_DRIVE_BACKUP_FOLDER_ID,
+    backupId,
+    name,
+    bytes: resolved.artifact.bytes,
+  });
+  return file ? safeResult(file, "already-uploaded", backupId, new Date().toISOString()) : null;
+}
+
+async function listDriveFolderFiles(input: { fetcher: Fetcher; accessToken: string; folderId: string }) {
+  const files: unknown[] = [];
+  let pageToken = "";
+  do {
+    const url = new URL(GOOGLE_DRIVE_FILES_URL);
+    url.searchParams.set("q", `'${escapeDriveQuery(input.folderId)}' in parents and trashed = false`);
+    url.searchParams.set("spaces", "drive");
+    url.searchParams.set("pageSize", "1000");
+    url.searchParams.set("fields", `nextPageToken,files(${DRIVE_FILE_FIELDS})`);
+    if (pageToken) url.searchParams.set("pageToken", pageToken);
+    const response = await timedFetch(input.fetcher, url.toString(), {
+      headers: { Authorization: `Bearer ${input.accessToken}` },
+    }, 20_000).catch((error) => {
+      throw new GoogleDriveMemberBackupError("folder-unavailable", "Google Drive retention inventory lookup failed", { cause: error });
+    });
+    if (!response.ok) throw new GoogleDriveMemberBackupError("folder-unavailable", "Google Drive retention inventory is unavailable", { googleStatus: response.status });
+    const payload = await jsonObject(response);
+    if (!payload || !Array.isArray(payload.files)) throw new GoogleDriveMemberBackupError("folder-unavailable", "Google Drive retention inventory response was invalid", { googleStatus: response.status });
+    files.push(...payload.files);
+    pageToken = typeof payload.nextPageToken === "string" ? payload.nextPageToken : "";
+  } while (pageToken);
+  return files;
+}
+
+function retentionIdentity(file: DriveFile, folderId: string) {
+  const backupId = file.appProperties.kdBackupId ?? "";
+  if (!file.parents.includes(folderId)) return { valid: false as const, reason: "wrong-folder" };
+  if (file.appProperties.kdBackupType !== "member-backup") return { valid: false as const, reason: "missing-or-wrong-backup-type" };
+  if (!isValidMemberBackupId(backupId)) return { valid: false as const, reason: "invalid-backup-id" };
+  if (file.name !== expectedFileName(backupId)) return { valid: false as const, reason: "filename-identity-mismatch" };
+  if (file.mimeType !== ZIP_MIME_TYPE || file.size < 1) return { valid: false as const, reason: "invalid-zip-metadata" };
+  if (file.appProperties.kdSource !== "railway_cron") return { valid: false as const, reason: "non-cron-or-legacy-source" };
+  if (file.appProperties.kdEnvironment !== "production") return { valid: false as const, reason: "non-production-environment" };
+  if (!file.appProperties.kdGitCommit || !file.appProperties.kdCreatedAt) return { valid: false as const, reason: "incomplete-system-metadata" };
+  if (!file.createdTime || !Number.isFinite(Date.parse(file.createdTime))) return { valid: false as const, reason: "invalid-created-time" };
+  return { valid: true as const, backupId };
+}
+
+export async function getGoogleDriveMemberBackupRetentionPlan(options: {
+  fetcher?: Fetcher;
+  environment?: DriveEnvironment;
+  now?: Date;
+  localBackups?: MemberBackupSummary[];
+  testOnlyAllowNonProduction?: boolean;
+} = {}): Promise<DriveRetentionPlan> {
+  const environment = configuredEnvironment(options.environment ?? process.env);
+  const fetcher = options.fetcher ?? fetch;
+  const accessToken = await refreshAccessToken(fetcher, environment);
+  const rawFiles = await listDriveFolderFiles({ fetcher, accessToken, folderId: environment.GOOGLE_DRIVE_BACKUP_FOLDER_ID });
+  const ignoredUnknown: DriveRetentionPlan["ignoredUnknown"] = [];
+  const parsed: Array<{ file: DriveFile; backupId: string }> = [];
+  for (const raw of rawFiles) {
+    const file = parseDriveFile(raw);
+    if (!file) {
+      const record = raw && typeof raw === "object" && !Array.isArray(raw) ? raw as Record<string, unknown> : {};
+      ignoredUnknown.push({
+        driveFileId: typeof record.id === "string" ? record.id : null,
+        name: typeof record.name === "string" ? record.name : null,
+        reason: "malformed-metadata",
+      });
+      continue;
+    }
+    const identity = retentionIdentity(file, environment.GOOGLE_DRIVE_BACKUP_FOLDER_ID);
+    if (!identity.valid) {
+      ignoredUnknown.push({ driveFileId: file.id, name: file.name, reason: identity.reason });
+      continue;
+    }
+    parsed.push({ file, backupId: identity.backupId });
+  }
+  const identityCounts = new Map<string, number>();
+  for (const item of parsed) identityCounts.set(item.backupId, (identityCounts.get(item.backupId) ?? 0) + 1);
+  const candidates = parsed.flatMap((item) => {
+    if (identityCounts.get(item.backupId) !== 1) {
+      ignoredUnknown.push({ driveFileId: item.file.id, name: item.file.name, reason: "duplicate-canonical-identity" });
+      return [];
+    }
+    return [{ driveFileId: item.file.id, backupId: item.backupId, name: item.file.name, createdTime: item.file.createdTime! }];
+  });
+  const localBackups = options.localBackups ?? await listMemberBackups({ testOnlyAllowNonProduction: options.testOnlyAllowNonProduction });
+  return planGoogleDriveMemberBackupRetention({
+    candidates,
+    ignoredUnknown,
+    protectedLocalBackupIds: localBackups.map((backup) => backup.backupId),
+    now: options.now,
+  });
+}
+
 async function readDriveFile(input: { fetcher: Fetcher; accessToken: string; fileId: string }) {
   const url = new URL(`${GOOGLE_DRIVE_FILES_URL}/${encodeURIComponent(input.fileId)}`);
   url.searchParams.set("fields", DRIVE_FILE_FIELDS);
@@ -238,6 +380,7 @@ async function uploadResumable(input: {
     appProperties: {
       kdBackupId: input.backupId,
       kdBackupType: "member-backup",
+      kdSource: input.manifest.source,
       kdEnvironment: input.manifest.environment,
       kdGitCommit: input.manifest.gitCommit,
       kdCreatedAt: input.manifest.createdAt,
@@ -345,11 +488,24 @@ export function uploadVerifiedMemberBackupToGoogleDrive(
 export async function runScheduledMemberBackupOffsiteWorkflow(options: {
   createBackup?: typeof createMemberBackup;
   uploadBackup?: typeof uploadVerifiedMemberBackupToGoogleDrive;
-  pruneBackups?: typeof pruneMemberBackups;
+  preflightStorage?: () => Promise<LocalRetentionResult | null>;
+  pruneBackups?: () => Promise<LocalRetentionResult | unknown>;
+  driveRetentionPlan?: () => Promise<DriveRetentionPlan | null>;
+  finalStorage?: () => Promise<MemberBackupStorageMetrics | null>;
 } = {}) {
   const createBackup = options.createBackup ?? createMemberBackup;
   const uploadBackup = options.uploadBackup ?? uploadVerifiedMemberBackupToGoogleDrive;
-  const pruneBackups = options.pruneBackups ?? pruneMemberBackups;
+  const customCreate = Boolean(options.createBackup);
+  const verifyOffsite = async (backup: MemberBackupSummary) => Boolean(await findVerifiedMemberBackupOnGoogleDrive(backup.backupId));
+  const preflightStorage = options.preflightStorage
+    ?? (customCreate ? async () => null : () => ensureAutomaticBackupStorage({ verifyOffsite }));
+  const pruneBackups = options.pruneBackups
+    ?? (customCreate ? async () => ({ removed: [] }) : () => applyLocalCronRetention({ verifyOffsite }));
+  const driveRetentionPlan = options.driveRetentionPlan
+    ?? (customCreate ? async () => null : () => getGoogleDriveMemberBackupRetentionPlan());
+  const finalStorage = options.finalStorage
+    ?? (customCreate ? async () => null : () => readMemberBackupStorageMetrics());
+  const preflight = await preflightStorage();
   const local = await createBackup({ source: "railway_cron" });
   let offsite: GoogleDriveBackupMetadata;
   try { offsite = await uploadBackup(local.manifest.backupId); }
@@ -360,5 +516,15 @@ export async function runScheduledMemberBackupOffsiteWorkflow(options: {
     throw new GoogleDriveMemberBackupError("upload-failed", "Google Drive offsite backup failed", { cause: error, backupId: local.manifest.backupId });
   }
   const retention = await pruneBackups();
-  return { local, offsite, retention };
+  let driveRetention: DriveRetentionPlan | { dryRun: true; status: "unavailable"; code: GoogleDriveMemberBackupFailureCode } | null;
+  try { driveRetention = await driveRetentionPlan(); }
+  catch (error) {
+    driveRetention = {
+      dryRun: true,
+      status: "unavailable",
+      code: error instanceof GoogleDriveMemberBackupError ? error.code : "verification-failed",
+    };
+  }
+  const storage = await finalStorage();
+  return { local, offsite, preflight, retention, driveRetention, storage };
 }

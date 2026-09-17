@@ -41,7 +41,7 @@ export const MEMBER_BACKUP_LEGACY_VERSIONS = ["J.5D.5A-H1-v1"] as const;
 type MemberBackupVersion = typeof MEMBER_BACKUP_VERSION | (typeof MEMBER_BACKUP_LEGACY_VERSIONS)[number];
 
 type JsonRecord = Record<string, unknown>;
-type BackupSource = "manual_admin" | "railway_cron" | "test";
+export type BackupSource = "manual_admin" | "railway_cron" | "test";
 type BackupEnvironment = "production" | "test";
 
 export type OrganizationFinding = {
@@ -893,20 +893,26 @@ export async function listMemberBackups(options: { testOnlyAllowNonProduction?: 
   return summaries.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
-export async function pruneMemberBackups(retentionDays = Number(process.env.MEMBER_BACKUP_RETENTION_DAYS || 90), now = new Date()) {
-  const safeDays = Number.isFinite(retentionDays) ? Math.max(7, Math.min(3650, Math.floor(retentionDays))) : 90;
-  const threshold = now.getTime() - safeDays * 86_400_000;
-  const root = backupRoot();
-  const backups = await listMemberBackups();
-  const removed: string[] = [];
-  for (const backup of backups) {
-    if (Date.parse(backup.createdAt) >= threshold) continue;
-    const target = path.join(root, backup.backupId);
-    if (!pathInside(root, target) || path.dirname(path.resolve(target)) !== path.resolve(root) || !isValidMemberBackupId(path.basename(target))) throw new Error("Unsafe backup retention target");
-    await fs.rm(target, { recursive: true, force: false });
-    removed.push(backup.backupId);
+export async function removeVerifiedRailwayCronBackup(
+  backupId: string,
+  options: { testOnlyAllowNonProduction?: boolean } = {},
+) {
+  const verified = await verifiedBackupById(backupId, options.testOnlyAllowNonProduction === true);
+  if (verified.manifest.source !== "railway_cron") {
+    throw new Error("Only verified railway_cron member backups are eligible for automatic removal");
   }
-  return { retentionDays: safeDays, removed };
+  const root = backupRoot();
+  const target = verified.directory;
+  if (
+    !pathInside(root, target)
+    || path.dirname(path.resolve(target)) !== path.resolve(root)
+    || !isValidMemberBackupId(path.basename(target))
+    || path.basename(target).startsWith(".staging-")
+  ) {
+    throw new Error("Unsafe member backup retention target");
+  }
+  await fs.rm(target, { recursive: true, force: false });
+  return { backupId, source: verified.manifest.source, removed: true as const };
 }
 
 const CRC_TABLE = (() => {

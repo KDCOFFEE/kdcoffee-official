@@ -46,6 +46,7 @@ function fakeVerified() {
     manifest: {
       backupId,
       status: "verified",
+      source: "railway_cron",
       environment: "production",
       gitCommit: "c0d6625-test",
       createdAt: "2026-09-17T01:02:03.000Z",
@@ -183,6 +184,7 @@ await check("upload metadata includes canonical appProperties", async () => {
   assert.deepEqual(metadata.appProperties, {
     kdBackupId: backupId,
     kdBackupType: "member-backup",
+    kdSource: "railway_cron",
     kdEnvironment: "production",
     kdGitCommit: "c0d6625-test",
     kdCreatedAt: "2026-09-17T01:02:03.000Z",

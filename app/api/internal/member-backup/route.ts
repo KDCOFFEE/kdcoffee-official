@@ -3,6 +3,7 @@ import { timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 
 import { GoogleDriveMemberBackupError, runScheduledMemberBackupOffsiteWorkflow } from "@/lib/googleDriveMemberBackup";
+import { MemberBackupStorageError } from "@/lib/memberBackupRetention";
 
 export const dynamic = "force-dynamic";
 
@@ -27,7 +28,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const { local, offsite, retention } = await runScheduledMemberBackupOffsiteWorkflow();
+    const { local, offsite, preflight, retention, driveRetention, storage } = await runScheduledMemberBackupOffsiteWorkflow();
     const { manifest } = local;
     return NextResponse.json({
       ok: true,
@@ -43,9 +44,21 @@ export async function POST(request: Request) {
       backupLocation: manifest.backupLocation,
       counts: manifest.counts,
       offsite,
+      preflight,
       retention,
+      driveRetention,
+      storage,
     }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
+    if (error instanceof MemberBackupStorageError) {
+      return NextResponse.json({
+        error: "會員備份因儲存空間安全門檻暫停",
+        code: error.code,
+        storage: error.metrics,
+        eligibleCronBackupCount: error.eligibleCronBackupCount,
+        backupCreated: false,
+      }, { status: 507, headers: { "Cache-Control": "no-store" } });
+    }
     if (error instanceof GoogleDriveMemberBackupError) {
       return NextResponse.json({
         error: "會員異地備份上傳失敗；Railway verified backup 已保留",

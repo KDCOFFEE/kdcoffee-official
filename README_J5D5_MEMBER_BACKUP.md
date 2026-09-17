@@ -67,7 +67,17 @@ as `valid-empty` only when canonical member profiles contain no non-empty
   `J.5D.5A-H2-v1`.
 - Admin API requires existing Admin authentication.
 - Cron API requires a dedicated `MEMBER_BACKUP_CRON_SECRET`.
-- Retention defaults to 90 days and never accepts less than 7 days.
+- Automatic local retention is source-aware: it keeps at most the newest seven
+  verified `railway_cron` backups and never automatically removes
+  `manual_admin` backups. A cron backup is removable only after its canonical
+  Google Drive copy is verified.
+- Before either an automatic or manual backup, the service checks the capacity
+  of the canonical persistent filesystem. The default reserve floor is the
+  greater of 200 MiB or 35% of filesystem capacity. Automatic runs may reclaim
+  only old, offsite-verified cron backups; manual runs never reclaim backups.
+- Google Drive long-term retention currently runs in dry-run planning mode. It
+  proposes the latest 30 automatic backups plus the latest verified backup in
+  each of the latest 12 UTC calendar months, but performs no Drive deletion.
 
 ## Endpoints
 
@@ -89,7 +99,9 @@ as `valid-empty` only when canonical member profiles contain no non-empty
 - `GOOGLE_DRIVE_CLIENT_SECRET=<server-side OAuth client secret>`
 - `GOOGLE_DRIVE_REFRESH_TOKEN=<server-side OAuth refresh token>`
 - `GOOGLE_DRIVE_BACKUP_FOLDER_ID=<application-authorized Drive folder ID>`
-- optional: `MEMBER_BACKUP_RETENTION_DAYS=90`
+- optional: `MEMBER_BACKUP_LOCAL_MAX_CRON=7`
+- optional: `MEMBER_BACKUP_MIN_FREE_BYTES=209715200`
+- optional: `MEMBER_BACKUP_MIN_FREE_PERCENT=35`
 
 The Google credential uses the `drive.file` scope. Credentials and access
 tokens remain server-only and are never written into backups, API responses,
@@ -97,11 +109,31 @@ or logs. Scheduled uploads use Drive API v3 resumable upload and canonical
 `kdBackupId` / `kdBackupType` app properties for retry idempotency. Manual
 Admin backups remain local-only and do not run retention.
 
-A scheduler can POST once daily to:
+A scheduler should POST once daily to:
 `https://www.kdcoffee1962.com/api/internal/member-backup`
 
 with:
 `Authorization: Bearer <MEMBER_BACKUP_CRON_SECRET>`
+
+Recommended Railway cron time is `19:30 UTC`, which is `03:30 Asia/Taipei`
+on the following day. As of I2 implementation, the Railway project does not
+yet have a dedicated member-backup cron service; scheduling remains an Owner
+deployment/configuration step and is not changed by application code.
+
+The internal workflow order is:
+
+1. storage preflight and narrowly scoped safe reclamation if required;
+2. create and verify the canonical local backup;
+3. regenerate/revalidate the canonical ZIP;
+4. upload and verify Google Drive metadata;
+5. prune only eligible old local cron backups;
+6. produce a Google Drive retention dry-run plan;
+7. report final safe storage metrics.
+
+If Drive upload or verification fails, the new verified local backup remains
+and post-upload local retention is skipped. The Admin backup API remains
+local-only, never auto-prunes manual backups, and returns a safe `storage-low`
+response instead of deleting prior manual backups.
 
 ## Important
 
