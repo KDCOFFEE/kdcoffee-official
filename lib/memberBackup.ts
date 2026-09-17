@@ -942,13 +942,19 @@ function zipCentralHeader(name: Buffer, crc: number, size: number, time: number,
   return buffer;
 }
 
-export async function createMemberBackupZipStream(verified: VerifiedMemberBackup) {
+export type MemberBackupZipArtifact = {
+  body: ReadableStream<Uint8Array>;
+  bytes: number;
+};
+
+export async function createMemberBackupZipArtifact(verified: VerifiedMemberBackup): Promise<MemberBackupZipArtifact> {
   if (verified.files.length > 65_535) throw new Error("Backup contains too many files for a standard ZIP archive");
   const entries = [] as Array<{ absolutePath: string; name: Buffer; size: number; crc: number; time: number; date: number; offset: number }>;
   let offset = 0;
   for (const file of verified.files) {
     if (file.bytes > 0xffffffff) throw new Error("Backup file exceeds standard ZIP size limits");
-    const stat = await fs.stat(file.absolutePath);
+    const stat = await fs.lstat(file.absolutePath);
+    if (!stat.isFile() || stat.isSymbolicLink() || stat.size !== file.bytes) throw new Error("Verified backup changed before ZIP generation");
     const name = Buffer.from(safeRelativePath(file.archivePath), "utf8");
     const { time, date } = dosDateTime(stat.mtime);
     const crc = await crc32File(file.absolutePath);
@@ -956,6 +962,9 @@ export async function createMemberBackupZipStream(verified: VerifiedMemberBackup
     offset += 30 + name.length + stat.size;
     if (offset > 0xffffffff) throw new Error("Backup exceeds standard ZIP archive limits");
   }
+  const centralSize = entries.reduce((sum, entry) => sum + 46 + entry.name.length, 0);
+  const totalBytes = offset + centralSize + 22;
+  if (totalBytes > 0xffffffff) throw new Error("Backup exceeds standard ZIP archive limits");
   async function* archive() {
     for (const entry of entries) {
       yield zipLocalHeader(entry.name, entry.crc, entry.size, entry.time, entry.date);
@@ -972,7 +981,14 @@ export async function createMemberBackupZipStream(verified: VerifiedMemberBackup
     end.writeUInt32LE(0x06054b50, 0); end.writeUInt16LE(0, 4); end.writeUInt16LE(0, 6); end.writeUInt16LE(entries.length, 8); end.writeUInt16LE(entries.length, 10); end.writeUInt32LE(centralSize, 12); end.writeUInt32LE(centralOffset, 16); end.writeUInt16LE(0, 20);
     yield end;
   }
-  return Readable.toWeb(Readable.from(archive())) as ReadableStream<Uint8Array>;
+  return {
+    body: Readable.toWeb(Readable.from(archive())) as ReadableStream<Uint8Array>,
+    bytes: totalBytes,
+  };
+}
+
+export async function createMemberBackupZipStream(verified: VerifiedMemberBackup) {
+  return (await createMemberBackupZipArtifact(verified)).body;
 }
 
 export function currentMemberBackupDataRoot() {

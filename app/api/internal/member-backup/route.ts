@@ -2,7 +2,7 @@ import { timingSafeEqual } from "node:crypto";
 
 import { NextResponse } from "next/server";
 
-import { createMemberBackup, pruneMemberBackups } from "@/lib/memberBackup";
+import { GoogleDriveMemberBackupError, runScheduledMemberBackupOffsiteWorkflow } from "@/lib/googleDriveMemberBackup";
 
 export const dynamic = "force-dynamic";
 
@@ -27,9 +27,8 @@ export async function POST(request: Request) {
   }
 
   try {
-    const result = await createMemberBackup({ source: "railway_cron" });
-    const retention = await pruneMemberBackups();
-    const { manifest } = result;
+    const { local, offsite, retention } = await runScheduledMemberBackupOffsiteWorkflow();
+    const { manifest } = local;
     return NextResponse.json({
       ok: true,
       backupId: manifest.backupId,
@@ -43,9 +42,20 @@ export async function POST(request: Request) {
       totalReferralCount: manifest.counts.totalReferrals,
       backupLocation: manifest.backupLocation,
       counts: manifest.counts,
+      offsite,
       retention,
     }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
+    if (error instanceof GoogleDriveMemberBackupError) {
+      return NextResponse.json({
+        error: "會員異地備份上傳失敗；Railway verified backup 已保留",
+        code: error.code,
+        backupId: error.backupId ?? null,
+        googleStatus: error.googleStatus ?? null,
+        localBackupRetained: Boolean(error.backupId),
+        retentionRun: false,
+      }, { status: 502, headers: { "Cache-Control": "no-store" } });
+    }
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "會員背景備份失敗" },
       { status: 500, headers: { "Cache-Control": "no-store" } },

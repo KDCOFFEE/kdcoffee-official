@@ -370,10 +370,11 @@ async function main() {
     await expectReject(() => backupModule.getVerifiedMemberBackupForDownload(invalid, { testOnlyAllowNonProduction: true }), /Invalid member backup ID/);
   }
   const verified = await backupModule.getVerifiedMemberBackupForDownload(manifest.backupId, { testOnlyAllowNonProduction: true });
-  const zipStream = await backupModule.createMemberBackupZipStream(verified);
+  const zipArtifact = await backupModule.createMemberBackupZipArtifact(verified);
   const zipChunks: Buffer[] = [];
-  for await (const chunk of Readable.fromWeb(zipStream as never)) zipChunks.push(Buffer.from(chunk));
+  for await (const chunk of Readable.fromWeb(zipArtifact.body as never)) zipChunks.push(Buffer.from(chunk));
   const zip = Buffer.concat(zipChunks);
+  assert.equal(zipArtifact.bytes, zip.length);
   assert.equal(zip.readUInt32LE(0), 0x04034b50);
   assert.match(zip.toString("latin1"), /organization-tree\.json/);
   assert.match(zip.toString("latin1"), /raw\/orders\/ORD-1\.json/);

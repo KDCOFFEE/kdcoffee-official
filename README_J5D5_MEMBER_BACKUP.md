@@ -75,14 +75,27 @@ as `valid-empty` only when canonical member profiles contain no non-empty
 - `POST /api/admin/member-backups` — create a manual verified backup; does not
   run retention pruning, including the first Production backup
 - `GET /api/admin/member-backups/<backupId>/download` — download a revalidated ZIP
-- `POST /api/internal/member-backup` — create a cron backup with Bearer auth
+- `POST /api/internal/member-backup` — create a cron backup with Bearer auth,
+  upload its revalidated ZIP to Google Drive, verify Drive metadata, and only
+  then run local retention. Upload failure keeps the verified local backup and
+  skips retention.
 
 ## Railway variables
 
 - `KD_DATA_DIR=/data`
 - `RAILWAY_VOLUME_MOUNT_PATH=/data`
 - `MEMBER_BACKUP_CRON_SECRET=<long random secret>` (needed only for the future cron route)
+- `GOOGLE_DRIVE_CLIENT_ID=<server-side OAuth client ID>`
+- `GOOGLE_DRIVE_CLIENT_SECRET=<server-side OAuth client secret>`
+- `GOOGLE_DRIVE_REFRESH_TOKEN=<server-side OAuth refresh token>`
+- `GOOGLE_DRIVE_BACKUP_FOLDER_ID=<application-authorized Drive folder ID>`
 - optional: `MEMBER_BACKUP_RETENTION_DAYS=90`
+
+The Google credential uses the `drive.file` scope. Credentials and access
+tokens remain server-only and are never written into backups, API responses,
+or logs. Scheduled uploads use Drive API v3 resumable upload and canonical
+`kdBackupId` / `kdBackupType` app properties for retry idempotency. Manual
+Admin backups remain local-only and do not run retention.
 
 A scheduler can POST once daily to:
 `https://www.kdcoffee1962.com/api/internal/member-backup`
@@ -94,5 +107,6 @@ with:
 
 Before the first Production run, the Owner should review the diff, deploy it,
 sign in as Admin, make exactly one Admin POST, inspect the returned Production
-provenance and counts, download the ZIP, and verify the ZIP off Railway. This
-phase does not call that endpoint and does not upload offsite automatically.
+provenance and counts, download the ZIP, and verify the ZIP off Railway.
+Development and automated tests must mock Drive HTTP calls and must not call
+the Production endpoint or a real Google Drive account.
