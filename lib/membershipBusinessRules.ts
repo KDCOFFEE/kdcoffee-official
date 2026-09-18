@@ -89,6 +89,8 @@ export const DEFAULT_MEMBERSHIP_RULES: MembershipBusinessRules = {
     referralRewardCalculationMode: "paid_amount",
     pointDisplayName: "KD點",
     selfPurchaseRewardRate: 5,
+    selfPurchaseEligibilityMode:
+      "after_prior_valid_consumption",
     payoutQualification: {
       mode: "either",
       qualificationBasis: "money",
@@ -323,7 +325,15 @@ export function validateMembershipBusinessRules(value: unknown, options: Members
   }
   validateOwnerChoice(rules.referral.referralRewardCalculationMode, ["paid_amount", "pv"], "推薦獎勵計算方式");
   if (typeof rules.referral.pointDisplayName !== "string" || !rules.referral.pointDisplayName.trim() || rules.referral.pointDisplayName.trim().length > 24) throw new MembershipRulesValidationError("點數顯示名稱需為 1～24 個字元");
-  if (typeof rules.referral.selfPurchaseRewardRate !== "number" || !Number.isFinite(rules.referral.selfPurchaseRewardRate) || rules.referral.selfPurchaseRewardRate < 0 || rules.referral.selfPurchaseRewardRate > 100) throw new MembershipRulesValidationError("會員續購回饋比例不正確");
+  if (typeof rules.referral.selfPurchaseRewardRate !== "number" || !Number.isFinite(rules.referral.selfPurchaseRewardRate) || rules.referral.selfPurchaseRewardRate < 0 || rules.referral.selfPurchaseRewardRate > 100) throw new MembershipRulesValidationError("會員本人消費回饋比例不正確");
+  validateOwnerChoice(
+    rules.referral.selfPurchaseEligibilityMode,
+    [
+      "first_completed_order",
+      "after_prior_valid_consumption",
+    ],
+    "會員本人消費回饋起算方式",
+  );
   if (!object(rules.referral.payoutQualification)) throw new MembershipRulesValidationError("推薦獎勵領取資格設定不完整");
   const payout = rules.referral.payoutQualification;
   validateOwnerChoice(payout.mode, ["general", "subscription", "either", "both"], "推薦獎勵資格判定模式");

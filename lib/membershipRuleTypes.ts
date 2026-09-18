@@ -22,6 +22,10 @@ export type ReferralPayoutQualificationMode = "general" | "subscription" | "eith
 export type ReferralExcessConsumptionMode = "reset" | "carry";
 export type ReferralQualificationBasis = "money" | "pv";
 
+export type SelfPurchaseEligibilityMode =
+  | "first_completed_order"
+  | "after_prior_valid_consumption";
+
 export type ReferralPayoutQualificationRules = {
   mode: ReferralPayoutQualificationMode;
   qualificationBasis: ReferralQualificationBasis;
@@ -57,8 +61,13 @@ export type MembershipBusinessRules = {
     referralRewardCalculationMode: "paid_amount" | "pv";
     /** Owner-editable display name for the internal PV unit. Internal data fields remain PV for compatibility. */
     pointDisplayName: string;
-    /** Owner-editable reward rate for a member's own repeat purchases. */
+    /** Owner-editable reward rate for a member's own purchases. */
     selfPurchaseRewardRate: number;
+    /**
+     * Controls when the member's own completed-order reward starts.
+     * Legacy rules missing this field normalize to after_prior_valid_consumption.
+     */
+    selfPurchaseEligibilityMode: SelfPurchaseEligibilityMode;
     payoutQualification: ReferralPayoutQualificationRules;
     /** Legacy per-reward forward window. Do not reinterpret as payoutQualification.rewardCoverage. */
     referralRewardQualificationWindowDays: number;

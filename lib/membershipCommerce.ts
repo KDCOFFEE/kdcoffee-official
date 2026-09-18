@@ -866,9 +866,41 @@ export async function handleCanonicalOrderOutcome(input: { orderId: string; outc
   }
 
   if (input.memberId && input.outcome === "completed") {
-    const hadPriorValidConsumption = Object.values(snapshot.validConsumptionEvents).some((item) => item.memberId === input.memberId && item.sourceOrderId !== input.orderId);
-    if (hadPriorValidConsumption) {
-      await createSelfPurchaseRewardFromFulfillment({ sourceMemberId: input.memberId, orderId: input.orderId, paidAmountBasis: input.merchandiseAmount, basePV: input.basePV, effectivePV: input.effectivePV, discountRatio: input.discountRatio, idempotencyKey: `${input.idempotencyKey}:self-repeat-v1`, now: input.now, stateFilePath: input.stateFilePath, rulesFilePath: input.rulesFilePath });
+    const activeRules =
+      await getActiveMembershipRules(
+        input.now,
+        input.rulesFilePath,
+      );
+
+    const hadPriorValidConsumption =
+      Object.values(
+        snapshot.validConsumptionEvents,
+      ).some(
+        (item) =>
+          item.memberId === input.memberId &&
+          item.sourceOrderId !== input.orderId,
+      );
+
+    const selfPurchaseEligible =
+      activeRules.rules.referral
+        .selfPurchaseEligibilityMode ===
+        "first_completed_order" ||
+      hadPriorValidConsumption;
+
+    if (selfPurchaseEligible) {
+      await createSelfPurchaseRewardFromFulfillment({
+        sourceMemberId: input.memberId,
+        orderId: input.orderId,
+        paidAmountBasis: input.merchandiseAmount,
+        basePV: input.basePV,
+        effectivePV: input.effectivePV,
+        discountRatio: input.discountRatio,
+        idempotencyKey:
+          `${input.idempotencyKey}:self-repeat-v1`,
+        now: input.now,
+        stateFilePath: input.stateFilePath,
+        rulesFilePath: input.rulesFilePath,
+      });
     }
   }
 
@@ -2246,7 +2278,7 @@ export async function createReferralRewardsFromFulfillment(input: { sourceMember
   }, { now: input.now, filePath: input.stateFilePath });
 }
 
-/** Creates a member's own repeat-purchase reward after at least one prior valid consumption. */
+/** Creates a member's own completed-order reward after the caller applies the configured eligibility start mode. */
 export async function createSelfPurchaseRewardFromFulfillment(input: { sourceMemberId: string; orderId: string; paidAmountBasis: number; basePV?: number; discountRatio?: number; effectivePV?: number; idempotencyKey: string; now?: Date; stateFilePath?: string; rulesFilePath?: string }) {
   const version = await getActiveMembershipRules(input.now, input.rulesFilePath);
   const key = `self-purchase-reward:create:${input.idempotencyKey}`;
@@ -3012,6 +3044,26 @@ export async function getMemberReferralCenter(memberId: string, options: { baseU
   const uniqueOrderNumbers = [...new Set(rewards.map((item) => item.sourceOrderNumber).filter(Boolean))];
   const orderPairs = await Promise.all(uniqueOrderNumbers.map(async (orderNumber) => [orderNumber, await readOrder(orderNumber)] as const));
   const sourceOrders = new Map(orderPairs);
+
+  const qualificationCoverageByRewardId =
+    new Map(
+      Object.values(
+        state.referralRewardCoverages,
+      ).map((coverage) => [
+        coverage.referralRewardId,
+        coverage,
+      ]),
+    );
+
+  const qualificationMaturationByRewardId =
+    new Map(
+      Object.values(
+        state.referralRewardMaturations,
+      ).map((maturation) => [
+        maturation.referralRewardId,
+        maturation,
+      ]),
+    );
   const safeOrderItems = (order: Awaited<ReturnType<typeof readOrder>>) => Array.isArray(order?.items)
     ? order.items.slice(0, 20).map((raw: unknown) => {
         const item = raw && typeof raw === "object" && !Array.isArray(raw) ? raw as Record<string, unknown> : {};
@@ -3036,7 +3088,18 @@ export async function getMemberReferralCenter(memberId: string, options: { baseU
 
   return { referralCode, referralUrl, mode: version.rules.referral.referralRewardCalculationMode, pointDisplayName, qualificationProgress, pvDisclosure: version.rules.referral.referralRewardCalculationMode === "pv" ? `本制度以 ${pointDisplayName} 計算，非商品售價百分比。${pointDisplayName} 是商品回饋計算單位，不是貨幣或可交易資產。` : null, maxDepth: depth, summaries, nodes, orgChart, rewards: rewards.map((item) => {
     const sourceOrder = sourceOrders.get(item.sourceOrderNumber);
-    return { rewardId: item.rewardId, sourceOrderNumber: item.sourceOrderNumber, sourceOrderCreatedAt: sourceOrder?.createdAt ?? null, sourceMemberNumber: registry.members[item.sourceMemberId]?.memberNumber ?? "KD-會員", sourceItems: safeOrderItems(sourceOrder ?? null), referralLevel: item.referralLevel, rewardType: item.rewardType, calculationMode: item.calculationMode, effectivePV: item.effectivePV, rewardRate: item.rewardRate, rewardPV: item.rewardPV, creditAmount: item.calculatedCreditAmount, projectedCreditAmount: item.projectedCreditAmount ?? item.calculatedCreditAmount, status: item.status, cancellationReason: item.cancellationReason ?? null, qualificationStatus: item.qualificationStatus ?? "legacy", qualificationExpiresAt: item.qualificationExpiresAt ?? null, qualificationOrderNumber: item.qualificationOrderNumber ?? null, qualificationOrderCreatedAt: item.qualificationOrderCreatedAt ?? null, qualificationOrderFinalState: item.qualificationOrderFinalState ?? null, qualificationQualifiedAt: item.qualificationQualifiedAt ?? null, successfulPickupBusinessDate: item.successfulPickupBusinessDate ?? null, releaseEligibleBusinessDate: item.releaseEligibleBusinessDate ?? item.scheduledReleaseAt?.slice(0, 10) ?? null, releasedAt: item.releasedAt };
+
+    const qualificationCoverage =
+      qualificationCoverageByRewardId.get(
+        item.rewardId,
+      ) ?? null;
+
+    const qualificationMaturation =
+      qualificationMaturationByRewardId.get(
+        item.rewardId,
+      ) ?? null;
+
+    return { rewardId: item.rewardId, sourceOrderNumber: item.sourceOrderNumber, sourceOrderCreatedAt: sourceOrder?.createdAt ?? null, sourceMemberNumber: registry.members[item.sourceMemberId]?.memberNumber ?? "KD-會員", sourceItems: safeOrderItems(sourceOrder ?? null), referralLevel: item.referralLevel, rewardType: item.rewardType, calculationMode: item.calculationMode, effectivePV: item.effectivePV, rewardRate: item.rewardRate, rewardPV: item.rewardPV, creditAmount: item.calculatedCreditAmount, projectedCreditAmount: item.projectedCreditAmount ?? item.calculatedCreditAmount, status: item.status, cancellationReason: item.cancellationReason ?? null, qualificationStatus: item.qualificationStatus ?? "legacy", qualificationAuthority: referralRewardQualificationAuthority(item), qualificationCoverage: qualificationCoverage ? { qualificationRoundId: qualificationCoverage.qualificationRoundId, qualificationAt: qualificationCoverage.qualificationAt, coverageStartsAt: qualificationCoverage.coverageStartsAt, coverageEndsAt: qualificationCoverage.coverageEndsAt } : null, qualificationMaturation: qualificationMaturation ? { maturesAt: qualificationMaturation.maturesAt, maturedAt: qualificationMaturation.maturedAt } : null, qualificationExpiresAt: item.qualificationExpiresAt ?? null, qualificationOrderNumber: item.qualificationOrderNumber ?? null, qualificationOrderCreatedAt: item.qualificationOrderCreatedAt ?? null, qualificationOrderFinalState: item.qualificationOrderFinalState ?? null, qualificationQualifiedAt: item.qualificationQualifiedAt ?? null, successfulPickupBusinessDate: item.successfulPickupBusinessDate ?? null, releaseEligibleBusinessDate: item.releaseEligibleBusinessDate ?? item.scheduledReleaseAt?.slice(0, 10) ?? null, releasedAt: item.releasedAt };
   }) };
 }
 

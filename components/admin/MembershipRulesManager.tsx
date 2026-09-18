@@ -16,7 +16,7 @@ type Props = {
 };
 
 const fieldHelpKeys: Record<string, string> = {
-  "未免運時的定期購運費": "shipping.subscriptionShippingFee", "定期購價格": "subscription.discountPercent", "修改期限": "subscription.modificationCutoffDays", "建立訂單": "subscription.orderCreationLeadDays", "一般備貨至少": "subscription.preparationLeadDays", "專屬烘焙至少": "subscription.customRoastPreparationLeadDays", "未取貨停止": "subscription.uncollectedTerminationCount", "每期最多修改": "subscription.maxModificationsPerCycle", "自訂最少": "subscription.customCycleMinDays", "自訂最多": "subscription.customCycleMaxDays", "會員選配送日期方式": "subscription.datePickerMode", "獎勵代數": "referral.referralMaxRewardDepth", "獎勵計算方式": "referral.referralRewardCalculationMode", "點數顯示名稱": "referral.pointDisplayName", "會員續購回饋": "referral.selfPurchaseRewardRate", "推薦獎勵領取資格期限": "referral.referralRewardQualificationWindowDays", "推薦獎勵基礎等待天數": "referral.referralRewardBaseWaitingDays", "推薦獎勵退貨保護天數": "referral.referralRewardReturnProtectionDays", "單筆全組織上限": "referral.referralTotalRewardCap", "單一會員每月上限": "referral.referralMonthlyCreditCap", "每 1 PV 換算": "referral.pvRewardMoneyValue", "一般商品最少備貨": "pickup.preparationLeadDays", "專屬烘焙最少備貨": "pickup.customRoastPreparationLeadDays", "自取日期選擇方式": "pickup.datePickerMode", "完成第幾次開始送": "gift.startsAtFulfillment", "開始後每隔": "gift.repeatEveryFulfillments", "半磅贈品": "gift.halfPoundQuantity", "一磅贈品": "gift.onePoundQuantity", "有效期限": "credit.expiryCalendarMonths", "到期前提醒": "credit.expiryReminderDays", "每筆最高折抵": "credit.redemption", "最高折抵": "credit.redemption", "每筆至少應付": "credit.redemption", "最高折抵商品金額": "credit.redemption", "抵用金是否可折運費": "credit.appliesToShipping", "會員使用抵用金方式": "credit.uiMode", "活動適用定期購時": "campaign.eligiblePricingMode", "暫停後恢復配送日期": "subscription.pauseResumeAnchorPolicy", "折扣金額有小數時": "money.roundingMode", "下一期前幾天提醒": "notification.nextCycleReminderDays", "修改截止前幾天提醒": "notification.modificationCutoffReminderDays", "通知失敗最多重試": "notification.retryCount", "到店後第幾天提醒": "fulfillment.arrivalReminderAfterDays", "Gmail 每次回看": "fulfillment.gmailScanLookbackDays",
+  "未免運時的定期購運費": "shipping.subscriptionShippingFee", "定期購價格": "subscription.discountPercent", "修改期限": "subscription.modificationCutoffDays", "建立訂單": "subscription.orderCreationLeadDays", "一般備貨至少": "subscription.preparationLeadDays", "專屬烘焙至少": "subscription.customRoastPreparationLeadDays", "未取貨停止": "subscription.uncollectedTerminationCount", "每期最多修改": "subscription.maxModificationsPerCycle", "自訂最少": "subscription.customCycleMinDays", "自訂最多": "subscription.customCycleMaxDays", "會員選配送日期方式": "subscription.datePickerMode", "獎勵代數": "referral.referralMaxRewardDepth", "獎勵計算方式": "referral.referralRewardCalculationMode", "點數顯示名稱": "referral.pointDisplayName", "會員本人消費回饋": "referral.selfPurchaseRewardRate", "本人消費回饋起算": "referral.selfPurchaseEligibilityMode", "推薦獎勵領取資格期限": "referral.referralRewardQualificationWindowDays", "推薦獎勵基礎等待天數": "referral.referralRewardBaseWaitingDays", "推薦獎勵退貨保護天數": "referral.referralRewardReturnProtectionDays", "單筆全組織上限": "referral.referralTotalRewardCap", "單一會員每月上限": "referral.referralMonthlyCreditCap", "每 1 PV 換算": "referral.pvRewardMoneyValue", "一般商品最少備貨": "pickup.preparationLeadDays", "專屬烘焙最少備貨": "pickup.customRoastPreparationLeadDays", "自取日期選擇方式": "pickup.datePickerMode", "完成第幾次開始送": "gift.startsAtFulfillment", "開始後每隔": "gift.repeatEveryFulfillments", "半磅贈品": "gift.halfPoundQuantity", "一磅贈品": "gift.onePoundQuantity", "有效期限": "credit.expiryCalendarMonths", "到期前提醒": "credit.expiryReminderDays", "每筆最高折抵": "credit.redemption", "最高折抵": "credit.redemption", "每筆至少應付": "credit.redemption", "最高折抵商品金額": "credit.redemption", "抵用金是否可折運費": "credit.appliesToShipping", "會員使用抵用金方式": "credit.uiMode", "活動適用定期購時": "campaign.eligiblePricingMode", "暫停後恢復配送日期": "subscription.pauseResumeAnchorPolicy", "折扣金額有小數時": "money.roundingMode", "下一期前幾天提醒": "notification.nextCycleReminderDays", "修改截止前幾天提醒": "notification.modificationCutoffReminderDays", "通知失敗最多重試": "notification.retryCount", "到店後第幾天提醒": "fulfillment.arrivalReminderAfterDays", "Gmail 每次回看": "fulfillment.gmailScanLookbackDays",
 };
 
 function RuleFieldTitle({ label, ruleKey }: { label: string; ruleKey?: string }) {
@@ -195,9 +195,49 @@ export default function MembershipRulesManager({ initialRevision, initialVersion
         <NumberField label="獎勵代數" value={rules.referral.referralMaxRewardDepth} min={1} max={10} unit="代" onChange={(value) => change((draft) => { draft.referral.referralMaxRewardDepth = value; while (draft.referral.levels.length < value) { const level=draft.referral.levels.length+1; draft.referral.levels.push({level,enabled:true,newReferralRewardRate:0,repeatPurchaseRewardRate:0,subscriptionRewardRate:0}); } })} />
         <Choice label="獎勵計算方式" value={rules.referral.referralRewardCalculationMode} onChange={(value) => change((draft) => { draft.referral.referralRewardCalculationMode = value as "paid_amount"|"pv"; })}><option value="paid_amount">商品實付金額</option><option value="pv">{rules.referral.pointDisplayName || "KD點"} 商品獎勵單位</option></Choice>
         <TextField label="點數顯示名稱" value={rules.referral.pointDisplayName} placeholder="例如：KD點" onChange={(value) => change((draft) => { draft.referral.pointDisplayName = value; })} />
-        <NumberField label="會員續購回饋" value={rules.referral.selfPurchaseRewardRate} min={0} max={100} unit="%" onChange={(value) => change((draft) => { draft.referral.selfPurchaseRewardRate = value; })} />
+        <NumberField
+          label="會員本人消費回饋"
+          value={rules.referral.selfPurchaseRewardRate}
+          min={0}
+          max={100}
+          unit="%"
+          onChange={(value) =>
+            change((draft) => {
+              draft.referral.selfPurchaseRewardRate =
+                value;
+            })
+          }
+        />
+
+        <Choice
+          label="本人消費回饋起算"
+          value={
+            rules.referral
+              .selfPurchaseEligibilityMode
+          }
+          onChange={(value) =>
+            change((draft) => {
+              draft.referral.selfPurchaseEligibilityMode =
+                value as MembershipBusinessRules["referral"]["selfPurchaseEligibilityMode"];
+            })
+          }
+        >
+          <option value="first_completed_order">
+            首筆完成訂單立即回饋
+          </option>
+
+          <option value="after_prior_valid_consumption">
+            第二筆完成消費起回饋
+          </option>
+        </Choice>
       </div>
-      <p className="membership-inline-note">會員續購回饋目前先保存為 Owner 可調整設定；實際自己消費回饋入帳會在下一階段接入 Reward Engine。</p>
+
+      <p className="membership-inline-note">
+        {rules.referral.selfPurchaseEligibilityMode ===
+        "first_completed_order"
+          ? `會員第一筆成功完成的訂單即可依目前 ${rules.referral.selfPurchaseRewardRate}% 設定建立本人消費回饋。`
+          : `會員需先有一筆有效完成消費；之後成功完成的訂單才依目前 ${rules.referral.selfPurchaseRewardRate}% 設定建立本人消費回饋。`}
+      </p>
       <fieldset className="membership-intervals">
         <legend>推薦獎勵領取資格</legend>
         <p>此區直接控制會員是否取得推薦獎勵領取資格；只改變資格判定，不會改變推薦比例、獎勵點數或既有入帳流程。</p>

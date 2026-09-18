@@ -53,6 +53,19 @@ type Center = {
     status: string;
     cancellationReason: string | null;
     qualificationStatus: string;
+    qualificationAuthority:
+      | "legacy_order"
+      | "qualification_coverage";
+    qualificationCoverage: {
+      qualificationRoundId: string;
+      qualificationAt: string;
+      coverageStartsAt: string;
+      coverageEndsAt: string;
+    } | null;
+    qualificationMaturation: {
+      maturesAt: string;
+      maturedAt: string;
+    } | null;
     qualificationExpiresAt: string | null;
     qualificationOrderNumber: string | null;
     qualificationOrderCreatedAt: string | null;
@@ -322,7 +335,43 @@ export default function MemberReferralCenter() {
             </select>
           </div>
           {pagedRewards.length ? <div className="member-reward-ledger-list">{pagedRewards.map((reward) => {
-          const qualificationLabel = reward.qualificationStatus === "awaiting_order" ? "待完成資格消費" : reward.qualificationStatus === "awaiting_completion" ? "等待訂單完成" : reward.qualificationStatus === "qualified" ? "已取得資格・等待發放" : reward.qualificationStatus === "expired" ? "資格已逾期" : "歷史獎勵";
+          const isCoverageQualification =
+            reward.qualificationAuthority ===
+            "qualification_coverage";
+
+          const hasQualificationCoverage =
+            isCoverageQualification &&
+            Boolean(
+              reward.qualificationCoverage,
+            );
+
+          const effectiveQualificationStatus =
+            hasQualificationCoverage
+              ? "qualified"
+              : reward.qualificationStatus;
+
+          const qualificationLabel =
+            effectiveQualificationStatus ===
+            "awaiting_order"
+              ? "待取得回饋資格"
+              : effectiveQualificationStatus ===
+                  "awaiting_completion"
+                ? "等待資格訂單完成"
+                : effectiveQualificationStatus ===
+                    "qualified"
+                  ? "資格已確認・等待入帳"
+                  : effectiveQualificationStatus ===
+                      "expired"
+                    ? "資格已逾期"
+                    : "歷史回饋";
+
+          const qualificationDisplayUntil =
+            hasQualificationCoverage
+              ? reward
+                  .qualificationCoverage
+                  ?.coverageEndsAt ?? null
+              : reward
+                  .qualificationExpiresAt;
           const itemText = reward.sourceItems.length ? reward.sourceItems.map((item) => `${item.name}${item.optionLabel ? `・${item.optionLabel}` : ""}${item.optionDetail ? ` ${item.optionDetail}` : ""}${item.preparationLabel ? `・${item.preparationLabel}` : ""} × ${item.quantity}`).join("、") : "來源訂單商品明細未保留";
           const basis = reward.calculationMode === "pv" ? `${reward.effectivePV.toLocaleString("zh-TW")} ${displayPointName} × ${reward.rewardRate.toLocaleString("zh-TW", { maximumFractionDigits: 2 })}%` : `依正式回饋規則 × ${reward.rewardRate.toLocaleString("zh-TW", { maximumFractionDigits: 2 })}%`;
           const q = data.displayRules.payoutQualification;
@@ -344,20 +393,40 @@ export default function MemberReferralCenter() {
               : q.mode === "both"
                 ? `需同時符合一般會員最近 ${q.generalMember.windowDays} 天累積${qualificationMetric}達 ${qualificationThreshold(q.generalMember.threshold)}，以及有效定期配送會員最近 ${q.activeSubscriptionMember.windowDays} 天累積${qualificationMetric}達 ${qualificationThreshold(q.activeSubscriptionMember.threshold)}。`
                 : `一般會員最近 ${q.generalMember.windowDays} 天累積${qualificationMetric}達 ${qualificationThreshold(q.generalMember.threshold)}，或有效定期配送會員最近 ${q.activeSubscriptionMember.windowDays} 天累積${qualificationMetric}達 ${qualificationThreshold(q.activeSubscriptionMember.threshold)}，任一條件符合即可。`;
-          const qualificationDetail = reward.qualificationStatus === "awaiting_order"
-            ? "尚待完成符合資格的有效消費，系統會在符合條件的訂單完成後自動判定。"
-            : reward.qualificationStatus === "awaiting_completion"
-              ? `資格訂單${reward.qualificationOrderNumber ? ` ${reward.qualificationOrderNumber}` : ""} 已建立，等待訂單完成。`
-              : reward.qualificationStatus === "qualified"
-                ? `資格已完成，正在等待發放安全期。基礎等待 ${data.displayRules.baseWaitingDays} 天＋退貨保護 ${data.displayRules.returnProtectionDays} 天。`
-                : reward.qualificationStatus === "expired"
-                  ? "本筆回饋資格期限已結束。"
-                  : "本筆依建立時保存的歷史回饋規則處理。";
-          const lifecycleStage = reward.status === "released"
-            ? 4
-            : reward.qualificationStatus === "qualified"
-              ? 3
-              : 2;
+          const qualificationDetail =
+            hasQualificationCoverage
+              ? `本筆回饋已由目前有效的推薦回饋資格涵蓋，資格已確認。現在進入安全等待期；基礎等待 ${data.displayRules.baseWaitingDays} 天＋退貨保護 ${data.displayRules.returnProtectionDays} 天。`
+              : effectiveQualificationStatus ===
+                  "awaiting_order"
+                ? "目前尚未取得本筆回饋所需的有效資格，系統會在符合條件後自動判定。"
+                : effectiveQualificationStatus ===
+                    "awaiting_completion"
+                  ? `資格訂單${reward.qualificationOrderNumber ? ` ${reward.qualificationOrderNumber}` : ""} 已建立，正在等待訂單完成。`
+                  : effectiveQualificationStatus ===
+                      "qualified"
+                    ? `資格已確認，現在進入安全等待期；基礎等待 ${data.displayRules.baseWaitingDays} 天＋退貨保護 ${data.displayRules.returnProtectionDays} 天。`
+                    : effectiveQualificationStatus ===
+                        "expired"
+                      ? "本筆回饋資格期限已結束。"
+                      : "本筆依建立時保存的歷史回饋規則處理。";
+
+          const lifecycleStage =
+            reward.status === "released"
+              ? 4
+              : effectiveQualificationStatus ===
+                  "qualified"
+                ? 3
+                : 2;
+
+          const lifecycleLabels = [
+            "回饋產生",
+            effectiveQualificationStatus ===
+            "qualified"
+              ? "資格已確認"
+              : "等待資格確認",
+            "安全等待",
+            "正式入帳",
+          ];
           const rewardCanStillRelease =
             reward.status === "scheduled"
             && reward.qualificationStatus !== "expired";
@@ -419,15 +488,15 @@ export default function MemberReferralCenter() {
                 </div>
 
                 <div className="member-reward-qualification-explain">
-                  <strong>{reward.qualificationStatus === "expired" ? "資格結果" : "我要怎麼符合資格？"}</strong>
+                  <strong>{effectiveQualificationStatus === "qualified" ? "本筆回饋資格狀態" : effectiveQualificationStatus === "expired" ? "資格結果" : "我要怎麼符合資格？"}</strong>
                   <p><b>目前規則參考：</b>{qualificationRuleText}</p>
                   <p><b>目前狀態：</b>{qualificationDetail}</p>
-                  {reward.qualificationExpiresAt ? <p><b>資格期限：</b>{formatDate(reward.qualificationExpiresAt)}</p> : null}
+                  {qualificationDisplayUntil ? <p><b>{hasQualificationCoverage ? "資格有效至：" : "資格期限："}</b>{formatDate(qualificationDisplayUntil)}</p> : null}
                   {reward.releaseEligibleBusinessDate && reward.status === "scheduled" ? <p><b>預計可發放日期：</b>{reward.releaseEligibleBusinessDate.replaceAll("-", "/")}</p> : null}
                 </div>
 
                 <div className="member-reward-lifecycle" aria-label="回饋入帳進度">
-                  {["回饋產生", "資格確認", "安全等待", "正式入帳"].map((label, index) => {
+                  {lifecycleLabels.map((label, index) => {
                     const step = index + 1;
                     return <span key={label} className={step < lifecycleStage ? "is-done" : step === lifecycleStage ? "is-current" : ""}><i>{step < lifecycleStage ? "✓" : step}</i>{label}</span>;
                   })}

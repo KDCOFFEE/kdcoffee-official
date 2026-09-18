@@ -21,7 +21,7 @@ const checks = [
   ["admin exposes subscription renewal referral rate", manager.includes('label="定期購續期"')],
   ["normal follow-up orders are classified as repeat_purchase", commerce.includes('alreadyHadFirstReferralPurchase ? "repeat_purchase" : "new_referral"')],
   ["first-purchase marker remains canonical", commerce.includes('item.type === "referral_new_qualified"')],
-  ["member self-purchase reward is created only after prior valid consumption", commerce.includes("hadPriorValidConsumption") && commerce.includes("createSelfPurchaseRewardFromFulfillment")],
+  ["member self-purchase reward supports configurable first-order or prior-consumption eligibility", commerce.includes("selfPurchaseEligibilityMode") && commerce.includes('"first_completed_order"') && commerce.includes("hadPriorValidConsumption") && commerce.includes("createSelfPurchaseRewardFromFulfillment")],
   ["self-purchase reward uses Owner-configurable rate", commerce.includes("const rewardRate = rules.selfPurchaseRewardRate")],
   ["self-purchase reward is separate from referral monthly cap", commerce.includes('reward.rewardType === "self_purchase" ? 0 : Object.values(state.referralRewards)')],
   ["refund/cancellation reversal still applies by source order", commerce.includes("cancelOrReverseReferralRewards") && commerce.includes("item.sourceOrderNumber === input.orderId")],
