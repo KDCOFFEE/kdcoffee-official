@@ -155,6 +155,66 @@ export type QualificationPathEvaluation = {
   passed: boolean;
 };
 
+export type MemberReferralQualificationEvidence = {
+  eventId: string;
+  orderNumber: string;
+  finalizedAt: string;
+  amount: number;
+  remainingAmount: number;
+  activeSubscriptionAtCompletion: boolean;
+};
+
+export type MemberReferralQualificationPath = {
+  path: "general" | "subscription";
+  windowDays: number;
+  windowStartedAt: string;
+  windowEndedAt: string;
+  threshold: number;
+  cumulativeAmount: number;
+  remainingToThreshold: number;
+  progressPercent: number;
+  activeSubscriptionRequired: boolean;
+  activeSubscriptionSatisfied: boolean;
+  passed: boolean;
+  evidence: MemberReferralQualificationEvidence[];
+};
+
+export type MemberReferralQualificationCoverageEvidence = {
+  eventId: string;
+  orderNumber: string;
+  finalizedAt: string;
+  eventAmount: number;
+  allocatedAmount: number;
+  cumulativeAllocatedAmount: number;
+  triggeredQualification: boolean;
+  activeSubscriptionAtCompletion: boolean;
+};
+
+export type MemberReferralQualificationProgress = {
+  mode: MembershipBusinessRules["referral"]["payoutQualification"]["mode"];
+  qualificationBasis: MembershipBusinessRules["referral"]["payoutQualification"]["qualificationBasis"];
+  pointDisplayName: string;
+  activeSubscriptionNow: boolean;
+  isQualifiedNow: boolean;
+  progressConditionsPassed: boolean;
+  status: "qualified" | "ready_on_next_completion" | "in_progress";
+  activeCoverage: {
+    roundId: string;
+    qualifiedAt: string;
+    coverageStartsAt: string;
+    coverageEndsAt: string;
+    selectedPaths: Array<"general" | "subscription">;
+    rulesVersion: number;
+    qualificationBasis: "money" | "pv";
+    consumedAmount: number;
+    availableAmountBefore: number;
+    remainingAmountAfter: number;
+    sourceEvidence: MemberReferralQualificationCoverageEvidence[];
+  } | null;
+  general: MemberReferralQualificationPath;
+  subscription: MemberReferralQualificationPath;
+};
+
 export type QualificationRound = {
   roundId: string;
   memberId: string;
@@ -1614,6 +1674,306 @@ function qualificationCoverageInterval(round: QualificationRound) {
   };
 }
 
+export function buildMemberReferralQualificationProgress(input: {
+  state: MembershipCommerceState;
+  rulesVersion: RulesVersion;
+  memberId: string;
+  now?: Date;
+}): MemberReferralQualificationProgress {
+  const now = input.now ?? new Date();
+
+  const qualificationRules =
+    input.rulesVersion.rules.referral.payoutQualification;
+
+  const basis =
+    qualificationBasisFromRules(qualificationRules);
+
+  const remaining =
+    remainingConsumptionByEvent(
+      input.state,
+      basis,
+    );
+
+  const activeSubscriptionNow =
+    hasActiveSubscription(
+      input.state,
+      input.memberId,
+    );
+
+  const generalThreshold =
+    basis === "pv"
+      ? qualificationRules.generalMember
+          .cumulativeValidPVThreshold
+      : qualificationRules.generalMember
+          .cumulativeValidConsumptionThreshold;
+
+  const subscriptionThreshold =
+    basis === "pv"
+      ? qualificationRules.activeSubscriptionMember
+          .cumulativeValidPVThreshold
+      : qualificationRules.activeSubscriptionMember
+          .cumulativeValidConsumptionThreshold;
+
+  const generalEvaluation =
+    evaluateQualificationPath({
+      state: input.state,
+      memberId: input.memberId,
+      finalizedAt: now,
+      windowDays:
+        qualificationRules.generalMember
+          .rollingWindowDays,
+      basis,
+      threshold: generalThreshold,
+      remaining,
+      activeSubscriptionRequired: false,
+      activeSubscriptionSatisfied: true,
+    });
+
+  const subscriptionEvaluation =
+    evaluateQualificationPath({
+      state: input.state,
+      memberId: input.memberId,
+      finalizedAt: now,
+      windowDays:
+        qualificationRules.activeSubscriptionMember
+          .rollingWindowDays,
+      basis,
+      threshold: subscriptionThreshold,
+      remaining,
+      activeSubscriptionRequired: true,
+      activeSubscriptionSatisfied:
+        activeSubscriptionNow,
+    });
+
+  const evidenceFor = (
+    evaluation: QualificationPathEvaluation,
+  ): MemberReferralQualificationEvidence[] =>
+    evaluation.eligibleEventIds
+      .map((eventId) => {
+        const event =
+          input.state.validConsumptionEvents[
+            eventId
+          ];
+
+        if (!event) return null;
+
+        return {
+          eventId,
+          orderNumber: event.sourceOrderId,
+          finalizedAt: event.finalizedAt,
+          amount:
+            qualificationBasisValue(
+              event,
+              basis,
+            ),
+          remainingAmount:
+            remaining.get(eventId) ?? 0,
+          activeSubscriptionAtCompletion:
+            event.activeSubscriptionAtCompletion,
+        };
+      })
+      .filter(
+        (
+          item,
+        ): item is MemberReferralQualificationEvidence =>
+          Boolean(item),
+      );
+
+  const pathView = (
+    path: "general" | "subscription",
+    evaluation: QualificationPathEvaluation,
+  ): MemberReferralQualificationPath => ({
+    path,
+    windowDays: evaluation.windowDays,
+    windowStartedAt:
+      evaluation.windowStartedAt,
+    windowEndedAt:
+      evaluation.windowEndedAt,
+    threshold: evaluation.threshold,
+    cumulativeAmount:
+      evaluation.cumulativeAmount,
+    remainingToThreshold: Math.max(
+      0,
+      evaluation.threshold -
+        evaluation.cumulativeAmount,
+    ),
+    progressPercent:
+      evaluation.threshold <= 0
+        ? 100
+        : Math.max(
+            0,
+            Math.min(
+              100,
+              (
+                evaluation.cumulativeAmount /
+                evaluation.threshold
+              ) * 100,
+            ),
+          ),
+    activeSubscriptionRequired:
+      evaluation.activeSubscriptionRequired,
+    activeSubscriptionSatisfied:
+      evaluation.activeSubscriptionSatisfied,
+    passed: evaluation.passed,
+    evidence: evidenceFor(evaluation),
+  });
+
+  const progressConditionsPassed =
+    qualificationRules.mode === "general"
+      ? generalEvaluation.passed
+      : qualificationRules.mode ===
+          "subscription"
+        ? subscriptionEvaluation.passed
+        : qualificationRules.mode ===
+            "either"
+          ? generalEvaluation.passed ||
+            subscriptionEvaluation.passed
+          : generalEvaluation.passed &&
+            subscriptionEvaluation.passed;
+
+  const activeCoverage =
+    Object.values(
+      input.state.qualificationRounds,
+    )
+      .filter((round) => {
+        if (
+          round.memberId !== input.memberId
+        ) {
+          return false;
+        }
+
+        const interval =
+          qualificationCoverageInterval(
+            round,
+          );
+
+        return (
+          now.getTime() >=
+            interval.startsAtMs &&
+          now.getTime() <=
+            interval.endsAtMs
+        );
+      })
+      .sort(
+        (left, right) =>
+          Date.parse(right.qualifiedAt) -
+            Date.parse(left.qualifiedAt) ||
+          right.roundId.localeCompare(
+            left.roundId,
+          ),
+      )
+      .map((round) => {
+        const interval =
+          qualificationCoverageInterval(
+            round,
+          );
+
+        const roundBasis =
+          qualificationBasisFromRound(
+            round,
+          );
+
+        let cumulativeAllocatedAmount = 0;
+
+        const sourceEvidence =
+          round.consumptionAccounting.allocations
+            .map((allocation) => {
+              const event =
+                input.state.validConsumptionEvents[
+                  allocation.validConsumptionEventId
+                ];
+
+              if (!event) {
+                return null;
+              }
+
+              cumulativeAllocatedAmount +=
+                allocation.amount;
+
+              return {
+                eventId: event.eventId,
+                orderNumber:
+                  event.sourceOrderId,
+                finalizedAt:
+                  event.finalizedAt,
+                eventAmount:
+                  qualificationBasisValue(
+                    event,
+                    roundBasis,
+                  ),
+                allocatedAmount:
+                  allocation.amount,
+                cumulativeAllocatedAmount,
+                triggeredQualification:
+                  event.eventId ===
+                  round.triggeringValidConsumptionEventId,
+                activeSubscriptionAtCompletion:
+                  event.activeSubscriptionAtCompletion,
+              };
+            })
+            .filter(
+              (
+                item,
+              ): item is MemberReferralQualificationCoverageEvidence =>
+                Boolean(item),
+            );
+
+        return {
+          roundId: round.roundId,
+          qualifiedAt: round.qualifiedAt,
+          coverageStartsAt:
+            interval.startsAt,
+          coverageEndsAt:
+            interval.endsAt,
+          selectedPaths: [
+            ...round.selectedAccountingPaths,
+          ],
+          rulesVersion:
+            round.rulesVersion,
+          qualificationBasis:
+            roundBasis,
+          consumedAmount:
+            round.consumptionAccounting
+              .consumedAmount,
+          availableAmountBefore:
+            round.consumptionAccounting
+              .availableAmountBefore,
+          remainingAmountAfter:
+            round.consumptionAccounting
+              .remainingAmountAfter,
+          sourceEvidence,
+        };
+      })[0] ?? null;
+
+  const isQualifiedNow =
+    activeCoverage !== null;
+
+  return {
+    mode: qualificationRules.mode,
+    qualificationBasis: basis,
+    pointDisplayName:
+      input.rulesVersion.rules.referral
+        .pointDisplayName || "KD點",
+    activeSubscriptionNow,
+    isQualifiedNow,
+    progressConditionsPassed,
+    status: isQualifiedNow
+      ? "qualified"
+      : progressConditionsPassed
+        ? "ready_on_next_completion"
+        : "in_progress",
+    activeCoverage,
+    general: pathView(
+      "general",
+      generalEvaluation,
+    ),
+    subscription: pathView(
+      "subscription",
+      subscriptionEvaluation,
+    ),
+  };
+}
+
 function roundCoversReward(round: QualificationRound, reward: ReferralReward) {
   if (round.memberId !== reward.beneficiaryMemberId || referralRewardQualificationAuthority(reward) !== "qualification_coverage") return false;
   const generatedAt = Date.parse(reward.createdAt);
@@ -2665,7 +3025,16 @@ export async function getMemberReferralCenter(memberId: string, options: { baseU
       })
     : [];
   const pointDisplayName = version.rules.referral.pointDisplayName || "KD點";
-  return { referralCode, referralUrl, mode: version.rules.referral.referralRewardCalculationMode, pointDisplayName, pvDisclosure: version.rules.referral.referralRewardCalculationMode === "pv" ? `本制度以 ${pointDisplayName} 計算，非商品售價百分比。${pointDisplayName} 是商品回饋計算單位，不是貨幣或可交易資產。` : null, maxDepth: depth, summaries, nodes, orgChart, rewards: rewards.map((item) => {
+
+  const qualificationProgress =
+    buildMemberReferralQualificationProgress({
+      state,
+      rulesVersion: version,
+      memberId,
+      now: new Date(),
+    });
+
+  return { referralCode, referralUrl, mode: version.rules.referral.referralRewardCalculationMode, pointDisplayName, qualificationProgress, pvDisclosure: version.rules.referral.referralRewardCalculationMode === "pv" ? `本制度以 ${pointDisplayName} 計算，非商品售價百分比。${pointDisplayName} 是商品回饋計算單位，不是貨幣或可交易資產。` : null, maxDepth: depth, summaries, nodes, orgChart, rewards: rewards.map((item) => {
     const sourceOrder = sourceOrders.get(item.sourceOrderNumber);
     return { rewardId: item.rewardId, sourceOrderNumber: item.sourceOrderNumber, sourceOrderCreatedAt: sourceOrder?.createdAt ?? null, sourceMemberNumber: registry.members[item.sourceMemberId]?.memberNumber ?? "KD-會員", sourceItems: safeOrderItems(sourceOrder ?? null), referralLevel: item.referralLevel, rewardType: item.rewardType, calculationMode: item.calculationMode, effectivePV: item.effectivePV, rewardRate: item.rewardRate, rewardPV: item.rewardPV, creditAmount: item.calculatedCreditAmount, projectedCreditAmount: item.projectedCreditAmount ?? item.calculatedCreditAmount, status: item.status, cancellationReason: item.cancellationReason ?? null, qualificationStatus: item.qualificationStatus ?? "legacy", qualificationExpiresAt: item.qualificationExpiresAt ?? null, qualificationOrderNumber: item.qualificationOrderNumber ?? null, qualificationOrderCreatedAt: item.qualificationOrderCreatedAt ?? null, qualificationOrderFinalState: item.qualificationOrderFinalState ?? null, qualificationQualifiedAt: item.qualificationQualifiedAt ?? null, successfulPickupBusinessDate: item.successfulPickupBusinessDate ?? null, releaseEligibleBusinessDate: item.releaseEligibleBusinessDate ?? item.scheduledReleaseAt?.slice(0, 10) ?? null, releasedAt: item.releasedAt };
   }) };

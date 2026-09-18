@@ -12,6 +12,7 @@ import MemberMobileDisclosure from "@/components/member/MemberMobileDisclosure";
 import MemberSectionNav from "@/components/member/MemberSectionNav";
 import MemberSubscriptionExperience from "@/components/member/MemberSubscriptionExperience";
 import MemberReferralCenter from "@/components/member/MemberReferralCenter";
+import MemberQualificationProgress from "@/components/member/MemberQualificationProgress";
 import { getMemberCommerceDashboard, getMemberReferralCenter } from "@/lib/membershipCommerce";
 import { getActiveMembershipRules } from "@/lib/membershipBusinessRules";
 import { fulfillmentRecordForOrder, readFulfillmentStore } from "@/lib/fulfillment";
@@ -438,20 +439,9 @@ export default async function MemberPage({
 
         </section>
 
-        <section className="member-qualification-banner">
-          <div>
-            <small>MEMBER STATUS</small>
-            <strong>
-              {pendingRewardPoints > 0 ? (
-                <>目前有 {pendingRewardPoints.toLocaleString("zh-TW")} <span className="member-point-display-name">{pointDisplayName}</span> 等待入帳</>
-              ) : (
-                "會員帳戶已啟用"
-              )}
-            </strong>
-            <span>回饋來源、資格條件、折抵價值與入帳狀態可在下方「推薦與回饋」查看。</span>
-          </div>
-          <a href="#referral">查看推薦與回饋 <b>→</b></a>
-        </section>
+        <MemberQualificationProgress
+          progress={referralCenter.qualificationProgress}
+        />
 
         <section className="member-quick-actions" aria-label="快速功能">
           <header>
