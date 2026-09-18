@@ -335,15 +335,102 @@ export function subscriptionItemsToRequestedItems(items: PricedSubscriptionItem[
   });
 }
 
-export function subscriptionOrderDisplayItems(items: PricedSubscriptionItem[], website: WebsiteData) {
+function subscriptionSkuPV(sku: PurchaseOption) {
+  const enabled = sku.pvEnabled === true;
+  const raw = Number(sku.pvValue);
+
+  return {
+    enabled,
+    value:
+      enabled && Number.isFinite(raw)
+        ? Math.max(0, raw)
+        : 0,
+  };
+}
+
+function subscriptionOrderPVFields(
+  entries: PurchaseOption[],
+  discountRatio: number,
+) {
+  const ratio = Number.isFinite(discountRatio)
+    ? Math.max(0, Math.min(1, discountRatio))
+    : 1;
+
+  const snapshots = entries.map(subscriptionSkuPV);
+  const basePV = snapshots.reduce(
+    (sum, snapshot) => sum + snapshot.value,
+    0,
+  );
+
+  return {
+    pvEnabled: snapshots.some((snapshot) => snapshot.enabled),
+    basePV,
+    discountRatio: ratio,
+    effectivePV: basePV * ratio,
+  };
+}
+
+export function subscriptionOrderDisplayItems(
+  items: PricedSubscriptionItem[],
+  website: WebsiteData,
+  options: { discountRatio?: number } = {},
+) {
+  const discountRatio = options.discountRatio ?? 1;
+
   return items.map((item) => {
     if (item.skuKind === "drip") {
-      const { product, sku } = resolveSubscriptionSku({ website, productId: item.productId, skuId: item.skuId, kind: "drip" });
-      return { ...item, slug: product.slug, name: product.name, optionId: sku.id, optionLabel: sku.label, optionDetail: sku.detail, lineTotal: item.unitPrice * item.quantity };
+      const { product, sku } = resolveSubscriptionSku({
+        website,
+        productId: item.productId,
+        skuId: item.skuId,
+        kind: "drip",
+      });
+
+      return {
+        ...item,
+        slug: product.slug,
+        name: product.name,
+        optionId: sku.id,
+        optionLabel: sku.label,
+        optionDetail: sku.detail,
+        lineTotal: item.unitPrice * item.quantity,
+        ...subscriptionOrderPVFields([sku], discountRatio),
+      };
     }
-    const products = item.components.map((component) => activeProduct(website, component.productId));
-    const dedicated = item.components.filter((component) => component.customRoast === true);
-    return { ...item, slug: products[0].slug, name: products.map((product) => product.name).join(" + "), optionLabel: item.packageWeight === "one-pound" ? "一磅咖啡豆組合" : "半磅咖啡豆", preparationLabel: item.roast, customRoast: dedicated.length > 0, roastLevel: [...new Set(dedicated.map((component) => component.roastLevel).filter(Boolean))].join("／") || undefined, lineTotal: item.unitPrice * item.quantity };
+    const resolvedComponents = item.components.map((component) =>
+      resolveSubscriptionSku({
+        website,
+        productId: component.productId,
+        skuId: component.skuId,
+        kind: "beans",
+      }),
+    );
+
+    const products = resolvedComponents.map(({ product }) => product);
+    const componentSkus = resolvedComponents.map(({ sku }) => sku);
+    const dedicated = item.components.filter(
+      (component) => component.customRoast === true,
+    );
+
+    return {
+      ...item,
+      slug: products[0].slug,
+      name: products.map((product) => product.name).join(" + "),
+      optionLabel:
+        item.packageWeight === "one-pound"
+          ? "一磅咖啡豆組合"
+          : "半磅咖啡豆",
+      preparationLabel: item.roast,
+      customRoast: dedicated.length > 0,
+      roastLevel:
+        [...new Set(
+          dedicated
+            .map((component) => component.roastLevel)
+            .filter(Boolean),
+        )].join("／") || undefined,
+      lineTotal: item.unitPrice * item.quantity,
+      ...subscriptionOrderPVFields(componentSkus, discountRatio),
+    };
   });
 }
 

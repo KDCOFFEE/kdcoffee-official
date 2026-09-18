@@ -24,7 +24,30 @@ function schedulerOrder(cycle: SubscriptionCycle, subscription: Awaited<ReturnTy
   if (!cycle.itemsSnapshot || !cycle.pricingSnapshot || !cycle.shippingSnapshot || !cycle.rulesSnapshot) throw new Error("本期尚未完成商務快照");
   if (subscription.shippingMethod === "711_cod" && !subscription.storeSelection?.storeId) throw new Error("尚未設定 7-ELEVEN 取貨門市");
   const orderNumber = deterministicOrderNumber(cycle);
-  const items = subscriptionOrderDisplayItems(cycle.itemsSnapshot, website);
+
+  const merchandiseAmount =
+    cycle.pricingSnapshot.selectedPriceSource === "campaign"
+      ? cycle.pricingSnapshot.campaignPrice ?? cycle.pricingSnapshot.subscriptionPrice
+      : cycle.pricingSnapshot.subscriptionPrice;
+
+  const discountRatio =
+    cycle.pricingSnapshot.merchandiseOriginal > 0
+      ? Math.max(
+          0,
+          Math.min(
+            1,
+            merchandiseAmount /
+              cycle.pricingSnapshot.merchandiseOriginal,
+          ),
+        )
+      : 1;
+
+  const items = subscriptionOrderDisplayItems(
+    cycle.itemsSnapshot,
+    website,
+    { discountRatio },
+  );
+
   return {
     orderNumber,
     createdAt: now.toISOString(),
