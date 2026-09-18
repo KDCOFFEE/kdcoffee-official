@@ -230,6 +230,29 @@ export default function MembershipRulesManager({ initialRevision, initialVersion
             第二筆完成消費起回饋
           </option>
         </Choice>
+
+        <label className="membership-switch">
+          <input
+            type="checkbox"
+            checked={
+              rules.referral
+                .selfPurchaseRequiresReferralQualification
+            }
+            onChange={(event) =>
+              change((draft) => {
+                draft.referral
+                  .selfPurchaseRequiresReferralQualification =
+                  event.target.checked;
+              })
+            }
+          />
+          <span>
+            <b>本人消費回饋需符合推薦獎勵領取資格</b>
+            <small>
+              未勾選時，本人消費回饋不受推薦獎勵資格門檻限制
+            </small>
+          </span>
+        </label>
       </div>
 
       <p className="membership-inline-note">
@@ -237,6 +260,13 @@ export default function MembershipRulesManager({ initialRevision, initialVersion
         "first_completed_order"
           ? `會員第一筆成功完成的訂單即可依目前 ${rules.referral.selfPurchaseRewardRate}% 設定建立本人消費回饋。`
           : `會員需先有一筆有效完成消費；之後成功完成的訂單才依目前 ${rules.referral.selfPurchaseRewardRate}% 設定建立本人消費回饋。`}
+      </p>
+
+      <p className="membership-inline-note">
+        {rules.referral
+          .selfPurchaseRequiresReferralQualification
+          ? "目前本人消費回饋仍需符合下方「推薦獎勵領取資格」後，才會進入安全等待與正式入帳。"
+          : "目前本人消費回饋不需要符合「推薦獎勵領取資格」；符合本人消費回饋起算條件且訂單完成後，即直接進入安全等待。"}
       </p>
       <fieldset className="membership-intervals">
         <legend>推薦獎勵領取資格</legend>

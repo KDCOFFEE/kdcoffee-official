@@ -91,6 +91,7 @@ export const DEFAULT_MEMBERSHIP_RULES: MembershipBusinessRules = {
     selfPurchaseRewardRate: 5,
     selfPurchaseEligibilityMode:
       "after_prior_valid_consumption",
+    selfPurchaseRequiresReferralQualification: false,
     payoutQualification: {
       mode: "either",
       qualificationBasis: "money",
@@ -334,6 +335,15 @@ export function validateMembershipBusinessRules(value: unknown, options: Members
     ],
     "會員本人消費回饋起算方式",
   );
+  if (
+    typeof rules.referral
+      .selfPurchaseRequiresReferralQualification !==
+    "boolean"
+  ) {
+    throw new MembershipRulesValidationError(
+      "會員本人消費回饋資格設定不正確",
+    );
+  }
   if (!object(rules.referral.payoutQualification)) throw new MembershipRulesValidationError("推薦獎勵領取資格設定不完整");
   const payout = rules.referral.payoutQualification;
   validateOwnerChoice(payout.mode, ["general", "subscription", "either", "both"], "推薦獎勵資格判定模式");

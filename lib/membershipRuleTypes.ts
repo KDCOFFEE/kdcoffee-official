@@ -68,6 +68,15 @@ export type MembershipBusinessRules = {
      * Legacy rules missing this field normalize to after_prior_valid_consumption.
      */
     selfPurchaseEligibilityMode: SelfPurchaseEligibilityMode;
+    /**
+     * Whether a member's own-purchase reward must also satisfy
+     * referral payout qualification.
+     *
+     * false = own-purchase reward is independent and enters
+     *         safety waiting immediately after completed order.
+     * true  = existing referral qualification coverage applies.
+     */
+    selfPurchaseRequiresReferralQualification: boolean;
     payoutQualification: ReferralPayoutQualificationRules;
     /** Legacy per-reward forward window. Do not reinterpret as payoutQualification.rewardCoverage. */
     referralRewardQualificationWindowDays: number;

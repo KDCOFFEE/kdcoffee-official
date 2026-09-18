@@ -55,7 +55,8 @@ type Center = {
     qualificationStatus: string;
     qualificationAuthority:
       | "legacy_order"
-      | "qualification_coverage";
+      | "qualification_coverage"
+      | "self_purchase_direct";
     qualificationCoverage: {
       qualificationRoundId: string;
       qualificationAt: string;
@@ -335,6 +336,12 @@ export default function MemberReferralCenter() {
             </select>
           </div>
           {pagedRewards.length ? <div className="member-reward-ledger-list">{pagedRewards.map((reward) => {
+          const isDirectSelfPurchase =
+            reward.rewardType ===
+              "self_purchase" &&
+            reward.qualificationAuthority ===
+              "self_purchase_direct";
+
           const isCoverageQualification =
             reward.qualificationAuthority ===
             "qualification_coverage";
@@ -346,32 +353,38 @@ export default function MemberReferralCenter() {
             );
 
           const effectiveQualificationStatus =
-            hasQualificationCoverage
+            isDirectSelfPurchase
               ? "qualified"
-              : reward.qualificationStatus;
+              : hasQualificationCoverage
+                ? "qualified"
+                : reward.qualificationStatus;
 
           const qualificationLabel =
-            effectiveQualificationStatus ===
-            "awaiting_order"
-              ? "待取得回饋資格"
+            isDirectSelfPurchase
+              ? "安全等待・等待入帳"
               : effectiveQualificationStatus ===
-                  "awaiting_completion"
-                ? "等待資格訂單完成"
+                  "awaiting_order"
+                ? "待取得回饋資格"
                 : effectiveQualificationStatus ===
-                    "qualified"
-                  ? "資格已確認・等待入帳"
+                    "awaiting_completion"
+                  ? "等待資格訂單完成"
                   : effectiveQualificationStatus ===
-                      "expired"
-                    ? "資格已逾期"
-                    : "歷史回饋";
+                      "qualified"
+                    ? "資格已確認・等待入帳"
+                    : effectiveQualificationStatus ===
+                        "expired"
+                      ? "資格已逾期"
+                      : "歷史回饋";
 
           const qualificationDisplayUntil =
-            hasQualificationCoverage
-              ? reward
-                  .qualificationCoverage
-                  ?.coverageEndsAt ?? null
-              : reward
-                  .qualificationExpiresAt;
+            isDirectSelfPurchase
+              ? null
+              : hasQualificationCoverage
+                ? reward
+                    .qualificationCoverage
+                    ?.coverageEndsAt ?? null
+                : reward
+                    .qualificationExpiresAt;
           const itemText = reward.sourceItems.length ? reward.sourceItems.map((item) => `${item.name}${item.optionLabel ? `・${item.optionLabel}` : ""}${item.optionDetail ? ` ${item.optionDetail}` : ""}${item.preparationLabel ? `・${item.preparationLabel}` : ""} × ${item.quantity}`).join("、") : "來源訂單商品明細未保留";
           const basis = reward.calculationMode === "pv" ? `${reward.effectivePV.toLocaleString("zh-TW")} ${displayPointName} × ${reward.rewardRate.toLocaleString("zh-TW", { maximumFractionDigits: 2 })}%` : `依正式回饋規則 × ${reward.rewardRate.toLocaleString("zh-TW", { maximumFractionDigits: 2 })}%`;
           const q = data.displayRules.payoutQualification;
@@ -394,8 +407,10 @@ export default function MemberReferralCenter() {
                 ? `需同時符合一般會員最近 ${q.generalMember.windowDays} 天累積${qualificationMetric}達 ${qualificationThreshold(q.generalMember.threshold)}，以及有效定期配送會員最近 ${q.activeSubscriptionMember.windowDays} 天累積${qualificationMetric}達 ${qualificationThreshold(q.activeSubscriptionMember.threshold)}。`
                 : `一般會員最近 ${q.generalMember.windowDays} 天累積${qualificationMetric}達 ${qualificationThreshold(q.generalMember.threshold)}，或有效定期配送會員最近 ${q.activeSubscriptionMember.windowDays} 天累積${qualificationMetric}達 ${qualificationThreshold(q.activeSubscriptionMember.threshold)}，任一條件符合即可。`;
           const qualificationDetail =
-            hasQualificationCoverage
-              ? `本筆回饋已由目前有效的推薦回饋資格涵蓋，資格已確認。現在進入安全等待期；基礎等待 ${data.displayRules.baseWaitingDays} 天＋退貨保護 ${data.displayRules.returnProtectionDays} 天。`
+            isDirectSelfPurchase
+              ? `本人消費回饋不需要符合推薦獎勵領取資格。訂單完成後即進入安全等待期；基礎等待 ${data.displayRules.baseWaitingDays} 天＋退貨保護 ${data.displayRules.returnProtectionDays} 天。`
+              : hasQualificationCoverage
+                ? `本筆回饋已由目前有效的推薦回饋資格涵蓋，資格已確認。現在進入安全等待期；基礎等待 ${data.displayRules.baseWaitingDays} 天＋退貨保護 ${data.displayRules.returnProtectionDays} 天。`
               : effectiveQualificationStatus ===
                   "awaiting_order"
                 ? "目前尚未取得本筆回饋所需的有效資格，系統會在符合條件後自動判定。"
@@ -418,15 +433,23 @@ export default function MemberReferralCenter() {
                 ? 3
                 : 2;
 
-          const lifecycleLabels = [
-            "回饋產生",
-            effectiveQualificationStatus ===
-            "qualified"
-              ? "資格已確認"
-              : "等待資格確認",
-            "安全等待",
-            "正式入帳",
-          ];
+          const lifecycleLabels =
+            isDirectSelfPurchase
+              ? [
+                  "回饋產生",
+                  "訂單完成",
+                  "安全等待",
+                  "正式入帳",
+                ]
+              : [
+                  "回饋產生",
+                  effectiveQualificationStatus ===
+                  "qualified"
+                    ? "資格已確認"
+                    : "等待資格確認",
+                  "安全等待",
+                  "正式入帳",
+                ];
           const rewardCanStillRelease =
             reward.status === "scheduled"
             && reward.qualificationStatus !== "expired";
@@ -488,11 +511,56 @@ export default function MemberReferralCenter() {
                 </div>
 
                 <div className="member-reward-qualification-explain">
-                  <strong>{effectiveQualificationStatus === "qualified" ? "本筆回饋資格狀態" : effectiveQualificationStatus === "expired" ? "資格結果" : "我要怎麼符合資格？"}</strong>
-                  <p><b>目前規則參考：</b>{qualificationRuleText}</p>
-                  <p><b>目前狀態：</b>{qualificationDetail}</p>
-                  {qualificationDisplayUntil ? <p><b>{hasQualificationCoverage ? "資格有效至：" : "資格期限："}</b>{formatDate(qualificationDisplayUntil)}</p> : null}
-                  {reward.releaseEligibleBusinessDate && reward.status === "scheduled" ? <p><b>預計可發放日期：</b>{reward.releaseEligibleBusinessDate.replaceAll("-", "/")}</p> : null}
+                  <strong>
+                    {isDirectSelfPurchase
+                      ? "本人消費回饋狀態"
+                      : effectiveQualificationStatus === "qualified"
+                        ? "本筆回饋資格狀態"
+                        : effectiveQualificationStatus === "expired"
+                          ? "資格結果"
+                          : "我要怎麼符合資格？"}
+                  </strong>
+
+                  {isDirectSelfPurchase ? (
+                    <p>
+                      <b>資格要求：</b>
+                      不需要符合推薦獎勵領取資格。
+                    </p>
+                  ) : (
+                    <p>
+                      <b>目前規則參考：</b>
+                      {qualificationRuleText}
+                    </p>
+                  )}
+
+                  <p>
+                    <b>目前狀態：</b>
+                    {qualificationDetail}
+                  </p>
+
+                  {qualificationDisplayUntil ? (
+                    <p>
+                      <b>
+                        {hasQualificationCoverage
+                          ? "資格有效至："
+                          : "資格期限："}
+                      </b>
+                      {formatDate(
+                        qualificationDisplayUntil,
+                      )}
+                    </p>
+                  ) : null}
+
+                  {reward.releaseEligibleBusinessDate &&
+                  reward.status === "scheduled" ? (
+                    <p>
+                      <b>預計可發放日期：</b>
+                      {reward.releaseEligibleBusinessDate.replaceAll(
+                        "-",
+                        "/",
+                      )}
+                    </p>
+                  ) : null}
                 </div>
 
                 <div className="member-reward-lifecycle" aria-label="回饋入帳進度">

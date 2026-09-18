@@ -277,7 +277,10 @@ export type ReferralRewardMaturation = {
   idempotencyKey: string;
 };
 
-export type ReferralRewardQualificationAuthority = "legacy_order" | "qualification_coverage";
+export type ReferralRewardQualificationAuthority =
+  | "legacy_order"
+  | "qualification_coverage"
+  | "self_purchase_direct";
 
 export type ReferralReward = {
   rewardId: string;
@@ -499,7 +502,19 @@ export function validateMembershipCommerceState(value: unknown): MembershipComme
   for (const field of ["subscriptions", "cycles", "referrals", "referralConversions", "referralRewards", "validConsumptionEvents", "qualificationRounds", "referralRewardCoverages", "referralRewardMaturations", "creditEntries", "creditReservations", "idempotency"] as const) if (!isObject(value[field])) throw new MembershipCommerceError("會員商務資料集合不完整");
   for (const field of ["events", "notifications", "audit"] as const) if (!Array.isArray(value[field])) throw new MembershipCommerceError("會員商務事件集合不完整");
   for (const reward of Object.values(value.referralRewards as Record<string, ReferralReward>)) {
-    if (reward.qualificationAuthority !== undefined && reward.qualificationAuthority !== "legacy_order" && reward.qualificationAuthority !== "qualification_coverage") throw new MembershipCommerceError("推薦獎勵資格權限格式不正確");
+    if (
+      reward.qualificationAuthority !== undefined
+      && reward.qualificationAuthority !== "legacy_order"
+      && reward.qualificationAuthority !== "qualification_coverage"
+      && reward.qualificationAuthority !== "self_purchase_direct"
+    ) throw new MembershipCommerceError("推薦獎勵資格權限格式不正確");
+    if (
+      reward.qualificationAuthority === "self_purchase_direct"
+      && (
+        reward.rewardType !== "self_purchase"
+        || reward.qualificationStatus !== "qualified"
+      )
+    ) throw new MembershipCommerceError("本人消費回饋直接發放資格格式不正確");
   }
   for (const consumption of Object.values(value.validConsumptionEvents as Record<string, ValidConsumptionEvent>)) {
     if (!consumption || typeof consumption.eventId !== "string" || typeof consumption.memberId !== "string" || typeof consumption.sourceOrderId !== "string" || typeof consumption.finalizedAt !== "string" || !Number.isFinite(Date.parse(consumption.finalizedAt)) || typeof consumption.createdAt !== "string" || !Number.isSafeInteger(consumption.rulesVersion)) throw new MembershipCommerceError("有效消費事件格式不正確");
@@ -2302,10 +2317,30 @@ export async function createSelfPurchaseRewardFromFulfillment(input: { sourceMem
     const baseWaitingDaysSnapshot = rules.referralRewardBaseWaitingDays;
     const returnProtectionDaysSnapshot = rules.referralRewardReturnProtectionDays;
     const totalWaitingDaysSnapshot = baseWaitingDaysSnapshot + returnProtectionDaysSnapshot;
+    const requiresReferralQualification =
+      rules.selfPurchaseRequiresReferralQualification;
+    const successfulPickupBusinessDate =
+      requiresReferralQualification
+        ? null
+        : getDateOnlyInTimeZone(now);
+    const releaseEligibleBusinessDate =
+      successfulPickupBusinessDate
+        ? referralReleaseEligibleBusinessDate(
+            successfulPickupBusinessDate,
+            baseWaitingDaysSnapshot,
+            returnProtectionDaysSnapshot,
+          )
+        : null;
     const rewardId = deterministicId("reward", `${input.orderId}:self_purchase:0:${input.sourceMemberId}`);
-    const reward: ReferralReward = { rewardId, sourceOrderNumber: input.orderId, sourceMemberId: input.sourceMemberId, beneficiaryMemberId: input.sourceMemberId, referralLevel: 0, rewardType: "self_purchase", calculationMode: rules.referralRewardCalculationMode, paidAmountBasis, basePV, discountRatio, effectivePV, rewardRate, rewardPV, pvRewardMoneyValue: rules.pvRewardMoneyValue, calculatedCreditAmount, projectedCreditAmount: calculatedCreditAmount, ruleVersion: version.rulesVersion, ancestrySnapshot: [], organizationCapPercentSnapshot: 0, organizationCapAmountSnapshot: 0, monthlyCapAmountSnapshot: 0, monthlyCapPeriodSnapshot: nowIso(now).slice(0, 7), monthlyCapUsageAtRelease: null, monthlyCapLimitedAmount: null, reversalPolicySnapshot: rules.reversalPolicy, baseWaitingDaysSnapshot, returnProtectionDaysSnapshot, totalWaitingDaysSnapshot, releasePolicyVersion: "taipei-business-date-v1", successfulPickupBusinessDate: null, releaseEligibleBusinessDate: null, sourceOrderFinalState: "completed", cancellationReason: null, qualificationWindowDays, qualificationStartedAt, qualificationExpiresAt: qualificationExpiry, qualificationStatus: "awaiting_order", qualificationOrderNumber: null, qualificationOrderCreatedAt: null, qualificationOrderFinalState: null, qualificationQualifiedAt: null, qualificationAttempts: [], qualificationAuthority: "qualification_coverage", createdAt: nowIso(now), eligibleAt: nowIso(now), scheduledReleaseAt: "", releasedAt: null, status: "scheduled", reversalCreditEntryId: null, rewardCreditEntryId: null, idempotencyKey: input.idempotencyKey };
+    const reward: ReferralReward = { rewardId, sourceOrderNumber: input.orderId, sourceMemberId: input.sourceMemberId, beneficiaryMemberId: input.sourceMemberId, referralLevel: 0, rewardType: "self_purchase", calculationMode: rules.referralRewardCalculationMode, paidAmountBasis, basePV, discountRatio, effectivePV, rewardRate, rewardPV, pvRewardMoneyValue: rules.pvRewardMoneyValue, calculatedCreditAmount, projectedCreditAmount: calculatedCreditAmount, ruleVersion: version.rulesVersion, ancestrySnapshot: [], organizationCapPercentSnapshot: 0, organizationCapAmountSnapshot: 0, monthlyCapAmountSnapshot: 0, monthlyCapPeriodSnapshot: nowIso(now).slice(0, 7), monthlyCapUsageAtRelease: null, monthlyCapLimitedAmount: null, reversalPolicySnapshot: rules.reversalPolicy, baseWaitingDaysSnapshot, returnProtectionDaysSnapshot, totalWaitingDaysSnapshot, releasePolicyVersion: "taipei-business-date-v1", successfulPickupBusinessDate, releaseEligibleBusinessDate, sourceOrderFinalState: "completed", cancellationReason: null, qualificationWindowDays: requiresReferralQualification ? qualificationWindowDays : undefined, qualificationStartedAt: requiresReferralQualification ? qualificationStartedAt : undefined, qualificationExpiresAt: requiresReferralQualification ? qualificationExpiry : undefined, qualificationStatus: requiresReferralQualification ? "awaiting_order" : "qualified", qualificationOrderNumber: null, qualificationOrderCreatedAt: null, qualificationOrderFinalState: null, qualificationQualifiedAt: requiresReferralQualification ? null : nowIso(now), qualificationAttempts: [], qualificationAuthority: requiresReferralQualification ? "qualification_coverage" : "self_purchase_direct", createdAt: nowIso(now), eligibleAt: nowIso(now), scheduledReleaseAt: releaseEligibleBusinessDate ? `${releaseEligibleBusinessDate}T00:00:00+08:00` : "", releasedAt: null, status: "scheduled", reversalCreditEntryId: null, rewardCreditEntryId: null, idempotencyKey: input.idempotencyKey };
     state.referralRewards[rewardId] = reward;
-    coverRewardFromEarliestQualificationRound(state, reward, now);
+    if (requiresReferralQualification) {
+      coverRewardFromEarliestQualificationRound(
+        state,
+        reward,
+        now,
+      );
+    }
     const source = event(state, "referral_reward_scheduled", { amount: calculatedCreditAmount, level: 0, rewardType: "self_purchase" }, now, { memberId: input.sourceMemberId, orderId: input.orderId });
     notify(state, version.rules, "referral_conversion", source.eventId, now, { memberId: input.sourceMemberId, safeData: { rewardAmount: calculatedCreditAmount, rewardType: "self_purchase" } });
     remember(state, key, rewardId, now);
@@ -2350,15 +2385,67 @@ export async function runReferralRewardReleaseScheduler(input: { now?: Date; sta
       results.push({ rewardId: reward.rewardId, status: "expired" });
     }
     const dueRewards = Object.values(state.referralRewards).filter((item) => {
-      if (referralRewardQualificationAuthority(item) !== "legacy_order" || item.status !== "scheduled" || (hasQualificationSnapshot(item) && item.qualificationStatus !== "qualified")) return false;
-      const eligibleDate = item.releaseEligibleBusinessDate ?? item.scheduledReleaseAt?.slice(0, 10);
-      return Boolean(eligibleDate && isReferralReleaseBusinessDateDue(today, eligibleDate));
+      const authority =
+        referralRewardQualificationAuthority(item);
+
+      if (item.status !== "scheduled") return false;
+
+      if (authority === "qualification_coverage") {
+        return false;
+      }
+
+      if (
+        authority === "self_purchase_direct"
+        && item.rewardType !== "self_purchase"
+      ) {
+        return false;
+      }
+
+      if (
+        authority === "legacy_order"
+        && hasQualificationSnapshot(item)
+        && item.qualificationStatus !== "qualified"
+      ) {
+        return false;
+      }
+
+      const eligibleDate =
+        item.releaseEligibleBusinessDate
+        ?? item.scheduledReleaseAt?.slice(0, 10);
+
+      return Boolean(
+        eligibleDate
+        && isReferralReleaseBusinessDateDue(
+          today,
+          eligibleDate,
+        ),
+      );
     }).sort((a, b) => (a.releaseEligibleBusinessDate ?? a.scheduledReleaseAt).localeCompare(b.releaseEligibleBusinessDate ?? b.scheduledReleaseAt) || a.createdAt.localeCompare(b.createdAt) || a.rewardId.localeCompare(b.rewardId));
     for (const reward of dueRewards) {
       try {
-        if (!hasQualificationSnapshot(reward) && version.rules.referral.referrerEligibility.mode === "active-subscription" && !hasActiveSubscription(state, reward.beneficiaryMemberId)) throw new MembershipCommerceError("舊版推薦 reward：推薦人目前沒有啟用中的定期購");
-        if (reward.sourceOrderFinalState && reward.sourceOrderFinalState !== "completed") throw new MembershipCommerceError("來源交易最新狀態不允許發放");
-        if (reward.qualificationOrderFinalState && reward.qualificationOrderFinalState !== "completed") throw new MembershipCommerceError("資格交易最新狀態不允許發放");
+        const authority =
+          referralRewardQualificationAuthority(reward);
+
+        if (
+          authority === "legacy_order"
+          && !hasQualificationSnapshot(reward)
+          && version.rules.referral.referrerEligibility.mode === "active-subscription"
+          && !hasActiveSubscription(
+            state,
+            reward.beneficiaryMemberId,
+          )
+        ) throw new MembershipCommerceError("舊版推薦 reward：推薦人目前沒有啟用中的定期購");
+
+        if (
+          reward.sourceOrderFinalState
+          && reward.sourceOrderFinalState !== "completed"
+        ) throw new MembershipCommerceError("來源交易最新狀態不允許發放");
+
+        if (
+          authority === "legacy_order"
+          && reward.qualificationOrderFinalState
+          && reward.qualificationOrderFinalState !== "completed"
+        ) throw new MembershipCommerceError("資格交易最新狀態不允許發放");
         const cap = reward.monthlyCapAmountSnapshot ?? version.rules.referral.referralMonthlyCreditCap;
         const capPeriod = reward.monthlyCapPeriodSnapshot ?? reward.createdAt.slice(0, 7);
         const monthUsed = reward.rewardType === "self_purchase" ? 0 : Object.values(state.referralRewards).filter((item) => item.rewardId !== reward.rewardId && item.rewardType !== "self_purchase" && item.beneficiaryMemberId === reward.beneficiaryMemberId && item.status === "released" && (item.monthlyCapPeriodSnapshot ?? item.createdAt.slice(0, 7)) === capPeriod).reduce((sum, item) => sum + item.calculatedCreditAmount, 0);
