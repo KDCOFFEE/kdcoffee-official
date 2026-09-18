@@ -26,6 +26,41 @@ export type SelfPurchaseEligibilityMode =
   | "first_completed_order"
   | "after_prior_valid_consumption";
 
+export type SelfPurchaseRewardAccumulationBasis =
+  | "single_order"
+  | "rolling_period";
+
+export type SelfPurchaseRewardTierThresholdBasis =
+  | "paid_amount"
+  | "pv";
+
+export type SelfPurchaseRewardTierCalculationMethod =
+  | "whole_order"
+  | "marginal";
+
+export type SelfPurchaseRewardTier = {
+  threshold: number;
+  rewardRate: number;
+};
+
+export type SelfPurchaseRewardTierRules = {
+  enabled: boolean;
+
+  /**
+   * Unit used ONLY to determine the member's own-purchase tier.
+   * This is independent from referral payout qualification.
+   */
+  thresholdBasis:
+    SelfPurchaseRewardTierThresholdBasis;
+
+  accumulationBasis:
+    SelfPurchaseRewardAccumulationBasis;
+  calculationMethod:
+    SelfPurchaseRewardTierCalculationMethod;
+  rollingWindowDays: number;
+  tiers: SelfPurchaseRewardTier[];
+};
+
 export type ReferralPayoutQualificationRules = {
   mode: ReferralPayoutQualificationMode;
   qualificationBasis: ReferralQualificationBasis;
@@ -61,8 +96,23 @@ export type MembershipBusinessRules = {
     referralRewardCalculationMode: "paid_amount" | "pv";
     /** Owner-editable display name for the internal PV unit. Internal data fields remain PV for compatibility. */
     pointDisplayName: string;
-    /** Owner-editable reward rate for a member's own purchases. */
+    /**
+     * Legacy / fallback flat rate for a member's own purchases.
+     * Tier rules remain disabled for historical rules unless
+     * explicitly enabled by Owner.
+     */
     selfPurchaseRewardRate: number;
+
+    /**
+     * Dynamic own-purchase reward tiers.
+     *
+     * The threshold unit is selected exclusively by
+     * selfPurchaseRewardTiers.thresholdBasis and is independent from
+     * referral payout qualification and referralRewardCalculationMode.
+     */
+    selfPurchaseRewardTiers:
+      SelfPurchaseRewardTierRules;
+
     /**
      * Controls when the member's own completed-order reward starts.
      * Legacy rules missing this field normalize to after_prior_valid_consumption.

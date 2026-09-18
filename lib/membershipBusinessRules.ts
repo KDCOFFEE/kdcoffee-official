@@ -89,6 +89,19 @@ export const DEFAULT_MEMBERSHIP_RULES: MembershipBusinessRules = {
     referralRewardCalculationMode: "paid_amount",
     pointDisplayName: "KD點",
     selfPurchaseRewardRate: 5,
+    selfPurchaseRewardTiers: {
+      enabled: false,
+      thresholdBasis: "paid_amount",
+      accumulationBasis: "single_order",
+      calculationMethod: "whole_order",
+      rollingWindowDays: 30,
+      tiers: [
+        {
+          threshold: 0,
+          rewardRate: 5,
+        },
+      ],
+    },
     selfPurchaseEligibilityMode:
       "after_prior_valid_consumption",
     selfPurchaseRequiresReferralQualification: false,
@@ -192,9 +205,41 @@ export function normalizeMembershipBusinessRules(value: unknown, options: Member
       const activeSubscriptionMember = object(payoutQualification.activeSubscriptionMember) ? payoutQualification.activeSubscriptionMember : {};
       const validConsumption = object(payoutQualification.validConsumption) ? payoutQualification.validConsumption : {};
       const rewardCoverage = object(payoutQualification.rewardCoverage) ? payoutQualification.rewardCoverage : {};
+
+      const suppliedSelfPurchaseRewardTiers =
+        object(supplied.selfPurchaseRewardTiers)
+          ? supplied.selfPurchaseRewardTiers
+          : {};
+
+      const legacySelfPurchaseRewardRate =
+        typeof supplied.selfPurchaseRewardRate ===
+        "number"
+          ? supplied.selfPurchaseRewardRate
+          : DEFAULT_MEMBERSHIP_RULES.referral
+              .selfPurchaseRewardRate;
+
+      const normalizedSelfPurchaseRewardTiers = {
+        ...DEFAULT_MEMBERSHIP_RULES.referral
+          .selfPurchaseRewardTiers,
+        ...suppliedSelfPurchaseRewardTiers,
+        tiers: Array.isArray(
+          suppliedSelfPurchaseRewardTiers.tiers,
+        )
+          ? suppliedSelfPurchaseRewardTiers.tiers
+          : [
+              {
+                threshold: 0,
+                rewardRate:
+                  legacySelfPurchaseRewardRate,
+              },
+            ],
+      };
+
       return {
         ...DEFAULT_MEMBERSHIP_RULES.referral,
         ...supplied,
+        selfPurchaseRewardTiers:
+          normalizedSelfPurchaseRewardTiers,
         payoutQualification: {
           ...DEFAULT_MEMBERSHIP_RULES.referral.payoutQualification,
           ...payoutQualification,
@@ -327,6 +372,136 @@ export function validateMembershipBusinessRules(value: unknown, options: Members
   validateOwnerChoice(rules.referral.referralRewardCalculationMode, ["paid_amount", "pv"], "推薦獎勵計算方式");
   if (typeof rules.referral.pointDisplayName !== "string" || !rules.referral.pointDisplayName.trim() || rules.referral.pointDisplayName.trim().length > 24) throw new MembershipRulesValidationError("點數顯示名稱需為 1～24 個字元");
   if (typeof rules.referral.selfPurchaseRewardRate !== "number" || !Number.isFinite(rules.referral.selfPurchaseRewardRate) || rules.referral.selfPurchaseRewardRate < 0 || rules.referral.selfPurchaseRewardRate > 100) throw new MembershipRulesValidationError("會員本人消費回饋比例不正確");
+
+  if (
+    !object(
+      rules.referral
+        .selfPurchaseRewardTiers,
+    )
+  ) {
+    throw new MembershipRulesValidationError(
+      "本人消費動態回饋級距設定不完整",
+    );
+  }
+
+  const selfPurchaseTiers =
+    rules.referral
+      .selfPurchaseRewardTiers;
+
+  if (
+    typeof selfPurchaseTiers.enabled !==
+    "boolean"
+  ) {
+    throw new MembershipRulesValidationError(
+      "本人消費動態回饋級距開關不正確",
+    );
+  }
+
+  validateOwnerChoice(
+    selfPurchaseTiers.thresholdBasis,
+    ["paid_amount", "pv"],
+    "本人消費級距判定基礎",
+  );
+
+  validateOwnerChoice(
+    selfPurchaseTiers.accumulationBasis,
+    [
+      "single_order",
+      "rolling_period",
+    ],
+    "本人消費級距累積方式",
+  );
+
+  validateOwnerChoice(
+    selfPurchaseTiers.calculationMethod,
+    [
+      "whole_order",
+      "marginal",
+    ],
+    "本人消費級距計算方式",
+  );
+
+  integer(
+    selfPurchaseTiers.rollingWindowDays,
+    1,
+    3650,
+    "本人消費級距累積期間",
+  );
+
+  if (
+    !Array.isArray(
+      selfPurchaseTiers.tiers,
+    ) ||
+    selfPurchaseTiers.tiers.length < 1 ||
+    selfPurchaseTiers.tiers.length > 50
+  ) {
+    throw new MembershipRulesValidationError(
+      "本人消費回饋級距需為 1～50 組",
+    );
+  }
+
+  let previousTierThreshold =
+    -1;
+
+  for (
+    let index = 0;
+    index <
+    selfPurchaseTiers.tiers.length;
+    index += 1
+  ) {
+    const tier =
+      selfPurchaseTiers.tiers[index];
+
+    if (!object(tier)) {
+      throw new MembershipRulesValidationError(
+        "本人消費回饋級距格式不正確",
+      );
+    }
+
+    if (
+      typeof tier.threshold !== "number" ||
+      !Number.isFinite(tier.threshold) ||
+      tier.threshold < 0 ||
+      tier.threshold > 100_000_000
+    ) {
+      throw new MembershipRulesValidationError(
+        "本人消費回饋級距門檻不正確",
+      );
+    }
+
+    if (
+      typeof tier.rewardRate !== "number" ||
+      !Number.isFinite(tier.rewardRate) ||
+      tier.rewardRate < 0 ||
+      tier.rewardRate > 100
+    ) {
+      throw new MembershipRulesValidationError(
+        "本人消費回饋級距比例不正確",
+      );
+    }
+
+    if (
+      index === 0 &&
+      tier.threshold !== 0
+    ) {
+      throw new MembershipRulesValidationError(
+        "本人消費回饋第一級門檻必須為 0",
+      );
+    }
+
+    if (
+      tier.threshold <=
+      previousTierThreshold
+    ) {
+      throw new MembershipRulesValidationError(
+        "本人消費回饋級距門檻必須由小到大且不可重複",
+      );
+    }
+
+    previousTierThreshold =
+      tier.threshold;
+  }
+
   validateOwnerChoice(
     rules.referral.selfPurchaseEligibilityMode,
     [

@@ -14,6 +14,13 @@ import {
   type MembershipBusinessRules,
   type RulesVersion,
 } from "./membershipBusinessRules";
+import type {
+  SelfPurchaseRewardTierRules,
+} from "./membershipRuleTypes";
+import {
+  calculateSelfPurchaseTierReward,
+  type SelfPurchaseTierRewardResult,
+} from "./selfPurchaseRewardTiers";
 import {
   addTaipeiCalendarDays,
   addTaipeiCalendarMonths,
@@ -140,6 +147,9 @@ export type ValidConsumptionEvent = {
   rulesVersion: number;
   qualificationRulesSnapshot: MembershipBusinessRules["referral"]["payoutQualification"];
   idempotencyKey: string;
+  /** Missing on historical events means the completed consumption remains valid. */
+  reversedAt?: string | null;
+  reversalOutcome?: "cancelled" | "uncollected" | "refunded" | "returned";
 };
 
 export type QualificationPathEvaluation = {
@@ -282,6 +292,30 @@ export type ReferralRewardQualificationAuthority =
   | "qualification_coverage"
   | "self_purchase_direct";
 
+export type SelfPurchaseTierEvidenceSnapshot = {
+  validConsumptionEventId: string | null;
+  sourceOrderId: string;
+  finalizedAt: string;
+  thresholdAmount: number;
+  role: "prior" | "current";
+};
+
+export type SelfPurchaseTierRewardSnapshot = {
+  featureEnabled: true;
+  rules: Omit<SelfPurchaseRewardTierRules, "enabled">;
+  payout: {
+    calculationMode: "paid_amount" | "pv";
+    pvRewardMoneyValue: number;
+    moneyRoundingMode: MembershipBusinessRules["money"]["roundingMode"];
+  };
+  windowStartedAt: string;
+  windowEndedAt: string;
+  initialEvidence: SelfPurchaseTierEvidenceSnapshot[];
+  latestEvidence: SelfPurchaseTierEvidenceSnapshot[];
+  initialResult: SelfPurchaseTierRewardResult;
+  latestResult: SelfPurchaseTierRewardResult;
+};
+
 export type ReferralReward = {
   rewardId: string;
   sourceOrderNumber: string;
@@ -299,6 +333,8 @@ export type ReferralReward = {
   pvRewardMoneyValue: number;
   calculatedCreditAmount: number;
   projectedCreditAmount?: number;
+  /** Present only for rewards created by the dynamic B3 own-purchase tier engine. */
+  selfPurchaseTierSnapshot?: SelfPurchaseTierRewardSnapshot;
   ruleVersion: number;
   ancestrySnapshot: string[];
   organizationCapPercentSnapshot?: number;
@@ -515,6 +551,22 @@ export function validateMembershipCommerceState(value: unknown): MembershipComme
         || reward.qualificationStatus !== "qualified"
       )
     ) throw new MembershipCommerceError("本人消費回饋直接發放資格格式不正確");
+    if (reward.selfPurchaseTierSnapshot !== undefined) {
+      const snapshot = reward.selfPurchaseTierSnapshot;
+      if (
+        reward.rewardType !== "self_purchase"
+        || !isObject(snapshot)
+        || snapshot.featureEnabled !== true
+        || !isObject(snapshot.rules)
+        || !isObject(snapshot.payout)
+        || !Array.isArray(snapshot.initialEvidence)
+        || !Array.isArray(snapshot.latestEvidence)
+        || !isObject(snapshot.initialResult)
+        || !isObject(snapshot.latestResult)
+        || !Number.isFinite(Date.parse(snapshot.windowStartedAt))
+        || !Number.isFinite(Date.parse(snapshot.windowEndedAt))
+      ) throw new MembershipCommerceError("本人消費動態級距快照格式不正確");
+    }
   }
   for (const consumption of Object.values(value.validConsumptionEvents as Record<string, ValidConsumptionEvent>)) {
     if (!consumption || typeof consumption.eventId !== "string" || typeof consumption.memberId !== "string" || typeof consumption.sourceOrderId !== "string" || typeof consumption.finalizedAt !== "string" || !Number.isFinite(Date.parse(consumption.finalizedAt)) || typeof consumption.createdAt !== "string" || !Number.isSafeInteger(consumption.rulesVersion)) throw new MembershipCommerceError("有效消費事件格式不正確");
@@ -528,6 +580,15 @@ export function validateMembershipCommerceState(value: unknown): MembershipComme
         || consumption.validConsumptionPV > 100_000_000
       )
     ) throw new MembershipCommerceError("有效消費事件 KD點格式不正確");
+    if (
+      consumption.reversedAt !== undefined
+      && consumption.reversedAt !== null
+      && !Number.isFinite(Date.parse(consumption.reversedAt))
+    ) throw new MembershipCommerceError("有效消費事件失效時間格式不正確");
+    if (
+      consumption.reversalOutcome !== undefined
+      && !["cancelled", "uncollected", "refunded", "returned"].includes(consumption.reversalOutcome)
+    ) throw new MembershipCommerceError("有效消費事件失效結果格式不正確");
     if (typeof consumption.includeCreditDiscount !== "boolean" || typeof consumption.includeShipping !== "boolean" || typeof consumption.activeSubscriptionAtCompletion !== "boolean" || !isObject(consumption.qualificationRulesSnapshot)) throw new MembershipCommerceError("有效消費事件快照不完整");
   }
   for (const round of Object.values(value.qualificationRounds as Record<string, QualificationRound>)) {
@@ -1331,6 +1392,144 @@ function rewardRound(value: number, mode: MembershipBusinessRules["money"]["roun
   if (!Number.isFinite(value) || value < 0) throw new MembershipCommerceError("推薦獎勵計算結果不正確");
   if (mode === OWNER_DECISION_REQUIRED) throw new MembershipCommerceError("金額尾數處理方式尚待 Owner 決定");
   return mode === "round-down" ? Math.floor(value) : mode === "round-up" ? Math.ceil(value) : Math.floor(value + 0.5);
+}
+
+function validForSelfPurchaseTier(consumption: ValidConsumptionEvent) {
+  return !consumption.reversedAt && !consumption.reversalOutcome;
+}
+
+function selfPurchaseTierThresholdAmount(
+  consumption: ValidConsumptionEvent,
+  thresholdBasis: SelfPurchaseRewardTierRules["thresholdBasis"],
+) {
+  if (thresholdBasis === "pv") {
+    const value = Number(consumption.validConsumptionPV ?? 0);
+    return Number.isFinite(value) && value > 0 ? value : 0;
+  }
+
+  // The trusted fulfillment path defines paid merchandise as subtotal minus
+  // applied credit. Do not reuse referral qualification's configurable
+  // validConsumptionAmount, which may include shipping or consumed credit.
+  return Math.max(
+    0,
+    consumption.merchandiseSubtotal - consumption.appliedCreditAmount,
+  );
+}
+
+function createSelfPurchaseTierSnapshot(input: {
+  state: MembershipCommerceState;
+  sourceMemberId: string;
+  orderId: string;
+  paidAmountBasis: number;
+  effectivePV: number;
+  completedAt: Date;
+  tierRules: SelfPurchaseRewardTierRules;
+  calculationMode: "paid_amount" | "pv";
+  pvRewardMoneyValue: number;
+  moneyRoundingMode: MembershipBusinessRules["money"]["roundingMode"];
+}): SelfPurchaseTierRewardSnapshot {
+  const anchorMilliseconds = input.completedAt.getTime();
+  const windowStartedAt = new Date(
+    anchorMilliseconds - input.tierRules.rollingWindowDays * QUALIFICATION_DAY_MS,
+  ).toISOString();
+  const windowEndedAt = input.completedAt.toISOString();
+  const currentAmount = input.tierRules.thresholdBasis === "pv"
+    ? input.effectivePV
+    : input.paidAmountBasis;
+  const currentConsumption = Object.values(input.state.validConsumptionEvents)
+    .find((consumption) =>
+      consumption.memberId === input.sourceMemberId
+      && consumption.sourceOrderId === input.orderId
+      && validForSelfPurchaseTier(consumption));
+  const priorEvidence: SelfPurchaseTierEvidenceSnapshot[] =
+    input.tierRules.accumulationBasis === "rolling_period"
+      ? Object.values(input.state.validConsumptionEvents)
+        .filter((consumption) => {
+          const finalizedAt = Date.parse(consumption.finalizedAt);
+          return (
+            consumption.memberId === input.sourceMemberId
+            && consumption.sourceOrderId !== input.orderId
+            && validForSelfPurchaseTier(consumption)
+            && finalizedAt >= Date.parse(windowStartedAt)
+            && finalizedAt <= anchorMilliseconds
+          );
+        })
+        .sort((left, right) =>
+          Date.parse(left.finalizedAt) - Date.parse(right.finalizedAt)
+          || left.eventId.localeCompare(right.eventId))
+        .map((consumption) => ({
+          validConsumptionEventId: consumption.eventId,
+          sourceOrderId: consumption.sourceOrderId,
+          finalizedAt: consumption.finalizedAt,
+          thresholdAmount: selfPurchaseTierThresholdAmount(
+            consumption,
+            input.tierRules.thresholdBasis,
+          ),
+          role: "prior" as const,
+        }))
+      : [];
+  const currentEvidence: SelfPurchaseTierEvidenceSnapshot = {
+    validConsumptionEventId: currentConsumption?.eventId ?? null,
+    sourceOrderId: input.orderId,
+    finalizedAt: currentConsumption?.finalizedAt ?? windowEndedAt,
+    thresholdAmount: currentAmount,
+    role: "current",
+  };
+  const initialEvidence = [...priorEvidence, currentEvidence];
+  const initialResult = calculateSelfPurchaseTierReward({
+    priorAmount: priorEvidence.reduce((sum, evidence) => sum + evidence.thresholdAmount, 0),
+    currentAmount,
+    calculationMethod: input.tierRules.calculationMethod,
+    tiers: input.tierRules.tiers,
+  });
+
+  return {
+    featureEnabled: true,
+    rules: {
+      thresholdBasis: input.tierRules.thresholdBasis,
+      accumulationBasis: input.tierRules.accumulationBasis,
+      calculationMethod: input.tierRules.calculationMethod,
+      rollingWindowDays: input.tierRules.rollingWindowDays,
+      tiers: structuredClone(input.tierRules.tiers),
+    },
+    payout: {
+      calculationMode: input.calculationMode,
+      pvRewardMoneyValue: input.pvRewardMoneyValue,
+      moneyRoundingMode: input.moneyRoundingMode,
+    },
+    windowStartedAt,
+    windowEndedAt,
+    initialEvidence: structuredClone(initialEvidence),
+    latestEvidence: structuredClone(initialEvidence),
+    initialResult: structuredClone(initialResult),
+    latestResult: structuredClone(initialResult),
+  };
+}
+
+function selfPurchaseTierPayout(input: {
+  result: SelfPurchaseTierRewardResult;
+  paidAmountBasis: number;
+  effectivePV: number;
+  snapshot: SelfPurchaseTierRewardSnapshot;
+}) {
+  const payoutRate = input.result.currentAmount > 0
+    ? input.result.rawReward / input.result.currentAmount * 100
+    : 0;
+  const rewardPV = input.snapshot.payout.calculationMode === "pv"
+    ? input.effectivePV * payoutRate / 100
+    : 0;
+  const rawCredit = input.snapshot.payout.calculationMode === "pv"
+    ? rewardPV * input.snapshot.payout.pvRewardMoneyValue
+    : input.paidAmountBasis * payoutRate / 100;
+
+  return {
+    rewardRate: input.result.effectiveRewardRate,
+    rewardPV,
+    calculatedCreditAmount: Math.max(
+      0,
+      rewardRound(rawCredit, input.snapshot.payout.moneyRoundingMode),
+    ),
+  };
 }
 
 function ancestryFor(state: MembershipCommerceState, memberId: string, maximum: number) {
@@ -2300,16 +2499,47 @@ export async function createSelfPurchaseRewardFromFulfillment(input: { sourceMem
   return transaction((state, now) => {
     if (remembered(state, key)) return Object.values(state.referralRewards).filter((item) => item.sourceOrderNumber === input.orderId && item.rewardType === "self_purchase");
     const rules = version.rules.referral;
-    if (!rules.programEnabled || rules.selfPurchaseRewardRate <= 0) { remember(state, key, "none", now); return []; }
+    const dynamicTiersEnabled = rules.selfPurchaseRewardTiers.enabled;
+    if (!rules.programEnabled || (!dynamicTiersEnabled && rules.selfPurchaseRewardRate <= 0)) { remember(state, key, "none", now); return []; }
     const paidAmountBasis = assertIntegerMoney(input.paidAmountBasis, "會員續購實付商品金額");
     const basePV = Math.max(0, Number(input.basePV ?? 0));
     const discountRatio = Math.max(0, Math.min(1, Number(input.discountRatio ?? 1)));
     const effectivePV = Math.max(0, Number(input.effectivePV ?? basePV * discountRatio));
-    if (rules.referralRewardCalculationMode === "pv" && !Number.isFinite(effectivePV)) throw new MembershipCommerceError("訂單有效 PV 不完整");
-    const rewardRate = rules.selfPurchaseRewardRate;
-    const rewardPV = rules.referralRewardCalculationMode === "pv" ? effectivePV * rewardRate / 100 : 0;
-    const rawCredit = rules.referralRewardCalculationMode === "pv" ? rewardPV * rules.pvRewardMoneyValue : paidAmountBasis * rewardRate / 100;
-    const calculatedCreditAmount = Math.max(0, rewardRound(rawCredit, version.rules.money.roundingMode));
+    if (
+      (rules.referralRewardCalculationMode === "pv"
+        || (dynamicTiersEnabled && rules.selfPurchaseRewardTiers.thresholdBasis === "pv"))
+      && !Number.isFinite(effectivePV)
+    ) throw new MembershipCommerceError("訂單有效 PV 不完整");
+    const selfPurchaseTierSnapshot = dynamicTiersEnabled
+      ? createSelfPurchaseTierSnapshot({
+          state,
+          sourceMemberId: input.sourceMemberId,
+          orderId: input.orderId,
+          paidAmountBasis,
+          effectivePV,
+          completedAt: now,
+          tierRules: rules.selfPurchaseRewardTiers,
+          calculationMode: rules.referralRewardCalculationMode,
+          pvRewardMoneyValue: rules.pvRewardMoneyValue,
+          moneyRoundingMode: version.rules.money.roundingMode,
+        })
+      : undefined;
+    const tierPayout = selfPurchaseTierSnapshot
+      ? selfPurchaseTierPayout({
+          result: selfPurchaseTierSnapshot.initialResult,
+          paidAmountBasis,
+          effectivePV,
+          snapshot: selfPurchaseTierSnapshot,
+        })
+      : null;
+    const rewardRate = tierPayout?.rewardRate ?? rules.selfPurchaseRewardRate;
+    const rewardPV = tierPayout?.rewardPV
+      ?? (rules.referralRewardCalculationMode === "pv" ? effectivePV * rewardRate / 100 : 0);
+    const rawCredit = rules.referralRewardCalculationMode === "pv"
+      ? rewardPV * rules.pvRewardMoneyValue
+      : paidAmountBasis * rewardRate / 100;
+    const calculatedCreditAmount = tierPayout?.calculatedCreditAmount
+      ?? Math.max(0, rewardRound(rawCredit, version.rules.money.roundingMode));
     if (calculatedCreditAmount < 1) { remember(state, key, "none", now); return []; }
     const qualificationWindowDays = rules.referralRewardQualificationWindowDays;
     const qualificationStartedAt = nowIso(now);
@@ -2332,7 +2562,7 @@ export async function createSelfPurchaseRewardFromFulfillment(input: { sourceMem
           )
         : null;
     const rewardId = deterministicId("reward", `${input.orderId}:self_purchase:0:${input.sourceMemberId}`);
-    const reward: ReferralReward = { rewardId, sourceOrderNumber: input.orderId, sourceMemberId: input.sourceMemberId, beneficiaryMemberId: input.sourceMemberId, referralLevel: 0, rewardType: "self_purchase", calculationMode: rules.referralRewardCalculationMode, paidAmountBasis, basePV, discountRatio, effectivePV, rewardRate, rewardPV, pvRewardMoneyValue: rules.pvRewardMoneyValue, calculatedCreditAmount, projectedCreditAmount: calculatedCreditAmount, ruleVersion: version.rulesVersion, ancestrySnapshot: [], organizationCapPercentSnapshot: 0, organizationCapAmountSnapshot: 0, monthlyCapAmountSnapshot: 0, monthlyCapPeriodSnapshot: nowIso(now).slice(0, 7), monthlyCapUsageAtRelease: null, monthlyCapLimitedAmount: null, reversalPolicySnapshot: rules.reversalPolicy, baseWaitingDaysSnapshot, returnProtectionDaysSnapshot, totalWaitingDaysSnapshot, releasePolicyVersion: "taipei-business-date-v1", successfulPickupBusinessDate, releaseEligibleBusinessDate, sourceOrderFinalState: "completed", cancellationReason: null, qualificationWindowDays: requiresReferralQualification ? qualificationWindowDays : undefined, qualificationStartedAt: requiresReferralQualification ? qualificationStartedAt : undefined, qualificationExpiresAt: requiresReferralQualification ? qualificationExpiry : undefined, qualificationStatus: requiresReferralQualification ? "awaiting_order" : "qualified", qualificationOrderNumber: null, qualificationOrderCreatedAt: null, qualificationOrderFinalState: null, qualificationQualifiedAt: requiresReferralQualification ? null : nowIso(now), qualificationAttempts: [], qualificationAuthority: requiresReferralQualification ? "qualification_coverage" : "self_purchase_direct", createdAt: nowIso(now), eligibleAt: nowIso(now), scheduledReleaseAt: releaseEligibleBusinessDate ? `${releaseEligibleBusinessDate}T00:00:00+08:00` : "", releasedAt: null, status: "scheduled", reversalCreditEntryId: null, rewardCreditEntryId: null, idempotencyKey: input.idempotencyKey };
+    const reward: ReferralReward = { rewardId, sourceOrderNumber: input.orderId, sourceMemberId: input.sourceMemberId, beneficiaryMemberId: input.sourceMemberId, referralLevel: 0, rewardType: "self_purchase", calculationMode: rules.referralRewardCalculationMode, paidAmountBasis, basePV, discountRatio, effectivePV, rewardRate, rewardPV, pvRewardMoneyValue: rules.pvRewardMoneyValue, calculatedCreditAmount, projectedCreditAmount: calculatedCreditAmount, selfPurchaseTierSnapshot, ruleVersion: version.rulesVersion, ancestrySnapshot: [], organizationCapPercentSnapshot: 0, organizationCapAmountSnapshot: 0, monthlyCapAmountSnapshot: 0, monthlyCapPeriodSnapshot: nowIso(now).slice(0, 7), monthlyCapUsageAtRelease: null, monthlyCapLimitedAmount: null, reversalPolicySnapshot: rules.reversalPolicy, baseWaitingDaysSnapshot, returnProtectionDaysSnapshot, totalWaitingDaysSnapshot, releasePolicyVersion: "taipei-business-date-v1", successfulPickupBusinessDate, releaseEligibleBusinessDate, sourceOrderFinalState: "completed", cancellationReason: null, qualificationWindowDays: requiresReferralQualification ? qualificationWindowDays : undefined, qualificationStartedAt: requiresReferralQualification ? qualificationStartedAt : undefined, qualificationExpiresAt: requiresReferralQualification ? qualificationExpiry : undefined, qualificationStatus: requiresReferralQualification ? "awaiting_order" : "qualified", qualificationOrderNumber: null, qualificationOrderCreatedAt: null, qualificationOrderFinalState: null, qualificationQualifiedAt: requiresReferralQualification ? null : nowIso(now), qualificationAttempts: [], qualificationAuthority: requiresReferralQualification ? "qualification_coverage" : "self_purchase_direct", createdAt: nowIso(now), eligibleAt: nowIso(now), scheduledReleaseAt: releaseEligibleBusinessDate ? `${releaseEligibleBusinessDate}T00:00:00+08:00` : "", releasedAt: null, status: "scheduled", reversalCreditEntryId: null, rewardCreditEntryId: null, idempotencyKey: input.idempotencyKey };
     state.referralRewards[rewardId] = reward;
     if (requiresReferralQualification) {
       coverRewardFromEarliestQualificationRound(
@@ -2504,14 +2734,106 @@ export async function runReferralRewardReleaseScheduler(input: { now?: Date; sta
   }, { now: input.now, filePath: input.stateFilePath });
 }
 
+function refreshScheduledSelfPurchaseTierRewardsForReversedConsumption(
+  state: MembershipCommerceState,
+  reversedConsumptions: ValidConsumptionEvent[],
+  now: Date,
+) {
+  const reversedEventIds = new Set(
+    reversedConsumptions.map((consumption) => consumption.eventId),
+  );
+  const reversedOrderIds = new Set(
+    reversedConsumptions.map((consumption) => consumption.sourceOrderId),
+  );
+  const reversedMemberIds = new Set(
+    reversedConsumptions.map((consumption) => consumption.memberId),
+  );
+  const changed: ReferralReward[] = [];
+
+  for (const reward of Object.values(state.referralRewards)) {
+    const snapshot = reward.selfPurchaseTierSnapshot;
+    if (
+      reward.rewardType !== "self_purchase"
+      || reward.status !== "scheduled"
+      || !snapshot
+      || snapshot.rules.accumulationBasis !== "rolling_period"
+      || reversedOrderIds.has(reward.sourceOrderNumber)
+      || !reversedMemberIds.has(reward.beneficiaryMemberId)
+      || !snapshot.initialEvidence.some((evidence) =>
+        evidence.role === "prior"
+        && evidence.validConsumptionEventId !== null
+        && reversedEventIds.has(evidence.validConsumptionEventId))
+    ) continue;
+
+    const latestEvidence = snapshot.initialEvidence.filter((evidence) => {
+      if (evidence.role === "current" || evidence.validConsumptionEventId === null) return true;
+      const consumption = state.validConsumptionEvents[evidence.validConsumptionEventId];
+      return Boolean(consumption && validForSelfPurchaseTier(consumption));
+    });
+    const currentEvidence = latestEvidence.find((evidence) => evidence.role === "current");
+    if (!currentEvidence) throw new MembershipCommerceError("本人消費動態級距缺少本次訂單證據");
+    const latestResult = calculateSelfPurchaseTierReward({
+      priorAmount: latestEvidence
+        .filter((evidence) => evidence.role === "prior")
+        .reduce((sum, evidence) => sum + evidence.thresholdAmount, 0),
+      currentAmount: currentEvidence.thresholdAmount,
+      calculationMethod: snapshot.rules.calculationMethod,
+      tiers: snapshot.rules.tiers,
+    });
+    const payout = selfPurchaseTierPayout({
+      result: latestResult,
+      paidAmountBasis: reward.paidAmountBasis,
+      effectivePV: reward.effectivePV,
+      snapshot,
+    });
+    const evidenceChanged = JSON.stringify(snapshot.latestEvidence) !== JSON.stringify(latestEvidence);
+    const resultChanged = JSON.stringify(snapshot.latestResult) !== JSON.stringify(latestResult);
+    const amountChanged = reward.projectedCreditAmount !== payout.calculatedCreditAmount;
+    if (!evidenceChanged && !resultChanged && !amountChanged) continue;
+
+    snapshot.latestEvidence = structuredClone(latestEvidence);
+    snapshot.latestResult = structuredClone(latestResult);
+    reward.rewardRate = payout.rewardRate;
+    reward.rewardPV = payout.rewardPV;
+    reward.projectedCreditAmount = payout.calculatedCreditAmount;
+    if (payout.calculatedCreditAmount < 1) {
+      reward.status = "cancelled";
+      reward.cancellationReason = "self_purchase_tier_below_minimum_after_reversal";
+    }
+    event(
+      state,
+      "self_purchase_tier_reward_refreshed",
+      {
+        rewardId: reward.rewardId,
+        projectedCreditAmount: payout.calculatedCreditAmount,
+        excludedEvidenceCount: snapshot.initialEvidence.length - latestEvidence.length,
+      },
+      now,
+      { memberId: reward.beneficiaryMemberId, orderId: reward.sourceOrderNumber },
+    );
+    changed.push(reward);
+  }
+
+  return changed;
+}
+
 export async function cancelOrReverseReferralRewards(input: { orderId: string; outcome?: "cancelled" | "uncollected" | "refunded" | "returned"; idempotencyKey: string; now?: Date; stateFilePath?: string; rulesFilePath?: string }) {
   const version = await getActiveMembershipRules(input.now, input.rulesFilePath);
   return transaction((state, now) => {
     const key = `referral-rewards:reverse:${input.idempotencyKey}`;
     if (remembered(state, key)) return [];
     const changed: ReferralReward[] = [];
+    const reversalOutcome = input.outcome ?? "cancelled";
+    const reversedConsumptions = Object.values(state.validConsumptionEvents)
+      .filter((consumption) => consumption.sourceOrderId === input.orderId)
+      .filter((consumption) => {
+        if (!validForSelfPurchaseTier(consumption)) return false;
+        consumption.reversedAt = nowIso(now);
+        consumption.reversalOutcome = reversalOutcome;
+        return true;
+      });
     for (const reward of Object.values(state.referralRewards).filter((item) => item.sourceOrderNumber === input.orderId)) {
-      reward.sourceOrderFinalState = input.outcome ?? "cancelled";
+      reward.sourceOrderFinalState = reversalOutcome;
       if (reward.status === "scheduled") { reward.status = "cancelled"; reward.cancellationReason = "source_transaction_reversed_before_release"; changed.push(reward); const source=event(state,"referral_reward_cancelled",{amount:reward.calculatedCreditAmount},now,{memberId:reward.beneficiaryMemberId,orderId:reward.sourceOrderNumber}); notify(state,version.rules,"referral_conversion",source.eventId,now,{memberId:reward.beneficiaryMemberId,safeData:{rewardAmount:0}}); continue; }
       if (reward.status !== "released" || (reward.reversalPolicySnapshot ?? version.rules.referral.reversalPolicy) !== "cancel-pending-and-reverse-released") continue;
       const original = reward.rewardCreditEntryId ? state.creditEntries[reward.rewardCreditEntryId] : undefined;
@@ -2520,6 +2842,13 @@ export async function cancelOrReverseReferralRewards(input: { orderId: string; o
       state.creditEntries[reversalId] = { creditEntryId: reversalId, memberId: reward.beneficiaryMemberId, sourceType: reward.rewardType === "self_purchase" ? "member_reward" : "referral", sourceReference: `referral_reward_reversal:${reward.rewardId}`, amount: -reward.calculatedCreditAmount, remainingAmount: 0, issuedAt: nowIso(now), expiresAt: nowIso(now), status: "consumed", createdAt: nowIso(now), metadata: { rewardId: reward.rewardId, reversalAmount: reward.calculatedCreditAmount, reversesCreditEntryId: reward.rewardCreditEntryId ?? "" } };
       reward.status = "reversed"; reward.reversedAt = nowIso(now); reward.reversalCreditEntryId = reversalId; changed.push(reward); const source=event(state,"referral_reward_reversed",{amount:reward.calculatedCreditAmount},now,{memberId:reward.beneficiaryMemberId,orderId:reward.sourceOrderNumber}); notify(state,version.rules,"referral_conversion",source.eventId,now,{memberId:reward.beneficiaryMemberId,safeData:{rewardAmount:0}});
     }
+    changed.push(
+      ...refreshScheduledSelfPurchaseTierRewardsForReversedConsumption(
+        state,
+        reversedConsumptions,
+        now,
+      ),
+    );
     remember(state, key, changed[0]?.rewardId ?? "none", now); return changed;
   }, { now: input.now, filePath: input.stateFilePath });
 }
