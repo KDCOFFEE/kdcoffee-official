@@ -133,6 +133,7 @@ export type ValidConsumptionEvent = {
   appliedCreditAmount: number;
   shippingAmount: number;
   validConsumptionAmount: number;
+  validConsumptionPV?: number;
   includeCreditDiscount: boolean;
   includeShipping: boolean;
   activeSubscriptionAtCompletion: boolean;
@@ -145,6 +146,7 @@ export type QualificationPathEvaluation = {
   windowDays: number;
   windowStartedAt: string;
   windowEndedAt: string;
+  qualificationBasis?: MembershipBusinessRules["referral"]["payoutQualification"]["qualificationBasis"];
   threshold: number;
   cumulativeAmount: number;
   eligibleEventIds: string[];
@@ -162,12 +164,14 @@ export type QualificationRound = {
   createdAt: string;
   rulesVersion: number;
   qualificationMode: MembershipBusinessRules["referral"]["payoutQualification"]["mode"];
+  qualificationBasis?: MembershipBusinessRules["referral"]["payoutQualification"]["qualificationBasis"];
   generalPath: QualificationPathEvaluation;
   subscriptionPath: QualificationPathEvaluation;
   finalQualified: true;
   selectedAccountingPaths: Array<"general" | "subscription">;
   excessConsumptionMode: MembershipBusinessRules["referral"]["payoutQualification"]["excessConsumptionMode"];
   consumptionAccounting: {
+    basis?: MembershipBusinessRules["referral"]["payoutQualification"]["qualificationBasis"];
     availableAmountBefore: number;
     consumedAmount: number;
     remainingAmountAfter: number;
@@ -440,6 +444,15 @@ export function validateMembershipCommerceState(value: unknown): MembershipComme
   for (const consumption of Object.values(value.validConsumptionEvents as Record<string, ValidConsumptionEvent>)) {
     if (!consumption || typeof consumption.eventId !== "string" || typeof consumption.memberId !== "string" || typeof consumption.sourceOrderId !== "string" || typeof consumption.finalizedAt !== "string" || !Number.isFinite(Date.parse(consumption.finalizedAt)) || typeof consumption.createdAt !== "string" || !Number.isSafeInteger(consumption.rulesVersion)) throw new MembershipCommerceError("有效消費事件格式不正確");
     for (const amount of [consumption.merchandiseSubtotal, consumption.appliedCreditAmount, consumption.shippingAmount, consumption.validConsumptionAmount]) assertIntegerMoney(amount, "有效消費事件金額");
+    if (
+      consumption.validConsumptionPV !== undefined
+      && (
+        typeof consumption.validConsumptionPV !== "number"
+        || !Number.isFinite(consumption.validConsumptionPV)
+        || consumption.validConsumptionPV < 0
+        || consumption.validConsumptionPV > 100_000_000
+      )
+    ) throw new MembershipCommerceError("有效消費事件 KD點格式不正確");
     if (typeof consumption.includeCreditDiscount !== "boolean" || typeof consumption.includeShipping !== "boolean" || typeof consumption.activeSubscriptionAtCompletion !== "boolean" || !isObject(consumption.qualificationRulesSnapshot)) throw new MembershipCommerceError("有效消費事件快照不完整");
   }
   for (const round of Object.values(value.qualificationRounds as Record<string, QualificationRound>)) {
@@ -1232,64 +1245,195 @@ function hasActiveSubscription(state: MembershipCommerceState, memberId: string)
 
 const QUALIFICATION_DAY_MS = 86_400_000;
 
-function remainingConsumptionByEvent(state: MembershipCommerceState) {
-  const consumed = new Map<string, number>();
-  for (const round of Object.values(state.qualificationRounds)) {
-    for (const allocation of round.consumptionAccounting.allocations) consumed.set(allocation.validConsumptionEventId, (consumed.get(allocation.validConsumptionEventId) ?? 0) + allocation.amount);
+type QualificationBasis = MembershipBusinessRules["referral"]["payoutQualification"]["qualificationBasis"];
+
+function qualificationBasisFromRules(
+  rules: MembershipBusinessRules["referral"]["payoutQualification"] | undefined,
+): QualificationBasis {
+  return rules?.qualificationBasis === "pv" ? "pv" : "money";
+}
+
+function qualificationBasisFromRound(round: QualificationRound): QualificationBasis {
+  return round.qualificationBasis === "pv" ? "pv" : "money";
+}
+
+function qualificationBasisValue(
+  consumption: ValidConsumptionEvent,
+  basis: QualificationBasis,
+) {
+  if (basis === "pv") {
+    const value = Number(consumption.validConsumptionPV ?? 0);
+    return Number.isFinite(value) && value > 0 ? value : 0;
   }
+
+  return Math.max(0, consumption.validConsumptionAmount);
+}
+
+function remainingConsumptionByEvent(
+  state: MembershipCommerceState,
+  basis: QualificationBasis,
+) {
+  const consumed = new Map<string, number>();
+
+  for (const round of Object.values(state.qualificationRounds)) {
+    if (qualificationBasisFromRound(round) !== basis) continue;
+
+    for (const allocation of round.consumptionAccounting.allocations) {
+      consumed.set(
+        allocation.validConsumptionEventId,
+        (consumed.get(allocation.validConsumptionEventId) ?? 0) + allocation.amount,
+      );
+    }
+  }
+
   const remaining = new Map<string, number>();
-  for (const consumption of Object.values(state.validConsumptionEvents)) remaining.set(consumption.eventId, Math.max(0, consumption.validConsumptionAmount - (consumed.get(consumption.eventId) ?? 0)));
+
+  for (const consumption of Object.values(state.validConsumptionEvents)) {
+    const available = qualificationBasisValue(consumption, basis);
+
+    remaining.set(
+      consumption.eventId,
+      Math.max(0, available - (consumed.get(consumption.eventId) ?? 0)),
+    );
+  }
+
   return remaining;
 }
 
-function evaluateQualificationPath(input: { state: MembershipCommerceState; memberId: string; finalizedAt: Date; windowDays: number; threshold: number; remaining: Map<string, number>; activeSubscriptionRequired: boolean; activeSubscriptionSatisfied: boolean }): QualificationPathEvaluation {
-  const windowStartedAt = new Date(input.finalizedAt.getTime() - input.windowDays * QUALIFICATION_DAY_MS);
+function evaluateQualificationPath(input: {
+  state: MembershipCommerceState;
+  memberId: string;
+  finalizedAt: Date;
+  windowDays: number;
+  basis: QualificationBasis;
+  threshold: number;
+  remaining: Map<string, number>;
+  activeSubscriptionRequired: boolean;
+  activeSubscriptionSatisfied: boolean;
+}): QualificationPathEvaluation {
+  const windowStartedAt = new Date(
+    input.finalizedAt.getTime() - input.windowDays * QUALIFICATION_DAY_MS,
+  );
+
   const eligible = Object.values(input.state.validConsumptionEvents)
     .filter((consumption) => {
       const occurredAt = Date.parse(consumption.finalizedAt);
-      return consumption.memberId === input.memberId && occurredAt >= windowStartedAt.getTime() && occurredAt <= input.finalizedAt.getTime() && (input.remaining.get(consumption.eventId) ?? 0) > 0;
+
+      return (
+        consumption.memberId === input.memberId
+        && occurredAt >= windowStartedAt.getTime()
+        && occurredAt <= input.finalizedAt.getTime()
+        && (input.remaining.get(consumption.eventId) ?? 0) > 0
+      );
     })
-    .sort((left, right) => Date.parse(left.finalizedAt) - Date.parse(right.finalizedAt) || left.eventId.localeCompare(right.eventId));
-  const cumulativeAmount = eligible.reduce((sum, consumption) => sum + (input.remaining.get(consumption.eventId) ?? 0), 0);
+    .sort(
+      (left, right) =>
+        Date.parse(left.finalizedAt) - Date.parse(right.finalizedAt)
+        || left.eventId.localeCompare(right.eventId),
+    );
+
+  const cumulativeAmount = eligible.reduce(
+    (sum, consumption) =>
+      sum + (input.remaining.get(consumption.eventId) ?? 0),
+    0,
+  );
+
   return {
     windowDays: input.windowDays,
     windowStartedAt: windowStartedAt.toISOString(),
     windowEndedAt: input.finalizedAt.toISOString(),
+    qualificationBasis: input.basis,
     threshold: input.threshold,
     cumulativeAmount,
     eligibleEventIds: eligible.map((consumption) => consumption.eventId),
     activeSubscriptionRequired: input.activeSubscriptionRequired,
     activeSubscriptionSatisfied: input.activeSubscriptionSatisfied,
-    passed: cumulativeAmount >= input.threshold && (!input.activeSubscriptionRequired || input.activeSubscriptionSatisfied),
+    passed:
+      cumulativeAmount >= input.threshold
+      && (!input.activeSubscriptionRequired || input.activeSubscriptionSatisfied),
   };
 }
 
-function allocateAvailableConsumption(input: { selectedPaths: Array<{ path: "general" | "subscription"; evaluation: QualificationPathEvaluation }>; remaining: Map<string, number>; mode: MembershipBusinessRules["referral"]["payoutQualification"]["excessConsumptionMode"] }) {
-  const union = new Set(input.selectedPaths.flatMap(({ evaluation }) => evaluation.eligibleEventIds));
-  const availableAmountBefore = [...union].reduce((sum, eventId) => sum + (input.remaining.get(eventId) ?? 0), 0);
+function allocateAvailableConsumption(input: {
+  selectedPaths: Array<{
+    path: "general" | "subscription";
+    evaluation: QualificationPathEvaluation;
+  }>;
+  remaining: Map<string, number>;
+  basis: QualificationBasis;
+  mode: MembershipBusinessRules["referral"]["payoutQualification"]["excessConsumptionMode"];
+}) {
+  const union = new Set(
+    input.selectedPaths.flatMap(({ evaluation }) => evaluation.eligibleEventIds),
+  );
+
+  const availableAmountBefore = [...union].reduce(
+    (sum, eventId) => sum + (input.remaining.get(eventId) ?? 0),
+    0,
+  );
+
   const allocated = new Map<string, number>();
+
   const take = (eventId: string, requested: number) => {
-    const available = (input.remaining.get(eventId) ?? 0) - (allocated.get(eventId) ?? 0);
+    const available =
+      (input.remaining.get(eventId) ?? 0)
+      - (allocated.get(eventId) ?? 0);
+
     const amount = Math.min(available, requested);
-    if (amount > 0) allocated.set(eventId, (allocated.get(eventId) ?? 0) + amount);
+
+    if (amount > 0) {
+      allocated.set(
+        eventId,
+        (allocated.get(eventId) ?? 0) + amount,
+      );
+    }
+
     return amount;
   };
+
   if (input.mode === "reset") {
-    for (const eventId of union) take(eventId, Number.MAX_SAFE_INTEGER);
+    for (const eventId of union) {
+      take(eventId, Number.MAX_SAFE_INTEGER);
+    }
   } else {
     for (const { evaluation } of input.selectedPaths) {
-      const alreadyCounted = evaluation.eligibleEventIds.reduce((sum, eventId) => sum + (allocated.get(eventId) ?? 0), 0);
+      const alreadyCounted = evaluation.eligibleEventIds.reduce(
+        (sum, eventId) => sum + (allocated.get(eventId) ?? 0),
+        0,
+      );
+
       let required = Math.max(0, evaluation.threshold - alreadyCounted);
+
       for (const eventId of evaluation.eligibleEventIds) {
         required -= take(eventId, required);
         if (required === 0) break;
       }
-      if (required !== 0) throw new MembershipCommerceError("推薦資格消費配置不足");
+
+      if (required !== 0) {
+        throw new MembershipCommerceError("推薦資格消費配置不足");
+      }
     }
   }
-  const allocations = [...allocated].map(([validConsumptionEventId, amount]) => ({ validConsumptionEventId, amount }));
-  const consumedAmount = allocations.reduce((sum, allocation) => sum + allocation.amount, 0);
-  return { availableAmountBefore, consumedAmount, remainingAmountAfter: availableAmountBefore - consumedAmount, allocations };
+
+  const allocations = [...allocated].map(
+    ([validConsumptionEventId, amount]) => ({
+      validConsumptionEventId,
+      amount,
+    }),
+  );
+
+  const consumedAmount = allocations.reduce(
+    (sum, allocation) => sum + allocation.amount,
+    0,
+  );
+
+  return {
+    basis: input.basis,
+    availableAmountBefore,
+    consumedAmount,
+    remainingAmountAfter: availableAmountBefore - consumedAmount,
+    allocations,
+  };
 }
 
 /** Records one immutable event and, at most, one successful qualification round for a completed canonical order. */
@@ -1309,6 +1453,26 @@ export async function recordValidConsumptionFromCompletedOrder(input: { memberId
   const version = await getActiveMembershipRules(finalizedAt, input.rulesFilePath);
   const qualificationRules = structuredClone(version.rules.referral.payoutQualification);
   const validConsumptionAmount = Math.max(0, financial.subtotal - (qualificationRules.validConsumption.includeCreditDiscount ? 0 : appliedCreditAmount) + (qualificationRules.validConsumption.includeShipping ? financial.shipping : 0));
+
+  const orderItems = Array.isArray(order.items)
+    ? order.items as Array<Record<string, unknown>>
+    : [];
+
+  const validConsumptionPV = orderItems.reduce((sum, item) => {
+    const quantity = Math.max(1, Number(item.quantity || 1));
+    const itemPV = Math.max(
+      0,
+      Number(item.effectivePV ?? item.basePV ?? 0),
+    );
+
+    return sum + itemPV * quantity;
+  }, 0);
+
+  if (!Number.isFinite(validConsumptionPV) || validConsumptionPV < 0) {
+    throw new MembershipCommerceError("有效消費訂單 KD點證據不完整");
+  }
+
+  const qualificationBasis = qualificationBasisFromRules(qualificationRules);
   const sourceReference = `completed-order:${input.orderId}`;
 
   return transaction((state, now) => {
@@ -1330,6 +1494,7 @@ export async function recordValidConsumptionFromCompletedOrder(input: { memberId
       appliedCreditAmount,
       shippingAmount: financial.shipping,
       validConsumptionAmount,
+      validConsumptionPV,
       includeCreditDiscount: qualificationRules.validConsumption.includeCreditDiscount,
       includeShipping: qualificationRules.validConsumption.includeShipping,
       activeSubscriptionAtCompletion: hasActiveSubscription(state, input.memberId),
@@ -1339,9 +1504,41 @@ export async function recordValidConsumptionFromCompletedOrder(input: { memberId
     };
     state.validConsumptionEvents[eventId] = consumption;
 
-    const remaining = remainingConsumptionByEvent(state);
-    const generalPath = evaluateQualificationPath({ state, memberId: input.memberId, finalizedAt, windowDays: qualificationRules.generalMember.rollingWindowDays, threshold: qualificationRules.generalMember.cumulativeValidConsumptionThreshold, remaining, activeSubscriptionRequired: false, activeSubscriptionSatisfied: true });
-    const subscriptionPath = evaluateQualificationPath({ state, memberId: input.memberId, finalizedAt, windowDays: qualificationRules.activeSubscriptionMember.rollingWindowDays, threshold: qualificationRules.activeSubscriptionMember.cumulativeValidConsumptionThreshold, remaining, activeSubscriptionRequired: true, activeSubscriptionSatisfied: consumption.activeSubscriptionAtCompletion });
+    const remaining = remainingConsumptionByEvent(state, qualificationBasis);
+
+    const generalThreshold =
+      qualificationBasis === "pv"
+        ? qualificationRules.generalMember.cumulativeValidPVThreshold
+        : qualificationRules.generalMember.cumulativeValidConsumptionThreshold;
+
+    const subscriptionThreshold =
+      qualificationBasis === "pv"
+        ? qualificationRules.activeSubscriptionMember.cumulativeValidPVThreshold
+        : qualificationRules.activeSubscriptionMember.cumulativeValidConsumptionThreshold;
+
+    const generalPath = evaluateQualificationPath({
+      state,
+      memberId: input.memberId,
+      finalizedAt,
+      windowDays: qualificationRules.generalMember.rollingWindowDays,
+      basis: qualificationBasis,
+      threshold: generalThreshold,
+      remaining,
+      activeSubscriptionRequired: false,
+      activeSubscriptionSatisfied: true,
+    });
+
+    const subscriptionPath = evaluateQualificationPath({
+      state,
+      memberId: input.memberId,
+      finalizedAt,
+      windowDays: qualificationRules.activeSubscriptionMember.rollingWindowDays,
+      basis: qualificationBasis,
+      threshold: subscriptionThreshold,
+      remaining,
+      activeSubscriptionRequired: true,
+      activeSubscriptionSatisfied: consumption.activeSubscriptionAtCompletion,
+    });
     const mode = qualificationRules.mode;
     const qualified = mode === "general" ? generalPath.passed : mode === "subscription" ? subscriptionPath.passed : mode === "either" ? generalPath.passed || subscriptionPath.passed : generalPath.passed && subscriptionPath.passed;
     let qualificationRound: QualificationRound | null = null;
@@ -1355,7 +1552,12 @@ export async function recordValidConsumptionFromCompletedOrder(input: { memberId
             : subscriptionPath.passed
               ? [{ path: "subscription", evaluation: subscriptionPath }]
               : [{ path: "general", evaluation: generalPath }];
-      const accounting = allocateAvailableConsumption({ selectedPaths, remaining, mode: qualificationRules.excessConsumptionMode });
+      const accounting = allocateAvailableConsumption({
+        selectedPaths,
+        remaining,
+        basis: qualificationBasis,
+        mode: qualificationRules.excessConsumptionMode,
+      });
       const roundId = id("qualification");
       qualificationRound = {
         roundId,
@@ -1366,6 +1568,7 @@ export async function recordValidConsumptionFromCompletedOrder(input: { memberId
         createdAt: nowIso(now),
         rulesVersion: version.rulesVersion,
         qualificationMode: mode,
+        qualificationBasis,
         generalPath,
         subscriptionPath,
         finalQualified: true,

@@ -20,11 +20,21 @@ export type MembershipNotificationEventType = (typeof membershipNotificationEven
 export type NotificationEventPolicy = { enabled: boolean; channels: Array<"member_center" | "email" | "line" | "admin"> };
 export type ReferralPayoutQualificationMode = "general" | "subscription" | "either" | "both";
 export type ReferralExcessConsumptionMode = "reset" | "carry";
+export type ReferralQualificationBasis = "money" | "pv";
 
 export type ReferralPayoutQualificationRules = {
   mode: ReferralPayoutQualificationMode;
-  generalMember: { rollingWindowDays: number; cumulativeValidConsumptionThreshold: number };
-  activeSubscriptionMember: { rollingWindowDays: number; cumulativeValidConsumptionThreshold: number };
+  qualificationBasis: ReferralQualificationBasis;
+  generalMember: {
+    rollingWindowDays: number;
+    cumulativeValidConsumptionThreshold: number;
+    cumulativeValidPVThreshold: number;
+  };
+  activeSubscriptionMember: {
+    rollingWindowDays: number;
+    cumulativeValidConsumptionThreshold: number;
+    cumulativeValidPVThreshold: number;
+  };
   validConsumption: { includeCreditDiscount: boolean; includeShipping: boolean };
   rewardCoverage: { lookbackDays: number; forwardDays: number };
   excessConsumptionMode: ReferralExcessConsumptionMode;

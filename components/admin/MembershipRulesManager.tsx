@@ -200,28 +200,201 @@ export default function MembershipRulesManager({ initialRevision, initialVersion
       <p className="membership-inline-note">會員續購回饋目前先保存為 Owner 可調整設定；實際自己消費回饋入帳會在下一階段接入 Reward Engine。</p>
       <fieldset className="membership-intervals">
         <legend>推薦獎勵領取資格</legend>
-        <p>此區先建立推薦獎勵資格規則；資格計算功能將在後續階段接用，現階段不會改變既有發放流程。</p>
+        <p>此區直接控制會員是否取得推薦獎勵領取資格；只改變資格判定，不會改變推薦比例、獎勵點數或既有入帳流程。</p>
+
+        <h3>資格判定基準</h3>
         <div className="membership-fields two">
-          <Choice label="資格判定模式" value={rules.referral.payoutQualification.mode} onChange={(value) => change((draft) => { draft.referral.payoutQualification.mode = value as MembershipBusinessRules["referral"]["payoutQualification"]["mode"]; })}><option value="general">只採一般會員資格</option><option value="subscription">只採訂閱會員資格</option><option value="either">任一資格符合即可</option><option value="both">兩種資格都必須符合</option></Choice>
-          <Choice label="超額消費處理" value={rules.referral.payoutQualification.excessConsumptionMode} onChange={(value) => change((draft) => { draft.referral.payoutQualification.excessConsumptionMode = value as MembershipBusinessRules["referral"]["payoutQualification"]["excessConsumptionMode"]; })}><option value="reset">達標後歸零，不累計超額</option><option value="carry">超額可延續至下一輪</option></Choice>
+          <Choice
+            label="資格判定基準"
+            value={rules.referral.payoutQualification.qualificationBasis}
+            onChange={(value) =>
+              change((draft) => {
+                draft.referral.payoutQualification.qualificationBasis =
+                  value as MembershipBusinessRules["referral"]["payoutQualification"]["qualificationBasis"];
+              })
+            }
+          >
+            <option value="money">消費金額（元）</option>
+            <option value="pv">商品 {rules.referral.pointDisplayName || "KD點"}</option>
+          </Choice>
+
+          <Choice
+            label="資格判定模式"
+            value={rules.referral.payoutQualification.mode}
+            onChange={(value) =>
+              change((draft) => {
+                draft.referral.payoutQualification.mode =
+                  value as MembershipBusinessRules["referral"]["payoutQualification"]["mode"];
+              })
+            }
+          >
+            <option value="general">只採一般會員資格</option>
+            <option value="subscription">只採訂閱會員資格</option>
+            <option value="either">任一資格符合即可</option>
+            <option value="both">兩種資格都必須符合</option>
+          </Choice>
+
+          <Choice
+            label="超額消費處理"
+            value={rules.referral.payoutQualification.excessConsumptionMode}
+            onChange={(value) =>
+              change((draft) => {
+                draft.referral.payoutQualification.excessConsumptionMode =
+                  value as MembershipBusinessRules["referral"]["payoutQualification"]["excessConsumptionMode"];
+              })
+            }
+          >
+            <option value="reset">達標後歸零，不累計超額</option>
+            <option value="carry">超額可延續至下一輪</option>
+          </Choice>
         </div>
+
+        <p className="membership-inline-note">
+          {rules.referral.payoutQualification.qualificationBasis === "pv"
+            ? `目前使用商品 ${rules.referral.pointDisplayName || "KD點"} 判定資格；商品售價高低不會直接決定是否合格。`
+            : "目前使用有效消費金額判定資格。"}
+        </p>
+
         <h3>一般會員資格</h3>
         <div className="membership-fields two">
-          <NumberField label="一般會員累積期間" value={rules.referral.payoutQualification.generalMember.rollingWindowDays} min={1} max={3650} unit="天" onChange={(value) => change((draft) => { draft.referral.payoutQualification.generalMember.rollingWindowDays = value; })} />
-          <NumberField label="一般會員有效消費門檻" value={rules.referral.payoutQualification.generalMember.cumulativeValidConsumptionThreshold} min={0} max={100000000} unit="元" onChange={(value) => change((draft) => { draft.referral.payoutQualification.generalMember.cumulativeValidConsumptionThreshold = value; })} />
+          <NumberField
+            label="一般會員累積期間"
+            value={rules.referral.payoutQualification.generalMember.rollingWindowDays}
+            min={1}
+            max={3650}
+            unit="天"
+            onChange={(value) =>
+              change((draft) => {
+                draft.referral.payoutQualification.generalMember.rollingWindowDays = value;
+              })
+            }
+          />
+
+          {rules.referral.payoutQualification.qualificationBasis === "pv" ? (
+            <NumberField
+              label="一般會員商品 KD點門檻"
+              value={rules.referral.payoutQualification.generalMember.cumulativeValidPVThreshold}
+              min={0}
+              max={100000000}
+              unit={rules.referral.pointDisplayName || "KD點"}
+              onChange={(value) =>
+                change((draft) => {
+                  draft.referral.payoutQualification.generalMember.cumulativeValidPVThreshold = value;
+                })
+              }
+            />
+          ) : (
+            <NumberField
+              label="一般會員有效消費門檻"
+              value={rules.referral.payoutQualification.generalMember.cumulativeValidConsumptionThreshold}
+              min={0}
+              max={100000000}
+              unit="元"
+              onChange={(value) =>
+                change((draft) => {
+                  draft.referral.payoutQualification.generalMember.cumulativeValidConsumptionThreshold = value;
+                })
+              }
+            />
+          )}
         </div>
-        <p>一般會員：最近 {rules.referral.payoutQualification.generalMember.rollingWindowDays} 天累積有效消費達 NT$ {rules.referral.payoutQualification.generalMember.cumulativeValidConsumptionThreshold.toLocaleString("zh-TW")}。</p>
+
+        <p>
+          一般會員：最近 {rules.referral.payoutQualification.generalMember.rollingWindowDays} 天
+          {rules.referral.payoutQualification.qualificationBasis === "pv"
+            ? `累積商品 ${rules.referral.pointDisplayName || "KD點"} 達 ${rules.referral.payoutQualification.generalMember.cumulativeValidPVThreshold.toLocaleString("zh-TW")}。`
+            : `累積有效消費達 NT$ ${rules.referral.payoutQualification.generalMember.cumulativeValidConsumptionThreshold.toLocaleString("zh-TW")}。`}
+        </p>
+
         <h3>訂閱會員資格</h3>
         <div className="membership-fields two">
-          <NumberField label="訂閱會員累積期間" value={rules.referral.payoutQualification.activeSubscriptionMember.rollingWindowDays} min={1} max={3650} unit="天" onChange={(value) => change((draft) => { draft.referral.payoutQualification.activeSubscriptionMember.rollingWindowDays = value; })} />
-          <NumberField label="訂閱會員有效消費門檻" value={rules.referral.payoutQualification.activeSubscriptionMember.cumulativeValidConsumptionThreshold} min={0} max={100000000} unit="元" onChange={(value) => change((draft) => { draft.referral.payoutQualification.activeSubscriptionMember.cumulativeValidConsumptionThreshold = value; })} />
+          <NumberField
+            label="訂閱會員累積期間"
+            value={rules.referral.payoutQualification.activeSubscriptionMember.rollingWindowDays}
+            min={1}
+            max={3650}
+            unit="天"
+            onChange={(value) =>
+              change((draft) => {
+                draft.referral.payoutQualification.activeSubscriptionMember.rollingWindowDays = value;
+              })
+            }
+          />
+
+          {rules.referral.payoutQualification.qualificationBasis === "pv" ? (
+            <NumberField
+              label="訂閱會員商品 KD點門檻"
+              value={rules.referral.payoutQualification.activeSubscriptionMember.cumulativeValidPVThreshold}
+              min={0}
+              max={100000000}
+              unit={rules.referral.pointDisplayName || "KD點"}
+              onChange={(value) =>
+                change((draft) => {
+                  draft.referral.payoutQualification.activeSubscriptionMember.cumulativeValidPVThreshold = value;
+                })
+              }
+            />
+          ) : (
+            <NumberField
+              label="訂閱會員有效消費門檻"
+              value={rules.referral.payoutQualification.activeSubscriptionMember.cumulativeValidConsumptionThreshold}
+              min={0}
+              max={100000000}
+              unit="元"
+              onChange={(value) =>
+                change((draft) => {
+                  draft.referral.payoutQualification.activeSubscriptionMember.cumulativeValidConsumptionThreshold = value;
+                })
+              }
+            />
+          )}
         </div>
-        <p>訂閱會員：須為有效訂閱會員，最近 {rules.referral.payoutQualification.activeSubscriptionMember.rollingWindowDays} 天累積有效消費達 NT$ {rules.referral.payoutQualification.activeSubscriptionMember.cumulativeValidConsumptionThreshold.toLocaleString("zh-TW")}。</p>
+
+        <p>
+          訂閱會員：須為有效訂閱會員，最近 {rules.referral.payoutQualification.activeSubscriptionMember.rollingWindowDays} 天
+          {rules.referral.payoutQualification.qualificationBasis === "pv"
+            ? `累積商品 ${rules.referral.pointDisplayName || "KD點"} 達 ${rules.referral.payoutQualification.activeSubscriptionMember.cumulativeValidPVThreshold.toLocaleString("zh-TW")}。`
+            : `累積有效消費達 NT$ ${rules.referral.payoutQualification.activeSubscriptionMember.cumulativeValidConsumptionThreshold.toLocaleString("zh-TW")}。`}
+        </p>
+
         <h3>有效消費計算</h3>
-        <div className="membership-checks">
-          <label><input type="checkbox" checked={rules.referral.payoutQualification.validConsumption.includeCreditDiscount} onChange={(event) => change((draft) => { draft.referral.payoutQualification.validConsumption.includeCreditDiscount = event.target.checked; })} />抵用金折抵金額計入有效消費</label>
-          <label><input type="checkbox" checked={rules.referral.payoutQualification.validConsumption.includeShipping} onChange={(event) => change((draft) => { draft.referral.payoutQualification.validConsumption.includeShipping = event.target.checked; })} />運費計入有效消費</label>
-        </div>
+
+        {rules.referral.payoutQualification.qualificationBasis === "money" ? (
+          <div className="membership-checks">
+            <label>
+              <input
+                type="checkbox"
+                checked={rules.referral.payoutQualification.validConsumption.includeCreditDiscount}
+                onChange={(event) =>
+                  change((draft) => {
+                    draft.referral.payoutQualification.validConsumption.includeCreditDiscount =
+                      event.target.checked;
+                  })
+                }
+              />
+              抵用金折抵金額計入有效消費
+            </label>
+
+            <label>
+              <input
+                type="checkbox"
+                checked={rules.referral.payoutQualification.validConsumption.includeShipping}
+                onChange={(event) =>
+                  change((draft) => {
+                    draft.referral.payoutQualification.validConsumption.includeShipping =
+                      event.target.checked;
+                  })
+                }
+              />
+              運費計入有效消費
+            </label>
+          </div>
+        ) : (
+          <p className="membership-inline-note">
+            商品 {rules.referral.pointDisplayName || "KD點"} 模式直接累積完成訂單中保存的商品
+            {rules.referral.pointDisplayName || "KD點"}；抵用金與運費不會改變商品點數資格。
+          </p>
+        )}
         <h3>獎勵涵蓋期間</h3>
         <div className="membership-fields two">
           <NumberField label="資格日前涵蓋" value={rules.referral.payoutQualification.rewardCoverage.lookbackDays} min={1} max={3650} unit="天" onChange={(value) => change((draft) => { draft.referral.payoutQualification.rewardCoverage.lookbackDays = value; })} />

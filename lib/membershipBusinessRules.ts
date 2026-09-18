@@ -12,7 +12,7 @@ import {
 import { getMembershipRulesFile } from "./storagePaths";
 
 export { MEMBERSHIP_RULES_SCHEMA_VERSION, OWNER_DECISION_REQUIRED } from "./membershipRuleTypes";
-export type { MembershipBusinessRules, MembershipRulesStore, MoneyRoundingMode, ReferralExcessConsumptionMode, ReferralPayoutQualificationMode, ReferralPayoutQualificationRules, RulesVersion } from "./membershipRuleTypes";
+export type { MembershipBusinessRules, MembershipRulesStore, MoneyRoundingMode, ReferralExcessConsumptionMode, ReferralPayoutQualificationMode, ReferralPayoutQualificationRules, ReferralQualificationBasis, RulesVersion } from "./membershipRuleTypes";
 
 export class MembershipRulesValidationError extends Error {
   constructor(message: string) {
@@ -91,8 +91,17 @@ export const DEFAULT_MEMBERSHIP_RULES: MembershipBusinessRules = {
     selfPurchaseRewardRate: 5,
     payoutQualification: {
       mode: "either",
-      generalMember: { rollingWindowDays: 30, cumulativeValidConsumptionThreshold: 1_500 },
-      activeSubscriptionMember: { rollingWindowDays: 30, cumulativeValidConsumptionThreshold: 1_000 },
+      qualificationBasis: "money",
+      generalMember: {
+        rollingWindowDays: 30,
+        cumulativeValidConsumptionThreshold: 1_500,
+        cumulativeValidPVThreshold: 1_500,
+      },
+      activeSubscriptionMember: {
+        rollingWindowDays: 30,
+        cumulativeValidConsumptionThreshold: 1_000,
+        cumulativeValidPVThreshold: 1_000,
+      },
       validConsumption: { includeCreditDiscount: true, includeShipping: false },
       rewardCoverage: { lookbackDays: 7, forwardDays: 30 },
       excessConsumptionMode: "reset",
@@ -318,11 +327,25 @@ export function validateMembershipBusinessRules(value: unknown, options: Members
   if (!object(rules.referral.payoutQualification)) throw new MembershipRulesValidationError("推薦獎勵領取資格設定不完整");
   const payout = rules.referral.payoutQualification;
   validateOwnerChoice(payout.mode, ["general", "subscription", "either", "both"], "推薦獎勵資格判定模式");
+  validateOwnerChoice(payout.qualificationBasis, ["money", "pv"], "推薦獎勵資格計算基準");
   if (!object(payout.generalMember) || !object(payout.activeSubscriptionMember)) throw new MembershipRulesValidationError("推薦獎勵會員資格設定不完整");
   integer(payout.generalMember.rollingWindowDays, 1, 3650, "一般會員累積期間");
-  integer(payout.generalMember.cumulativeValidConsumptionThreshold, 0, 100_000_000, "一般會員有效消費門檻");
+  integer(payout.generalMember.cumulativeValidConsumptionThreshold, 0, 100_000_000, "一般會員有效消費金額門檻");
+  if (
+    typeof payout.generalMember.cumulativeValidPVThreshold !== "number"
+    || !Number.isFinite(payout.generalMember.cumulativeValidPVThreshold)
+    || payout.generalMember.cumulativeValidPVThreshold < 0
+    || payout.generalMember.cumulativeValidPVThreshold > 100_000_000
+  ) throw new MembershipRulesValidationError("一般會員有效消費 KD點門檻設定不正確");
+
   integer(payout.activeSubscriptionMember.rollingWindowDays, 1, 3650, "訂閱會員累積期間");
-  integer(payout.activeSubscriptionMember.cumulativeValidConsumptionThreshold, 0, 100_000_000, "訂閱會員有效消費門檻");
+  integer(payout.activeSubscriptionMember.cumulativeValidConsumptionThreshold, 0, 100_000_000, "訂閱會員有效消費金額門檻");
+  if (
+    typeof payout.activeSubscriptionMember.cumulativeValidPVThreshold !== "number"
+    || !Number.isFinite(payout.activeSubscriptionMember.cumulativeValidPVThreshold)
+    || payout.activeSubscriptionMember.cumulativeValidPVThreshold < 0
+    || payout.activeSubscriptionMember.cumulativeValidPVThreshold > 100_000_000
+  ) throw new MembershipRulesValidationError("訂閱會員有效消費 KD點門檻設定不正確");
   if (!object(payout.validConsumption) || typeof payout.validConsumption.includeCreditDiscount !== "boolean" || typeof payout.validConsumption.includeShipping !== "boolean") throw new MembershipRulesValidationError("有效消費計算設定不正確");
   if (!object(payout.rewardCoverage)) throw new MembershipRulesValidationError("推薦獎勵涵蓋期間設定不完整");
   integer(payout.rewardCoverage.lookbackDays, 1, 3650, "獎勵涵蓋回看期間");

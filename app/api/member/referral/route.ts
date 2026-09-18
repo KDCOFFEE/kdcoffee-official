@@ -65,13 +65,20 @@ export async function GET(request: Request) {
       pvRewardMoneyValue: referral.pvRewardMoneyValue,
       payoutQualification: {
         mode: referral.payoutQualification.mode,
+        qualificationBasis: referral.payoutQualification.qualificationBasis,
         generalMember: {
           windowDays: referral.payoutQualification.generalMember.rollingWindowDays,
-          threshold: referral.payoutQualification.generalMember.cumulativeValidConsumptionThreshold,
+          threshold:
+            referral.payoutQualification.qualificationBasis === "pv"
+              ? referral.payoutQualification.generalMember.cumulativeValidPVThreshold
+              : referral.payoutQualification.generalMember.cumulativeValidConsumptionThreshold,
         },
         activeSubscriptionMember: {
           windowDays: referral.payoutQualification.activeSubscriptionMember.rollingWindowDays,
-          threshold: referral.payoutQualification.activeSubscriptionMember.cumulativeValidConsumptionThreshold,
+          threshold:
+            referral.payoutQualification.qualificationBasis === "pv"
+              ? referral.payoutQualification.activeSubscriptionMember.cumulativeValidPVThreshold
+              : referral.payoutQualification.activeSubscriptionMember.cumulativeValidConsumptionThreshold,
         },
       },
       baseWaitingDays: referral.referralRewardBaseWaitingDays,

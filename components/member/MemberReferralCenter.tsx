@@ -14,6 +14,7 @@ type Center = {
     pvRewardMoneyValue: number;
     payoutQualification: {
       mode: "general" | "subscription" | "either" | "both";
+      qualificationBasis: "money" | "pv";
       generalMember: { windowDays: number; threshold: number };
       activeSubscriptionMember: { windowDays: number; threshold: number };
     };
@@ -325,13 +326,24 @@ export default function MemberReferralCenter() {
           const itemText = reward.sourceItems.length ? reward.sourceItems.map((item) => `${item.name}${item.optionLabel ? `・${item.optionLabel}` : ""}${item.optionDetail ? ` ${item.optionDetail}` : ""}${item.preparationLabel ? `・${item.preparationLabel}` : ""} × ${item.quantity}`).join("、") : "來源訂單商品明細未保留";
           const basis = reward.calculationMode === "pv" ? `${reward.effectivePV.toLocaleString("zh-TW")} ${displayPointName} × ${reward.rewardRate.toLocaleString("zh-TW", { maximumFractionDigits: 2 })}%` : `依正式回饋規則 × ${reward.rewardRate.toLocaleString("zh-TW", { maximumFractionDigits: 2 })}%`;
           const q = data.displayRules.payoutQualification;
+
+          const qualificationMetric =
+            q.qualificationBasis === "pv"
+              ? `商品 ${displayPointName}`
+              : "有效消費";
+
+          const qualificationThreshold = (value: number) =>
+            q.qualificationBasis === "pv"
+              ? pointValue(value, displayPointName)
+              : creditValue(value);
+
           const qualificationRuleText = q.mode === "general"
-            ? `最近 ${q.generalMember.windowDays} 天累積有效消費達 ${q.generalMember.threshold.toLocaleString("zh-TW")}。`
+            ? `最近 ${q.generalMember.windowDays} 天累積${qualificationMetric}達 ${qualificationThreshold(q.generalMember.threshold)}。`
             : q.mode === "subscription"
-              ? `有效定期配送會員最近 ${q.activeSubscriptionMember.windowDays} 天累積有效消費達 ${q.activeSubscriptionMember.threshold.toLocaleString("zh-TW")}。`
+              ? `有效定期配送會員最近 ${q.activeSubscriptionMember.windowDays} 天累積${qualificationMetric}達 ${qualificationThreshold(q.activeSubscriptionMember.threshold)}。`
               : q.mode === "both"
-                ? `需同時符合一般會員最近 ${q.generalMember.windowDays} 天有效消費 ${q.generalMember.threshold.toLocaleString("zh-TW")}，以及有效定期配送會員最近 ${q.activeSubscriptionMember.windowDays} 天有效消費 ${q.activeSubscriptionMember.threshold.toLocaleString("zh-TW")}。`
-                : `一般會員最近 ${q.generalMember.windowDays} 天有效消費達 ${q.generalMember.threshold.toLocaleString("zh-TW")}，或有效定期配送會員最近 ${q.activeSubscriptionMember.windowDays} 天有效消費達 ${q.activeSubscriptionMember.threshold.toLocaleString("zh-TW")}，任一條件符合即可。`;
+                ? `需同時符合一般會員最近 ${q.generalMember.windowDays} 天累積${qualificationMetric}達 ${qualificationThreshold(q.generalMember.threshold)}，以及有效定期配送會員最近 ${q.activeSubscriptionMember.windowDays} 天累積${qualificationMetric}達 ${qualificationThreshold(q.activeSubscriptionMember.threshold)}。`
+                : `一般會員最近 ${q.generalMember.windowDays} 天累積${qualificationMetric}達 ${qualificationThreshold(q.generalMember.threshold)}，或有效定期配送會員最近 ${q.activeSubscriptionMember.windowDays} 天累積${qualificationMetric}達 ${qualificationThreshold(q.activeSubscriptionMember.threshold)}，任一條件符合即可。`;
           const qualificationDetail = reward.qualificationStatus === "awaiting_order"
             ? "尚待完成符合資格的有效消費，系統會在符合條件的訂單完成後自動判定。"
             : reward.qualificationStatus === "awaiting_completion"
