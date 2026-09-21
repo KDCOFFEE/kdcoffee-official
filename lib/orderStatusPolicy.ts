@@ -121,6 +121,7 @@ export function assessOrderStatusCompatibility(
 ): OrderStatusCompatibility {
   const status = String(order.status || "");
   if (isAbnormalInventoryStatus(status)) return { compatible: true };
+  if (status === "uncollected") return { compatible: true };
   if (statusAllowedForDelivery(order.orderMode, status)) return { compatible: true };
 
   return {

@@ -174,11 +174,7 @@ export function assessOrderCancellation(
       };
     }
     if (order.orderMode === "studio_pickup") {
-      return {
-        allowed: false,
-        errorMessage:
-          "此工作室自取訂單已備妥待取，不能使用一般取消直接回補庫存。",
-      };
+      return { allowed: true };
     }
 
     return {
@@ -244,6 +240,7 @@ export function orderStatusLabel(status: string) {
       shipped: "已寄件",
       ready_for_pickup: "等待取貨",
       completed: "已完成",
+      uncollected: "未取貨",
       cancelled: "已取消",
       inventory_pending: "庫存交易待確認",
       inventory_failed: "庫存交易失敗",
