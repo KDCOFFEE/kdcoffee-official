@@ -77,8 +77,8 @@ export default async function OrderCompletePage({ searchParams }: { searchParams
           </a>
         </div>
 
-        <p className="order-success-help">已登入 LINE 會員的顧客，可至會員頁查看資料與訂單紀錄。</p>
-        <Link className="order-success-member" href="/member">查看 LINE 會員資料</Link>
+        <p className="order-success-help">已登入會員可至會員中心查看會員資料、訂單與回饋紀錄。</p>
+        <Link className="order-success-member" href="/member">進入會員中心</Link>
       </section>
     </main>
   );
