@@ -625,7 +625,7 @@ export default async function MemberPage({
                       className="member-order-detail-link"
                       href={`/orders/${encodeURIComponent(order.orderNumber)}`}
                     >
-                      查看訂單／詢問此訂單
+                      查看／管理此訂單
                     </Link>
                   </div>
                 </article>

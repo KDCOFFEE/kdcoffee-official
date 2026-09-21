@@ -67,6 +67,7 @@ export async function GET(
 
   return NextResponse.json({
     order: customerOrderDto(authorized.order, creditReservation),
+    access: authorized.access.access,
     messages: getOrderMessages(authorized.order),
     timeline: buildOrderTimeline(authorized.order, "customer"),
   }, { headers: { "Cache-Control": "no-store" } });
