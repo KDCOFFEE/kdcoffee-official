@@ -50,6 +50,23 @@ type Center = {
     rewardPV: number;
     creditAmount: number;
     projectedCreditAmount: number;
+    selfPurchaseTierSnapshot: {
+      rules: {
+        thresholdBasis: "paid_amount" | "pv";
+        accumulationBasis: "single_order" | "rolling_period";
+        calculationMethod: "whole_order" | "marginal";
+        rollingWindowDays: number;
+        tiers: Array<{ threshold: number; rewardRate: number }>;
+      };
+      latestResult: {
+        priorAmount: number;
+        currentAmount: number;
+        attainedAmount: number;
+        effectiveRewardRate: number;
+        rawReward: number;
+        breakdown: Array<{ threshold: number; rewardRate: number; amount: number; reward: number }>;
+      };
+    } | null;
     status: string;
     cancellationReason: string | null;
     qualificationStatus: string;
@@ -386,7 +403,23 @@ export default function MemberReferralCenter() {
                 : reward
                     .qualificationExpiresAt;
           const itemText = reward.sourceItems.length ? reward.sourceItems.map((item) => `${item.name}${item.optionLabel ? `・${item.optionLabel}` : ""}${item.optionDetail ? ` ${item.optionDetail}` : ""}${item.preparationLabel ? `・${item.preparationLabel}` : ""} × ${item.quantity}`).join("、") : "來源訂單商品明細未保留";
-          const basis = reward.calculationMode === "pv" ? `${reward.effectivePV.toLocaleString("zh-TW")} ${displayPointName} × ${reward.rewardRate.toLocaleString("zh-TW", { maximumFractionDigits: 2 })}%` : `依正式回饋規則 × ${reward.rewardRate.toLocaleString("zh-TW", { maximumFractionDigits: 2 })}%`;
+          const tierSnapshot = reward.rewardType === "self_purchase" ? reward.selfPurchaseTierSnapshot : null;
+          const tierResult = tierSnapshot?.latestResult ?? null;
+          const tierUnit = tierSnapshot?.rules.thresholdBasis === "pv" ? displayPointName : "元";
+          const basis = tierSnapshot && tierResult
+            ? tierSnapshot.rules.calculationMethod === "marginal"
+              ? `本次 ${tierResult.currentAmount.toLocaleString("zh-TW")} ${tierUnit}｜分段計算｜最高級距 ${tierResult.effectiveRewardRate.toLocaleString("zh-TW", { maximumFractionDigits: 2 })}%`
+              : `本次 ${tierResult.currentAmount.toLocaleString("zh-TW")} ${tierUnit}｜整筆套用 ${tierResult.effectiveRewardRate.toLocaleString("zh-TW", { maximumFractionDigits: 2 })}%`
+            : reward.calculationMode === "pv"
+              ? `${reward.effectivePV.toLocaleString("zh-TW")} ${displayPointName} × ${reward.rewardRate.toLocaleString("zh-TW", { maximumFractionDigits: 2 })}%`
+              : `依正式回饋規則 × ${reward.rewardRate.toLocaleString("zh-TW", { maximumFractionDigits: 2 })}%`;
+          const tierBreakdownText = tierSnapshot && tierResult
+            ? tierSnapshot.rules.calculationMethod === "marginal"
+              ? tierResult.breakdown
+                  .map((part) => `${part.amount.toLocaleString("zh-TW")} ${tierUnit} × ${part.rewardRate.toLocaleString("zh-TW", { maximumFractionDigits: 2 })}% = ${part.reward.toLocaleString("zh-TW", { maximumFractionDigits: 2 })} ${displayPointName}`)
+                  .join("；")
+              : `${tierResult.currentAmount.toLocaleString("zh-TW")} ${tierUnit} × ${tierResult.effectiveRewardRate.toLocaleString("zh-TW", { maximumFractionDigits: 2 })}% = ${tierResult.rawReward.toLocaleString("zh-TW", { maximumFractionDigits: 2 })} ${displayPointName}`
+            : null;
           const q = data.displayRules.payoutQualification;
 
           const qualificationMetric =
@@ -497,6 +530,7 @@ export default function MemberReferralCenter() {
                     <small>① 回饋來源</small>
                     <strong>{reward.rewardType === "self_purchase" ? "自己的消費" : `第 ${reward.referralLevel} 層推薦消費`}</strong>
                     <span>{basis}</span>
+                    {tierBreakdownText ? <span>{tierBreakdownText}</span> : null}
                   </div>
                   <div>
                     <small>② 預計取得</small>
