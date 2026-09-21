@@ -14,3 +14,37 @@
   .membership-intervals label{width:max-content;max-width:100%}
   .membership-intervals input[type="number"]{flex-basis:6rem;width:6rem!important;min-width:6rem}
 }
+
+/* J.5D.6B3.4 — Admin dynamic self-purchase reward tier editor */
+.self-purchase-tier-editor{display:grid;gap:16px}
+.self-purchase-tier-toggle{max-width:760px}
+.self-purchase-tier-explainer{display:flex;flex-wrap:wrap;gap:6px 10px;padding:12px 14px;border:1px solid #dccfc3;background:#fffaf5;color:#4a382e;line-height:1.65}
+.self-purchase-tier-table{display:grid;gap:8px;min-width:0}
+.self-purchase-tier-head,.self-purchase-tier-row{display:grid;grid-template-columns:minmax(88px,.65fr) minmax(180px,1.2fr) minmax(160px,1fr) minmax(110px,.75fr);gap:10px;align-items:center}
+.self-purchase-tier-head{padding:0 10px;color:#756255;font-size:12px;font-weight:850;letter-spacing:.06em}
+.self-purchase-tier-row{padding:10px;border:1px solid #dfd2c6;background:#fff;border-radius:10px}
+.self-purchase-tier-row>strong{color:#392a22}
+.self-purchase-tier-row label{display:flex;align-items:center;gap:8px;min-width:0}
+.self-purchase-tier-row input[type="number"]{box-sizing:border-box;width:100%;min-width:0;height:42px;padding:8px 10px;border:1px solid #cfc1b3;background:#fff;color:#30251f;font:inherit;font-weight:800;font-variant-numeric:tabular-nums;text-align:right}
+.self-purchase-tier-row input[type="number"]:disabled{background:#f2ede8;color:#74665d;cursor:not-allowed}
+.self-purchase-tier-row label b{flex:0 0 auto;min-width:2.5em;color:#69584d;font-size:13px}
+.self-purchase-tier-remove{min-height:40px;padding:8px 12px;border:1px solid #d4c4b8;background:#fff;color:#5d4032;border-radius:8px;font-weight:800;cursor:pointer}
+.self-purchase-tier-remove:disabled{opacity:.45;cursor:not-allowed}
+.self-purchase-tier-actions{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px}
+.self-purchase-tier-actions button{min-height:42px;padding:9px 14px;border:1px solid #b89c86;background:#fff7f0;color:#4d3428;border-radius:8px;font-weight:850;cursor:pointer}
+.self-purchase-tier-actions button:disabled{opacity:.45;cursor:not-allowed}
+.self-purchase-tier-actions small{color:#75665d;line-height:1.55}
+
+@media(max-width:760px){
+  .self-purchase-tier-head{display:none}
+  .self-purchase-tier-row{grid-template-columns:1fr 1fr}
+  .self-purchase-tier-row>strong{grid-column:1/-1}
+  .self-purchase-tier-remove{grid-column:1/-1}
+}
+
+@media(max-width:520px){
+  .self-purchase-tier-row{grid-template-columns:1fr}
+  .self-purchase-tier-row>strong,.self-purchase-tier-remove{grid-column:auto}
+}
+.self-purchase-tier-row input[type="number"]{flex:1 1 auto!important;width:100%!important;min-width:0!important}
+.self-purchase-tier-editor .sr-only{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}

@@ -196,7 +196,7 @@ export default function MembershipRulesManager({ initialRevision, initialVersion
         <Choice label="獎勵計算方式" value={rules.referral.referralRewardCalculationMode} onChange={(value) => change((draft) => { draft.referral.referralRewardCalculationMode = value as "paid_amount"|"pv"; })}><option value="paid_amount">商品實付金額</option><option value="pv">{rules.referral.pointDisplayName || "KD點"} 商品獎勵單位</option></Choice>
         <TextField label="點數顯示名稱" value={rules.referral.pointDisplayName} placeholder="例如：KD點" onChange={(value) => change((draft) => { draft.referral.pointDisplayName = value; })} />
         <NumberField
-          label="會員本人消費回饋"
+          label="固定本人消費回饋（動態級距關閉時）"
           value={rules.referral.selfPurchaseRewardRate}
           min={0}
           max={100}
@@ -255,11 +255,221 @@ export default function MembershipRulesManager({ initialRevision, initialVersion
         </label>
       </div>
 
+      <fieldset className="membership-intervals self-purchase-tier-editor">
+        <legend>本人消費動態回饋級距</legend>
+        <p>
+          開啟後，本人消費回饋不再只使用上方固定比例，而是依下列級距判定。
+          級距判定基準與推薦獎勵領取資格互相獨立。
+        </p>
+
+        <label className="membership-switch self-purchase-tier-toggle">
+          <input
+            type="checkbox"
+            checked={rules.referral.selfPurchaseRewardTiers.enabled}
+            onChange={(event) =>
+              change((draft) => {
+                draft.referral.selfPurchaseRewardTiers.enabled =
+                  event.target.checked;
+              })
+            }
+          />
+          <span>
+            <b>啟用本人消費動態級距</b>
+            <small>關閉時沿用上方固定本人消費回饋比例</small>
+          </span>
+        </label>
+
+        <div className="membership-fields three">
+          <Choice
+            label="級距判定基準"
+            value={rules.referral.selfPurchaseRewardTiers.thresholdBasis}
+            onChange={(value) =>
+              change((draft) => {
+                draft.referral.selfPurchaseRewardTiers.thresholdBasis =
+                  value as MembershipBusinessRules["referral"]["selfPurchaseRewardTiers"]["thresholdBasis"];
+              })
+            }
+          >
+            <option value="paid_amount">商品實付金額</option>
+            <option value="pv">商品 {rules.referral.pointDisplayName || "KD點"}</option>
+          </Choice>
+
+          <Choice
+            label="級距累積方式"
+            value={rules.referral.selfPurchaseRewardTiers.accumulationBasis}
+            onChange={(value) =>
+              change((draft) => {
+                draft.referral.selfPurchaseRewardTiers.accumulationBasis =
+                  value as MembershipBusinessRules["referral"]["selfPurchaseRewardTiers"]["accumulationBasis"];
+              })
+            }
+          >
+            <option value="single_order">單筆訂單</option>
+            <option value="rolling_period">期間累積</option>
+          </Choice>
+
+          <Choice
+            label="回饋計算方式"
+            value={rules.referral.selfPurchaseRewardTiers.calculationMethod}
+            onChange={(value) =>
+              change((draft) => {
+                draft.referral.selfPurchaseRewardTiers.calculationMethod =
+                  value as MembershipBusinessRules["referral"]["selfPurchaseRewardTiers"]["calculationMethod"];
+              })
+            }
+          >
+            <option value="whole_order">整筆套用達成級距</option>
+            <option value="marginal">各級距分段計算</option>
+          </Choice>
+        </div>
+
+        {rules.referral.selfPurchaseRewardTiers.accumulationBasis ===
+        "rolling_period" ? (
+          <div className="membership-fields two">
+            <NumberField
+              label="累積期間"
+              value={rules.referral.selfPurchaseRewardTiers.rollingWindowDays}
+              min={1}
+              max={3650}
+              unit="天"
+              onChange={(value) =>
+                change((draft) => {
+                  draft.referral.selfPurchaseRewardTiers.rollingWindowDays =
+                    value;
+                })
+              }
+            />
+          </div>
+        ) : null}
+
+        <div className="self-purchase-tier-explainer">
+          <strong>目前設定：</strong>
+          <span>
+            {rules.referral.selfPurchaseRewardTiers.thresholdBasis === "pv"
+              ? `以商品 ${rules.referral.pointDisplayName || "KD點"} 判定級距`
+              : "以商品實付金額判定級距"}
+            ；
+            {rules.referral.selfPurchaseRewardTiers.accumulationBasis ===
+            "rolling_period"
+              ? `訂單完成時往前 ${rules.referral.selfPurchaseRewardTiers.rollingWindowDays} 天累積`
+              : "每筆訂單獨立判定"}
+            ；
+            {rules.referral.selfPurchaseRewardTiers.calculationMethod ===
+            "marginal"
+              ? "各級距分段計算"
+              : "整筆訂單套用達成的最高級距"}
+            。
+          </span>
+        </div>
+
+        <div className="self-purchase-tier-table" role="group" aria-label="本人消費回饋級距">
+          <div className="self-purchase-tier-head" aria-hidden="true">
+            <span>級距</span>
+            <span>門檻</span>
+            <span>回饋率</span>
+            <span>操作</span>
+          </div>
+
+          {rules.referral.selfPurchaseRewardTiers.tiers.map((tier, index) => (
+            <div className="self-purchase-tier-row" key={`self-purchase-tier-${index}`}>
+              <strong>第 {index + 1} 級</strong>
+
+              <label>
+                <span className="sr-only">第 {index + 1} 級門檻</span>
+                <input
+                  type="number"
+                  min={0}
+                  max={100000000}
+                  step="any"
+                  value={tier.threshold}
+                  disabled={index === 0}
+                  onChange={(event) =>
+                    change((draft) => {
+                      draft.referral.selfPurchaseRewardTiers.tiers[index].threshold =
+                        Number(event.target.value);
+                    })
+                  }
+                />
+                <b>
+                  {rules.referral.selfPurchaseRewardTiers.thresholdBasis ===
+                  "pv"
+                    ? rules.referral.pointDisplayName || "KD點"
+                    : "元"}
+                </b>
+              </label>
+
+              <label>
+                <span className="sr-only">第 {index + 1} 級回饋率</span>
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  step="any"
+                  value={tier.rewardRate}
+                  onChange={(event) =>
+                    change((draft) => {
+                      draft.referral.selfPurchaseRewardTiers.tiers[index].rewardRate =
+                        Number(event.target.value);
+                    })
+                  }
+                />
+                <b>%</b>
+              </label>
+
+              <button
+                type="button"
+                className="self-purchase-tier-remove"
+                disabled={index === 0 || rules.referral.selfPurchaseRewardTiers.tiers.length <= 1}
+                onClick={() =>
+                  change((draft) => {
+                    draft.referral.selfPurchaseRewardTiers.tiers.splice(index, 1);
+                  })
+                }
+              >
+                刪除此級
+              </button>
+            </div>
+          ))}
+        </div>
+
+        <div className="self-purchase-tier-actions">
+          <button
+            type="button"
+            disabled={rules.referral.selfPurchaseRewardTiers.tiers.length >= 50}
+            onClick={() =>
+              change((draft) => {
+                const tiers = draft.referral.selfPurchaseRewardTiers.tiers;
+                const last = tiers.at(-1);
+                tiers.push({
+                  threshold: (last?.threshold ?? 0) + 100,
+                  rewardRate: last?.rewardRate ?? draft.referral.selfPurchaseRewardRate,
+                });
+              })
+            }
+          >
+            ＋ 新增回饋級距
+          </button>
+          <small>第一級門檻固定為 0；其餘門檻必須由小到大且不可重複。</small>
+        </div>
+
+        <p className="membership-inline-note">
+          回饋金額的計算基準仍由上方「獎勵計算方式」控制：目前為
+          {rules.referral.referralRewardCalculationMode === "pv"
+            ? `${rules.referral.pointDisplayName || "KD點"} × 每 1 ${rules.referral.pointDisplayName || "KD點"} 換算金額`
+            : "商品實付金額"}
+          。這與「級距判定基準」是兩個獨立設定。
+        </p>
+      </fieldset>
+
       <p className="membership-inline-note">
         {rules.referral.selfPurchaseEligibilityMode ===
         "first_completed_order"
-          ? `會員第一筆成功完成的訂單即可依目前 ${rules.referral.selfPurchaseRewardRate}% 設定建立本人消費回饋。`
-          : `會員需先有一筆有效完成消費；之後成功完成的訂單才依目前 ${rules.referral.selfPurchaseRewardRate}% 設定建立本人消費回饋。`}
+          ? rules.referral.selfPurchaseRewardTiers.enabled
+            ? "會員第一筆成功完成的訂單即可依目前動態級距建立本人消費回饋。"
+            : `會員第一筆成功完成的訂單即可依目前 ${rules.referral.selfPurchaseRewardRate}% 固定比例建立本人消費回饋。`
+          : rules.referral.selfPurchaseRewardTiers.enabled
+            ? "會員需先有一筆有效完成消費；之後成功完成的訂單才依目前動態級距建立本人消費回饋。"
+            : `會員需先有一筆有效完成消費；之後成功完成的訂單才依目前 ${rules.referral.selfPurchaseRewardRate}% 固定比例建立本人消費回饋。`}
       </p>
 
       <p className="membership-inline-note">
