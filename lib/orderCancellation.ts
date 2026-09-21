@@ -284,7 +284,11 @@ export async function requestMemberOrderCancellation(input: CancellationRuntime 
   if (!order) throw new MemberOrderCancellationError("找不到訂單", 404);
   assertMemberOwnsOrder(order, input.memberId);
 
-  if (MEMBER_DIRECT_CANCELLATION_STATUSES.has(order.status) || order.status === "cancelled") {
+  if (
+    MEMBER_DIRECT_CANCELLATION_STATUSES.has(order.status) ||
+    (order.status === "ready_for_pickup" && order.orderMode === "studio_pickup") ||
+    order.status === "cancelled"
+  ) {
     const result = await cancelOrderCanonically({
       orderNumber: input.orderNumber,
       cancellationReason: input.cancellationReason,

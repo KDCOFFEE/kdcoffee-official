@@ -11,6 +11,7 @@ type CustomerOrderSummary = {
   orderNumber: string;
   createdAt: string;
   status: string;
+  orderMode: string;
   statusLabel: string;
   modeLabel: string;
   financialBreakdown: {
@@ -44,8 +45,11 @@ const MEMBER_CANCELLATION_REASONS = [
   "其他",
 ] as const;
 
-function cancellationPresentation(status: string) {
-  if (DIRECT_MEMBER_CANCELLATION_STATUSES.has(status)) {
+function cancellationPresentation(status: string, orderMode: string) {
+  if (
+    DIRECT_MEMBER_CANCELLATION_STATUSES.has(status) ||
+    (status === "ready_for_pickup" && orderMode === "studio_pickup")
+  ) {
     return {
       canSubmit: true,
       note: "目前可提出自助取消。確認後系統會依既有安全流程處理訂單、庫存與已保留的會員抵用金。",
@@ -264,9 +268,9 @@ export default function OrderConversation({ orderNumber }: { orderNumber: string
             <h2>取消訂單</h2>
           </div>
 
-          <p>{cancellationPresentation(order.status).note}</p>
+          <p>{cancellationPresentation(order.status, order.orderMode).note}</p>
 
-          {cancellationPresentation(order.status).canSubmit ? (
+          {cancellationPresentation(order.status, order.orderMode).canSubmit ? (
             <form className="order-cancellation-form" onSubmit={cancelOrder}>
               <label htmlFor="order-cancellation-reason">取消原因</label>
               <select
