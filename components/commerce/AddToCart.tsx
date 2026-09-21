@@ -32,7 +32,7 @@ function normalizeOptions(product: CoffeeArtwork): PurchaseOption[] {
 }
 
 export default function AddToCart({ product, showPv = false, pointDisplayName = "KD點" }: { product: CoffeeArtwork; showPv?: boolean; pointDisplayName?: string }) {
-  const { addItem } = useCart();
+  const { addItem, items } = useCart();
   const options = useMemo(() => normalizeOptions(product), [product]);
   const [selectedId, setSelectedId] = useState(options[0]?.id || "");
   const [preparation, setPreparation] = useState("咖啡豆");
@@ -56,7 +56,17 @@ export default function AddToCart({ product, showPv = false, pointDisplayName = 
   const customRoastEligible =
     !!selectedLine &&
     isCustomRoastLineEligible(selectedLine);
-  const unavailable = product.purchasable === false || product.status === "sold_out" || !option || option.enabled === false || option.stock === 0;
+  const optionStock = option && typeof option.stock === "number" && Number.isInteger(option.stock) && option.stock >= 0 ? option.stock : 0;
+  const sameSkuInCart = option
+    ? items.reduce((sum, item) => sum + (
+        item.slug === product.slug &&
+        (item.optionId || item.optionLabel) === (option.id || option.label)
+          ? item.quantity
+          : 0
+      ), 0)
+    : 0;
+  const remainingStock = Math.max(0, optionStock - sameSkuInCart);
+  const unavailable = product.purchasable === false || product.status === "sold_out" || !option || option.enabled === false || optionStock === 0;
 
   function resetCustomRoast() {
     setCustomRoast(false);
@@ -73,10 +83,11 @@ export default function AddToCart({ product, showPv = false, pointDisplayName = 
   }
 
   function changeQuantity(next: number) {
-    const safe = Math.max(1, Math.min(99, next));
-    setQuantity(safe);
-    setNotice("");
     if (!option) return;
+    const requested = Math.max(1, Math.min(99, next));
+    const safe = Math.min(requested, Math.max(1, remainingStock));
+    setQuantity(safe);
+    setNotice(requested > remainingStock ? `目前現貨最多還可加入 ${remainingStock} 包。` : "");
     const nextLine = {
       slug: product.slug,
       optionId: option.id,
@@ -92,6 +103,8 @@ export default function AddToCart({ product, showPv = false, pointDisplayName = 
 
   function commit(goCheckout: boolean) {
     if (!option || unavailable) return setNotice("此規格目前暫停供應。");
+    if (remainingStock <= 0) return setNotice(`購物車已達此規格的現貨上限（${optionStock} 包）。`);
+    if (quantity > remainingStock) return setNotice(`目前現貨最多還可加入 ${remainingStock} 包。`);
     if (customRoast && !customRoastEligible) return setNotice("專屬烘焙需同一款半磅咖啡豆或咖啡粉達 4 包（2 磅）。");
     if (customRoast && !roastLevel) return setNotice("請先選擇專屬烘焙的烘焙度。");
     const prep = needsPreparation ? preparation || "咖啡豆" : undefined;
@@ -106,6 +119,7 @@ export default function AddToCart({ product, showPv = false, pointDisplayName = 
       roastLevel: customRoastEligible && customRoast ? roastLevel : undefined,
       roastNote: customRoastEligible && customRoast ? roastNote.trim() : undefined,
       unitPrice: option.price,
+      stock: optionStock,
     }, quantity);
 
     if (goCheckout) {
@@ -127,7 +141,7 @@ export default function AddToCart({ product, showPv = false, pointDisplayName = 
           const soldOut = item.stock === 0;
           const active = option?.id === item.id;
           return <button key={item.id} type="button" aria-pressed={active} className={active ? "active" : ""} onClick={() => chooseOption(item)} disabled={soldOut}>
-            <span><strong>{item.label}</strong><small>{item.detail}{soldOut ? "・暫時售完" : ""}{showPv && item.pvEnabled ? `・${item.pvValue ?? 0} ${pointDisplayName}` : ""}</small></span><b>NT$ {item.price.toLocaleString("zh-TW")}</b>
+            <span><strong>{item.label}</strong><small>{item.detail}{soldOut ? "・暫時售完" : `・現貨 ${Math.max(0, Number(item.stock) || 0)} 包`}{showPv && item.pvEnabled ? `・${item.pvValue ?? 0} ${pointDisplayName}` : ""}</small></span><b>NT$ {item.price.toLocaleString("zh-TW")}</b>
           </button>;
         })}
       </div>
@@ -150,6 +164,7 @@ export default function AddToCart({ product, showPv = false, pointDisplayName = 
         </div>
         <button type="button" className="add-cart-button" onClick={() => commit(false)} disabled={unavailable}>加入購物車</button>
       </div>
+      {option && optionStock > 0 ? <p className="buy-hint">目前現貨上限 {optionStock} 包{sameSkuInCart > 0 ? `；購物車已有 ${sameSkuInCart} 包，還可加入 ${remainingStock} 包。` : "。"}</p> : null}
 
       {customRoastEligible ? <section className="custom-roast-panel" aria-live="polite">
         <div className="custom-roast-badge">已達 2 磅</div>

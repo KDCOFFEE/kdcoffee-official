@@ -142,7 +142,7 @@ function normalizeProduct(value: unknown) {
               ...item,
               stock: product.stock || 0,
               enabled: true,
-            }))).map((item) => ({ ...item, pvEnabled: item.pvEnabled === true, pvValue: typeof item.pvValue === "number" ? item.pvValue : 0 })),
+            }))).map((item) => ({ ...item, allowBackorder: item.allowBackorder === true, pvEnabled: item.pvEnabled === true, pvValue: typeof item.pvValue === "number" ? item.pvValue : 0 })),
   };
 }
 

@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useState } from "react";
-import { cartItemKey, useCart } from "@/components/commerce/CartProvider";
+import { cartItemKey, cartSkuKey, useCart } from "@/components/commerce/CartProvider";
 import {
   ALLOWED_ROAST_LEVELS,
   isCustomRoastLineEligible,
@@ -20,6 +20,9 @@ export default function CartPage() {
           const key = cartItemKey(item);
           const eligible = isCustomRoastLineEligible(item);
           const note = draftNotes[key] ?? item.roastNote ?? "";
+          const stockLimit = typeof item.stock === "number" && Number.isInteger(item.stock) && item.stock >= 0 ? item.stock : undefined;
+          const skuQuantity = items.reduce((sum, entry) => sum + (cartSkuKey(entry) === cartSkuKey(item) ? entry.quantity : 0), 0);
+          const atStockLimit = stockLimit !== undefined && skuQuantity >= stockLimit;
           return <article className="cart-row" key={key}>
             <div className="cart-row-copy">
               <h2>{item.name}</h2>
@@ -32,9 +35,10 @@ export default function CartPage() {
                   <label>風味需求或備註<textarea value={note} maxLength={160} rows={2} placeholder="例如：希望甜感明顯、酸感柔和" onChange={e=>setDraftNotes(v=>({...v,[key]:e.target.value}))} onBlur={()=>updateCustomRoast(key,{enabled:true,roastLevel:item.roastLevel || "淺中焙",roastNote:note})}/></label>
                 </div> : null}
               </section> : item.customRoast ? <div className="cart-custom-roast"><b>專屬烘焙：{item.roastLevel || "待確認"}</b>{item.roastNote ? <span>{item.roastNote}</span> : null}</div> : null}
+              {stockLimit !== undefined ? <small>現貨購買上限：此規格共 {stockLimit} 包{atStockLimit ? "（已達上限）" : ""}</small> : null}
               <button className="cart-remove-button" type="button" onClick={() => removeItem(key)}>刪除此商品</button>
             </div>
-            <div className="quantity-control"><button type="button" onClick={() => item.quantity <= 1 ? removeItem(key) : updateQuantity(key, item.quantity - 1)}>−</button><span>{item.quantity}</span><button type="button" onClick={() => updateQuantity(key, item.quantity + 1)}>＋</button></div>
+            <div className="quantity-control"><button type="button" onClick={() => item.quantity <= 1 ? removeItem(key) : updateQuantity(key, item.quantity - 1)}>−</button><span>{item.quantity}</span><button type="button" disabled={atStockLimit} title={atStockLimit ? "已達現貨庫存上限" : undefined} onClick={() => updateQuantity(key, item.quantity + 1)}>＋</button></div>
             <strong>NT$ {(item.unitPrice * item.quantity).toLocaleString("zh-TW")}</strong>
           </article>;
         })}</div>

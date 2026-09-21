@@ -15,6 +15,7 @@ export type CartItem = {
   roastNote?: string;
   unitPrice: number;
   quantity: number;
+  stock?: number;
 };
 
 type CartContextValue = {
@@ -35,6 +36,9 @@ const LEGACY_KEYS = ["kdcoffee-cart-v13", "kdcoffee-cart-v3", "kdcoffee-cart-v2"
 
 export const cartItemKey = (item: Pick<CartItem, "slug" | "optionId" | "optionLabel" | "preparationLabel" | "customRoast" | "roastLevel">) =>
   `${item.slug}::${item.optionId || item.optionLabel}::${item.preparationLabel || "default"}::${item.customRoast ? item.roastLevel || "custom" : "standard"}`;
+
+export const cartSkuKey = (item: Pick<CartItem, "slug" | "optionId" | "optionLabel">) =>
+  `${item.slug}::${item.optionId || item.optionLabel}`;
 
 function normalizeCartCustomRoast(items: CartItem[]) {
   return items.map((item) => {
@@ -73,6 +77,7 @@ function sanitizeCart(value: unknown): CartItem[] {
       roastNote: customRoast && raw.roastNote ? String(raw.roastNote).slice(0, 160) : undefined,
       unitPrice,
       quantity,
+      stock: typeof raw.stock === "number" && Number.isInteger(raw.stock) && raw.stock >= 0 ? raw.stock : undefined,
     }];
   });
   return normalizeCartCustomRoast(items);
@@ -111,7 +116,18 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     subtotal: items.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0),
     addItem: (item, quantity = 1) => {
       setItems((current) => {
-        const safeQuantity = Math.max(1, Math.min(99, Number(quantity) || 1));
+        const requestedQuantity = Math.max(1, Math.min(99, Number(quantity) || 1));
+        const stockLimit =
+          typeof item.stock === "number" && Number.isInteger(item.stock) && item.stock >= 0
+            ? item.stock
+            : 99;
+        const inventoryKey = cartSkuKey(item);
+        const existingSkuQuantity = current.reduce(
+          (sum, entry) => sum + (cartSkuKey(entry) === inventoryKey ? entry.quantity : 0),
+          0,
+        );
+        const safeQuantity = Math.min(requestedQuantity, Math.max(0, stockLimit - existingSkuQuantity));
+        if (safeQuantity <= 0) return current;
         const candidate = {
           ...item,
           quantity: safeQuantity,
@@ -139,7 +155,21 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     },
     updateQuantity: (key, quantity) => {
       setItems((current) => {
-        const safeQuantity = Math.max(1, Math.min(99, Number(quantity) || 1));
+        const target = current.find((item) => cartItemKey(item) === key);
+        if (!target) return current;
+        const requestedQuantity = Math.max(1, Math.min(99, Number(quantity) || 1));
+        const stockLimit =
+          typeof target.stock === "number" && Number.isInteger(target.stock) && target.stock >= 0
+            ? target.stock
+            : 99;
+        const inventoryKey = cartSkuKey(target);
+        const otherSkuQuantity = current.reduce(
+          (sum, entry) =>
+            sum + (cartItemKey(entry) !== key && cartSkuKey(entry) === inventoryKey ? entry.quantity : 0),
+          0,
+        );
+        const maxForThisLine = Math.max(1, stockLimit - otherSkuQuantity);
+        const safeQuantity = Math.min(requestedQuantity, maxForThisLine);
         const updated = current.map((item) => cartItemKey(item) === key
           ? {
               ...item,
