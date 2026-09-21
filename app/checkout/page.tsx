@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useCart } from "@/components/commerce/CartProvider";
+import { cartItemKey, useCart } from "@/components/commerce/CartProvider";
 import StoreSelector from "@/components/commerce/StoreSelector";
 import {
   addDateOnlyDays,
@@ -190,7 +190,7 @@ export default function CheckoutPage() {
           <label className="terms-check"><input type="checkbox" required />我已確認聯絡資料正確，並同意 KD Coffee 為處理本次訂購而聯絡我。</label>
           {error && <p className="form-error">{error}</p>}{warning && <p className="form-error">{warning}</p>}
         </div>
-        <aside className="checkout-summary"><h2>訂單摘要</h2>{items.map(item=><div className="summary-item" key={`${item.slug}-${item.optionLabel}-${item.roastLevel || "standard"}`}><span>{item.name}<small>{item.optionLabel}{item.preparationLabel ? ` · ${item.preparationLabel}` : ""} × {item.quantity}</small>{item.customRoast ? <div className="summary-custom-roast"><strong>專屬烘焙｜{item.roastLevel || "待確認"}</strong>{item.roastNote ? <em>{item.roastNote}</em> : null}</div> : null}</span><b>NT$ {(item.unitPrice*item.quantity).toLocaleString("zh-TW")}</b></div>)}<div className="summary-line"><span>商品小計</span><b>NT$ {subtotal.toLocaleString("zh-TW")}</b></div><div className="summary-line"><span>{mode === "studio_pickup" ? "工作室自取" : "7-ELEVEN 運費"}</span><b>{shipping ? `NT$ ${shipping}` : "免運"}</b></div>{requestedCredit > 0 && <div className="summary-line"><span>會員抵用金</span><b>- NT$ {requestedCredit.toLocaleString("zh-TW")}</b></div>}<div className="summary-total"><span>{mode === "studio_pickup" ? "訂單總額" : "取貨付款總額"}</span><strong>NT$ {Math.max(0, subtotal + shipping - requestedCredit).toLocaleString("zh-TW")}</strong></div><button type="submit" disabled={submitting||!ready||!items.length}>{submitting?"資料傳送中…":"確認並傳送訂單"}</button><p>系統會先保存訂單，再傳送至 KD Coffee 的 LINE 訂單群組。</p></aside>
+        <aside className="checkout-summary"><h2>訂單摘要</h2>{items.map(item=><div className="summary-item" key={cartItemKey(item)}><span>{item.name}<small>{item.optionLabel}{item.preparationLabel ? ` · ${item.preparationLabel}` : ""} × {item.quantity}</small>{item.customRoast ? <div className="summary-custom-roast"><strong>專屬烘焙｜{item.roastLevel || "待確認"}</strong>{item.roastNote ? <em>{item.roastNote}</em> : null}</div> : null}</span><b>NT$ {(item.unitPrice*item.quantity).toLocaleString("zh-TW")}</b></div>)}<div className="summary-line"><span>商品小計</span><b>NT$ {subtotal.toLocaleString("zh-TW")}</b></div><div className="summary-line"><span>{mode === "studio_pickup" ? "工作室自取" : "7-ELEVEN 運費"}</span><b>{shipping ? `NT$ ${shipping}` : "免運"}</b></div>{requestedCredit > 0 && <div className="summary-line"><span>會員抵用金</span><b>- NT$ {requestedCredit.toLocaleString("zh-TW")}</b></div>}<div className="summary-total"><span>{mode === "studio_pickup" ? "訂單總額" : "取貨付款總額"}</span><strong>NT$ {Math.max(0, subtotal + shipping - requestedCredit).toLocaleString("zh-TW")}</strong></div><button type="submit" disabled={submitting||!ready||!items.length}>{submitting?"資料傳送中…":"確認並傳送訂單"}</button><p>系統會先保存訂單，再傳送至 KD Coffee 的 LINE 訂單群組。</p></aside>
       </form>
     </section>
   </main>;
