@@ -6,6 +6,7 @@ import { isAdminAuthenticated } from "@/lib/adminAuth";
 import { atomicWriteJson, withFileLock } from "@/lib/jsonFileStore";
 import {
   isMonthlyMenuBackgroundImage,
+  getArtworkMonthForSave,
   MONTHLY_MENU_BACKGROUND_FITS,
   MONTHLY_MENU_BACKGROUND_POSITIONS,
   normalizeMonthlyMenuBackground,
@@ -13,6 +14,7 @@ import {
   type MonthlyMenuBackgroundPosition,
 } from "@/lib/monthlyMenuBackground";
 import { getArtworkUploadDir, getWebsiteDataFile } from "@/lib/storagePaths";
+import { getCurrentMonthlyMenuPeriod } from "@/lib/monthlyMenuPeriod";
 
 export const dynamic = "force-dynamic";
 
@@ -32,9 +34,11 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const website = await readWebsiteData();
+  const currentMonth = getCurrentMonthlyMenuPeriod();
   return NextResponse.json({
     background: normalizeMonthlyMenuBackground(website.menu?.background),
-    monthKey: typeof website.menu?.monthKey === "string" ? website.menu.monthKey : undefined,
+    currentMonth,
+    monthKey: currentMonth.monthKey,
   });
 }
 
@@ -73,26 +77,28 @@ export async function PUT(request: Request) {
       }
     }
 
-    const savedBackground = {
-      ...(image ? { image } : {}),
-      opacity,
-      position: background.position,
-      fit: background.fit,
-    };
-
-    const version = await withFileLock(websiteFile, async () => {
+    const saved = await withFileLock(websiteFile, async () => {
       const website = await readWebsiteData();
       if (!website.menu || typeof website.menu !== "object") {
         throw new Error("網站豆單資料格式不完整");
       }
+      const previous = normalizeMonthlyMenuBackground(website.menu.background);
+      const artworkMonthKey = getArtworkMonthForSave(previous, image, getCurrentMonthlyMenuPeriod().monthKey);
+      const savedBackground = {
+        ...(image ? { image } : {}),
+        ...(artworkMonthKey ? { artworkMonthKey } : {}),
+        opacity,
+        position: background.position,
+        fit: background.fit,
+      };
       website.menu = { ...website.menu, background: savedBackground };
       website.updatedAt = new Date().toISOString();
       website.version = Number(website.version || 1) + 1;
       await atomicWriteJson(websiteFile, website);
-      return website.version;
+      return { version: website.version, background: savedBackground };
     });
 
-    return NextResponse.json({ ok: true, version, background: savedBackground });
+    return NextResponse.json({ ok: true, ...saved, currentMonth: getCurrentMonthlyMenuPeriod() });
   } catch (error) {
     return NextResponse.json({
       error: error instanceof Error ? error.message : "儲存失敗",

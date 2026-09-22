@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import styles from "@/app/monthly-menu/monthly-menu.module.css";
+import type { MonthlyMenuPeriod } from "@/lib/monthlyMenuPeriod";
 import type {
   MonthlyMenuBackground,
   MonthlyMenuBackgroundPosition,
@@ -28,7 +29,7 @@ export type MonthlyMenuDownloadArtwork = {
 };
 
 type MonthlyMenuDownloadButtonProps = {
-  monthKey?: string;
+  period: MonthlyMenuPeriod;
   monthTitle: string;
   monthIssue: string;
   artworks: MonthlyMenuDownloadArtwork[];
@@ -493,7 +494,7 @@ async function generateMonthlyMenuImage(
 }
 
 export default function MonthlyMenuPrintButton({
-  monthKey,
+  period,
   monthTitle,
   monthIssue,
   artworks,
@@ -519,9 +520,7 @@ export default function MonthlyMenuPrintButton({
       );
       const objectUrl = URL.createObjectURL(blob);
       const link = document.createElement("a");
-      const filenameMonth = /^\d{4}-(0[1-9]|1[0-2])$/.test(monthKey || "")
-        ? monthKey
-        : "Current";
+      const filenameMonth = period.monthKey;
       link.href = objectUrl;
       link.download = `KD-Coffee-Monthly-Menu-${filenameMonth}.webp`;
       document.body.appendChild(link);

@@ -10,6 +10,7 @@ import { getLiveWebsiteData, type CoffeeArtwork } from "@/data/websiteData";
 import { isProductListedInWorks } from "@/lib/productListing";
 import { resolveListAsset } from "@/lib/productVisualAssets";
 import { normalizeMonthlyMenuBackground } from "@/lib/monthlyMenuBackground";
+import { getCurrentMonthlyMenuPeriod, getMonthlyMenuPresentation } from "@/lib/monthlyMenuPeriod";
 import styles from "./monthly-menu.module.css";
 
 export const metadata: Metadata = {
@@ -37,25 +38,6 @@ function getMonthlyArtworks(products: CoffeeArtwork[]): MonthlyArtwork[] {
       const bSort = Number.isFinite(Number(b.sort)) ? Number(b.sort) : Number.MAX_SAFE_INTEGER;
       return aSort - bSort || a.originalIndex - b.originalIndex;
     });
-}
-
-function getMonthPresentation(monthKey?: string, monthLabel?: string) {
-  const match = monthKey?.match(/^(\d{4})-(0[1-9]|1[0-2])$/);
-
-  if (!match) {
-    return {
-      label: monthLabel?.trim() || "MONTHLY SELECTION",
-      issue: "MONTHLY EDITION",
-      title: "本月豆單",
-    };
-  }
-
-  const [, year, month] = match;
-  return {
-    label: monthLabel?.trim() || `${year} / ${month}`,
-    issue: `${year} / ${month}`,
-    title: `${Number(month)} 月豆單`,
-  };
 }
 
 function getDisplayPurchases(product: CoffeeArtwork): MenuPurchaseOption[] {
@@ -89,7 +71,8 @@ const backgroundPositions = {
 export default async function MonthlyMenuPage() {
   const live = await getLiveWebsiteData();
   const products = getMonthlyArtworks(live.menu.products);
-  const month = getMonthPresentation(live.menu.monthKey, live.menu.monthLabel);
+  const period = getCurrentMonthlyMenuPeriod();
+  const month = getMonthlyMenuPresentation(period);
   const background = normalizeMonthlyMenuBackground(live.menu.background);
   const downloadArtworks: MonthlyMenuDownloadArtwork[] = products.map((product, index) => ({
     number: String(index + 1).padStart(2, "0"),
@@ -230,7 +213,7 @@ export default async function MonthlyMenuPage() {
 
         <div className={styles.printActions}>
           <MonthlyMenuPrintButton
-            monthKey={live.menu.monthKey}
+            period={period}
             monthTitle={month.title}
             monthIssue={month.issue}
             artworks={downloadArtworks}

@@ -1,3 +1,5 @@
+import { getCurrentMonthlyMenuPeriod } from "./monthlyMenuPeriod";
+
 export const MONTHLY_MENU_BACKGROUND_POSITIONS = [
   "auto", "center", "top-left", "top-right", "bottom-left", "bottom-right",
 ] as const;
@@ -9,6 +11,7 @@ export type MonthlyMenuBackgroundFit = (typeof MONTHLY_MENU_BACKGROUND_FITS)[num
 
 export type MonthlyMenuBackground = {
   image?: string;
+  artworkMonthKey?: string;
   opacity: number;
   position: MonthlyMenuBackgroundPosition;
   fit: MonthlyMenuBackgroundFit;
@@ -39,12 +42,24 @@ export function normalizeMonthlyMenuBackground(value: unknown): MonthlyMenuBackg
 
   return {
     image: isMonthlyMenuBackgroundImage(background.image) ? background.image : undefined,
+    artworkMonthKey: isMonthlyMenuBackgroundImage(background.image) && typeof background.artworkMonthKey === "string" && /^\d{4}-(0[1-9]|1[0-2])$/.test(background.artworkMonthKey)
+      ? background.artworkMonthKey
+      : undefined,
     // R6 stored a faint full-sheet background. R6.1 makes this a header
     // artwork, so preserve the artwork contrast even for existing records.
     opacity: DEFAULT_MONTHLY_MENU_BACKGROUND.opacity,
     position,
     fit,
   };
+}
+
+export function getArtworkMonthForSave(previous: MonthlyMenuBackground, image: string, currentMonthKey: string) {
+  if (!image) return undefined;
+  return image === previous.image ? previous.artworkMonthKey : currentMonthKey;
+}
+
+export function isArtworkFromAnotherMonth(background: MonthlyMenuBackground, currentMonthKey: string) {
+  return Boolean(background.image && background.artworkMonthKey && background.artworkMonthKey !== currentMonthKey);
 }
 
 export type TaiwanMonthlyTheme = {
@@ -63,30 +78,30 @@ export const TAIWAN_MONTHLY_THEMES: Record<number, TaiwanMonthlyTheme> = {
   6: { title: "雨季拾光", subtitle: "梅雨 · 雨聲 · 水氣 · 安靜", keywords: "梅雨、雨聲、水氣、安靜", visualDirection: "玻璃雨痕、水面、灰藍暖光" },
   7: { title: "盛夏光景", subtitle: "盛夏 · 烈日 · 午後 · 明亮", keywords: "盛夏、烈日、午後、明亮", visualDirection: "夏季日光、自然陰影、天空、夏風" },
   8: { title: "夏末午後", subtitle: "暖金 · 微風 · 柔和日光", keywords: "暖金、微風、柔和日光、夏末", visualDirection: "金色午後、柔光、夏末空氣" },
-  9: { title: "月下秋意", subtitle: "月色 · 團聚 · 入秋 · 夜風", keywords: "月色、團聚、入秋、夜風", visualDirection: "月光、夜色、暖金、初秋氣息" },
+  9: { title: "初秋微光", subtitle: "初秋 · 微涼晨風 · 柔和日光", keywords: "初秋、微涼晨風、柔和日光、夏末轉秋", visualDirection: "暖米色紙感、金色柔光、初秋空氣、安靜而細緻的季節轉換" },
   10: { title: "秋日澄光", subtitle: "涼風 · 乾爽 · 澄澈 · 成熟", keywords: "涼風、乾爽、澄澈、成熟", visualDirection: "清澈天空、斜陽、金褐色調" },
   11: { title: "入冬暖意", subtitle: "東北風 · 微涼 · 溫暖 · 沉靜", keywords: "東北風、微涼、溫暖、沉靜", visualDirection: "晨霧、柔和冬光、溫暖室內外光線" },
   12: { title: "歲末微光", subtitle: "年末 · 相聚 · 回望 · 期待", keywords: "年末、相聚、回望、期待", visualDirection: "夜色、窗光、暖金、小型自然光點" },
 };
 
-export function getTaiwanMonthlyTheme(monthKey?: string) {
+export function getTaiwanMonthlyTheme(monthKey = getCurrentMonthlyMenuPeriod().monthKey) {
   const match = monthKey?.match(/^\d{4}-(0[1-9]|1[0-2])$/);
   return match ? TAIWAN_MONTHLY_THEMES[Number(match[1])] : undefined;
 }
 
-export function getMonthlyMenuBackgroundPrompt(monthKey?: string) {
+export function getMonthlyMenuBackgroundPrompt(monthKey = getCurrentMonthlyMenuPeriod().monthKey) {
   const recommendation = getTaiwanMonthlyTheme(monthKey);
-  const month = monthKey || "current month";
+  const month = monthKey;
   const seasonalContext = recommendation
-    ? `Taiwan seasonal context: ${recommendation.keywords}\nSuggested theme title (render this exact title inside the artwork): ${recommendation.title}\nVisual direction: ${recommendation.visualDirection}`
-    : "Taiwan seasonal context: choose an appropriate restrained seasonal theme and render a concise Traditional Chinese title inside the artwork.";
+    ? `Taiwan seasonal context: ${recommendation.keywords}\nThe ONLY text allowed inside the artwork is this exact seasonal theme title: ${recommendation.title}\nVisual direction: ${recommendation.visualDirection}`
+    : "Taiwan seasonal context: choose an appropriate restrained seasonal theme. The only artwork text may be a concise Traditional Chinese seasonal title.";
 
   return `Create ONE integrated editorial monthly theme artwork for KD Coffee Monthly Selection.
 
-Month: ${month}
+Current operational month for seasonal mood only: ${month} (Asia/Taipei).
 ${seasonalContext}
 
-The artwork will be placed inside the header area of an A4 specialty coffee monthly menu. The image itself must contain the monthly theme title; it must not rely on separate HTML text.
+The artwork will be placed inside the header area of an A4 specialty coffee monthly menu. Render only the seasonal theme title in the image. Do NOT render any month, year, date, YYYY-MM, English month name, Chinese month number, or selection label. The website and print layout supply all month and year typography outside the artwork.
 
 Create a refined specialty-coffee editorial atmosphere with warm ivory paper tones, restrained seasonal colour, soft natural light, and quiet luxury. The visual should fade naturally into a warm ivory editorial paper background. Main visual weight belongs in the center-right area. Keep the left 25–30% visually quiet and low contrast for the existing month typography. Keep at least 10% safe area at top and bottom. Place the theme title around the right-side 60–85% horizontal area, never flush to the edge.
 

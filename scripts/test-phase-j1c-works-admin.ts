@@ -8,6 +8,8 @@ import path from "node:path";
 import { DEFAULT_WEBSITE_VISUAL_STYLE } from "../lib/pageBuilderVisualStyle.ts";
 // @ts-expect-error -- Node's TypeScript stripping requires explicit extensions in this test.
 import { readWorksPageAdminState, saveWorksPageAdminState, WorksPageVersionConflictError } from "../lib/worksPageAdminStore.ts";
+// @ts-expect-error -- Node's TypeScript stripping requires explicit extensions in this test.
+import { getCurrentMonthlyMenuPeriod } from "../lib/monthlyMenuPeriod.ts";
 
 let passed = 0;
 function check(name: string, condition: unknown) {
@@ -74,7 +76,7 @@ try {
 
   const pagesBeforeGet = await readFile(pagesPath, "utf8");
   const first = await readWorksPageAdminState();
-  check("GET without Works config returns exact resolved defaults", first.hasSavedConfig === false && first.savedConfig === null && first.resolved.hero.eyebrow === "九月精選" && first.resolved.hero.description === "九月豆單說明");
+  check("GET without Works config uses the current Taipei month", first.hasSavedConfig === false && first.savedConfig === null && first.resolved.hero.eyebrow === getCurrentMonthlyMenuPeriod().selectionLabel && first.resolved.hero.description === "九月豆單說明");
   check("GET without Works config does not create or write configuration", await readFile(pagesPath, "utf8") === pagesBeforeGet);
 
   const saved = await saveWorksPageAdminState({

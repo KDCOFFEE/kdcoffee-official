@@ -10,6 +10,8 @@ import { DEFAULT_WEBSITE_VISUAL_STYLE } from "../lib/pageBuilderVisualStyle.ts";
 import { readWorksPageAdminState, saveWorksPageAdminState, WorksPageVersionConflictError } from "../lib/worksPageAdminStore.ts";
 // @ts-expect-error -- Node's TypeScript stripping requires explicit extensions in this test.
 import { resolveWorksPageCms, validateWorksPageCms, type WorksPageCmsConfig } from "../lib/worksPageCms.ts";
+// @ts-expect-error -- Node's TypeScript stripping requires explicit extensions in this test.
+import { getCurrentMonthlyMenuPeriod } from "../lib/monthlyMenuPeriod.ts";
 
 let passed = 0;
 function check(name: string, condition: unknown) {
@@ -107,10 +109,10 @@ try {
   monthlyConfig.hero!.customEyebrow = "不應顯示的舊小標";
   monthlyConfig.hero!.customDescription = "不應顯示的舊說明";
   await saveWorksPageAdminState({ version: 22, works: monthlyConfig, now: new Date("2026-09-01T02:01:00.000Z") });
-  website.menu.monthLabel = "十月精選"; website.menu.intro = "十月豆單說明";
+  website.menu.monthLabel = "過期月份小標"; website.menu.intro = "十月豆單說明";
   await writeFile(files.website, `${JSON.stringify(website, null, 2)}\n`);
   const dynamic = await readWorksPageAdminState();
-  check("monthly-menu eyebrow remains live and dynamic", dynamic.resolved.hero.eyebrow === "十月精選");
+  check("monthly-menu eyebrow follows current Taipei month, not saved copy", dynamic.resolved.hero.eyebrow === getCurrentMonthlyMenuPeriod().selectionLabel && dynamic.resolved.hero.eyebrow !== website.menu.monthLabel);
   check("monthly-menu description remains live and dynamic", dynamic.resolved.hero.description === "十月豆單說明");
   check("monthly-menu mode does not promote stale custom copy", dynamic.resolved.hero.eyebrow !== monthlyConfig.hero!.customEyebrow && dynamic.resolved.hero.description !== monthlyConfig.hero!.customDescription);
 

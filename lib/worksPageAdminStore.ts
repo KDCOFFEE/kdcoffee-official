@@ -10,6 +10,7 @@ import { resolveListAsset } from "./productVisualAssets";
 import { getPagesDataFile, getWebsiteDataFile } from "./storagePaths";
 import type { WorksPageCmsConfig } from "./worksPageCms";
 import { resolveWorksPageCms, validateWorksPageCms } from "./worksPageCms";
+import { getCurrentMonthlyMenuPeriod } from "./monthlyMenuPeriod";
 
 export class WorksPageVersionConflictError extends Error {
   constructor() {
@@ -23,7 +24,7 @@ async function readLiveWorksData() {
   const products = Array.isArray(website.menu?.products) ? website.menu.products : [];
   return {
     live: {
-      monthLabel: typeof website.menu?.monthLabel === "string" ? website.menu.monthLabel : "",
+      monthLabel: getCurrentMonthlyMenuPeriod().selectionLabel,
       intro: typeof website.menu?.intro === "string" ? website.menu.intro : "",
     },
     products: products

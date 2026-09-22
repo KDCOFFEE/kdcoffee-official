@@ -13,12 +13,13 @@ import { readPageStore } from "@/lib/pageBuilderStore";
 import { resolveListAsset } from "@/lib/productVisualAssets";
 import { resolveWorksProductListing } from "@/lib/productListing";
 import { DEFAULT_WORKS_PAGE_CMS_CONFIG, resolveWorksPageCms, resolveWorksPublicColorBindings, resolveWorksPublicMotionBindings } from "@/lib/worksPageCms";
+import { getCurrentMonthlyMenuPeriod } from "@/lib/monthlyMenuPeriod";
 
 export const dynamic="force-dynamic";
 
 export async function generateMetadata(): Promise<Metadata> {
   const [live, pageStore] = await Promise.all([getLiveWebsiteData(), readPageStore()]);
-  const works = resolveWorksPageCms(pageStore.systemPages?.works, { monthLabel: live.menu.monthLabel, intro: live.menu.intro });
+  const works = resolveWorksPageCms(pageStore.systemPages?.works, { monthLabel: getCurrentMonthlyMenuPeriod().selectionLabel, intro: live.menu.intro });
   const seoTitle = works.seo.title.trim() || DEFAULT_WORKS_PAGE_CMS_CONFIG.seo!.title!;
   const seoDescription = works.seo.description.trim() || DEFAULT_WORKS_PAGE_CMS_CONFIG.seo!.description!;
   const image = works.seo.shareImage;
@@ -46,7 +47,7 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function WorksPage(){
   const [live,pageStore]=await Promise.all([getLiveWebsiteData(),readPageStore()]);
   const products=resolveWorksProductListing(live.menu.products);
-  const works=resolveWorksPageCms(pageStore.systemPages?.works,{monthLabel:live.menu.monthLabel,intro:live.menu.intro});
+  const works=resolveWorksPageCms(pageStore.systemPages?.works,{monthLabel:getCurrentMonthlyMenuPeriod().selectionLabel,intro:live.menu.intro});
   const presentation=works.catalog.presentation;
   const colorsEnabled=pageStore.systemPages?.works?.colors!==undefined;
   const colorBindings=colorsEnabled?resolveWorksPublicColorBindings(works.colors):undefined;

@@ -5,10 +5,12 @@ import {
   DEFAULT_MONTHLY_MENU_BACKGROUND,
   getMonthlyMenuBackgroundPrompt,
   getTaiwanMonthlyTheme,
+  isArtworkFromAnotherMonth,
   type MonthlyMenuBackground,
 } from "@/lib/monthlyMenuBackground";
+import type { MonthlyMenuPeriod } from "@/lib/monthlyMenuPeriod";
 
-type Payload = { background: MonthlyMenuBackground; monthKey?: string };
+type Payload = { background: MonthlyMenuBackground; currentMonth: MonthlyMenuPeriod };
 
 const cssPositions: Record<MonthlyMenuBackground["position"], string> = {
   auto: "center", center: "center", "top-left": "left top", "top-right": "right top",
@@ -21,9 +23,10 @@ export default function MonthlyMenuBackgroundManager() {
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState("讀取中…");
-  const [monthKey, setMonthKey] = useState<string | undefined>();
-  const recommendation = useMemo(() => getTaiwanMonthlyTheme(monthKey), [monthKey]);
-  const prompt = useMemo(() => getMonthlyMenuBackgroundPrompt(monthKey), [monthKey]);
+  const [currentMonth, setCurrentMonth] = useState<MonthlyMenuPeriod | null>(null);
+  const recommendation = useMemo(() => currentMonth ? getTaiwanMonthlyTheme(currentMonth.monthKey) : undefined, [currentMonth]);
+  const prompt = useMemo(() => currentMonth ? getMonthlyMenuBackgroundPrompt(currentMonth.monthKey) : "", [currentMonth]);
+  const artworkMonthWarning = currentMonth && isArtworkFromAnotherMonth(background, currentMonth.monthKey);
 
   useEffect(() => {
     fetch("/api/admin/monthly-menu", { cache: "no-store" })
@@ -32,7 +35,7 @@ export default function MonthlyMenuBackgroundManager() {
         if (!response.ok) throw new Error(payload.error || "讀取失敗");
         return payload as Payload;
       })
-.then((payload) => { setBackground(payload.background); setMonthKey(payload.monthKey); setMessage(""); })
+      .then((payload) => { setBackground(payload.background); setCurrentMonth(payload.currentMonth); setMessage(""); })
       .catch((error) => setMessage(error instanceof Error ? error.message : "讀取失敗"))
       .finally(() => setLoading(false));
   }, []);
@@ -86,6 +89,7 @@ export default function MonthlyMenuBackgroundManager() {
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || "儲存失敗");
       setBackground(payload.background);
+      if (payload.currentMonth) setCurrentMonth(payload.currentMonth);
       setMessage("本月主題視覺已儲存。");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "儲存失敗");
@@ -115,11 +119,13 @@ export default function MonthlyMenuBackgroundManager() {
         </div>
       </div>
       {message ? <div className="cms-message" role="status">{message}</div> : null}
+      {currentMonth ? <section className="cms-panel"><b>目前月份</b><p>{currentMonth.monthKey} · {currentMonth.selectionLabel}</p></section> : null}
+      {artworkMonthWarning ? <div className="cms-message" role="status">目前為 {currentMonth.monthKey}，但主視覺仍為 {background.artworkMonthKey} 保存內容。可重新產生或上傳本月主視覺。</div> : null}
 
       {recommendation ? (
         <section className="cms-panel">
           <div className="cms-panel-head">
-            <div><h2>AI 建議主題</h2><p>{monthKey} · 依台灣季節與節慶情境自動產生，主題名稱會直接包含在生成 artwork 裡。</p></div>
+            <div><h2>AI 建議主題</h2><p>{currentMonth?.monthKey} · 依台灣季節與節慶情境自動產生。圖內只包含主題名稱，月份由網站排版顯示。</p></div>
           </div>
           <div className="cms-grid two">
             <div><b>推薦主題</b><p>{recommendation.title}</p></div>

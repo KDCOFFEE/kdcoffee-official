@@ -3,6 +3,7 @@ import path from "path";
 import { NextResponse } from "next/server";
 
 import { isAdminAuthenticated } from "@/lib/adminAuth";
+import { getCurrentMonthlyMenuPeriod } from "@/lib/monthlyMenuPeriod";
 import { atomicWriteJson, withFileLock } from "@/lib/jsonFileStore";
 import {
   applyProductChanges,
@@ -248,14 +249,15 @@ export async function GET() {
         JSON.stringify(product) !== JSON.stringify(raw[index]),
     );
 
+  const currentMonth = getCurrentMonthlyMenuPeriod();
   return NextResponse.json({
     products,
 
     campaigns: Array.isArray(homepage.campaigns) ? homepage.campaigns : [],
 
     menu: {
-      monthKey: menu.monthKey || "2026-08",
-      monthLabel: menu.monthLabel || "",
+      monthKey: currentMonth.monthKey,
+      monthLabel: currentMonth.selectionLabel,
       title: menu.title || "",
       intro: menu.intro || "",
     },
