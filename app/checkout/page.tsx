@@ -12,8 +12,11 @@ import {
   isValidDateOnly,
 } from "@/lib/checkoutRules";
 import { subscriptionShippingFee, subscriptionShippingSaving } from "@/lib/shippingRules";
+import { generalCheckoutShipping } from "@/lib/checkoutShipping";
+import { validateDeliveryAddress, type DeliveryAddress } from "@/lib/deliveryAddress";
+import type { ActiveHomeDeliveryPaymentMethod } from "@/lib/homeDeliveryPayment";
 
-type OrderMode = "711_cod" | "studio_pickup";
+type OrderMode = "711_cod" | "studio_pickup" | "home_delivery";
 type Member = { displayName:string; pickupName?:string; phone?:string; email?:string; favoriteStore?:{id:string;name:string;address:string;city?:string;district?:string} };
 const IDEMPOTENCY_STORAGE_KEY = "kdcoffee-checkout-idempotency-key";
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -44,16 +47,19 @@ export default function CheckoutPage() {
   const [memberLoaded, setMemberLoaded] = useState(false);
   const [name,setName]=useState(""); const [phone,setPhone]=useState(""); const [email,setEmail]=useState("");
   const [pickupDate, setPickupDate] = useState("");
+  const [deliveryAddress, setDeliveryAddress] = useState<DeliveryAddress>({ recipientName: "", phone: "", postalCode: "", city: "", district: "", addressLine: "" });
+  const [paymentMethod, setPaymentMethod] = useState<ActiveHomeDeliveryPaymentMethod>("atm_transfer");
   const [joinSubscription, setJoinSubscription] = useState(false);
   const [subscriptionInterval, setSubscriptionInterval] = useState(30);
   const [subscriptionIntervalMode, setSubscriptionIntervalMode] = useState<"preset" | "custom">("preset");
   const [subscriptionStartDate, setSubscriptionStartDate] = useState("");
-  const [operationalRules, setOperationalRules] = useState<{ pickup: { earliestStandardDate: string; earliestCustomRoastDate: string; blockedDates: string[] }; shipping: { subscriptionFreeShipping: boolean; subscriptionShippingFee: number; sevenElevenShippingFee: number; homeDeliveryShippingFee: number; subscriptionShippingDiscount: number }; money: { roundingMode: string }; subscription: { discountPercent: number; intervalsDays: number[]; customCycleEnabled: boolean; customCycleMinDays: number; customCycleMaxDays: number; earliestDate: string }; credit: { uiMode: "amount-and-maximum" | "use-or-not" | "automatic-maximum" | "custom-amount"; showAmountInput: boolean; showMaximumButton: boolean; automaticallyUseMaximum: boolean; allowZeroTotal: boolean; appliesToShipping: boolean } } | null>(null);
+  const [operationalRules, setOperationalRules] = useState<{ pickup: { earliestStandardDate: string; earliestCustomRoastDate: string; blockedDates: string[] }; shipping: { subscriptionFreeShipping: boolean; subscriptionShippingFee: number; sevenElevenShippingFee: number; homeDeliveryShippingFee: number; homeDeliveryCodFee: number; subscriptionShippingDiscount: number }; openingYearFreeShipping: { enabled: boolean; startDate: string; endDate: string; shippingMethods: string[] }; money: { roundingMode: string }; subscription: { discountPercent: number; intervalsDays: number[]; customCycleEnabled: boolean; customCycleMinDays: number; customCycleMaxDays: number; earliestDate: string }; credit: { uiMode: "amount-and-maximum" | "use-or-not" | "automatic-maximum" | "custom-amount"; showAmountInput: boolean; showMaximumButton: boolean; automaticallyUseMaximum: boolean; allowZeroTotal: boolean; appliesToShipping: boolean } } | null>(null);
   const [creditQuote, setCreditQuote] = useState<{ availableBalance: number; maximumUsable: number; minimumPayable: number } | null>(null);
   const [requestedCredit, setRequestedCredit] = useState(0);
   const [useCredit, setUseCredit] = useState(false);
-  const shipping = mode === "711_cod" && subtotal < 1500 ? 60 : 0;
   const today = getDateOnlyInTimeZone(new Date());
+  const shipping = generalCheckoutShipping({ mode, subtotal, homeDeliveryShippingFee: operationalRules?.shipping.homeDeliveryShippingFee, member: Boolean(member), date: today, openingYearFreeShipping: operationalRules?.openingYearFreeShipping });
+  const codServiceFee = mode === "home_delivery" && paymentMethod === "cash_on_delivery" ? operationalRules?.shipping.homeDeliveryCodFee ?? 0 : 0;
   const hasCustomRoast = items.some(item => item.customRoast);
   const earliestPickupDate = operationalRules ? (hasCustomRoast ? operationalRules.pickup.earliestCustomRoastDate : operationalRules.pickup.earliestStandardDate) : addDateOnlyDays(today, hasCustomRoast ? 3 : 0);
 
@@ -117,7 +123,7 @@ export default function CheckoutPage() {
 
   const subscriptionRenewalTotal =
     subscriptionRenewalProductTotal +
-    subscriptionRenewalShipping;
+    subscriptionRenewalShipping + codServiceFee;
 
   const subscriptionTotalSavings =
     subscriptionProductSavings +
@@ -125,7 +131,7 @@ export default function CheckoutPage() {
 
   useEffect(()=>{
     fetch("/api/member/me",{cache:"no-store"}).then(r=>r.json()).then(({member})=>{
-      if(member){ setMember(member); setName(member.pickupName||member.displayName||""); setPhone(member.phone||""); setEmail(member.email||""); }
+      if(member){ setMember(member); setName(member.pickupName||member.displayName||""); setPhone(member.phone||""); setEmail(member.email||""); setDeliveryAddress((current) => ({ ...current, recipientName: current.recipientName || member.pickupName || member.displayName || "", phone: current.phone || member.phone || "" })); }
     }).finally(()=>setMemberLoaded(true));
   },[]);
   useEffect(() => {
@@ -183,6 +189,10 @@ export default function CheckoutPage() {
       if (!isDateOnlyOnOrAfter(pickupDate, earliestPickupDate)) return setError(hasCustomRoast ? `訂單含專屬烘焙，最早可選 ${earliestPickupDate} 取貨。` : "工作室自取日期不可早於今天。");
       if (operationalRules?.pickup.blockedDates.includes(pickupDate)) return setError("這一天工作室暫停自取，請選擇其他日期。");
     }
+    if (mode === "home_delivery") {
+      try { validateDeliveryAddress(deliveryAddress); }
+      catch (reason) { return setError(reason instanceof Error ? reason.message : "請填寫完整宅配地址"); }
+    }
     setSubmitting(true);
     try {
       const idempotencyKey = getOrCreateIdempotencyKey();
@@ -192,6 +202,8 @@ export default function CheckoutPage() {
         customer: { name, phone, email, note: form.get("note") },
         store: mode === "711_cod" ? { id: form.get("storeId"), name: form.get("storeName"), address: form.get("storeAddress") } : null,
         studioPickup: mode === "studio_pickup" ? { preferredDate: form.get("pickupDate") } : null,
+        deliveryAddress: mode === "home_delivery" ? validateDeliveryAddress(deliveryAddress) : null,
+        paymentMethod: mode === "home_delivery" ? paymentMethod : null,
         corporateGift: null,
         subscriptionIntent: member && joinSubscription ? { consent: true, intervalDays: subscriptionInterval, firstRenewalDate: subscriptionStartDate } : null,
         requestedCredit: member ? requestedCredit : 0,
@@ -217,7 +229,7 @@ export default function CheckoutPage() {
       );
       sessionStorage.removeItem(IDEMPOTENCY_STORAGE_KEY);
       clearCart(); sessionStorage.setItem("kdcoffee-last-order", JSON.stringify(result));
-      router.push(`/order-complete?order=${encodeURIComponent(result.orderNumber)}&line=${result.lineNotification?.sent?"sent":"pending"}&mode=${mode}${orderAccessToken ? `#token=${encodeURIComponent(orderAccessToken)}` : ""}`);
+      router.push(`/order-complete?order=${encodeURIComponent(result.orderNumber)}&line=${result.lineNotification?.sent?"sent":"pending"}&mode=${mode}${mode === "home_delivery" ? `&payment=${encodeURIComponent(result.paymentMethod || paymentMethod)}` : ""}${orderAccessToken ? `#token=${encodeURIComponent(orderAccessToken)}` : ""}`);
     } catch (e) { setError(e instanceof Error ? e.message : "訂單送出失敗"); }
     finally { setSubmitting(false); }
   }
@@ -225,7 +237,7 @@ export default function CheckoutPage() {
   return <main className="commerce-page">
     <header className="commerce-topbar"><Link href="/">KD COFFEE</Link><span>結帳</span><Link href="/cart">返回購物車</Link></header>
     <section className="checkout-shell">
-      <div className="commerce-title"><p className="eyebrow dark">CHECKOUT</p><h1>選擇最方便的取貨方式</h1><p>一般訂購可選 7-ELEVEN 取貨付款或到 KD Coffee 工作室自取。</p></div>
+      <div className="commerce-title"><p className="eyebrow dark">CHECKOUT</p><h1>選擇配送方式</h1><p>一般訂購可選 7-ELEVEN 取貨付款、KD Coffee 工作室自取或宅配。</p></div>
       <form className="checkout-grid" onSubmit={submitOrder}>
         <div className="checkout-form">
           <section className="form-card">
@@ -259,10 +271,18 @@ export default function CheckoutPage() {
           <section className="form-card"><div className="form-card-head"><span>02</span><h2>取貨方式</h2></div><div className="delivery-mode-grid">
             <label className={mode === "711_cod" ? "delivery-mode active" : "delivery-mode"}><input type="radio" name="orderMode" value="711_cod" checked={mode === "711_cod"} onChange={()=>setMode("711_cod")} /><b>7-ELEVEN 取貨付款</b><span>商品到店後再付款取貨</span></label>
             <label className={mode === "studio_pickup" ? "delivery-mode active" : "delivery-mode"}><input type="radio" name="orderMode" value="studio_pickup" checked={mode === "studio_pickup"} onChange={()=>setMode("studio_pickup")} /><b>到工作室取貨</b><span>免運費，由工作室確認取貨時間</span></label>
+            <label className={mode === "home_delivery" ? "delivery-mode active" : "delivery-mode"}><input type="radio" name="orderMode" value="home_delivery" checked={mode === "home_delivery"} onChange={() => { setMode("home_delivery"); setDeliveryAddress((current) => ({ ...current, recipientName: current.recipientName || name, phone: current.phone || phone })); }} /><b>宅配</b><span>配送到指定地址</span></label>
           </div></section>
           {mode === "711_cod" && <section className="form-card"><div className="form-card-head"><span>03</span><h2>7-ELEVEN 取貨門市</h2></div><div className="delivery-notice"><strong>門市取貨付款</strong><p>選到行政區後會顯示該區所有門市，也可用路名、店名、地址或店號搜尋。</p></div><StoreSelector initialStore={member?.favoriteStore} /></section>}
           {mode === "studio_pickup" && <section className="form-card"><div className="form-card-head"><span>03</span><h2>工作室自取</h2></div><div className="delivery-notice"><strong>KD Coffee 咖啡藝術工坊自取</strong><p>{hasCustomRoast ? `本訂單含專屬烘焙，需預留製作時間，最早可於 ${earliestPickupDate} 取貨。` : `最早可於 ${earliestPickupDate} 取貨。請選擇希望日期，工作室確認後會通知你。`}</p></div><div className="store-selector-grid"><label>希望取貨日期<input type="date" name="pickupDate" min={earliestPickupDate} value={pickupDate} onChange={event=>setPickupDate(event.target.value)} required /><span className="field-help">第一版只需選日期，不需要選上午／下午時段。</span></label></div></section>}
-          {member && creditQuote && creditQuote.availableBalance > 0 && <section className="form-card"><div className="form-card-head"><span>04</span><h2>會員抵用金</h2></div><div className="delivery-notice"><strong>目前可用 NT$ {creditQuote.availableBalance.toLocaleString("zh-TW")}</strong><p>本次最多可折 NT$ {creditQuote.maximumUsable.toLocaleString("zh-TW")}；系統會優先使用較早到期的額度。</p></div>{operationalRules?.credit.uiMode === "use-or-not" ? <label className="terms-check"><input type="checkbox" checked={useCredit} onChange={(event) => { setUseCredit(event.target.checked); setRequestedCredit(event.target.checked ? creditQuote.maximumUsable : 0); }} />使用本次可折抵的最高金額</label> : operationalRules?.credit.uiMode === "automatic-maximum" ? <p className="member-notice">已自動套用最大折抵 NT$ {creditQuote.maximumUsable.toLocaleString("zh-TW")}</p> : <div className="subscription-enrollment-fields"><label>本次折抵金額<input type="number" min={0} max={creditQuote.maximumUsable} value={requestedCredit} onChange={(event) => setRequestedCredit(Math.min(creditQuote.maximumUsable, Math.max(0, Number(event.target.value) || 0)))} /></label>{operationalRules?.credit.showMaximumButton && <button type="button" onClick={() => setRequestedCredit(creditQuote.maximumUsable)}>最大折抵</button>}</div>}<div className="subscription-enrollment-summary"><span>折抵後預計應付 NT$ {Math.max(0, subtotal + shipping - requestedCredit).toLocaleString("zh-TW")}</span></div></section>}
+          {mode === "home_delivery" && <section className="form-card"><div className="form-card-head"><span>03</span><h2>宅配地址與付款</h2></div><div className="store-selector-grid">
+            {([
+              ["recipientName", "收件人姓名", 40, "name"], ["phone", "手機／聯絡電話", 20, "tel"],
+              ["postalCode", "郵遞區號", 6, "postal-code"], ["city", "縣市", 20, "address-level1"],
+              ["district", "區／鄉鎮市", 30, "address-level2"], ["addressLine", "詳細地址", 120, "street-address"],
+            ] as const).map(([key, label, maxLength, autoComplete]) => <label key={key}>{label}<input name={key} value={deliveryAddress[key]} onChange={(event) => setDeliveryAddress((current) => ({ ...current, [key]: event.target.value }))} maxLength={maxLength} autoComplete={autoComplete} required /></label>)}
+          </div><fieldset className="member-shipping-method-options"><legend>付款方式</legend><label><input type="radio" name="homePaymentMethod" value="atm_transfer" checked={paymentMethod === "atm_transfer"} onChange={() => setPaymentMethod("atm_transfer")} />ATM 轉帳</label><label><input type="radio" name="homePaymentMethod" value="cash_on_delivery" checked={paymentMethod === "cash_on_delivery"} onChange={() => setPaymentMethod("cash_on_delivery")} />貨到付款</label></fieldset>{paymentMethod === "atm_transfer" ? <p className="field-help">訂單成立後請依網站／客服提供的轉帳資訊完成付款，確認入帳後安排出貨。</p> : <p className="field-help">貨到付款手續費 NT$ {codServiceFee.toLocaleString("zh-TW")}</p>}</section>}
+          {member && creditQuote && creditQuote.availableBalance > 0 && <section className="form-card"><div className="form-card-head"><span>04</span><h2>會員抵用金</h2></div><div className="delivery-notice"><strong>目前可用 NT$ {creditQuote.availableBalance.toLocaleString("zh-TW")}</strong><p>本次最多可折 NT$ {creditQuote.maximumUsable.toLocaleString("zh-TW")}；系統會優先使用較早到期的額度。</p></div>{operationalRules?.credit.uiMode === "use-or-not" ? <label className="terms-check"><input type="checkbox" checked={useCredit} onChange={(event) => { setUseCredit(event.target.checked); setRequestedCredit(event.target.checked ? creditQuote.maximumUsable : 0); }} />使用本次可折抵的最高金額</label> : operationalRules?.credit.uiMode === "automatic-maximum" ? <p className="member-notice">已自動套用最大折抵 NT$ {creditQuote.maximumUsable.toLocaleString("zh-TW")}</p> : <div className="subscription-enrollment-fields"><label>本次折抵金額<input type="number" min={0} max={creditQuote.maximumUsable} value={requestedCredit} onChange={(event) => setRequestedCredit(Math.min(creditQuote.maximumUsable, Math.max(0, Number(event.target.value) || 0)))} /></label>{operationalRules?.credit.showMaximumButton && <button type="button" onClick={() => setRequestedCredit(creditQuote.maximumUsable)}>最大折抵</button>}</div>}<div className="subscription-enrollment-summary"><span>折抵後預計應付 NT$ {Math.max(0, subtotal + shipping + codServiceFee - requestedCredit).toLocaleString("zh-TW")}</span></div></section>}
           <section className="form-card"><div className="form-card-head"><span>04</span><h2>備註</h2></div><label>其他說明 <small>選填</small><textarea name="note" maxLength={300} rows={4} placeholder="有需要我們特別注意的事項，請寫在這裡" /></label></section>
           {member && joinSubscription && operationalRules?.subscription.customCycleEnabled && <button type="button" className="text-link" onClick={() => { setSubscriptionIntervalMode("custom"); setSubscriptionInterval(operationalRules.subscription.customCycleMinDays); }}>改用自訂配送週期</button>}
           {member && <section className="form-card subscription-enrollment-card">
@@ -345,7 +365,7 @@ export default function CheckoutPage() {
     </strong>
   </div>
 
-  {mode === "711_cod" &&
+  {mode !== "studio_pickup" &&
     operationalRules &&
     subscriptionRenewalShipping === 0 &&
     subscriptionShippingSavings > 0 && (
@@ -357,7 +377,7 @@ export default function CheckoutPage() {
       </div>
     )}
 
-  {mode === "711_cod" &&
+  {mode !== "studio_pickup" &&
     operationalRules &&
     subscriptionRenewalShipping > 0 && (
       <div className="subscription-renewal-row">
@@ -368,12 +388,13 @@ export default function CheckoutPage() {
       </div>
     )}
 
-  {mode === "711_cod" && subscriptionRenewalShipping > 0 && subscriptionShippingSavings > 0 && (
+  {mode !== "studio_pickup" && subscriptionRenewalShipping > 0 && subscriptionShippingSavings > 0 && (
     <div className="subscription-renewal-row saving">
       <span>定期配送運費優惠</span>
       <strong>− NT$ {subscriptionShippingSavings.toLocaleString("zh-TW")}</strong>
     </div>
   )}
+  {mode === "home_delivery" && paymentMethod === "cash_on_delivery" && <div className="subscription-renewal-row"><span>貨到付款手續費</span><strong>NT$ {codServiceFee.toLocaleString("zh-TW")}</strong></div>}
 
   <footer>
     <span>依目前設定，每期預估優惠</span>
@@ -495,7 +516,7 @@ export default function CheckoutPage() {
                 </b>
               </div>
             );
-          })}<div className="summary-line"><span>商品小計</span><b>NT$ {subtotal.toLocaleString("zh-TW")}</b></div><div className="summary-line"><span>{mode === "studio_pickup" ? "工作室自取" : "7-ELEVEN 運費"}</span><b>{shipping ? `NT$ ${shipping}` : "免運"}</b></div>{requestedCredit > 0 && <div className="summary-line"><span>會員抵用金</span><b>- NT$ {requestedCredit.toLocaleString("zh-TW")}</b></div>}<div className="summary-total"><span>{mode === "studio_pickup" ? "訂單總額" : "取貨付款總額"}</span><strong>NT$ {Math.max(0, subtotal + shipping - requestedCredit).toLocaleString("zh-TW")}</strong></div><button type="submit" disabled={submitting||!ready||!items.length}>{submitting?"資料傳送中…":"確認並傳送訂單"}</button><p>系統會先保存訂單，再傳送至 KD Coffee 的 LINE 訂單群組。</p></aside>
+          })}<div className="summary-line"><span>商品小計</span><b>NT$ {subtotal.toLocaleString("zh-TW")}</b></div><div className="summary-line"><span>{mode === "studio_pickup" ? "工作室自取" : mode === "home_delivery" ? "宅配運費" : "7-ELEVEN 運費"}</span><b>{shipping ? `NT$ ${shipping}` : "免運"}</b></div>{mode === "home_delivery" && <div className="summary-line"><span>貨到付款手續費</span><b>NT$ {codServiceFee.toLocaleString("zh-TW")}</b></div>}{requestedCredit > 0 && <div className="summary-line"><span>會員抵用金</span><b>- NT$ {requestedCredit.toLocaleString("zh-TW")}</b></div>}<div className="summary-total"><span>{mode === "711_cod" ? "取貨付款總額" : "訂單總額"}</span><strong>NT$ {Math.max(0, subtotal + shipping + codServiceFee - requestedCredit).toLocaleString("zh-TW")}</strong></div><button type="submit" disabled={submitting||!ready||!items.length}>{submitting?"資料傳送中…":"確認並傳送訂單"}</button><p>系統會先保存訂單，再傳送至 KD Coffee 的 LINE 訂單群組。</p></aside>
       </form>
     </section>
   </main>;

@@ -19,6 +19,7 @@ import { addTaipeiCalendarDays } from "@/lib/membershipPolicies";
 import { getLiveWebsiteData } from "@/data/websiteData";
 import { isSameOriginRequest } from "@/lib/requestSecurity";
 import { resolveMemberSubscriptionItems } from "@/lib/subscriptionSkuModel";
+import { validateDeliveryAddress } from "@/lib/deliveryAddress";
 
 export const dynamic = "force-dynamic";
 
@@ -143,12 +144,21 @@ export async function PATCH(request: Request) {
       actionResult.subscriptionId = cycle.subscriptionId;
     } else if (["change-shipping", "change-store"].includes(action)) {
       const shippingMethod = action === "change-store" ? "711_cod" : String(body.shippingMethod || "");
-      if (!["studio_pickup", "711_cod"].includes(shippingMethod)) throw new MembershipCommerceError("不支援的取貨方式");
+      if (!["studio_pickup", "711_cod", "home_delivery"].includes(shippingMethod)) throw new MembershipCommerceError("不支援的取貨方式");
+      if (shippingMethod !== "home_delivery" && body.deliveryAddress != null) throw new MembershipCommerceError("此配送方式不可填寫宅配地址");
+      if (shippingMethod === "home_delivery" && (body.storeId != null || body.storeName != null)) throw new MembershipCommerceError("宅配不可同時指定門市");
       const storeSelection = shippingMethod === "711_cod"
         ? { storeId: String(body.storeId || "").trim().slice(0, 10), storeName: String(body.storeName || "").trim().slice(0, 60) }
         : null;
       if (shippingMethod === "711_cod" && (!storeSelection?.storeId || !storeSelection.storeName)) throw new MembershipCommerceError("請先選擇有效的 7-ELEVEN 取貨門市");
-      await updateSubscriptionPreferences({ memberId: member.id, subscriptionId: String(body.subscriptionId), expectedRevision: Number(body.expectedRevision), shippingMethod, storeSelection, idempotencyKey });
+      let deliveryAddress = null;
+      if (shippingMethod === "home_delivery") {
+        try { deliveryAddress = validateDeliveryAddress(body.deliveryAddress); }
+        catch (error) { throw new MembershipCommerceError(error instanceof Error ? error.message : "宅配地址不正確"); }
+      }
+      const paymentMethod = shippingMethod === "home_delivery" ? String(body.paymentMethod || "") : null;
+      if (shippingMethod === "home_delivery" && paymentMethod !== "atm_transfer" && paymentMethod !== "cash_on_delivery") throw new MembershipCommerceError("請選擇可用的宅配付款方式");
+      await updateSubscriptionPreferences({ memberId: member.id, subscriptionId: String(body.subscriptionId), expectedRevision: Number(body.expectedRevision), shippingMethod, storeSelection, deliveryAddress, paymentMethod: paymentMethod as "atm_transfer" | "cash_on_delivery" | null, idempotencyKey });
     } else if (action === "change-items") {
       const dashboard = await getMemberCommerceDashboard(member.id);
       const cycle = dashboard.cycles.find((item) => item.cycleId === String(body.cycleId));

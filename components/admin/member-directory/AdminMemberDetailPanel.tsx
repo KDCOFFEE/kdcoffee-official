@@ -39,7 +39,7 @@ export function AdminMemberDetailPanel(props: {
 
       <section><h3>定期配送（{props.detail.subscriptions.length}）</h3>
         {props.detail.subscriptions.map((subscription) => <article key={subscription.subscriptionId} className="detail-card"><strong>{subscription.subscriptionId}</strong><DefinitionList rows={[
-          ["狀態", subscription.status], ["週期", `每 ${subscription.intervalDays} 天`], ["未來取貨", subscription.shippingMethod], ["7-ELEVEN 門市", subscription.storeSelection?.storeName], ["首筆訂單", subscription.startedFromOrderId], ["下一期", subscription.nextCycle?.plannedDate], ["修改截止", subscription.nextCycle?.modificationDeadline], ["期次狀態", subscription.nextCycle?.status],
+          ["狀態", subscription.status], ["週期", `每 ${subscription.intervalDays} 天`], ["未來配送", subscription.shippingMethod === "home_delivery" ? "宅配" : subscription.shippingMethod === "711_cod" ? "7-ELEVEN" : "工作室自取"], ["7-ELEVEN 門市", subscription.storeSelection?.storeName], ["首筆訂單", subscription.startedFromOrderId], ["下一期", subscription.nextCycle?.plannedDate], ["修改截止", subscription.nextCycle?.modificationDeadline], ["期次狀態", subscription.nextCycle?.status],
         ]} /></article>)}
         {!props.detail.subscriptions.length ? <p>沒有定期配送紀錄。</p> : null}
       </section>
@@ -51,7 +51,7 @@ export function AdminMemberDetailPanel(props: {
       <section><h3>訂單</h3><DefinitionList rows={[
         ["全部訂單", props.detail.orders.orderCount], ["已完成訂單", props.detail.orders.completedOrderCount], ["已完成訂單金額", money(props.detail.orders.completedSpend)], ["全部訂單金額", money(props.detail.orders.allOrderAmount)],
       ]} />
-      <div className="detail-orders">{props.detail.orders.recent.map((order) => <article key={order.orderNumber} className="detail-card"><strong>{order.orderNumber}</strong><span>{order.createdAt} · {order.fulfillmentStatus || order.orderStatus}</span><span>{money(order.total)} · {order.shippingMethod}{order.storeName ? ` · ${order.storeName}` : ""}</span>{order.diagnostic ? <b>{order.diagnostic}</b> : null}</article>)}</div></section>
+      <div className="detail-orders">{props.detail.orders.recent.map((order) => <article key={order.orderNumber} className="detail-card"><strong>{order.orderNumber}</strong><span>{order.createdAt} · {order.fulfillmentStatus || order.orderStatus}</span><span>{money(order.total)} · {order.shippingMethod === "home_delivery" ? "宅配" : order.shippingMethod === "711_cod" ? "7-ELEVEN" : order.shippingMethod === "studio_pickup" ? "工作室自取" : order.shippingMethod}{order.storeName ? ` · ${order.storeName}` : ""}</span>{order.diagnostic ? <b>{order.diagnostic}</b> : null}</article>)}</div></section>
 
       {props.detail.organization.findings.length || props.detail.diagnostics.length ? <section className="detail-warnings"><h3>資料診斷</h3><ul>{[...props.detail.organization.findings, ...props.detail.diagnostics].map((item, index) => <li key={`${item.code}-${index}`}>{item.message}</li>)}</ul></section> : null}
     </div> : null}

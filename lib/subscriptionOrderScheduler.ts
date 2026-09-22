@@ -21,7 +21,13 @@ function deterministicOrderNumber(cycle: SubscriptionCycle) {
 
 function schedulerOrder(cycle: SubscriptionCycle, subscription: Awaited<ReturnType<typeof readMembershipCommerceState>>["subscriptions"][string], member: Awaited<ReturnType<typeof readMember>>, now: Date, website: WebsiteData) {
   if (!cycle.itemsSnapshot || !cycle.pricingSnapshot || !cycle.shippingSnapshot || !cycle.rulesSnapshot) throw new Error("本期尚未完成商務快照");
-  if (subscription.shippingMethod === "711_cod" && !subscription.storeSelection?.storeId) throw new Error("尚未設定 7-ELEVEN 取貨門市");
+  const lockedDelivery = cycle.shippingSnapshot;
+  const method = lockedDelivery.method;
+  if (method === "711_cod" && !lockedDelivery.storeSelection?.storeId) throw new Error("尚未設定 7-ELEVEN 取貨門市");
+  if (method === "home_delivery" && (!lockedDelivery.deliveryAddress || !["atm_transfer", "cash_on_delivery"].includes(lockedDelivery.paymentMethod || ""))) throw new Error("宅配快照資料不完整");
+  if (!["711_cod", "studio_pickup", "home_delivery"].includes(method)) throw new Error("不支援的配送方式");
+  const homePayment = method === "home_delivery" ? lockedDelivery.paymentMethod : null;
+  const codServiceFee = method === "home_delivery" ? lockedDelivery.codServiceFee ?? cycle.pricingSnapshot.codServiceFee ?? 0 : 0;
   const orderNumber = deterministicOrderNumber(cycle);
 
   const merchandiseAmount =
@@ -50,14 +56,17 @@ function schedulerOrder(cycle: SubscriptionCycle, subscription: Awaited<ReturnTy
   return {
     orderNumber,
     createdAt: now.toISOString(),
-    status: subscription.shippingMethod === "711_cod" ? "waiting_merchant_create_cod_shipment" : "waiting_studio_pickup_confirmation",
-    orderMode: subscription.shippingMethod,
+    status: method === "711_cod" ? "waiting_merchant_create_cod_shipment" : method === "home_delivery" ? "new_order" : "waiting_studio_pickup_confirmation",
+    orderMode: method,
     customer: { name: member?.pickupName || member?.displayName || "KD Coffee 會員", phone: member?.phone || "", email: member?.email || "", note: "定期購系統自動建立" },
     member: { memberId: subscription.memberId, lineUserId: member?.lineUserId, lineDisplayName: member?.displayName },
-    store: subscription.shippingMethod === "711_cod" ? { id: subscription.storeSelection!.storeId, name: subscription.storeSelection!.storeName, address: "" } : undefined,
-    studioPickup: subscription.shippingMethod === "studio_pickup" ? { preferredDate: cycle.plannedDate } : undefined,
-    payment: subscription.shippingMethod === "711_cod" ? "cash_on_delivery" : "pickup_confirmation",
-    delivery: subscription.shippingMethod === "711_cod" ? "7-ELEVEN 門市取貨付款" : "KD Coffee 工作室自取",
+    store: method === "711_cod" ? { id: lockedDelivery.storeSelection!.storeId, name: lockedDelivery.storeSelection!.storeName, address: "" } : undefined,
+    studioPickup: method === "studio_pickup" ? { preferredDate: cycle.plannedDate } : undefined,
+    deliveryAddress: method === "home_delivery" ? structuredClone(lockedDelivery.deliveryAddress) : undefined,
+    payment: method === "home_delivery" ? homePayment : method === "711_cod" ? "cash_on_delivery" : "pickup_confirmation",
+    paymentDetails: method === "home_delivery" ? { method: homePayment, status: "pending", paidAt: null } : undefined,
+    codServiceFee: method === "home_delivery" ? codServiceFee : undefined,
+    delivery: method === "home_delivery" ? "宅配" : method === "711_cod" ? "7-ELEVEN 門市取貨付款" : "KD Coffee 工作室自取",
     items,
     subtotal: cycle.pricingSnapshot.selectedPriceSource === "campaign" ? cycle.pricingSnapshot.campaignPrice : cycle.pricingSnapshot.subscriptionPrice,
     shipping: cycle.pricingSnapshot.shipping,

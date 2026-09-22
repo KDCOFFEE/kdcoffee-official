@@ -10,6 +10,7 @@ export const dynamic = "force-dynamic";
 function deliveryLabel(order: { orderMode?: string; store?: { name?: string } }) {
   if (order.orderMode === "711_cod") return order.store?.name || "7-ELEVEN 取貨付款";
   if (order.orderMode === "studio_pickup") return "KD Coffee 工作室自取";
+  if (order.orderMode === "home_delivery") return "宅配";
   return "企業送禮洽詢";
 }
 

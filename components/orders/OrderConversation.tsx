@@ -6,6 +6,8 @@ import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import OrderTimeline from "@/components/orders/OrderTimeline";
 import type { OrderMessage } from "@/lib/orderConversation";
 import type { OrderTimelineEntry } from "@/lib/orderTimeline";
+import type { DeliveryAddress } from "@/lib/deliveryAddress";
+import type { HomeDeliveryPaymentDetails } from "@/lib/homeDeliveryPayment";
 
 type CustomerOrderSummary = {
   orderNumber: string;
@@ -14,9 +16,12 @@ type CustomerOrderSummary = {
   orderMode: string;
   statusLabel: string;
   modeLabel: string;
+  deliveryAddress: DeliveryAddress | null;
+  paymentDetails: HomeDeliveryPaymentDetails | null;
   financialBreakdown: {
     subtotal: number;
     shipping: number;
+    codServiceFee: number;
     creditApplied: number | null;
     totalBeforeCredit: number | null;
     total: number;
@@ -253,10 +258,12 @@ export default function OrderConversation({ orderNumber }: { orderNumber: string
       <div className="customer-order-financials" aria-label="訂單金額明細">
         <span>商品小計</span><b>{money(order.financialBreakdown.subtotal)}</b>
         <span>{order.modeLabel.startsWith("7-ELEVEN") ? "7-ELEVEN 運費" : "運費"}</span><b>{order.financialBreakdown.shipping ? money(order.financialBreakdown.shipping) : "免運"}</b>
+        {order.orderMode === "home_delivery" && <><span>貨到付款手續費</span><b>{money(order.financialBreakdown.codServiceFee)}</b></>}
         {order.financialBreakdown.creditApplied !== null ? <><span>會員抵用金</span><b className="credit-deduction">−{money(order.financialBreakdown.creditApplied)}</b></> : null}
         {order.financialBreakdown.totalBeforeCredit !== null ? <><span>折抵前總額</span><b>{money(order.financialBreakdown.totalBeforeCredit)}</b></> : null}
         <strong>訂單總計</strong><strong>{money(order.financialBreakdown.total)}</strong>
       </div>
+      {order.orderMode === "home_delivery" && <div className="customer-order-financials"><strong>宅配資料</strong><span>{order.deliveryAddress ? `${order.deliveryAddress.recipientName}・${order.deliveryAddress.phone}` : "地址待確認"}</span><span>{order.deliveryAddress ? `${order.deliveryAddress.postalCode} ${order.deliveryAddress.city}${order.deliveryAddress.district}${order.deliveryAddress.addressLine}` : ""}</span><span>{order.paymentDetails?.method === "atm_transfer" ? "ATM 轉帳" : "貨到付款"}</span><span>{order.paymentDetails?.status === "paid" ? "已收款" : "待收款"}</span>{order.paymentDetails?.method === "atm_transfer" && order.paymentDetails.status === "pending" && <p>請依網站／客服提供的轉帳資訊完成付款，確認入帳後安排出貨。</p>}</div>}
       {order.creditReservation?.status === "released" ? <p className="customer-credit-returned" role="status">訂單取消，{money(order.creditReservation.amount)} 抵用金已返還。</p> : null}
 
       <OrderTimeline entries={timeline} audience="customer" />

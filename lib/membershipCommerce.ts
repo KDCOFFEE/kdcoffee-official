@@ -39,8 +39,9 @@ import {
   type SubscriptionItem,
 } from "./membershipPolicies";
 import { projectOrderFinancialBreakdown } from "./orderFinancialProjection";
-import type { HomeDeliveryPaymentMethod } from "./homeDeliveryPayment";
-import { subscriptionShippingFee } from "./shippingRules";
+import { createHomeDeliveryPaymentSnapshot, type HomeDeliveryPaymentMethod } from "./homeDeliveryPayment";
+import { validateDeliveryAddress, type DeliveryAddress } from "./deliveryAddress";
+import { subscriptionShippingFee, type KdShippingMethod } from "./shippingRules";
 import { getMembershipCommerceStateFile } from "./storagePaths";
 import {
   DEDICATED_ROAST_STANDARD_PREPARATION_DAYS,
@@ -65,6 +66,7 @@ export type Subscription = {
   intervalDays: number;
   shippingMethod: string;
   storeSelection: { storeId: string; storeName: string } | null;
+  deliveryAddress?: DeliveryAddress | null;
   paymentMethod?: HomeDeliveryPaymentMethod | null;
   defaultItems: SubscriptionDefaultItem[];
   rulesVersion: number;
@@ -103,7 +105,7 @@ export type SubscriptionCycle = {
   itemsSnapshot: SubscriptionDefaultItem[] | null;
   pricingSnapshot: PricingSnapshot | null;
   giftSnapshot: { eligible: boolean; quantity: number; selectedProductId: string | null; packingLockedAt: string | null } | null;
-  shippingSnapshot: { method: string; storeSelection: { storeId: string; storeName: string } | null; freeShipping: boolean } | null;
+  shippingSnapshot: { method: string; storeSelection: { storeId: string; storeName: string } | null; deliveryAddress?: DeliveryAddress | null; paymentMethod?: HomeDeliveryPaymentMethod | null; codServiceFee?: number; freeShipping: boolean } | null;
   paymentSnapshot?: { method: HomeDeliveryPaymentMethod } | null;
   rulesSnapshot: RulesVersion | null;
   createdOrderId: string | null;
@@ -798,11 +800,25 @@ function touch(record: { revision: number; updatedAt: string }, now: Date) {
   record.updatedAt = nowIso(now);
 }
 
-export async function createSubscription(input: { memberId: string; startedFromOrderId: string; anchorDate: string; intervalDays: number; shippingMethod: string; storeSelection?: Subscription["storeSelection"]; defaultItems: SubscriptionDefaultItem[]; idempotencyKey: string; now?: Date; stateFilePath?: string; rulesFilePath?: string }) {
+function subscriptionDeliveryPreference(input: { shippingMethod: string; storeSelection?: Subscription["storeSelection"]; deliveryAddress?: DeliveryAddress | null; paymentMethod?: HomeDeliveryPaymentMethod | null }, requireStore = false) {
+  if (input.shippingMethod === "studio_pickup") return { storeSelection: null, deliveryAddress: null, paymentMethod: null };
+  if (input.shippingMethod === "711_cod") {
+    if (requireStore && (!input.storeSelection?.storeId?.trim() || !input.storeSelection.storeName?.trim())) throw new MembershipCommerceError("請先選擇有效的 7-ELEVEN 取貨門市");
+    return { storeSelection: input.storeSelection ? structuredClone(input.storeSelection) : null, deliveryAddress: null, paymentMethod: null };
+  }
+  if (input.shippingMethod === "home_delivery") {
+    if (input.paymentMethod !== "atm_transfer" && input.paymentMethod !== "cash_on_delivery") throw new MembershipCommerceError("請選擇宅配付款方式");
+    return { storeSelection: null, deliveryAddress: validateDeliveryAddress(input.deliveryAddress), paymentMethod: input.paymentMethod };
+  }
+  throw new MembershipCommerceError("不支援的取貨方式");
+}
+
+export async function createSubscription(input: { memberId: string; startedFromOrderId: string; anchorDate: string; intervalDays: number; shippingMethod: string; storeSelection?: Subscription["storeSelection"]; deliveryAddress?: DeliveryAddress | null; paymentMethod?: HomeDeliveryPaymentMethod | null; defaultItems: SubscriptionDefaultItem[]; idempotencyKey: string; now?: Date; stateFilePath?: string; rulesFilePath?: string }) {
   await assertCanonicalMember(input.memberId);
   const version = await getActiveMembershipRules(input.now, input.rulesFilePath);
   if (!resolveSubscriptionInterval(input.intervalDays, version.rules).allowed) throw new MembershipCommerceError("此配送週期目前未開放");
   const items = cloneItems(input.defaultItems);
+  const delivery = subscriptionDeliveryPreference(input);
   const key = `subscription:create:${input.idempotencyKey}`;
   return transaction((state, now) => {
     const existingId = remembered(state, key);
@@ -810,7 +826,7 @@ export async function createSubscription(input: { memberId: string; startedFromO
     if (Object.values(state.subscriptions).some((subscription) => subscription.startedFromOrderId === input.startedFromOrderId)) throw new MembershipCommerceError("此首筆訂單已建立定期購");
     const subscriptionId = id("sub");
     const timestamp = nowIso(now);
-    const subscription: Subscription = { subscriptionId, memberId: input.memberId, status: "pending_activation", startedFromOrderId: input.startedFromOrderId, anchorDate: input.anchorDate, intervalDays: input.intervalDays, shippingMethod: input.shippingMethod, storeSelection: input.storeSelection ?? null, defaultItems: items, rulesVersion: version.rulesVersion, statusReason: "等待首筆原價訂單成功取貨", createdAt: timestamp, updatedAt: timestamp, revision: 0 };
+    const subscription: Subscription = { subscriptionId, memberId: input.memberId, status: "pending_activation", startedFromOrderId: input.startedFromOrderId, anchorDate: input.anchorDate, intervalDays: input.intervalDays, shippingMethod: input.shippingMethod, ...delivery, defaultItems: items, rulesVersion: version.rulesVersion, statusReason: "等待首筆原價訂單成功取貨", createdAt: timestamp, updatedAt: timestamp, revision: 0 };
     state.subscriptions[subscriptionId] = subscription;
     remember(state, key, subscriptionId, now);
     audit(state, { actor: "member", action: "subscription-created", entityType: "subscription", entityId: subscriptionId, before: {}, after: { status: subscription.status }, reason: "首筆原價訂單建立定期購", sourceEvent: input.startedFromOrderId }, now);
@@ -1110,7 +1126,7 @@ export async function lockSubscriptionCycle(input: { cycleId: string; idempotenc
     if (remembered(state, key)) return cycle;
     if (!["scheduled", "modifiable"].includes(cycle.status)) throw new MembershipCommerceError("本期無法鎖定");
     const subscription = state.subscriptions[cycle.subscriptionId];
-    if (subscription.shippingMethod !== "studio_pickup" && subscription.shippingMethod !== "711_cod") throw new MembershipCommerceError("不支援的取貨方式");
+    const delivery = subscriptionDeliveryPreference(subscription);
     const items = cloneItems(cycle.itemsDraft);
     const original = items.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
     const subscriptionPrice = applyPercentage(original, version.rules.subscription.discountPercent, version.rules.money.roundingMode);
@@ -1120,16 +1136,21 @@ export async function lockSubscriptionCycle(input: { cycleId: string; idempotenc
     const campaignPrice = campaign?.subscriptionEligible ? Math.max(0, original - campaignAdjustment) : null;
     const useCampaign = campaignPrice != null && (version.rules.campaign.eligiblePricingMode === "campaign-replaces-subscription" || version.rules.campaign.eligiblePricingMode === "campaign-defined" || (version.rules.campaign.eligiblePricingMode === "best-price" && campaignPrice < subscriptionPrice));
     const merchandisePrice = useCampaign ? campaignPrice : subscriptionPrice;
-    const shipping = subscriptionShippingFee(subscription.shippingMethod, version.rules);
+    const shipping = subscriptionShippingFee(subscription.shippingMethod as KdShippingMethod, version.rules);
+    const payment = subscription.shippingMethod === "home_delivery"
+      ? createHomeDeliveryPaymentSnapshot(delivery.paymentMethod as "atm_transfer" | "cash_on_delivery", version.rules)
+      : null;
+    const codServiceFee = payment?.codServiceFee ?? 0;
     const progress = giftProgress(state, subscription.subscriptionId);
     const fulfillmentNumber = progress + 1;
     const giftEligible = giftEligibleAt(fulfillmentNumber, version.rules);
     cycle.status = "locked";
     cycle.itemsSnapshot = items;
     cycle.rulesSnapshot = structuredClone(version);
-    cycle.pricingSnapshot = { merchandiseOriginal: original, subscriptionDiscountPercent: version.rules.subscription.discountPercent, subscriptionPrice, campaignPrice, selectedPriceSource: useCampaign ? "campaign" : "subscription", campaign, creditReserved: 0, shipping, finalAmount: Math.max(0, merchandisePrice + shipping), currency: "TWD", roundingMode: version.rules.money.roundingMode };
+    cycle.pricingSnapshot = { merchandiseOriginal: original, subscriptionDiscountPercent: version.rules.subscription.discountPercent, subscriptionPrice, campaignPrice, selectedPriceSource: useCampaign ? "campaign" : "subscription", campaign, creditReserved: 0, shipping, codServiceFee, finalAmount: Math.max(0, merchandisePrice + shipping + codServiceFee), currency: "TWD", roundingMode: version.rules.money.roundingMode };
     cycle.giftSnapshot = { eligible: giftEligible, quantity: giftEligible ? giftQuantityForItems(items, version.rules) : 0, selectedProductId: null, packingLockedAt: null };
-    cycle.shippingSnapshot = { method: subscription.shippingMethod, storeSelection: structuredClone(subscription.storeSelection), freeShipping: shipping === 0 };
+    cycle.shippingSnapshot = { method: subscription.shippingMethod, storeSelection: delivery.storeSelection, deliveryAddress: delivery.deliveryAddress, paymentMethod: delivery.paymentMethod, codServiceFee, freeShipping: shipping === 0 };
+    cycle.paymentSnapshot = payment ? { method: payment.paymentDetails.method } : null;
     touch(cycle, now);
     remember(state, key, cycle.cycleId, now);
     audit(state, { actor: "system", action: "cycle-locked", entityType: "cycle", entityId: cycle.cycleId, before: { status: "modifiable" }, after: { status: "locked", rulesVersion: version.rulesVersion, finalAmount: cycle.pricingSnapshot.finalAmount }, reason: "會員修改期限截止", sourceEvent: input.idempotencyKey }, now);
@@ -1257,7 +1278,7 @@ export async function memberSkipCycle(input: { memberId: string; cycleId: string
   }, { now: input.now, filePath: input.stateFilePath });
 }
 
-export async function updateSubscriptionPreferences(input: { memberId: string; subscriptionId: string; expectedRevision: number; idempotencyKey: string; shippingMethod?: string; storeSelection?: Subscription["storeSelection"]; defaultItems?: SubscriptionDefaultItem[]; now?: Date; stateFilePath?: string }) {
+export async function updateSubscriptionPreferences(input: { memberId: string; subscriptionId: string; expectedRevision: number; idempotencyKey: string; shippingMethod?: string; storeSelection?: Subscription["storeSelection"]; deliveryAddress?: DeliveryAddress | null; paymentMethod?: HomeDeliveryPaymentMethod | null; defaultItems?: SubscriptionDefaultItem[]; now?: Date; stateFilePath?: string }) {
   const items = input.defaultItems ? cloneItems(input.defaultItems) : null;
   const key = `subscription:preferences:${input.idempotencyKey}`;
   return transaction((state, now) => {
@@ -1269,17 +1290,18 @@ export async function updateSubscriptionPreferences(input: { memberId: string; s
     if (!["active", "paused"].includes(subscription.status)) throw new MembershipCommerceError("目前無法修改定期購內容");
     const beforeShippingMethod = subscription.shippingMethod;
     const beforeStore = subscription.storeSelection?.storeId ?? "none";
-    if (input.shippingMethod !== undefined || input.storeSelection !== undefined) {
+    if (input.shippingMethod !== undefined || input.storeSelection !== undefined || input.deliveryAddress !== undefined || input.paymentMethod !== undefined) {
       const shippingMethod = input.shippingMethod ?? subscription.shippingMethod;
-      if (!["studio_pickup", "711_cod"].includes(shippingMethod)) throw new MembershipCommerceError("不支援的取貨方式");
-      const requestedStore = input.storeSelection !== undefined
-        ? structuredClone(input.storeSelection)
-        : structuredClone(subscription.storeSelection);
-      if (shippingMethod === "711_cod" && (!requestedStore?.storeId.trim() || !requestedStore.storeName.trim())) {
-        throw new MembershipCommerceError("請先選擇有效的 7-ELEVEN 取貨門市");
-      }
+      const delivery = subscriptionDeliveryPreference({
+        shippingMethod,
+        storeSelection: input.storeSelection !== undefined ? input.storeSelection : subscription.storeSelection,
+        deliveryAddress: input.deliveryAddress !== undefined ? input.deliveryAddress : subscription.deliveryAddress,
+        paymentMethod: input.paymentMethod !== undefined ? input.paymentMethod : subscription.paymentMethod,
+      }, true);
       subscription.shippingMethod = shippingMethod;
-      subscription.storeSelection = shippingMethod === "studio_pickup" ? null : requestedStore;
+      subscription.storeSelection = delivery.storeSelection;
+      subscription.deliveryAddress = delivery.deliveryAddress;
+      subscription.paymentMethod = delivery.paymentMethod;
     }
     if (items) subscription.defaultItems = items;
     touch(subscription, now);

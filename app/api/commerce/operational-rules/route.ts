@@ -32,6 +32,7 @@ export async function GET() {
       subscriptionShippingDiscount:
         rules.shipping.subscriptionShippingDiscount,
     },
+    openingYearFreeShipping: rules.membership.openingYearFreeShipping,
     money: {
       roundingMode: rules.money.roundingMode,
     },

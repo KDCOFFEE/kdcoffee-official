@@ -29,6 +29,9 @@ import {
 import { resolvePickupDateAvailability, resolveSubscriptionDateAvailability, resolveSubscriptionInterval } from "@/lib/membershipPolicies";
 import { getLiveWebsiteData } from "@/data/websiteData";
 import { subscriptionItemsFromStoredOrderItems } from "@/lib/subscriptionSkuModel";
+import { validateDeliveryAddress, validateOrderDeliverySelection } from "@/lib/deliveryAddress";
+import { generalCheckoutShipping } from "@/lib/checkoutShipping";
+import { quoteHomeDeliveryPayable, type ActiveHomeDeliveryPaymentMethod } from "@/lib/homeDeliveryPayment";
 
 function clean(value: unknown, max = 200) { return String(value ?? "").trim().slice(0, max); }
 function validPhone(value: string) { return /^09\d{8}$/.test(value); }
@@ -78,13 +81,14 @@ export async function POST(request: Request) {
       ? { tokenHash: guestAccess.tokenHash, createdAt: new Date().toISOString() }
       : undefined;
     const orderMode = clean(body.orderMode, 30) || "711_cod";
-    if (!["711_cod", "studio_pickup", "corporate_gift"].includes(orderMode)) throw new Error("訂購方式不正確");
+    if (!["711_cod", "studio_pickup", "home_delivery", "corporate_gift"].includes(orderMode)) throw new Error("訂購方式不正確");
     const customer = { name: clean(body.customer?.name, 20), phone: clean(body.customer?.phone, 10), email: clean(body.customer?.email, 120), note: clean(body.customer?.note, 300) };
     if (!customer.name) throw new Error("請填寫姓名");
     if (!validPhone(customer.phone)) throw new Error("手機號碼格式不正確");
     if (!validEmail(customer.email)) throw new Error("Email 格式不正確");
     const memberInfo = member ? { memberId: member.id, lineUserId: member.lineUserId, lineDisplayName: member.displayName } : null;
     const rulesVersion = await getActiveMembershipRules();
+    const { deliveryAddress, paymentMethod } = validateOrderDeliverySelection({ orderMode, store: body.store, studioPickup: body.studioPickup, deliveryAddress: body.deliveryAddress, paymentMethod: body.paymentMethod });
     const requestedCredit = Number(body.requestedCredit ?? 0);
     if (!Number.isSafeInteger(requestedCredit) || requestedCredit < 0) throw new Error("抵用金金額不正確");
     if (requestedCredit > 0 && !member) throw new Error("請先登入會員才能使用抵用金");
@@ -99,6 +103,7 @@ export async function POST(request: Request) {
       customer,
       store: body.store ?? null,
       studioPickup: body.studioPickup ?? null,
+      ...(orderMode === "home_delivery" ? { deliveryAddress, paymentMethod } : {}),
       corporateGift: body.corporateGift ?? null,
       items: body.items ?? null,
       ...(subscriptionIntent ? { subscriptionIntent } : {}),
@@ -142,8 +147,16 @@ export async function POST(request: Request) {
               if (!validStoreId(store.id) || !store.name || !store.address) throw new Error("請選擇正確且完整的 7-ELEVEN 門市");
               favoriteStore = store;
               return {
-                order: { orderNumber: candidateOrderNumber, createdAt, status: "waiting_merchant_create_cod_shipment", orderMode, customer, member: memberInfo, guestOrderAccess, store, subscriptionIntent, payment: "cash_on_delivery", delivery: "7-ELEVEN 門市取貨付款", lineNotification: { sent: false, status: "pending" }, idempotencyKey, idempotencyRequestHash: requestHash, ...priced },
+                order: { orderNumber: candidateOrderNumber, createdAt, status: "waiting_merchant_create_cod_shipment", orderMode, customer, member: memberInfo, guestOrderAccess, store, deliveryAddress: null, subscriptionIntent, payment: "cash_on_delivery", delivery: "7-ELEVEN 門市取貨付款", lineNotification: { sent: false, status: "pending" }, idempotencyKey, idempotencyRequestHash: requestHash, ...priced },
                 lineText: `【KD Coffee 新訂單｜7-ELEVEN 取貨付款】\n\n訂單編號：${candidateOrderNumber}\n會員：${member ? `${member.displayName}（LINE 會員）` : "訪客"}\n姓名：${customer.name}\n手機：${customer.phone}\nEmail：${customer.email || "未提供"}\n\n門市店號：${store.id}\n門市名稱：${store.name}\n門市地址：${store.address}\n\n訂購內容：\n${itemLines}\n\n商品小計：NT$ ${priced.subtotal.toLocaleString("zh-TW")}\n運費：${priced.shipping ? `NT$ ${priced.shipping}` : "免運"}\n取貨付款總額：NT$ ${priced.total.toLocaleString("zh-TW")}\n\n備註：${customer.note || "無"}\n\n下一步：請核對門市資料後，建立 7-ELEVEN 取貨付款寄件單。`,
+              };
+            }
+            if (orderMode === "home_delivery") {
+              const shipping = generalCheckoutShipping({ mode: "home_delivery", subtotal: priced.subtotal, homeDeliveryShippingFee: rulesVersion.rules.shipping.homeDeliveryShippingFee, member: Boolean(member), date: getDateOnlyInTimeZone(new Date(createdAt)), openingYearFreeShipping: rulesVersion.rules.membership.openingYearFreeShipping });
+              const payment = quoteHomeDeliveryPayable({ merchandiseSubtotal: priced.subtotal, shipping, availableCredit: 0, requestedCredit: 0, method: paymentMethod as ActiveHomeDeliveryPaymentMethod, rules: rulesVersion.rules });
+              return {
+                order: { orderNumber: candidateOrderNumber, createdAt, status: "new_order", orderMode, customer, member: memberInfo, guestOrderAccess, deliveryAddress, subscriptionIntent, payment: payment.payment, paymentDetails: { ...payment.paymentDetails, paidAt: null }, codServiceFee: payment.codServiceFee, delivery: "宅配", lineNotification: { sent: false, status: "pending" }, idempotencyKey, idempotencyRequestHash: requestHash, ...priced, shipping, totalBeforeCredit: payment.totalBeforeCredit, total: payment.total },
+                lineText: `【KD Coffee 新訂單｜宅配】\n\n訂單編號：${candidateOrderNumber}\n會員：${member ? `${member.displayName}（LINE 會員）` : "訪客"}\n姓名：${customer.name}\n手機：${customer.phone}\nEmail：${customer.email || "未提供"}\n\n收件人：${deliveryAddress!.recipientName}\n聯絡電話：${deliveryAddress!.phone}\n宅配地址：${deliveryAddress!.postalCode} ${deliveryAddress!.city}${deliveryAddress!.district}${deliveryAddress!.addressLine}\n付款方式：${paymentMethod === "atm_transfer" ? "ATM 轉帳" : "貨到付款"}\n\n訂購內容：\n${itemLines}\n\n商品小計：NT$ ${priced.subtotal.toLocaleString("zh-TW")}\n運費：NT$ ${shipping.toLocaleString("zh-TW")}\n貨到付款手續費：NT$ ${payment.codServiceFee.toLocaleString("zh-TW")}\n應付總額：NT$ ${payment.total.toLocaleString("zh-TW")}\n\n備註：${customer.note || "無"}`,
               };
             }
             const pickup = { preferredDate: clean(body.studioPickup?.preferredDate, 20) };
@@ -152,7 +165,7 @@ export async function POST(request: Request) {
             const pickupAvailability = resolvePickupDateAvailability({ requestedDate: pickup.preferredDate, today: taipeiToday, customRoast: hasCustomRoast, rules: rulesVersion.rules });
             if (!pickupAvailability.allowed) throw new Error(pickupAvailability.reason === "blocked-date" ? "這一天工作室暫停自取，請選擇其他日期" : `工作室自取最早可選 ${pickupAvailability.earliestDate}`);
             return {
-              order: { orderNumber: candidateOrderNumber, createdAt, status: "waiting_studio_pickup_confirmation", orderMode, customer, member: memberInfo, guestOrderAccess, studioPickup: pickup, subscriptionIntent, payment: "pickup_confirmation", delivery: "KD Coffee 工作室自取", lineNotification: { sent: false, status: "pending" }, idempotencyKey, idempotencyRequestHash: requestHash, ...priced, shipping: 0, total: priced.subtotal },
+              order: { orderNumber: candidateOrderNumber, createdAt, status: "waiting_studio_pickup_confirmation", orderMode, customer, member: memberInfo, guestOrderAccess, studioPickup: pickup, deliveryAddress: null, subscriptionIntent, payment: "pickup_confirmation", delivery: "KD Coffee 工作室自取", lineNotification: { sent: false, status: "pending" }, idempotencyKey, idempotencyRequestHash: requestHash, ...priced, shipping: 0, total: priced.subtotal },
               lineText: `【KD Coffee 新訂單｜工作室自取】\n\n訂單編號：${candidateOrderNumber}\n會員：${member ? `${member.displayName}（LINE 會員）` : "訪客"}\n姓名：${customer.name}\n手機：${customer.phone}\nEmail：${customer.email || "未提供"}\n\n希望取貨日期：${pickup.preferredDate || "未指定"}\n取貨時間：由工作室確認後通知\n\n訂購內容：\n${itemLines}\n\n訂單總額：NT$ ${priced.subtotal.toLocaleString("zh-TW")}\n備註：${customer.note || "無"}`,
             };
           },
@@ -192,6 +205,7 @@ export async function POST(request: Request) {
       return NextResponse.json({
         orderNumber: core.order.orderNumber,
         orderMode: core.order.orderMode,
+        paymentMethod: core.order.orderMode === "home_delivery" ? core.order.payment : undefined,
         saved: true,
         idempotentReplay: true,
         lineNotification: storedLineNotification,
@@ -243,7 +257,8 @@ export async function POST(request: Request) {
         try {
           const storedItems = Array.isArray(core.order.items) ? core.order.items as Array<Record<string, unknown>> : [];
           const defaultItems = subscriptionItemsFromStoredOrderItems(storedItems, await getLiveWebsiteData());
-          await createSubscription({ memberId: member.id, startedFromOrderId: orderNumber, anchorDate: subscriptionIntent.firstRenewalDate, intervalDays: subscriptionIntent.intervalDays, shippingMethod: orderMode, storeSelection: favoriteStore ? { storeId: favoriteStore.id, storeName: favoriteStore.name } : undefined, defaultItems, idempotencyKey: `checkout:${idempotencyKey}` });
+          const storedStore = core.order.store as { id?: string; name?: string } | undefined;
+          await createSubscription({ memberId: member.id, startedFromOrderId: orderNumber, anchorDate: subscriptionIntent.firstRenewalDate, intervalDays: subscriptionIntent.intervalDays, shippingMethod: String(core.order.orderMode), storeSelection: storedStore ? { storeId: String(storedStore.id || ""), storeName: String(storedStore.name || "") } : null, deliveryAddress: core.order.orderMode === "home_delivery" ? validateDeliveryAddress(core.order.deliveryAddress) : null, paymentMethod: core.order.orderMode === "home_delivery" ? core.order.payment as ActiveHomeDeliveryPaymentMethod : null, defaultItems, idempotencyKey: `checkout:${idempotencyKey}` });
         } catch (error) {
           warnings.push("訂單已成立；定期配送申請已保存在訂單中，工作室將協助完成確認。");
           console.error(`Order ${orderNumber} saved but subscription enrollment failed:`, error);
@@ -270,7 +285,7 @@ export async function POST(request: Request) {
     }
     if (!lineResult.sent) console.error(`Order ${orderNumber} saved but LINE notification failed:`, lineResult.reason);
 
-    return NextResponse.json({ orderNumber, orderMode, saved: true, orderAccessToken: guestAccess?.token, lineNotification: lineResult, credit: { requestedAmount: requestedCredit, appliedAmount: appliedCredit, reservationId: creditReservationId }, warning: warnings.length ? warnings.join(" ") : undefined });
+    return NextResponse.json({ orderNumber, orderMode, paymentMethod: orderMode === "home_delivery" ? core.order.payment : undefined, saved: true, orderAccessToken: guestAccess?.token, lineNotification: lineResult, credit: { requestedAmount: requestedCredit, appliedAmount: appliedCredit, reservationId: creditReservationId }, warning: warnings.length ? warnings.join(" ") : undefined });
   } catch (error) {
     const serverError = error instanceof OrderFileCreationError || error instanceof OrderFileNotFoundError || error instanceof OrderFileValidationError || error instanceof InventoryTransactionError || error instanceof FileLockTimeoutError || error instanceof OrderIdempotencyError;
     return NextResponse.json(

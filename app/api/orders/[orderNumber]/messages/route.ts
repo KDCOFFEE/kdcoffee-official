@@ -40,7 +40,9 @@ function customerOrderDto(order: Awaited<ReturnType<typeof readOrder>>, creditRe
       ? "7-ELEVEN 門市取貨付款"
       : order.orderMode === "studio_pickup"
         ? "KD Coffee 工作室自取"
-        : "企業送禮洽詢",
+        : order.orderMode === "home_delivery" ? "宅配" : "企業送禮洽詢",
+    deliveryAddress: order.orderMode === "home_delivery" ? order.deliveryAddress ?? null : null,
+    paymentDetails: order.orderMode === "home_delivery" ? order.paymentDetails ?? null : null,
     financialBreakdown,
     creditReservation,
   };

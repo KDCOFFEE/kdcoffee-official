@@ -95,7 +95,7 @@ try {
   const rawRoute = await readFile(path.join(process.cwd(), "app/api/admin/orders/[orderNumber]/route.ts"), "utf8");
   check("raw Admin order-status route blocks home progression", rawRoute.includes('latestOrder.orderMode === "home_delivery"'));
   const checkout = await readFile(path.join(process.cwd(), "app/checkout/page.tsx"), "utf8");
-  check("customer Checkout still excludes home delivery", checkout.includes('type OrderMode = "711_cod" | "studio_pickup"') && !checkout.includes('mode === "home_delivery"'));
+  check("customer Checkout enables home delivery without credit card", checkout.includes('value="home_delivery"') && !checkout.includes('value="credit_card"'));
 
   rule.shipping.homeDeliveryCodFee = 30;
   const atmId = "KD20260922-2001";
