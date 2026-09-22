@@ -81,7 +81,7 @@ export type ReferralPayoutQualificationRules = {
 
 export type MembershipBusinessRules = {
   membership: { openingYearFreeShipping: { enabled: boolean; startDate: string; endDate: string; shippingMethods: string[] } };
-  shipping: { subscriptionFreeShipping: boolean; subscriptionShippingFee: number };
+  shipping: { subscriptionFreeShipping: boolean; subscriptionShippingFee: number; sevenElevenShippingFee: number; homeDeliveryShippingFee: number; subscriptionShippingDiscount: number };
   subscription: { discountPercent: number; intervalsDays: number[]; intervalOptions: Array<{ days: number; enabled: boolean }>; customCycleEnabled: boolean; customCycleMinDays: number; customCycleMaxDays: number; modificationCutoffDays: number; orderCreationLeadDays: number; preparationLeadDays: number; customRoastPreparationLeadDays: number; delayQuickOptionsDays: number[]; advanceQuickOptionsDays: number[]; maxModificationsPerCycle: number | null; datePickerMode: "quick-and-calendar" | "calendar-only" | "suggestion-and-calendar"; uncollectedTerminationCount: number; allowOtherSubscriptionProducts: boolean; allowHalfToOnePound: boolean; allowOneToHalfPound: boolean; allowMixedOnePound: boolean; allowQuantityChange: boolean; pauseResumeAnchorPolicy: typeof OWNER_DECISION_REQUIRED | "keep-original" | "resume-date" | "member-selects-date" };
   pickup: { preparationLeadDays: number; customRoastPreparationLeadDays: number; blockedDates: string[]; datePickerMode: "calendar" | "suggestion-and-calendar" };
   gift: { startsAtFulfillment: number; repeatEveryFulfillments: number; halfPoundQuantity: number; onePoundQuantity: number; pool: Array<{ productId: string; priority: number; enabled: boolean }> };

@@ -39,6 +39,7 @@ import {
   type SubscriptionItem,
 } from "./membershipPolicies";
 import { projectOrderFinancialBreakdown } from "./orderFinancialProjection";
+import { subscriptionShippingFee } from "./shippingRules";
 import { getMembershipCommerceStateFile } from "./storagePaths";
 import {
   DEDICATED_ROAST_STANDARD_PREPARATION_DAYS,
@@ -1096,7 +1097,7 @@ export async function updateCycleItems(input: { cycleId: string; items: Subscrip
   }, { now: input.now, filePath: input.stateFilePath });
 }
 
-export async function lockSubscriptionCycle(input: { cycleId: string; idempotencyKey: string; shipping: number; campaign?: PricingSnapshot["campaign"]; now?: Date; stateFilePath?: string; rulesFilePath?: string }) {
+export async function lockSubscriptionCycle(input: { cycleId: string; idempotencyKey: string; /** @deprecated Shipping is calculated from active rules at lock time. */ shipping?: number; campaign?: PricingSnapshot["campaign"]; now?: Date; stateFilePath?: string; rulesFilePath?: string }) {
   const version = await getActiveMembershipRules(input.now, input.rulesFilePath);
   const key = `cycle:lock:${input.idempotencyKey}`;
   return transaction((state, now) => {
@@ -1105,6 +1106,7 @@ export async function lockSubscriptionCycle(input: { cycleId: string; idempotenc
     if (remembered(state, key)) return cycle;
     if (!["scheduled", "modifiable"].includes(cycle.status)) throw new MembershipCommerceError("本期無法鎖定");
     const subscription = state.subscriptions[cycle.subscriptionId];
+    if (subscription.shippingMethod !== "studio_pickup" && subscription.shippingMethod !== "711_cod") throw new MembershipCommerceError("不支援的取貨方式");
     const items = cloneItems(cycle.itemsDraft);
     const original = items.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
     const subscriptionPrice = applyPercentage(original, version.rules.subscription.discountPercent, version.rules.money.roundingMode);
@@ -1114,7 +1116,7 @@ export async function lockSubscriptionCycle(input: { cycleId: string; idempotenc
     const campaignPrice = campaign?.subscriptionEligible ? Math.max(0, original - campaignAdjustment) : null;
     const useCampaign = campaignPrice != null && (version.rules.campaign.eligiblePricingMode === "campaign-replaces-subscription" || version.rules.campaign.eligiblePricingMode === "campaign-defined" || (version.rules.campaign.eligiblePricingMode === "best-price" && campaignPrice < subscriptionPrice));
     const merchandisePrice = useCampaign ? campaignPrice : subscriptionPrice;
-    const shipping = version.rules.shipping.subscriptionFreeShipping ? 0 : assertIntegerMoney(input.shipping, "運費");
+    const shipping = subscriptionShippingFee(subscription.shippingMethod, version.rules);
     const progress = giftProgress(state, subscription.subscriptionId);
     const fulfillmentNumber = progress + 1;
     const giftEligible = giftEligibleAt(fulfillmentNumber, version.rules);

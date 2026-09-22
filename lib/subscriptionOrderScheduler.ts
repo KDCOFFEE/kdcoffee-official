@@ -7,7 +7,6 @@ import { withFileLock } from "./jsonFileStore";
 import { getDateOnlyInTimeZone } from "./checkoutRules";
 import { runInventoryOrderTransaction } from "./orderInventoryTransaction";
 import type { RequestedItem } from "./orderPricing";
-import { getActiveMembershipRules } from "./membershipBusinessRules";
 import { createOrderFromCycle, enqueueScheduledMembershipNotifications, lockSubscriptionCycle, readMembershipCommerceState, registerReferralQualificationOrder, type SubscriptionCycle } from "./membershipCommerce";
 import { readMember } from "./memberAuth";
 import { getOrdersDir, getWebsiteDataFile } from "./storagePaths";
@@ -115,9 +114,7 @@ export async function runSubscriptionOrderScheduler(options: { today?: string; n
           summary.skipped += 1; summary.items.push({ cycleId: candidate.cycleId, result: "skipped", message: "定期購目前不符合自動建單條件" }); continue;
         }
         if (cycle.status !== "locked") {
-          const activeRules = await getActiveMembershipRules(options.now, options.rulesFilePath);
-          const shipping = activeRules.rules.shipping.subscriptionFreeShipping ? 0 : activeRules.rules.shipping.subscriptionShippingFee;
-          cycle = await lockSubscriptionCycle({ cycleId: cycle.cycleId, idempotencyKey: `scheduler-lock:${cycle.cycleId}`, shipping, now: options.now, stateFilePath: options.stateFilePath, rulesFilePath: options.rulesFilePath });
+          cycle = await lockSubscriptionCycle({ cycleId: cycle.cycleId, idempotencyKey: `scheduler-lock:${cycle.cycleId}`, now: options.now, stateFilePath: options.stateFilePath, rulesFilePath: options.rulesFilePath });
         }
         state = await readMembershipCommerceState(options.stateFilePath);
         const latestSubscription = state.subscriptions[cycle.subscriptionId];

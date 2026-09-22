@@ -121,13 +121,47 @@ export default function MembershipRulesManager({ initialRevision, initialVersion
     {impact && <p className="membership-save-feedback" role="status">這次調整會影響 {impact.affectedCycles} 個尚未鎖定期次（{impact.activeSubscriptions} 個啟用中的定期購）；{impact.lockedCyclesPreserved} 個已鎖定／已成立期次與既有推薦獎勵維持原快照。{impact.pvSwitchBlocked ? ` 尚有 ${impact.missingPv?.length ?? 0} 個販售中 SKU 未設定 PV，目前不能切換。` : ""}</p>}
 
     <section className="membership-rule-card">
-      <header><span>01</span><div><h2>會員免運</h2><p>開站首年活動與定期購免運分開管理。</p></div></header>
+      <header><span>01</span><div><h2>配送費與定期購優惠</h2><p>集中管理一般配送費、定期購配送優惠與開站會員免運活動。</p></div></header>
       <div className="membership-fields two">
         <label className="membership-switch"><input type="checkbox" checked={rules.membership.openingYearFreeShipping.enabled} onChange={(event) => change((draft) => { draft.membership.openingYearFreeShipping.enabled = event.target.checked; })} /><span><b>開站首年會員免運</b><small>目前套用 7-ELEVEN 取貨</small></span><AdminRuleHelpButton ruleKey="membership.openingYearFreeShipping.enabled" /></label>
-        <label className="membership-switch"><input type="checkbox" checked={rules.shipping.subscriptionFreeShipping} onChange={(event) => change((draft) => { draft.shipping.subscriptionFreeShipping = event.target.checked; })} /><span><b>定期購不限金額免運</b><small>不受開站首年活動期限影響</small></span><AdminRuleHelpButton ruleKey="shipping.subscriptionFreeShipping" /></label>
-        <NumberField label="未免運時的定期購運費" value={rules.shipping.subscriptionShippingFee} min={0} max={10000} unit="元" onChange={(value) => change((draft) => { draft.shipping.subscriptionShippingFee = value; })} />
+
+
+        <NumberField label="7-ELEVEN 一般運費" value={rules.shipping.sevenElevenShippingFee} min={0} max={10000} unit="元" onChange={(value) => change((draft) => { draft.shipping.sevenElevenShippingFee = value; })} />
+        <NumberField label="宅配一般運費" value={rules.shipping.homeDeliveryShippingFee} min={0} max={10000} unit="元" onChange={(value) => change((draft) => { draft.shipping.homeDeliveryShippingFee = value; })} />
+        <NumberField label="定期購配送費優惠" value={rules.shipping.subscriptionShippingDiscount} min={0} max={10000} unit="元" onChange={(value) => change((draft) => { draft.shipping.subscriptionShippingDiscount = value; })} />
+        <div className="membership-rule-summary">
+          <small>7-ELEVEN 定期購運費</small>
+          <strong>
+            NT$ {rules.shipping.sevenElevenShippingFee.toLocaleString("zh-TW")}
+            {" − 優惠 NT$ "}
+            {Math.min(rules.shipping.sevenElevenShippingFee, rules.shipping.subscriptionShippingDiscount).toLocaleString("zh-TW")}
+            {" = NT$ "}
+            {Math.max(0, rules.shipping.sevenElevenShippingFee - rules.shipping.subscriptionShippingDiscount).toLocaleString("zh-TW")}
+          </strong>
+        </div>
+        <div className="membership-rule-summary">
+          <small>宅配定期購運費</small>
+          <strong>
+            NT$ {rules.shipping.homeDeliveryShippingFee.toLocaleString("zh-TW")}
+            {" − 優惠 NT$ "}
+            {Math.min(rules.shipping.homeDeliveryShippingFee, rules.shipping.subscriptionShippingDiscount).toLocaleString("zh-TW")}
+            {" = NT$ "}
+            {Math.max(0, rules.shipping.homeDeliveryShippingFee - rules.shipping.subscriptionShippingDiscount).toLocaleString("zh-TW")}
+          </strong>
+        </div>
+
         <label><RuleFieldTitle label="活動開始日" ruleKey="membership.openingYearFreeShipping.startDate" /><input type="date" value={rules.membership.openingYearFreeShipping.startDate} onChange={(event) => change((draft) => { draft.membership.openingYearFreeShipping.startDate = event.target.value; })} /></label>
         <label><RuleFieldTitle label="活動結束日" ruleKey="membership.openingYearFreeShipping.endDate" /><input type="date" value={rules.membership.openingYearFreeShipping.endDate} onChange={(event) => change((draft) => { draft.membership.openingYearFreeShipping.endDate = event.target.value; })} /></label>
+        <details>
+          <summary>舊版相容設定</summary>
+          <p className="membership-effective-note">
+            以下設定目前保留給既有定期購與舊資料相容使用。新宅配配送費規則不使用這兩個欄位，暫時不要刪除。
+          </p>
+          <div className="membership-fields two">
+            <label className="membership-switch"><input type="checkbox" checked={rules.shipping.subscriptionFreeShipping} onChange={(event) => change((draft) => { draft.shipping.subscriptionFreeShipping = event.target.checked; })} /><span><b>舊版：定期購不限金額免運</b><small>保留既有定期購相容邏輯</small></span><AdminRuleHelpButton ruleKey="shipping.subscriptionFreeShipping" /></label>
+            <NumberField label="舊版：未免運時的定期購運費" value={rules.shipping.subscriptionShippingFee} min={0} max={10000} unit="元" onChange={(value) => change((draft) => { draft.shipping.subscriptionShippingFee = value; })} />
+          </div>
+        </details>
       </div>
     </section>
 

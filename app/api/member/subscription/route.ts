@@ -135,11 +135,9 @@ export async function PATCH(request: Request) {
       const version = await getActiveMembershipRules();
       const plannedDate = addTaipeiCalendarDays(new Date().toISOString().slice(0, 10), version.rules.subscription.preparationLeadDays);
       const cycle = await generateSubscriptionCycle({ subscriptionId: subscription.subscriptionId, sequence: Date.now(), plannedDate, kind: "manual_replenishment", idempotencyKey });
-      const shipping = version.rules.shipping.subscriptionFreeShipping ? 0 : version.rules.shipping.subscriptionShippingFee;
       await lockSubscriptionCycle({
         cycleId: cycle.cycleId,
         idempotencyKey: `${idempotencyKey}:lock`,
-        shipping,
       });
       actionResult.plannedDate = cycle.plannedDate;
       actionResult.subscriptionId = cycle.subscriptionId;

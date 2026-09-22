@@ -11,6 +11,7 @@ import {
   isDateOnlyOnOrAfter,
   isValidDateOnly,
 } from "@/lib/checkoutRules";
+import { subscriptionShippingFee, subscriptionShippingSaving } from "@/lib/shippingRules";
 
 type OrderMode = "711_cod" | "studio_pickup";
 type Member = { displayName:string; pickupName?:string; phone?:string; email?:string; favoriteStore?:{id:string;name:string;address:string;city?:string;district?:string} };
@@ -47,7 +48,7 @@ export default function CheckoutPage() {
   const [subscriptionInterval, setSubscriptionInterval] = useState(30);
   const [subscriptionIntervalMode, setSubscriptionIntervalMode] = useState<"preset" | "custom">("preset");
   const [subscriptionStartDate, setSubscriptionStartDate] = useState("");
-  const [operationalRules, setOperationalRules] = useState<{ pickup: { earliestStandardDate: string; earliestCustomRoastDate: string; blockedDates: string[] }; shipping: { subscriptionFreeShipping: boolean; subscriptionShippingFee: number }; money: { roundingMode: string }; subscription: { discountPercent: number; intervalsDays: number[]; customCycleEnabled: boolean; customCycleMinDays: number; customCycleMaxDays: number; earliestDate: string }; credit: { uiMode: "amount-and-maximum" | "use-or-not" | "automatic-maximum" | "custom-amount"; showAmountInput: boolean; showMaximumButton: boolean; automaticallyUseMaximum: boolean; allowZeroTotal: boolean; appliesToShipping: boolean } } | null>(null);
+  const [operationalRules, setOperationalRules] = useState<{ pickup: { earliestStandardDate: string; earliestCustomRoastDate: string; blockedDates: string[] }; shipping: { subscriptionFreeShipping: boolean; subscriptionShippingFee: number; sevenElevenShippingFee: number; homeDeliveryShippingFee: number; subscriptionShippingDiscount: number }; money: { roundingMode: string }; subscription: { discountPercent: number; intervalsDays: number[]; customCycleEnabled: boolean; customCycleMinDays: number; customCycleMaxDays: number; earliestDate: string }; credit: { uiMode: "amount-and-maximum" | "use-or-not" | "automatic-maximum" | "custom-amount"; showAmountInput: boolean; showMaximumButton: boolean; automaticallyUseMaximum: boolean; allowZeroTotal: boolean; appliesToShipping: boolean } } | null>(null);
   const [creditQuote, setCreditQuote] = useState<{ availableBalance: number; maximumUsable: number; minimumPayable: number } | null>(null);
   const [requestedCredit, setRequestedCredit] = useState(0);
   const [useCredit, setUseCredit] = useState(false);
@@ -106,20 +107,13 @@ export default function CheckoutPage() {
       subtotal - subscriptionRenewalProductTotal,
     );
 
-  const subscriptionRenewalShipping =
-    mode === "711_cod"
-      ? operationalRules?.shipping
-          .subscriptionFreeShipping
-        ? 0
-        : operationalRules?.shipping
-            .subscriptionShippingFee ?? 0
-      : 0;
+  const subscriptionRenewalShipping = operationalRules
+    ? subscriptionShippingFee(mode, operationalRules)
+    : 0;
 
-  const subscriptionShippingSavings =
-    mode === "711_cod" &&
-    operationalRules?.shipping.subscriptionFreeShipping
-      ? operationalRules.shipping.subscriptionShippingFee
-      : 0;
+  const subscriptionShippingSavings = operationalRules
+    ? subscriptionShippingSaving(mode, operationalRules)
+    : 0;
 
   const subscriptionRenewalTotal =
     subscriptionRenewalProductTotal +
@@ -352,7 +346,9 @@ export default function CheckoutPage() {
   </div>
 
   {mode === "711_cod" &&
-    operationalRules?.shipping.subscriptionFreeShipping && (
+    operationalRules &&
+    subscriptionRenewalShipping === 0 &&
+    subscriptionShippingSavings > 0 && (
       <div className="subscription-renewal-row saving">
         <span>定期配送運費</span>
         <strong>
@@ -363,7 +359,7 @@ export default function CheckoutPage() {
 
   {mode === "711_cod" &&
     operationalRules &&
-    !operationalRules.shipping.subscriptionFreeShipping && (
+    subscriptionRenewalShipping > 0 && (
       <div className="subscription-renewal-row">
         <span>定期配送運費</span>
         <strong>
@@ -371,6 +367,13 @@ export default function CheckoutPage() {
         </strong>
       </div>
     )}
+
+  {mode === "711_cod" && subscriptionRenewalShipping > 0 && subscriptionShippingSavings > 0 && (
+    <div className="subscription-renewal-row saving">
+      <span>定期配送運費優惠</span>
+      <strong>− NT$ {subscriptionShippingSavings.toLocaleString("zh-TW")}</strong>
+    </div>
+  )}
 
   <footer>
     <span>依目前設定，每期預估優惠</span>

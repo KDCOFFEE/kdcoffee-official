@@ -37,7 +37,7 @@ export const DEFAULT_MEMBERSHIP_RULES: MembershipBusinessRules = {
       shippingMethods: ["711_cod"],
     },
   },
-  shipping: { subscriptionFreeShipping: true, subscriptionShippingFee: 60 },
+  shipping: { subscriptionFreeShipping: true, subscriptionShippingFee: 60, sevenElevenShippingFee: 60, homeDeliveryShippingFee: 100, subscriptionShippingDiscount: 60 },
   subscription: {
     discountPercent: 95,
     intervalsDays: [30, 45, 60, 75, 90],
@@ -303,6 +303,9 @@ export function validateMembershipBusinessRules(value: unknown, options: Members
 
   if (!object(rules.shipping) || typeof rules.shipping.subscriptionFreeShipping !== "boolean") throw new MembershipRulesValidationError("定期購運費設定不正確");
   integer(rules.shipping.subscriptionShippingFee, 0, 10_000, "定期購運費");
+  integer(rules.shipping.sevenElevenShippingFee, 0, 10_000, "7-ELEVEN shipping fee");
+  integer(rules.shipping.homeDeliveryShippingFee, 0, 10_000, "home delivery shipping fee");
+  integer(rules.shipping.subscriptionShippingDiscount, 0, 10_000, "subscription shipping discount");
   if (!object(rules.subscription)) throw new MembershipRulesValidationError("定期購設定不完整");
   percent(rules.subscription.discountPercent, "定期購價格");
   if (!Array.isArray(rules.subscription.intervalsDays) || rules.subscription.intervalsDays.length > 20 || (rules.subscription.intervalsDays.length === 0 && !rules.subscription.customCycleEnabled)) throw new MembershipRulesValidationError("配送週期至少需要一個快捷或自訂選項");

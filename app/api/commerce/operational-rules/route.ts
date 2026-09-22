@@ -23,6 +23,12 @@ export async function GET() {
         rules.shipping.subscriptionFreeShipping,
       subscriptionShippingFee:
         rules.shipping.subscriptionShippingFee,
+      sevenElevenShippingFee:
+        rules.shipping.sevenElevenShippingFee,
+      homeDeliveryShippingFee:
+        rules.shipping.homeDeliveryShippingFee,
+      subscriptionShippingDiscount:
+        rules.shipping.subscriptionShippingDiscount,
     },
     money: {
       roundingMode: rules.money.roundingMode,

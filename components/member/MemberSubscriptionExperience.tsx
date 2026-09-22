@@ -5,6 +5,8 @@ import Link from "next/link";
 
 import StoreSelector from "@/components/commerce/StoreSelector";
 import { addDateOnlyDays, ALLOWED_ROAST_LEVELS, getDateOnlyInTimeZone } from "@/lib/checkoutRules";
+import type { MembershipBusinessRules } from "@/lib/membershipRuleTypes";
+import { regularShippingFee, subscriptionShippingFee } from "@/lib/shippingRules";
 import type { PricedSubscriptionItem } from "@/lib/subscriptionItemTypes";
 import {
   changeBeanPackageWeight,
@@ -60,6 +62,7 @@ type SubscriptionCycle = {
   orderCreationDate?: string;
   modificationDeadline: string;
   itemsDraft: PricedSubscriptionItem[];
+  itemsSnapshot: PricedSubscriptionItem[] | null;
   pricingSnapshot: {
     merchandiseOriginal: number;
     subscriptionDiscountPercent: number;
@@ -70,6 +73,8 @@ type SubscriptionCycle = {
     shipping: number;
     finalAmount: number;
   } | null;
+  shippingSnapshot: { method: string; storeSelection: { storeId: string; storeName: string } | null } | null;
+  rulesSnapshot: { rules: Pick<MembershipBusinessRules, "shipping"> } | null;
   createdOrderId: string | null;
   revision: number;
   modificationCount?: number;
@@ -100,7 +105,7 @@ type PendingRushConfirmation =
   | { kind: "date"; action: "advance" | "delay" | "change-date"; payload: Record<string, unknown> }
   | { kind: "cancel-reschedule" };
 
-type Props = Dashboard & { products: MemberSubscriptionProduct[]; rules: { intervalsDays: number[]; customCycleEnabled: boolean; customCycleMinDays: number; customCycleMaxDays: number; delayQuickOptionsDays: number[]; advanceQuickOptionsDays: number[]; preparationLeadDays: number; discountPercent: number; subscriptionFreeShipping: boolean; subscriptionShippingFee: number; datePickerMode: "quick-and-calendar" | "calendar-only" | "suggestion-and-calendar"; maxModificationsPerCycle: number | null; allowOtherSubscriptionProducts?: boolean; allowHalfToOnePound?: boolean; allowOneToHalfPound?: boolean; allowMixedOnePound?: boolean; allowQuantityChange?: boolean; maxItems?: number } };
+type Props = Dashboard & { products: MemberSubscriptionProduct[]; rules: { intervalsDays: number[]; customCycleEnabled: boolean; customCycleMinDays: number; customCycleMaxDays: number; delayQuickOptionsDays: number[]; advanceQuickOptionsDays: number[]; preparationLeadDays: number; discountPercent: number; sevenElevenShippingFee: number; homeDeliveryShippingFee: number; subscriptionShippingDiscount: number; datePickerMode: "quick-and-calendar" | "calendar-only" | "suggestion-and-calendar"; maxModificationsPerCycle: number | null; allowOtherSubscriptionProducts?: boolean; allowHalfToOnePound?: boolean; allowOneToHalfPound?: boolean; allowMixedOnePound?: boolean; allowQuantityChange?: boolean; maxItems?: number } };
 
 const money = (value: number) => `NT$ ${value.toLocaleString("zh-TW")}`;
 const redemptionLabel = (status: MemberCreditHistoryEntry["orderRedemptions"][number]["status"]) => status === "released" ? "訂單取消，抵用金已返還" : status === "reserved" ? "本筆已保留折抵" : "本筆已使用";
@@ -230,6 +235,8 @@ export default function MemberSubscriptionExperience(initial: Props) {
     ?? dashboard.subscriptions.find((item) => item.subscriptionId === defaultSubscriptionId(dashboard.subscriptions))
     ?? dashboard.subscriptions[0];
   const nextCycle = subscription ? dashboard.cycles.find((item) => item.subscriptionId === subscription.subscriptionId && ["scheduled", "modifiable"].includes(item.status)) : undefined;
+  const lockedCycle = subscription ? dashboard.cycles.find((item) => item.subscriptionId === subscription.subscriptionId && item.status === "locked") : undefined;
+  const pricingCycle = lockedCycle ?? nextCycle;
   const currentOrderCycle = subscription ? latestCreatedOrderCycle(dashboard.cycles, subscription.subscriptionId) : undefined;
   const currentArrangement = subscription ? currentSubscriptionArrangement(dashboard.cycles, subscription.subscriptionId) : undefined;
   const otherSubscription = subscription ? dashboard.subscriptions.find((item) => item.subscriptionId !== subscription.subscriptionId) : undefined;
@@ -240,7 +247,7 @@ export default function MemberSubscriptionExperience(initial: Props) {
   );
 
   const availableCredit = dashboard.credits.filter((item) => item.status === "available").reduce((sum, item) => sum + item.remainingAmount, 0);
-  const nextItems = nextCycle?.itemsDraft ?? subscription?.defaultItems ?? [];
+  const nextItems = pricingCycle?.itemsSnapshot ?? pricingCycle?.itemsDraft ?? subscription?.defaultItems ?? [];
   const originalProductIds = new Set(nextItems.flatMap((item) => item.skuKind === "drip" ? [item.productId] : item.components.map((component) => component.productId)));
   const nextSubtotal = nextItems.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
   const expectedPayment = subscriptionPrice(
@@ -248,34 +255,39 @@ export default function MemberSubscriptionExperience(initial: Props) {
     initial.rules.discountPercent,
   );
 
-  const lockedPricing = nextCycle?.pricingSnapshot ?? null;
+  const lockedPricing = pricingCycle?.pricingSnapshot ?? null;
   const displayedOriginal = lockedPricing?.merchandiseOriginal ?? nextSubtotal;
   const displayedSubscriptionPrice =
     lockedPricing?.subscriptionPrice ?? expectedPayment;
-  const displayedFinal =
-    lockedPricing?.finalAmount ?? displayedSubscriptionPrice;
   const subscriptionSaving = Math.max(
     0,
     displayedOriginal - displayedSubscriptionPrice,
   );
 
-  const regularShipping =
-    subscription?.shippingMethod === "711_cod"
-      ? initial.rules.subscriptionShippingFee
-      : 0;
-
-  const subscriptionShippingSaving =
-    subscription?.shippingMethod === "711_cod" &&
-    initial.rules.subscriptionFreeShipping
-      ? regularShipping
-      : 0;
-
-  const displayedSubscriptionShipping =
-    lockedPricing?.shipping ??
-    Math.max(
-      0,
-      regularShipping - subscriptionShippingSaving,
-    );
+  const shippingMethod = lockedPricing
+    ? pricingCycle?.shippingSnapshot?.method
+    : subscription?.shippingMethod;
+  const displayedStoreSelection = lockedPricing
+    ? pricingCycle?.shippingSnapshot?.storeSelection
+    : subscription?.storeSelection;
+  const supportedShippingMethod = shippingMethod === "711_cod" ? "711_cod" : "studio_pickup";
+  const currentShippingRules = { shipping: initial.rules };
+  const lockedShippingRules = pricingCycle?.rulesSnapshot?.rules;
+  const regularShipping = lockedPricing
+    ? pricingCycle?.shippingSnapshot && lockedShippingRules &&
+      typeof lockedShippingRules.shipping.sevenElevenShippingFee === "number" &&
+      typeof lockedShippingRules.shipping.homeDeliveryShippingFee === "number"
+      ? regularShippingFee(supportedShippingMethod, lockedShippingRules)
+      : lockedPricing.shipping
+    : regularShippingFee(supportedShippingMethod, currentShippingRules);
+  const displayedSubscriptionShipping = lockedPricing?.shipping ??
+    subscriptionShippingFee(supportedShippingMethod, currentShippingRules);
+  const subscriptionShippingSaving = Math.max(
+    0,
+    regularShipping - displayedSubscriptionShipping,
+  );
+  const displayedFinal = lockedPricing?.finalAmount ??
+    displayedSubscriptionPrice + displayedSubscriptionShipping;
 
   const regularPurchaseTotal =
     displayedOriginal + regularShipping;
@@ -466,8 +478,8 @@ export default function MemberSubscriptionExperience(initial: Props) {
             {subscription.status === "active" && (
               <small>
                 下次配送日期{" "}
-                {nextCycle?.plannedDate
-                  ? displayDate(nextCycle.plannedDate).slice(5)
+                {pricingCycle?.plannedDate
+                  ? displayDate(pricingCycle.plannedDate).slice(5)
                   : "尚未排定"}
               </small>
             )}
@@ -479,14 +491,14 @@ export default function MemberSubscriptionExperience(initial: Props) {
         {dashboard.subscriptions.length > 1 && <div className="member-subscription-selector"><label htmlFor="member-subscription-selector">選擇定期配送<select id="member-subscription-selector" value={subscription.subscriptionId} onChange={(event) => selectSubscription(event.target.value)}>{dashboard.subscriptions.map((item) => <option value={item.subscriptionId} key={item.subscriptionId}>{subscriptionSelectorLabel(item, initial.products)}</option>)}</select></label><small>每筆定期配送分開保存；切換後可查看各自狀態與安排。</small></div>}
         <article className="member-subscription-summary">
           <div><small>配送週期</small><strong>每 {subscription.intervalDays} 天</strong></div>
-          <div><small>下次安排</small><strong>{nextCycle?.plannedDate ?? (subscription.status === "pending_activation" ? "首筆取貨後安排" : "尚未排定")}</strong></div>
-          <div><small>取貨方式／門市</small><strong>{subscription.shippingMethod === "711_cod" ? `7-ELEVEN・${subscription.storeSelection?.storeName || "尚未選擇門市"}` : "工作室自取"}</strong></div>
+          <div><small>下次安排</small><strong>{pricingCycle?.plannedDate ?? (subscription.status === "pending_activation" ? "首筆取貨後安排" : "尚未排定")}</strong></div>
+          <div><small>取貨方式／門市</small><strong>{shippingMethod === "711_cod" ? `7-ELEVEN・${displayedStoreSelection?.storeName || "尚未選擇門市"}` : "工作室自取"}</strong></div>
           <div><small>下一次商品</small><strong>{subscriptionItemsSummary(nextItems, initial.products) || "尚未選擇"}</strong></div>
-          <div><small>修改截止</small><strong>{nextCycle?.modificationDeadline ?? "啟動後顯示"}</strong></div>
+          <div><small>修改截止</small><strong>{pricingCycle?.modificationDeadline ?? "啟動後顯示"}</strong></div>
           <div>
-  <small>預估應付</small>
-  <strong>{nextCycle ? money(displayedFinal) : "啟動後計算"}</strong>
-  {nextCycle && (
+  <small>{lockedPricing ? "本期應付" : "預估應付"}</small>
+  <strong>{pricingCycle ? money(displayedFinal) : "啟動後計算"}</strong>
+  {pricingCycle && (
     <>
       <span>
         一般購買 {money(regularPurchaseTotal)} → 定期購預估{" "}
@@ -496,7 +508,7 @@ export default function MemberSubscriptionExperience(initial: Props) {
       <span>
         商品優惠省 {money(subscriptionSaving)}
         {subscriptionShippingSaving > 0
-          ? ` ＋ 免運再省 ${money(subscriptionShippingSaving)}`
+          ? ` ＋ 配送優惠省 ${money(subscriptionShippingSaving)}`
           : ""}
         {" "}＝ 本期共省 {money(totalSubscriptionSaving)}
       </span>
@@ -808,7 +820,7 @@ export default function MemberSubscriptionExperience(initial: Props) {
       </div>
     )}
 
-    {showPriceDetails && nextCycle && (
+    {showPriceDetails && pricingCycle && (
       <div
         className="member-price-modal-backdrop"
         role="presentation"
@@ -867,7 +879,7 @@ export default function MemberSubscriptionExperience(initial: Props) {
 
             {subscriptionShippingSaving > 0 && (
               <div>
-                <span>定期購免運優惠</span>
+                <span>定期購配送優惠</span>
                 <strong>
                   − {money(subscriptionShippingSaving)}
                 </strong>
