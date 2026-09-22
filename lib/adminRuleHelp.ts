@@ -69,7 +69,160 @@ export const adminRuleHelpDefinitions: AdminRuleHelpDefinition[] = [
   define({ ruleKey: "referral.referralMaxRewardDepth", title: "最大推薦代數", summary: "限制一次訂單最多向上計算幾代。", runtimeBehavior: "從下單會員最近推薦人開始，最多走訪此代數且硬上限十代。", evaluationTiming: rewardCreationTiming, historicalImpact: "已建立 reward 保留 ancestry snapshot；只影響新 reward。", runtimeSource: "lib/membershipCommerce.ts", evaluatedBy: "referral ancestry resolver" }),
   define({ ruleKey: "referral.referralRewardCalculationMode", title: "Reward calculation mode", summary: "選擇以商品實付金額或 effective PV 計算。", runtimeBehavior: "實付模式以商品小計扣已使用抵用金且不含運費；PV 模式以折扣後 effective PV 計算。", evaluationTiming: rewardCreationTiming, historicalImpact: "reward 保存 calculation mode、金額與 PV snapshot，舊資料不重算。", runtimeSource: "lib/membershipCommerce.ts", evaluatedBy: "multi-generation reward resolver" }),
   define({ ruleKey: "referral.pointDisplayName", title: "點數顯示名稱", summary: "控制前台與會員中心如何稱呼內部 PV 單位。", runtimeBehavior: "只改顯示文字；內部 pvValue、effectivePV 與 reward snapshot 欄位不改名。", evaluationTiming: "前台與會員中心呈現時。", historicalImpact: "不重算任何舊獎勵。" }),
-  define({ ruleKey: "referral.selfPurchaseRewardRate", title: "會員續購回饋", summary: "設定會員自己消費時預計使用的回饋比例。", runtimeBehavior: "會員已有至少一筆先前有效消費後，下一筆符合條件的完成訂單會依此比例建立自己的續購回饋。", evaluationTiming: "每筆會員訂單成功完成時；首筆有效消費不列入續購回饋。", historicalImpact: "只影響新完成訂單，不回算歷史訂單。" }),
+  define({
+    ruleKey: "referral.selfPurchaseRewardRate",
+    title: "固定本人消費回饋",
+    summary: "動態級距關閉時，會員自己的符合條件消費使用這個固定回饋比例。",
+    runtimeBehavior: "是否從第一筆或第二筆開始回饋，由「本人消費回饋起算」決定；只有動態級距關閉時才直接使用這個固定比例。",
+    evaluationTiming: "每筆符合本人消費回饋起算條件的訂單成功完成時。",
+    example: "例如固定回饋 5%，且選「第二筆完成消費起回饋」：第一筆完成訂單不產生本人回饋；第二筆完成訂單開始按 5% 計算。若改成「首筆完成訂單立即回饋」，則第一筆就按 5% 計算。",
+    edgeCases: [
+      "啟用動態級距後，實際比例改由級距設定決定。",
+      "本人消費回饋是否需要推薦獎勵領取資格，由另一個獨立開關控制。",
+    ],
+    relatedRules: [
+      "referral.selfPurchaseEligibilityMode",
+      "referral.selfPurchaseRewardTiers.enabled",
+      "referral.selfPurchaseRequiresReferralQualification",
+    ],
+    historicalImpact: "只影響之後完成的新訂單，不回算已建立的本人消費回饋。",
+    ownerRecommendation: "如果所有會員重消都使用同一回饋率，保持動態級距關閉並在這裡設定比例最簡單。",
+  }),
+
+  define({
+    ruleKey: "referral.selfPurchaseEligibilityMode",
+    title: "本人消費回饋起算",
+    summary: "決定會員自己的消費從第幾筆完成訂單開始產生本人消費回饋。",
+    runtimeBehavior: "選「首筆完成訂單立即回饋」時，第一筆成功完成訂單就會計算；選「第二筆完成消費起回饋」時，第一筆只建立有效消費紀錄，從第二筆成功完成訂單開始計算。",
+    evaluationTiming: "每筆會員訂單成功完成時。",
+    example: "例如固定回饋 5%：若選首筆立即回饋，會員第一筆符合條件的完成訂單就有 5% 回饋；若選第二筆起回饋，第一筆不產生本人消費回饋，第二筆完成訂單才開始計算。",
+    edgeCases: [
+      "此設定只決定本人消費回饋從第幾筆開始，不等於推薦獎勵領取資格。",
+      "取消、未取貨或未達成功完成狀態的訂單不應被當成有效完成消費。",
+    ],
+    relatedRules: [
+      "referral.selfPurchaseRewardRate",
+      "referral.selfPurchaseRewardTiers.enabled",
+    ],
+    historicalImpact: "只影響之後完成的訂單，不回算歷史訂單。",
+    ownerRecommendation: "若把「重消」定義為再次購買，可使用第二筆完成消費起回饋；若希望新會員第一筆就有本人回饋，則選首筆完成訂單立即回饋。",
+  }),
+
+  define({
+    ruleKey: "referral.selfPurchaseRequiresReferralQualification",
+    title: "本人消費回饋是否需要推薦資格",
+    summary: "控制會員拿自己的重消回饋前，是否還必須符合下方的推薦獎勵領取資格。",
+    runtimeBehavior: "未勾選時，本人消費回饋與推薦獎勵資格完全分開，只要符合本人回饋起算條件且訂單完成即可進入安全等待；勾選後則還要通過推薦獎勵領取資格。",
+    evaluationTiming: "符合本人消費回饋起算條件的訂單完成、準備建立本人回饋時。",
+    example: "例如本人固定回饋 5%、推薦資格門檻 800 KD。未勾選時，即使會員當期只有 300 KD，只要符合本人回饋起算條件，仍可拿自己的 5% 回饋；勾選後則必須先符合 800 KD 的推薦資格。",
+    edgeCases: [
+      "這個開關不改變推薦獎勵本身的資格規則。",
+      "未勾選不代表取消安全等待或取消／退貨保護。",
+    ],
+    relatedRules: [
+      "referral.selfPurchaseEligibilityMode",
+      "referral.payoutQualification",
+    ],
+    historicalImpact: "只影響之後建立的本人消費回饋，既有 reward 不重算。",
+    ownerRecommendation: "如果你的設計是「自己的重消回饋不需要額外達標」，就維持未勾選。",
+  }),
+
+  define({
+    ruleKey: "referral.selfPurchaseRewardTiers.enabled",
+    title: "啟用本人消費動態級距",
+    summary: "決定本人消費回饋要使用固定比例，還是依消費表現套用不同回饋級距。",
+    runtimeBehavior: "關閉時使用「固定本人消費回饋」比例；開啟後改依級距判定基準、累積方式與回饋計算方式計算。",
+    evaluationTiming: "每筆符合本人消費回饋起算條件的訂單成功完成時。",
+    example: "例如固定回饋為 5%，動態級距設定為 0 KD＝5%、300 KD＝20%。關閉動態級距時都用 5%；開啟後則依目前達到的級距判定回饋。",
+    edgeCases: [
+      "開啟動態級距不會改變「本人消費回饋起算」規則。",
+      "第一級門檻固定為 0，確保所有符合起算條件的訂單都有可對應的級距。",
+    ],
+    relatedRules: [
+      "referral.selfPurchaseEligibilityMode",
+      "referral.selfPurchaseRewardTiers.thresholdBasis",
+      "referral.selfPurchaseRewardTiers.accumulationBasis",
+      "referral.selfPurchaseRewardTiers.calculationMethod",
+    ],
+    historicalImpact: "只影響之後完成的新訂單；已建立的本人消費回饋保留原快照。",
+    ownerRecommendation: "只有需要依消費量提高或分段回饋時才開啟；若所有會員都固定回饋同一比例，保持關閉較簡單。",
+  }),
+
+  define({
+    ruleKey: "referral.selfPurchaseRewardTiers.thresholdBasis",
+    title: "級距判定基準",
+    summary: "決定用什麼數字判斷會員目前落在哪一個本人消費回饋級距。",
+    runtimeBehavior: "可選商品實付金額或商品 KD點；這只負責判斷級距，實際回饋金額仍由上方獎勵計算方式控制。",
+    evaluationTiming: "本人消費回饋訂單成功完成、需要判定級距時。",
+    example: "例如第二級門檻設 300。若基準選 KD點，會員累積到 300 KD 就進入第二級；若選實付金額，則要累積到 NT$300 才進入第二級。",
+    edgeCases: [
+      "級距判定基準與回饋金額的計算基準是兩個獨立設定。",
+      "切換基準時請同步檢查所有級距門檻數字是否仍符合你的商業意義。",
+    ],
+    relatedRules: [
+      "referral.referralRewardCalculationMode",
+      "referral.selfPurchaseRewardTiers.accumulationBasis",
+    ],
+    historicalImpact: "新完成訂單使用當下規則；既有 reward snapshot 不重算。",
+    ownerRecommendation: "若 KD點本身代表你希望獎勵的商品價值，使用 KD點判定通常較直觀。",
+  }),
+
+  define({
+    ruleKey: "referral.selfPurchaseRewardTiers.accumulationBasis",
+    title: "級距累積方式",
+    summary: "決定級距是每張訂單各自判斷，還是把一段期間內的有效消費累積後再判斷。",
+    runtimeBehavior: "「單筆訂單」只看本次訂單的級距判定值；「期間累積」會在訂單完成時往前看設定天數，把有效完成消費累積後判斷目前級距。",
+    evaluationTiming: "本人消費回饋訂單成功完成時。",
+    example: "例如累積期間 30 天、門檻 300 KD。會員前一筆完成 100 KD，本次再完成 300 KD：單筆模式只看本次 300 KD；期間累積模式則以 30 天合計 400 KD 判斷級距。",
+    edgeCases: [
+      "只有選期間累積時，「累積期間」天數才會生效。",
+      "取消、未取貨或其他無效訂單不應算入有效累積。",
+    ],
+    relatedRules: [
+      "referral.selfPurchaseRewardTiers.rollingWindowDays",
+      "referral.selfPurchaseRewardTiers.thresholdBasis",
+    ],
+    historicalImpact: "期間累積會依完成訂單時保存的證據／快照判斷；不應用新規則回頭改寫既有 reward。",
+    ownerRecommendation: "想鼓勵會員一段時間內持續回購可選期間累積；想讓每筆訂單完全獨立則選單筆訂單。",
+  }),
+
+  define({
+    ruleKey: "referral.selfPurchaseRewardTiers.rollingWindowDays",
+    title: "累積期間",
+    summary: "當級距累積方式選「期間累積」時，決定系統往前計算多少天的有效完成消費。",
+    runtimeBehavior: "每次符合條件的訂單完成時，系統以目前訂單為基準往前看設定天數，將有效消費累積後判斷級距。",
+    evaluationTiming: "期間累積模式下，每筆本人消費回饋訂單成功完成時。",
+    example: "例如設定 30 天：9/1 完成 100 KD、9/20 完成 200 KD，9/20 判定時 30 天內合計 300 KD；若第一筆已超出 30 天視窗，就不再計入。",
+    edgeCases: [
+      "只有期間累積模式才使用這個天數。",
+      "這是滾動視窗，不是每月 1 號自動歸零。",
+    ],
+    relatedRules: [
+      "referral.selfPurchaseRewardTiers.accumulationBasis",
+      "referral.selfPurchaseRewardTiers.thresholdBasis",
+    ],
+    historicalImpact: "新完成訂單依當下設定的滾動視窗判斷；既有 reward 不重算。",
+    ownerRecommendation: "30 天適合近似一個月的持續回購觀察；若想完全按每張訂單判斷，改用單筆訂單模式。",
+  }),
+
+  define({
+    ruleKey: "referral.selfPurchaseRewardTiers.calculationMethod",
+    title: "回饋計算方式",
+    summary: "決定會員跨到較高級距時，本次回饋要整筆套用最高級距，還是依各級距分段計算。",
+    runtimeBehavior: "「整筆套用達成級距」會把本次可回饋基礎全部套用本次達成的最高級距；「各級距分段計算」只把落在各門檻區段的部分套用對應比例。",
+    evaluationTiming: "本人消費回饋訂單成功完成並確認本次級距後。",
+    example: "假設第 1 級 0 KD＝5%、第 2 級 300 KD＝20%，而本次消費前已累積 100 KD，本次再完成 300 KD。整筆套用：本次 300 KD 都按 20% 計；分段計算：本次前 200 KD 按 5%，跨過 300 KD 門檻後的 100 KD 按 20%，所以本次回饋為 10＋20＝30 KD。",
+    edgeCases: [
+      "分段計算只計算本次消費跨過的門檻區段，不是把歷史消費重新發一次回饋。",
+      "整筆套用通常回饋較高、規則較簡單；分段計算較精細。",
+    ],
+    relatedRules: [
+      "referral.selfPurchaseRewardTiers.accumulationBasis",
+      "referral.selfPurchaseRewardTiers.thresholdBasis",
+    ],
+    historicalImpact: "只影響新完成訂單的計算方式；已建立 reward 不重算。",
+    ownerRecommendation: "若希望會員一達到新級距，本次整筆都享新比例可用整筆套用；若希望各門檻成本更精準可用分段計算。",
+  }),
   define({ ruleKey: "referral.referrerEligibility", title: "舊版推薦人資格相容欄位", summary: "保留舊資料可讀性，不再控制 Phase I.3B canonical multi-generation reward。", runtimeBehavior: "只有缺少 qualification metadata 的歷史 reward 仍沿用舊版 release 相容判斷；新 reward 一律使用領取資格期限 snapshot。", evaluationTiming: "讀取舊版 reward 時。", historicalImpact: "不批次改寫舊 reward；新流程不再要求 active subscription。", ownerRecommendation: "請使用「推薦獎勵領取資格期限」管理新制度。", runtimeSource: "lib/membershipCommerce.ts", evaluatedBy: "legacy reward compatibility" }),
   define({ ruleKey: "referral.referralRewardQualificationWindowDays", title: "推薦獎勵領取資格期限", summary: "推薦獎勵產生後，推薦人可透過自己的有效消費取得領獎資格的台北曆日數。", runtimeBehavior: "每筆 reward 建立時保存 N 天、起算時間與到期日。推薦人須在期限內建立一般或定期購訂單；判斷看下單時間，不是成功取貨時間。訂單仍須最後成功成交且沒有取消、未取、退款或退貨。", evaluationTiming: "reward 建立時保存期限；推薦人訂單建立與可信任 fulfillment outcome 發生時更新 qualification。", example: "8/1 產生 reward，期限 30 天：8/30 下單、9/3 成功取貨仍符合；8/31 才下單則不能解鎖。", edgeCases: ["期限內訂單失敗且期限未過，可用另一筆期限內訂單再嘗試。", "期限內訂單到期時尚未完成，不會直接逾期；等待該訂單最終結果。", "一般購買與定期購都可以，不要求 active subscription。"], relatedRules: ["referral.referralRewardBaseWaitingDays", "referral.referralRewardReturnProtectionDays"], historicalImpact: "N 天保存在 reward snapshot；Owner 後續修改只影響新 reward。", ownerRecommendation: "資格期限與獎勵發放等待天數用途不同，請分別評估。", runtimeSource: "lib/membershipCommerce.ts", evaluatedBy: "referral qualification state machine" }),
   define({ ruleKey: "referral.referralRewardBaseWaitingDays", title: "推薦獎勵基礎等待天數", summary: "推薦人的 qualification order 成功取貨後，系統先等待的基礎台北曆日數。", runtimeBehavior: "基礎等待與退貨保護天數相加後得到總等待；以 Asia/Taipei 日期計算，不看成功取貨的時、分、秒。符合日期後由 scheduler 下一次執行發放。", evaluationTiming: "reward 建立時 snapshot；qualification order 可信任成功取貨時計算可發放日期。", example: "8/1 15:30 成功取貨，基礎等待 7 天、退貨保護 3 天，8/11 起符合發放日期，不需等到 08:00 或 15:30。", edgeCases: ["可設為 0 天。", "scheduler 不保證在符合日期 00:00 立即執行。"], relatedRules: ["referral.referralRewardReturnProtectionDays"], historicalImpact: "只影響新建立的 reward；既有 reward 使用建立時 snapshot。", runtimeSource: "lib/membershipCommerce.ts", evaluatedBy: "reward release business-date scheduler" }),
@@ -135,7 +288,7 @@ export function resolveAdminRuleCurrentValue(ruleKey: string, rules: MembershipB
       return "已設定";
     }).join("、");
   }
-  const labels: Record<string, string> = { "active-subscription": "必須有啟用中的定期購", none: "不限制", paid_amount: "商品實付金額", pv: "PV 商品獎勵單位", "cancel-pending-and-reverse-released": "取消待發放並沖回已發放", "cancel-pending-only": "只取消待發放", "round-half-up": "四捨五入", "round-down": "無條件捨去", "round-up": "無條件進位", unlimited: "不限制", "maximum-fixed": "最高固定金額", "minimum-payable": "保留最低應付金額", "maximum-percentage": "最高商品金額比例", yes: "可以", no: "不可以" };
+  const labels: Record<string, string> = { "active-subscription": "必須有啟用中的定期購", none: "不限制", paid_amount: "商品實付金額", pv: "PV 商品獎勵單位", first_completed_order: "首筆完成訂單立即回饋", after_prior_valid_consumption: "第二筆完成消費起回饋", single_order: "單筆訂單", rolling_period: "期間累積", whole_order: "整筆套用達成級距", marginal: "各級距分段計算", "cancel-pending-and-reverse-released": "取消待發放並沖回已發放", "cancel-pending-only": "只取消待發放", "round-half-up": "四捨五入", "round-down": "無條件捨去", "round-up": "無條件進位", unlimited: "不限制", "maximum-fixed": "最高固定金額", "minimum-payable": "保留最低應付金額", "maximum-percentage": "最高商品金額比例", yes: "可以", no: "不可以" };
   if (typeof value === "object" && value !== null) {
     const mode = (value as { mode?: unknown }).mode;
     return mode ? labels[String(mode)] || "依目前選擇的營運模式" : "依目前細項設定";

@@ -16,7 +16,7 @@ type Props = {
 };
 
 const fieldHelpKeys: Record<string, string> = {
-  "未免運時的定期購運費": "shipping.subscriptionShippingFee", "定期購價格": "subscription.discountPercent", "修改期限": "subscription.modificationCutoffDays", "建立訂單": "subscription.orderCreationLeadDays", "一般備貨至少": "subscription.preparationLeadDays", "專屬烘焙至少": "subscription.customRoastPreparationLeadDays", "未取貨停止": "subscription.uncollectedTerminationCount", "每期最多修改": "subscription.maxModificationsPerCycle", "自訂最少": "subscription.customCycleMinDays", "自訂最多": "subscription.customCycleMaxDays", "會員選配送日期方式": "subscription.datePickerMode", "獎勵代數": "referral.referralMaxRewardDepth", "獎勵計算方式": "referral.referralRewardCalculationMode", "點數顯示名稱": "referral.pointDisplayName", "會員本人消費回饋": "referral.selfPurchaseRewardRate", "本人消費回饋起算": "referral.selfPurchaseEligibilityMode", "推薦獎勵領取資格期限": "referral.referralRewardQualificationWindowDays", "推薦獎勵基礎等待天數": "referral.referralRewardBaseWaitingDays", "推薦獎勵退貨保護天數": "referral.referralRewardReturnProtectionDays", "單筆全組織上限": "referral.referralTotalRewardCap", "單一會員每月上限": "referral.referralMonthlyCreditCap", "每 1 PV 換算": "referral.pvRewardMoneyValue", "一般商品最少備貨": "pickup.preparationLeadDays", "專屬烘焙最少備貨": "pickup.customRoastPreparationLeadDays", "自取日期選擇方式": "pickup.datePickerMode", "完成第幾次開始送": "gift.startsAtFulfillment", "開始後每隔": "gift.repeatEveryFulfillments", "半磅贈品": "gift.halfPoundQuantity", "一磅贈品": "gift.onePoundQuantity", "有效期限": "credit.expiryCalendarMonths", "到期前提醒": "credit.expiryReminderDays", "每筆最高折抵": "credit.redemption", "最高折抵": "credit.redemption", "每筆至少應付": "credit.redemption", "最高折抵商品金額": "credit.redemption", "抵用金是否可折運費": "credit.appliesToShipping", "會員使用抵用金方式": "credit.uiMode", "活動適用定期購時": "campaign.eligiblePricingMode", "暫停後恢復配送日期": "subscription.pauseResumeAnchorPolicy", "折扣金額有小數時": "money.roundingMode", "下一期前幾天提醒": "notification.nextCycleReminderDays", "修改截止前幾天提醒": "notification.modificationCutoffReminderDays", "通知失敗最多重試": "notification.retryCount", "到店後第幾天提醒": "fulfillment.arrivalReminderAfterDays", "Gmail 每次回看": "fulfillment.gmailScanLookbackDays",
+  "未免運時的定期購運費": "shipping.subscriptionShippingFee", "定期購價格": "subscription.discountPercent", "修改期限": "subscription.modificationCutoffDays", "建立訂單": "subscription.orderCreationLeadDays", "一般備貨至少": "subscription.preparationLeadDays", "專屬烘焙至少": "subscription.customRoastPreparationLeadDays", "未取貨停止": "subscription.uncollectedTerminationCount", "每期最多修改": "subscription.maxModificationsPerCycle", "自訂最少": "subscription.customCycleMinDays", "自訂最多": "subscription.customCycleMaxDays", "會員選配送日期方式": "subscription.datePickerMode", "獎勵代數": "referral.referralMaxRewardDepth", "獎勵計算方式": "referral.referralRewardCalculationMode", "點數顯示名稱": "referral.pointDisplayName", "會員本人消費回饋": "referral.selfPurchaseRewardRate", "固定本人消費回饋（動態級距關閉時）": "referral.selfPurchaseRewardRate", "本人消費回饋起算": "referral.selfPurchaseEligibilityMode", "推薦獎勵領取資格期限": "referral.referralRewardQualificationWindowDays", "推薦獎勵基礎等待天數": "referral.referralRewardBaseWaitingDays", "推薦獎勵退貨保護天數": "referral.referralRewardReturnProtectionDays", "單筆全組織上限": "referral.referralTotalRewardCap", "單一會員每月上限": "referral.referralMonthlyCreditCap", "每 1 PV 換算": "referral.pvRewardMoneyValue", "一般商品最少備貨": "pickup.preparationLeadDays", "專屬烘焙最少備貨": "pickup.customRoastPreparationLeadDays", "自取日期選擇方式": "pickup.datePickerMode", "完成第幾次開始送": "gift.startsAtFulfillment", "開始後每隔": "gift.repeatEveryFulfillments", "半磅贈品": "gift.halfPoundQuantity", "一磅贈品": "gift.onePoundQuantity", "有效期限": "credit.expiryCalendarMonths", "到期前提醒": "credit.expiryReminderDays", "每筆最高折抵": "credit.redemption", "最高折抵": "credit.redemption", "每筆至少應付": "credit.redemption", "最高折抵商品金額": "credit.redemption", "抵用金是否可折運費": "credit.appliesToShipping", "會員使用抵用金方式": "credit.uiMode", "活動適用定期購時": "campaign.eligiblePricingMode", "暫停後恢復配送日期": "subscription.pauseResumeAnchorPolicy", "折扣金額有小數時": "money.roundingMode", "下一期前幾天提醒": "notification.nextCycleReminderDays", "修改截止前幾天提醒": "notification.modificationCutoffReminderDays", "通知失敗最多重試": "notification.retryCount", "到店後第幾天提醒": "fulfillment.arrivalReminderAfterDays", "Gmail 每次回看": "fulfillment.gmailScanLookbackDays",
 };
 
 function RuleFieldTitle({ label, ruleKey }: { label: string; ruleKey?: string }) {
@@ -252,6 +252,7 @@ export default function MembershipRulesManager({ initialRevision, initialVersion
               未勾選時，本人消費回饋不受推薦獎勵資格門檻限制
             </small>
           </span>
+          <AdminRuleHelpButton ruleKey="referral.selfPurchaseRequiresReferralQualification" />
         </label>
       </div>
 
@@ -277,11 +278,13 @@ export default function MembershipRulesManager({ initialRevision, initialVersion
             <b>啟用本人消費動態級距</b>
             <small>關閉時沿用上方固定本人消費回饋比例</small>
           </span>
+          <AdminRuleHelpButton ruleKey="referral.selfPurchaseRewardTiers.enabled" />
         </label>
 
         <div className="membership-fields three">
           <Choice
             label="級距判定基準"
+            helpKey="referral.selfPurchaseRewardTiers.thresholdBasis"
             value={rules.referral.selfPurchaseRewardTiers.thresholdBasis}
             onChange={(value) =>
               change((draft) => {
@@ -296,6 +299,7 @@ export default function MembershipRulesManager({ initialRevision, initialVersion
 
           <Choice
             label="級距累積方式"
+            helpKey="referral.selfPurchaseRewardTiers.accumulationBasis"
             value={rules.referral.selfPurchaseRewardTiers.accumulationBasis}
             onChange={(value) =>
               change((draft) => {
@@ -310,6 +314,7 @@ export default function MembershipRulesManager({ initialRevision, initialVersion
 
           <Choice
             label="回饋計算方式"
+            helpKey="referral.selfPurchaseRewardTiers.calculationMethod"
             value={rules.referral.selfPurchaseRewardTiers.calculationMethod}
             onChange={(value) =>
               change((draft) => {
@@ -328,6 +333,7 @@ export default function MembershipRulesManager({ initialRevision, initialVersion
           <div className="membership-fields two">
             <NumberField
               label="累積期間"
+              helpKey="referral.selfPurchaseRewardTiers.rollingWindowDays"
               value={rules.referral.selfPurchaseRewardTiers.rollingWindowDays}
               min={1}
               max={3650}
