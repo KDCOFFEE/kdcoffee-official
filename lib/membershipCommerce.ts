@@ -39,6 +39,7 @@ import {
   type SubscriptionItem,
 } from "./membershipPolicies";
 import { projectOrderFinancialBreakdown } from "./orderFinancialProjection";
+import type { HomeDeliveryPaymentMethod } from "./homeDeliveryPayment";
 import { subscriptionShippingFee } from "./shippingRules";
 import { getMembershipCommerceStateFile } from "./storagePaths";
 import {
@@ -64,6 +65,7 @@ export type Subscription = {
   intervalDays: number;
   shippingMethod: string;
   storeSelection: { storeId: string; storeName: string } | null;
+  paymentMethod?: HomeDeliveryPaymentMethod | null;
   defaultItems: SubscriptionDefaultItem[];
   rulesVersion: number;
   statusReason: string;
@@ -82,6 +84,7 @@ export type PricingSnapshot = {
   campaign: { campaignId: string; subscriptionEligible: boolean; adjustment: number; pricingMode: string } | null;
   creditReserved: number;
   shipping: number;
+  codServiceFee?: number;
   finalAmount: number;
   currency: "TWD";
   roundingMode: string;
@@ -101,6 +104,7 @@ export type SubscriptionCycle = {
   pricingSnapshot: PricingSnapshot | null;
   giftSnapshot: { eligible: boolean; quantity: number; selectedProductId: string | null; packingLockedAt: string | null } | null;
   shippingSnapshot: { method: string; storeSelection: { storeId: string; storeName: string } | null; freeShipping: boolean } | null;
+  paymentSnapshot?: { method: HomeDeliveryPaymentMethod } | null;
   rulesSnapshot: RulesVersion | null;
   createdOrderId: string | null;
   createdAt: string;

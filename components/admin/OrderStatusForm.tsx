@@ -139,6 +139,7 @@ function OrderStatusFormInner({
   const cancellationCanBeCompleted = cancellationAllowed || manualShipmentVoidCompletionAvailable;
   const statusTransitionAllowed =
     statusIsKnown &&
+    (orderMode !== "home_delivery" || status === "cancelled") &&
     (status === "cancelled"
       ? cancellationCanBeCompleted
       : assessOrderStatusProgression(
@@ -230,6 +231,7 @@ function OrderStatusFormInner({
             <option
               value={optionStatus}
               disabled={
+                orderMode === "home_delivery" ||
                 reactivationBlocked ||
                 inventoryFulfillmentBlocked ||
                 !assessOrderStatusProgression(
@@ -245,6 +247,7 @@ function OrderStatusFormInner({
           <option value="cancelled" disabled={!cancellationCanBeCompleted}>已取消</option>
         </select>
       </label>
+      {orderMode === "home_delivery" ? <p className="admin-save-message">宅配訂單的進度請使用上方履約處理；此處只可執行正式取消。</p> : null}
       {reactivationBlocked ? (
         <p className="admin-save-message">
           {inventoryReturned

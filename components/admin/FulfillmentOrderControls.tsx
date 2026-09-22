@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 
 import { fulfillmentStateLabels, type FulfillmentRecord, type FulfillmentState } from "@/lib/fulfillmentTypes";
 import { MAX_CANCELLATION_REASON_LENGTH } from "@/lib/orderInventoryPolicy";
+import type { HomeDeliveryPaymentDetails } from "@/lib/homeDeliveryPayment";
 
 type FlowStep = { state: FulfillmentState; label: string; automatic?: boolean };
 
@@ -42,6 +43,7 @@ export default function FulfillmentOrderControls({
   cancellationBlockedMessage = "",
   initialPickupDate = "",
   initialStore,
+  initialPaymentDetails,
 }: {
   orderId: string;
   orderMode: string;
@@ -51,6 +53,7 @@ export default function FulfillmentOrderControls({
   cancellationBlockedMessage?: string;
   initialPickupDate?: string;
   initialStore?: { id: string; name: string; address: string };
+  initialPaymentDetails?: HomeDeliveryPaymentDetails;
 }) {
   const router = useRouter();
   const [record, setRecord] = useState(initial);
@@ -65,8 +68,12 @@ export default function FulfillmentOrderControls({
   const [overrideStore, setOverrideStore] = useState(initialStore ?? { id: "", name: "", address: "" });
   const [overrideReason, setOverrideReason] = useState("");
   const [busy, setBusy] = useState(false);
+  const [paymentStatus, setPaymentStatus] = useState(initialPaymentDetails?.status || "pending");
+  const [delivered, setDelivered] = useState(false);
+  const [codCollected, setCodCollected] = useState(false);
 
   const isSevenEleven = orderMode === "711_cod";
+  const isHomeDelivery = orderMode === "home_delivery";
   const steps = useMemo(() => (isSevenEleven ? sevenElevenSteps : studioSteps), [isSevenEleven]);
   const activeIndex = normalizedStepIndex(steps, record.currentState);
   const orderCancelled = initialOrderStatus === "cancelled";
@@ -90,6 +97,7 @@ export default function FulfillmentOrderControls({
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "更新失敗");
       setRecord(result.record);
+      if (payload.action === "confirm-atm-payment" || (isHomeDelivery && payload.state === "completed" && initialPaymentDetails?.method === "cash_on_delivery")) setPaymentStatus("paid");
       setMessage("履約狀態已更新");
       router.refresh();
     } catch (error) {
@@ -183,6 +191,27 @@ export default function FulfillmentOrderControls({
           ? "已到店。系統會等待買家完成取貨通知，收到後自動完成此訂單。"
           : null
     : null;
+
+  if (isHomeDelivery) {
+    const method = initialPaymentDetails?.method;
+    const paymentName = method === "atm_transfer" ? "ATM 轉帳" : method === "cash_on_delivery" ? "貨到付款" : "付款方式待確認";
+    const canPrepare = method === "cash_on_delivery" || (method === "atm_transfer" && paymentStatus === "paid");
+    return (
+      <div className="fulfillment-order-controls guided-fulfillment">
+        <div className="guided-fulfillment-head"><div><small>宅配人工履約流程</small><strong>{record.currentState === "completed" ? "已完成" : record.currentState === "shipped" ? "已出貨" : record.currentState === "preparing" ? "準備中" : "訂單待處理"}</strong></div><span className="fulfillment-state-chip">宅配</span></div>
+        <p>付款方式：{paymentName}／{paymentStatus === "paid" ? "已收款" : "待收款"}</p>
+        {!terminal && method === "atm_transfer" && paymentStatus === "pending" ? <button type="button" className="primary" disabled={busy} onClick={() => { if (window.confirm("已確認 ATM 匯款入帳？")) void send({ action: "confirm-atm-payment" }); }}>確認 ATM 已入帳</button> : null}
+        {!terminal && record.currentState === "order_created" ? <button type="button" className="primary" disabled={busy || !canPrepare} onClick={() => void send({ action: "transition", state: "preparing" })}>開始準備</button> : null}
+        {!terminal && record.currentState === "preparing" ? <button type="button" className="primary" disabled={busy} onClick={() => void send({ action: "transition", state: "shipped" })}>標記已出貨</button> : null}
+        {!terminal && record.currentState === "shipped" ? <div className="guided-next-action"><label><input type="checkbox" checked={delivered} onChange={(event) => setDelivered(event.target.checked)} /> 已確認宅配送達</label>{method === "cash_on_delivery" ? <label><input type="checkbox" checked={codCollected} onChange={(event) => setCodCollected(event.target.checked)} /> 已確認貨到付款全額收訖</label> : null}<button type="button" className="primary" disabled={busy || !delivered || (method === "cash_on_delivery" && !codCollected)} onClick={() => { if (window.confirm("確認已送達且付款條件已完成，將透過正式履約事件完成訂單？")) void send({ action: "transition", state: "completed", confirmed: true, delivered, codCollected }); }}>確認送達並完成訂單</button></div> : null}
+        {!terminal && cancellationAllowed ? <details className="guided-secondary-panel"><summary>取消訂單</summary><div className="guided-secondary-content"><label>取消原因<input value={cancellationReason} maxLength={MAX_CANCELLATION_REASON_LENGTH} onChange={(event) => setCancellationReason(event.target.value)} /></label><button type="button" className="danger" disabled={busy || !cancellationReason.trim()} onClick={() => void cancelOrder()}>確認取消訂單</button></div></details> : null}
+        {!terminal && !cancellationAllowed ? <p>{cancellationBlockedMessage}</p> : null}
+        {message ? <p role="status" className="fulfillment-action-message">{message}</p> : null}
+      </div>
+    );
+  }
+
+  if (!isSevenEleven && orderMode !== "studio_pickup") return <p role="alert">此訂單配送方式尚無可用履約控制。</p>;
 
   return (
     <div className="fulfillment-order-controls guided-fulfillment">

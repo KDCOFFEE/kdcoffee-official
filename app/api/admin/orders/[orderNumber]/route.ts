@@ -58,6 +58,9 @@ export async function PATCH(
     const result = await withStoredOrderUpdateLock(
       orderNumber,
       async (latestOrder, persistOrder) => {
+        if (latestOrder.orderMode === "home_delivery") {
+          throw new OrderStatusTransitionError("宅配訂單請使用履約處理流程更新狀態。");
+        }
         assertOrderStatusTransition(latestOrder, requestedStatus);
         const previous = latestOrder.status;
         const updatedAt = new Date().toISOString();

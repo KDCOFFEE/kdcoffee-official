@@ -88,7 +88,7 @@ function sha256(value: string) {
 }
 
 function isGeneralProductOrder(order: StoredOrder) {
-  return order.orderMode === "711_cod" || order.orderMode === "studio_pickup";
+  return order.orderMode === "711_cod" || order.orderMode === "studio_pickup" || order.orderMode === "home_delivery";
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

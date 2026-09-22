@@ -59,7 +59,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function isGeneralProductOrder(order: InventoryPolicyOrder) {
-  return order.orderMode === "711_cod" || order.orderMode === "studio_pickup";
+  return order.orderMode === "711_cod" || order.orderMode === "studio_pickup" || order.orderMode === "home_delivery";
 }
 
 function pendingAssessment(): OrderInventoryAssessment {

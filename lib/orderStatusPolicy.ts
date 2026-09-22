@@ -6,6 +6,7 @@ import {
 export const orderDeliveryMethods = [
   "711_cod",
   "studio_pickup",
+  "home_delivery",
   "corporate_gift",
 ] as const;
 
@@ -45,6 +46,14 @@ const studioPickupStatuses = [
   "completed",
   "cancelled",
 ] as const;
+
+const homeDeliveryStatuses = ["new_order", "confirmed", "shipped", "completed", "cancelled"] as const;
+const homeDeliveryTransitions: Record<string, readonly string[]> = {
+  new_order: ["confirmed"],
+  confirmed: ["shipped"],
+  shipped: ["completed"],
+};
+const homeDeliveryOrder = ["new_order", "confirmed", "shipped", "completed"] as const;
 
 const sevenElevenTransitions: Record<string, readonly string[]> = {
   new_order: ["waiting_merchant_create_cod_shipment"],
@@ -91,6 +100,9 @@ function statusAllowedForDelivery(orderMode: unknown, status: string) {
   if (orderMode === "studio_pickup") {
     return (studioPickupStatuses as readonly string[]).includes(status);
   }
+  if (orderMode === "home_delivery") {
+    return (homeDeliveryStatuses as readonly string[]).includes(status);
+  }
   if (orderMode === "corporate_gift") {
     return status === "corporate_gift_inquiry" || status === "cancelled";
   }
@@ -109,6 +121,9 @@ function incompatibleTargetMessage(orderMode: unknown, targetStatus: OrderStatus
   }
   if (orderMode === "711_cod" && targetStatus === "waiting_studio_pickup_confirmation") {
     return "7-ELEVEN 訂單不能使用工作室自取流程狀態。";
+  }
+  if (orderMode === "home_delivery") {
+    return "宅配訂單不能使用此履約狀態。";
   }
   if (orderMode === "corporate_gift") {
     return "企業送禮洽詢不使用一般商品訂單履約狀態。";
@@ -152,7 +167,7 @@ export function assessOrderStatusProgression(
       errorMessage: "企業送禮洽詢不使用一般商品訂單履約狀態。",
     };
   }
-  if (order.orderMode !== "711_cod" && order.orderMode !== "studio_pickup") {
+  if (order.orderMode !== "711_cod" && order.orderMode !== "studio_pickup" && order.orderMode !== "home_delivery") {
     return {
       allowed: false,
       errorMessage: "此訂單的配送方式無法確認，不能更新履約狀態。",
@@ -195,7 +210,7 @@ export function assessOrderStatusProgression(
   const transitions =
     order.orderMode === "711_cod"
       ? sevenElevenTransitions
-      : studioPickupTransitions;
+      : order.orderMode === "home_delivery" ? homeDeliveryTransitions : studioPickupTransitions;
   if ((transitions[currentStatus] || []).includes(targetStatus)) {
     return { allowed: true };
   }
@@ -203,7 +218,7 @@ export function assessOrderStatusProgression(
   const orderedStatuses =
     order.orderMode === "711_cod"
       ? sevenElevenOrder
-      : studioPickupOrder;
+      : order.orderMode === "home_delivery" ? homeDeliveryOrder : studioPickupOrder;
   const currentIndex = (orderedStatuses as readonly string[]).indexOf(currentStatus);
   const targetIndex = (orderedStatuses as readonly string[]).indexOf(targetStatus);
   if (currentIndex >= 0 && targetIndex >= 0 && targetIndex < currentIndex) {
@@ -225,6 +240,9 @@ export function orderFlowDescription(orderMode: string) {
   }
   if (orderMode === "studio_pickup") {
     return "待確認 → 已確認 → 已備妥待取 → 已完成";
+  }
+  if (orderMode === "home_delivery") {
+    return "待處理 → 準備中 → 已出貨 → 已完成";
   }
   if (orderMode === "corporate_gift") {
     return "企業送禮洽詢不使用一般商品訂單履約狀態。";

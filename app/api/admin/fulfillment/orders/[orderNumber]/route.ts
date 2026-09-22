@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { isAdminAuthenticated } from "@/lib/adminAuth";
-import { associateExternalFulfillment, evaluatePickupDeadlines, FulfillmentError, fulfillmentRecordForOrder, readFulfillmentStore, recordAdminFulfillmentEvent } from "@/lib/fulfillment";
+import { associateExternalFulfillment, confirmHomeDeliveryAtmPayment, evaluatePickupDeadlines, FulfillmentError, fulfillmentRecordForOrder, readFulfillmentStore, recordAdminFulfillmentEvent } from "@/lib/fulfillment";
 import { readOrder } from "@/lib/adminOrders";
 import type { FulfillmentState } from "@/lib/fulfillmentTypes";
 import { applyOwnerOrderException } from "@/lib/ownerOrderExceptions";
@@ -23,7 +23,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ or
   try {
     const body = await request.json();
     let record;
-    if (body.action === "override") {
+    if (body.action === "confirm-atm-payment") {
+      const order = await confirmHomeDeliveryAtmPayment({ orderId: orderNumber });
+      record = fulfillmentRecordForOrder(await readFulfillmentStore(), order);
+    } else if (body.action === "override") {
       const order = await applyOwnerOrderException({ orderId: orderNumber, action: body.overrideAction === "change-store" ? "change-store" : "change-date", expectedFulfillmentRevision: Number(body.expectedRevision), idempotencyKey: String(body.idempotencyKey || ""), reason: String(body.reason || ""), date: body.date ? String(body.date) : undefined, store: body.store ? { id: String(body.store.id || ""), name: String(body.store.name || ""), address: String(body.store.address || "") } : undefined });
       record = fulfillmentRecordForOrder(await readFulfillmentStore(), order);
     } else if (body.action === "associate") record = await associateExternalFulfillment({ orderId: orderNumber, externalOrderId: String(body.externalOrderId || ""), externalShipmentId: String(body.externalShipmentId || "") || undefined, expectedRevision: Number(body.expectedRevision) });
@@ -37,7 +40,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ or
       const reason = String(body.reason || "").trim();
       if (state === "uncollected" && !["門市確認逾期未取", "顧客確認不取貨", "物流退回確認", "其他人工確認"].includes(reason)) throw new FulfillmentError("請選擇人工確認未取貨的原因");
       const note = [reason, String(body.note || "").trim()].filter(Boolean).join("｜");
-      record = (await recordAdminFulfillmentEvent({ orderId: orderNumber, state, expectedRevision: Number(body.expectedRevision), confirmed: body.confirmed === true, note, actor: "後台管理員" })).record;
+      record = (await recordAdminFulfillmentEvent({ orderId: orderNumber, state, expectedRevision: Number(body.expectedRevision), confirmed: body.confirmed === true, delivered: body.delivered === true, codCollected: body.codCollected === true, note, actor: "後台管理員" })).record;
     }
     return NextResponse.json({ record });
   } catch (error) {

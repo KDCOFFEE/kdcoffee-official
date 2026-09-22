@@ -91,6 +91,15 @@ function customerStatusTitle(orderMode: unknown, value: unknown) {
       cancelled: "訂單已取消",
     }[status] || "訂單進度已更新";
   }
+  if (orderMode === "home_delivery") {
+    return {
+      new_order: "宅配訂單已建立",
+      confirmed: "宅配訂單準備中",
+      shipped: "宅配訂單已出貨",
+      completed: "宅配訂單已送達並完成",
+      cancelled: "訂單已取消",
+    }[status] || "宅配訂單進度已更新";
+  }
   if (status === "corporate_gift_inquiry") return "企業送禮洽詢已收到";
   if (status === "cancelled") return "訂單已取消";
   return status === "completed" ? "訂單完成" : "訂單進度已更新";
@@ -197,6 +206,10 @@ export function buildOrderTimeline(
     if (!isRecord(value)) return;
     const state = cleanText(value.state, 80);
     const labels: Record<string,string> = { order_created:"訂單成立",preparing:"準備中",shipped:"已交寄",in_transit:"配送中",arrived_at_pickup_store:"商品已到 7-ELEVEN",ready_for_store_pickup:"咖啡已準備完成，可以取貨",completed:"已完成取貨",suspected_uncollected:"取貨狀態待工作室確認",uncollected:"未完成取貨",cancelled:"已取消",exception_requires_review:"取貨狀態待確認" };
+    if (order.orderMode === "home_delivery") {
+      labels.shipped = "宅配已出貨";
+      labels.completed = "宅配已送達並完成";
+    }
     const source = cleanText(value.source, 80);
     add({
       id: `fulfillment-${cleanText(value.eventId,100)||index}`,

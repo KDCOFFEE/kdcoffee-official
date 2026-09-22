@@ -128,6 +128,8 @@ export default function MembershipRulesManager({ initialRevision, initialVersion
 
         <NumberField label="7-ELEVEN 一般運費" value={rules.shipping.sevenElevenShippingFee} min={0} max={10000} unit="元" onChange={(value) => change((draft) => { draft.shipping.sevenElevenShippingFee = value; })} />
         <NumberField label="宅配一般運費" value={rules.shipping.homeDeliveryShippingFee} min={0} max={10000} unit="元" onChange={(value) => change((draft) => { draft.shipping.homeDeliveryShippingFee = value; })} />
+        <NumberField label="宅配貨到付款手續費" value={rules.shipping.homeDeliveryCodFee} min={0} max={50} unit="元／筆" onChange={(value) => change((draft) => { draft.shipping.homeDeliveryCodFee = value; })} />
+        <p className="membership-effective-note">宅配貨到付款手續費每筆 NT$0–50，與運費分開計算；定期購配送費優惠不折抵此手續費。</p>
         <NumberField label="定期購配送費優惠" value={rules.shipping.subscriptionShippingDiscount} min={0} max={10000} unit="元" onChange={(value) => change((draft) => { draft.shipping.subscriptionShippingDiscount = value; })} />
         <div className="membership-rule-summary">
           <small>7-ELEVEN 定期購運費</small>

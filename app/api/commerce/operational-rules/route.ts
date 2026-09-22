@@ -27,6 +27,8 @@ export async function GET() {
         rules.shipping.sevenElevenShippingFee,
       homeDeliveryShippingFee:
         rules.shipping.homeDeliveryShippingFee,
+      homeDeliveryCodFee:
+        rules.shipping.homeDeliveryCodFee,
       subscriptionShippingDiscount:
         rules.shipping.subscriptionShippingDiscount,
     },

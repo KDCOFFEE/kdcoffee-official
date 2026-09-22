@@ -3,6 +3,7 @@ type UnknownOrderSnapshot = Record<string, unknown>;
 export type OrderFinancialBreakdown = {
   subtotal: number;
   shipping: number;
+  codServiceFee: number;
   creditApplied: number | null;
   totalBeforeCredit: number | null;
   total: number;
@@ -22,6 +23,7 @@ function nonNegativeMoney(value: unknown) {
 export function projectOrderFinancialBreakdown(order: UnknownOrderSnapshot): OrderFinancialBreakdown {
   const subtotal = nonNegativeMoney(order.subtotal) ?? 0;
   const shipping = nonNegativeMoney(order.shipping) ?? 0;
+  const codServiceFee = nonNegativeMoney(order.codServiceFee) ?? 0;
   const storedTotal = nonNegativeMoney(order.total);
   const total = storedTotal ?? subtotal;
   const totalBeforeCredit = nonNegativeMoney(order.totalBeforeCredit);
@@ -34,13 +36,14 @@ export function projectOrderFinancialBreakdown(order: UnknownOrderSnapshot): Ord
     reservationId
       && appliedAmount
       && totalBeforeCredit !== null
-      && totalBeforeCredit === subtotal + shipping
+      && totalBeforeCredit === subtotal + shipping + codServiceFee
       && total === totalBeforeCredit - appliedAmount,
   );
 
   return {
     subtotal,
     shipping,
+    codServiceFee,
     creditApplied: canonicalCreditIsConsistent ? appliedAmount : null,
     totalBeforeCredit: canonicalCreditIsConsistent ? totalBeforeCredit : null,
     total,

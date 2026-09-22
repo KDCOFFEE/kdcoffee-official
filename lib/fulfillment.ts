@@ -2,7 +2,9 @@ import { createHash, randomUUID } from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 
-import { updateStoredOrderSafely, readOrder, type StoredOrder } from "./adminOrders";
+import { updateStoredOrderSafely, withStoredOrderUpdateLock, readOrder, type StoredOrder } from "./adminOrders";
+import { assessOrderInventoryTransaction } from "./orderInventoryPolicy";
+import type { HomeDeliveryPaymentDetails } from "./homeDeliveryPayment";
 import { atomicWriteJson, withFileLock } from "./jsonFileStore";
 import { handleCanonicalOrderOutcome, handleReferralQualificationOrderOutcome } from "./membershipCommerce";
 import { getFulfillmentSettingsFile, getFulfillmentStateFile } from "./storagePaths";
@@ -185,8 +187,8 @@ function orderStatusForState(state: FulfillmentState, current: string) {
   return current;
 }
 
-async function mirrorEventToOrder(order: StoredOrder, event: FulfillmentEvent, record: FulfillmentRecord) {
-  await updateStoredOrderSafely(order.orderNumber, (latest) => {
+async function mirrorEventToOrder(order: StoredOrder, event: FulfillmentEvent, record: FulfillmentRecord, persistLockedOrder?: (order: StoredOrder) => Promise<StoredOrder>) {
+  const update = (latest: StoredOrder) => {
     const existing = Array.isArray(latest.fulfillmentEvents) ? latest.fulfillmentEvents : [];
     const status = orderStatusForState(event.state, String(latest.status || ""));
     const changed = status !== latest.status;
@@ -206,7 +208,9 @@ async function mirrorEventToOrder(order: StoredOrder, event: FulfillmentEvent, r
         : [...existing, { eventId: event.eventId, state: event.state, source: event.source, occurredAt: event.occurredAt, note: event.note }],
       statusHistory: changed ? [...(Array.isArray(latest.statusHistory) ? latest.statusHistory : []), { from: latest.status, to: status, at: event.occurredAt, source: "fulfillment" }] : latest.statusHistory,
     };
-  });
+  };
+  if (persistLockedOrder) await persistLockedOrder(update(order));
+  else await updateStoredOrderSafely(order.orderNumber, update);
 }
 
 async function runConsequence(order: StoredOrder, event: FulfillmentEvent) {
@@ -248,7 +252,7 @@ function review(store: FulfillmentStore, parsed: ParsedFulfillmentEvidence, reas
   return reviewId;
 }
 
-async function appendCanonicalEvent(input: { order: StoredOrder; state: FulfillmentState; source: FulfillmentSource; sourceFingerprint: string; sourceReference?: string; externalOrderId?: string; externalShipmentId?: string; occurredAt: string; actor?: string; note?: string; expectedRevision?: number; filePath: string; settings: LogisticsSettings; now: Date }) {
+async function appendCanonicalEvent(input: { order: StoredOrder; state: FulfillmentState; source: FulfillmentSource; sourceFingerprint: string; sourceReference?: string; externalOrderId?: string; externalShipmentId?: string; occurredAt: string; actor?: string; note?: string; expectedRevision?: number; delivered?: boolean; codCollected?: boolean; persistLockedOrder?: (order: StoredOrder) => Promise<StoredOrder>; filePath: string; settings: LogisticsSettings; now: Date }) {
   return withFileLock(input.filePath, async () => {
     const store = await readFulfillmentStore(input.filePath);
     const existingPointer = store.processedFingerprints[input.sourceFingerprint];
@@ -256,7 +260,7 @@ async function appendCanonicalEvent(input: { order: StoredOrder; state: Fulfillm
     const existingEvent = existingRecord?.events.find((event) => event.eventId === existingPointer.eventId);
     if (existingEvent) {
       if (store.consequenceStatus[existingEvent.eventId] !== "completed") {
-        await mirrorEventToOrder(input.order, existingEvent, existingRecord!);
+        await mirrorEventToOrder(input.order, existingEvent, existingRecord!, input.persistLockedOrder);
         try {
           await runConsequence(input.order, existingEvent);
           store.consequenceStatus[existingEvent.eventId] = "completed";
@@ -268,8 +272,30 @@ async function appendCanonicalEvent(input: { order: StoredOrder; state: Fulfillm
       return { event: existingEvent, record: existingRecord!, replayed: true, ignored: false };
     }
 
-    const record = recordForOrder(store, input.order, input.now);
+    let order = input.order;
+    const record = recordForOrder(store, order, input.now);
     if (input.expectedRevision !== undefined && record.revision !== input.expectedRevision) throw new FulfillmentError("訂單履約狀態已更新，請重新整理後再試", 409);
+    if (order.orderMode === "home_delivery") {
+      if (!input.persistLockedOrder) throw new FulfillmentError("宅配訂單需要訂單鎖才能更新履約", 409);
+      if (input.source !== "admin" || input.externalOrderId || input.externalShipmentId) throw new FulfillmentError("宅配只能使用人工履約流程");
+      if (order.status === "cancelled" || order.status === "completed") throw new FulfillmentError("此宅配訂單已結束，不能繼續履約", 409);
+      if (assessOrderInventoryTransaction(order).kind !== "trusted_committed") throw new FulfillmentError("宅配訂單庫存尚未確認，不能履約", 409);
+      const next: Partial<Record<FulfillmentState, FulfillmentState>> = { order_created: "preparing", preparing: "shipped", shipped: "completed" };
+      if (next[record.currentState] !== input.state) throw new FulfillmentError("宅配履約必須依準備、出貨、完成順序操作", 409);
+      const details = order.paymentDetails as HomeDeliveryPaymentDetails | undefined;
+      if (!details || !["atm_transfer", "cash_on_delivery"].includes(details.method) || order.payment !== details.method) throw new FulfillmentError("宅配付款快照不完整，不能履約", 409);
+      if (details.status !== "pending" && details.status !== "paid") throw new FulfillmentError("付款狀態不能進入履約流程", 409);
+      if (details.status === "paid" && (!details.paidAt || details.confirmedBy !== "admin")) throw new FulfillmentError("付款確認紀錄不完整，不能履約", 409);
+      if (details.method === "atm_transfer" && details.status !== "paid") throw new FulfillmentError("請先確認 ATM 匯款入帳", 409);
+      if (input.state === "completed") {
+        if (input.delivered !== true) throw new FulfillmentError("請先確認宅配已送達", 409);
+        if (details.method === "cash_on_delivery" && input.codCollected !== true) throw new FulfillmentError("請先確認貨到付款已收款", 409);
+        if (details.method === "cash_on_delivery" && details.status !== "paid") {
+          if (order.status !== "shipped" || details.status !== "pending") throw new FulfillmentError("宅配付款狀態已變更，請重新整理", 409);
+          order = await input.persistLockedOrder({ ...order, paymentDetails: { ...details, status: "paid", paidAt: nowIso(input.now), confirmedBy: "admin" } });
+        }
+      }
+    }
     const transition = canTransition(record.currentState, input.state, input.source);
     if (transition === "blocked") throw new FulfillmentError(`不能由「${fulfillmentStateLabels[record.currentState]}」變更為「${fulfillmentStateLabels[input.state]}」`, 409);
     if (transition === "stale" || transition === "replay") {
@@ -281,7 +307,7 @@ async function appendCanonicalEvent(input: { order: StoredOrder; state: Fulfillm
     const revision = record.revision + 1;
     const event: FulfillmentEvent = {
       eventId: `ful_${randomUUID()}`,
-      orderId: input.order.orderNumber,
+      orderId: order.orderNumber,
       state: input.state,
       source: input.source,
       sourceFingerprint: input.sourceFingerprint,
@@ -307,10 +333,10 @@ async function appendCanonicalEvent(input: { order: StoredOrder; state: Fulfillm
     store.processedFingerprints[input.sourceFingerprint] = { eventId: event.eventId, orderId: record.orderId };
     store.consequenceStatus[event.eventId] = event.state === "completed" || event.state === "uncollected" || event.state === "cancelled" ? "pending" : "completed";
     await persistStore(input.filePath, store, input.now);
-    await mirrorEventToOrder(input.order, event, record);
+    await mirrorEventToOrder(order, event, record, input.persistLockedOrder);
     if (store.consequenceStatus[event.eventId] === "pending") {
       try {
-        await runConsequence(input.order, event);
+        await runConsequence(order, event);
         store.consequenceStatus[event.eventId] = "completed";
       } catch (error) {
         store.consequenceStatus[event.eventId] = "failed";
@@ -395,11 +421,12 @@ export async function processSevenElevenEmail(evidence: FulfillmentEmailEvidence
   if (lookup.reviewId) return { parsed, mutated: false, review: true, reviewId: lookup.reviewId };
   const order = await readOrder(lookup.orderId!);
   if (!order) return { parsed, mutated: false, review: true };
+  if (order.orderMode !== "711_cod") return { parsed, mutated: false, review: false };
   const result = await appendCanonicalEvent({ order, state: parsed.eventType, source: "seven_eleven_email", sourceFingerprint: parsed.sourceFingerprint, sourceReference: evidence.messageId?.slice(0, 300), externalOrderId: parsed.externalOrderId, externalShipmentId: parsed.externalShipmentId, occurredAt: parsed.eventTimestamp, filePath, settings, now });
   return { parsed, mutated: !result.ignored, review: false, ...result };
 }
 
-export async function recordAdminFulfillmentEvent(input: { orderId: string; state: FulfillmentState; expectedRevision: number; confirmed?: boolean; note?: string; filePath?: string; settingsFilePath?: string; now?: Date; actor?: string }) {
+export async function recordAdminFulfillmentEvent(input: { orderId: string; state: FulfillmentState; expectedRevision: number; confirmed?: boolean; delivered?: boolean; codCollected?: boolean; note?: string; filePath?: string; settingsFilePath?: string; now?: Date; actor?: string }) {
   if (!(fulfillmentStates as readonly string[]).includes(input.state)) throw new FulfillmentError("履約狀態不正確");
   if (["completed", "uncollected", "cancelled"].includes(input.state) && input.confirmed !== true) throw new FulfillmentError("此操作需要再次確認");
   const order = await readOrder(input.orderId);
@@ -409,7 +436,22 @@ export async function recordAdminFulfillmentEvent(input: { orderId: string; stat
   const sourceFingerprint = createHash("sha256").update(`admin:${input.orderId}:${input.state}:${input.expectedRevision}`).digest("hex");
   const filePath = input.filePath ?? getFulfillmentStateFile();
   await fs.mkdir(path.dirname(filePath), { recursive: true });
-  return appendCanonicalEvent({ order, state: input.state, source: "admin", sourceFingerprint, occurredAt: nowIso(now), actor: input.actor || "後台管理員", note: input.note?.trim().slice(0, 200), expectedRevision: input.expectedRevision, filePath, settings, now });
+  const eventInput = { state: input.state, source: "admin" as const, sourceFingerprint, occurredAt: nowIso(now), actor: input.actor || "後台管理員", note: input.note?.trim().slice(0, 200), expectedRevision: input.expectedRevision, delivered: input.delivered, codCollected: input.codCollected, filePath, settings, now };
+  if (order.orderMode === "home_delivery") {
+    return withStoredOrderUpdateLock(order.orderNumber, (latest, persistLockedOrder) => appendCanonicalEvent({ ...eventInput, order: latest, persistLockedOrder }));
+  }
+  return appendCanonicalEvent({ ...eventInput, order });
+}
+
+export async function confirmHomeDeliveryAtmPayment(input: { orderId: string; now?: Date }) {
+  return updateStoredOrderSafely(input.orderId, (order) => {
+    if (order.orderMode !== "home_delivery" || order.payment !== "atm_transfer") throw new FulfillmentError("只有宅配 ATM 訂單可確認匯款", 409);
+    if (order.status !== "new_order") throw new FulfillmentError("訂單已進入履約流程，不能在此確認匯款", 409);
+    if (assessOrderInventoryTransaction(order).kind !== "trusted_committed") throw new FulfillmentError("庫存交易尚未完成，不能確認匯款", 409);
+    const details = order.paymentDetails as HomeDeliveryPaymentDetails | undefined;
+    if (details?.method !== "atm_transfer" || details.status !== "pending") throw new FulfillmentError("ATM 付款狀態不是待確認", 409);
+    return { ...order, paymentDetails: { ...details, status: "paid", paidAt: nowIso(input.now), confirmedBy: "admin" }, updatedAt: nowIso(input.now) };
+  });
 }
 
 export async function evaluatePickupDeadlines(options: { filePath?: string; settingsFilePath?: string; now?: Date } = {}) {
