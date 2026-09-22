@@ -508,6 +508,122 @@ html[data-works-motion-capable="true"] .works-page [data-works-motion-state="pre
 @media(max-width:700px){.member-card{padding:28px 22px}.member-profile{align-items:flex-start}.member-profile img,.member-avatar-fallback{width:76px;height:76px}.member-actions{display:grid;grid-template-columns:1fr 1fr}.member-actions a{text-align:center}.member-order-card{grid-template-columns:1fr}.member-order-meta{justify-items:start;text-align:left}.member-edit-head{align-items:center}}
 
 .member-center-nav{display:flex;gap:8px;overflow-x:auto;padding:4px 0 18px;margin-bottom:24px;scrollbar-width:thin}.member-center-nav a{flex:0 0 auto;padding:9px 13px;border:1px solid #d9cbbd;border-radius:999px;color:#49382d;text-decoration:none;font-size:13px;background:#fff}.member-commerce-section{margin:36px 0;padding-top:14px;scroll-margin-top:100px}.member-commerce-section>.member-section-head{margin-bottom:16px}.member-subscription-status{padding:7px 11px;border-radius:999px;background:#edf6ee;color:#315c36;font-size:13px}.member-subscription-status.paused{background:#fff3d9;color:#7b5718}.member-subscription-status.pending_activation{background:#eee8ff;color:#514182}.member-subscription-status.terminated{background:#eee;color:#666}.member-commerce-empty,.member-commerce-callout{padding:24px;border-radius:16px;background:#f7f3ed}.member-commerce-empty{display:grid;gap:8px}.member-commerce-empty a{justify-self:start;color:#49382d;font-weight:700}.member-commerce-empty.compact{padding:18px}.member-subscription-grid{display:grid;gap:14px}.member-subscription-summary{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}.member-subscription-summary>div,.member-credit-summary>div{padding:17px;border-radius:14px;background:#f7f3ed}.member-subscription-summary small,.member-subscription-summary strong,.member-credit-summary small,.member-credit-summary strong{display:block}.member-subscription-actions{display:grid;gap:10px}.member-subscription-actions details{border:1px solid #ded2c7;border-radius:14px;background:#fff}.member-subscription-actions summary{padding:16px 18px;cursor:pointer;font-weight:700}.member-action-panel{display:grid;gap:12px;padding:0 18px 18px}.member-action-panel label{display:grid;gap:6px}.member-action-panel input,.member-action-panel select{padding:12px;border:1px solid #d9cbbd;border-radius:10px;background:#fff}.member-action-panel button,.member-replenish-button{border:0;border-radius:11px;padding:12px 16px;background:#39291f;color:#fff;font-weight:700;cursor:pointer}.member-action-panel button:disabled,.member-replenish-button:disabled{opacity:.5}.member-action-buttons,.member-quick-delays{display:flex;flex-wrap:wrap;gap:8px}.member-action-panel .member-danger-soft{background:#fff0ed;color:#8a3026;border:1px solid #efc5bd}.member-replenish-button{justify-self:start;background:#6a4b37}.member-credit-summary{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}.member-credit-history,.member-referral-list{display:grid;gap:8px}.member-credit-history article,.member-referral-list article{display:flex;justify-content:space-between;gap:16px;padding:15px 2px;border-bottom:1px solid #eadfd4}.member-credit-history article>div,.member-referral-list article>div{display:grid;gap:3px}.member-credit-history article>div:last-child,.member-referral-list article>div:last-child{text-align:right}.member-credit-history small,.member-referral-list small{color:#7c6a5d}.member-commerce-callout p{margin-bottom:0}
+
+.member-commerce-callout .member-danger-soft{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  margin-top:16px;
+  padding:11px 16px;
+  border:1px solid #dfb6ae;
+  border-radius:10px;
+  background:#fff0ed;
+  color:#8a3026;
+  font:inherit;
+  font-weight:750;
+  cursor:pointer
+}
+.member-commerce-callout .member-danger-soft:hover{
+  background:#fbe2dc
+}
+.member-commerce-callout .member-danger-soft:disabled{
+  opacity:.5;
+  cursor:not-allowed
+}
+
+.subscription-enrollment-summary{
+  display:grid;
+  gap:7px;
+  padding:15px 17px;
+  border-radius:13px;
+  background:#f7f1e9
+}
+.subscription-enrollment-summary strong{
+  font-size:14px;
+  color:#34251c
+}
+.subscription-enrollment-summary span{
+  display:block;
+  line-height:1.65;
+  color:#66574d
+}
+
+.subscription-renewal-preview{
+  display:grid;
+  gap:0;
+  overflow:hidden;
+  border:1px solid #d8c7b2;
+  border-radius:16px;
+  background:#fff
+}
+.subscription-renewal-preview header{
+  display:flex;
+  align-items:flex-end;
+  justify-content:space-between;
+  gap:18px;
+  padding:20px;
+  background:#211814;
+  color:#f8f0e7
+}
+.subscription-renewal-preview header div{
+  display:grid;
+  gap:3px
+}
+.subscription-renewal-preview header small{
+  font-size:10px;
+  letter-spacing:.14em;
+  color:#bcaea3
+}
+.subscription-renewal-preview header strong{
+  font-size:17px
+}
+.subscription-renewal-preview header>b{
+  color:#d2aa68;
+  font-family:Georgia,"Noto Serif TC",serif;
+  font-size:25px;
+  white-space:nowrap
+}
+.subscription-renewal-row{
+  display:flex;
+  justify-content:space-between;
+  gap:18px;
+  padding:12px 18px;
+  border-bottom:1px solid #eee4d9;
+  font-size:13px
+}
+.subscription-renewal-row span{
+  color:#6e5d50
+}
+.subscription-renewal-row strong{
+  text-align:right;
+  color:#33251d
+}
+.subscription-renewal-row.saving strong{
+  color:#8a4a2d
+}
+.subscription-renewal-preview footer{
+  display:flex;
+  justify-content:space-between;
+  gap:18px;
+  padding:16px 18px;
+  background:#faf5ed
+}
+.subscription-renewal-preview footer span{
+  color:#6c594a;
+  font-size:12px
+}
+.subscription-renewal-preview footer strong{
+  color:#70451f;
+  font-size:17px
+}
+.subscription-renewal-note{
+  display:block;
+  padding:0 18px 16px;
+  background:#faf5ed;
+  color:#8b7a6c;
+  font-size:10px;
+  line-height:1.6
+}
 .member-price-detail-button{
   margin-top:8px;
   width:max-content;
@@ -6787,5 +6903,554 @@ button.member-lifecycle-action:disabled,
   .order-conversation-form .order-cancellation-submit {
     min-height: 54px;
     padding: 15px 18px;
+  }
+}
+
+/* KD CHECKOUT SUBSCRIPTION UI V2 */
+
+.subscription-enrollment-card{
+  padding:26px 28px 30px
+}
+
+.subscription-enrollment-card .form-card-head{
+  margin-bottom:18px;
+  padding-bottom:15px
+}
+
+.subscription-enrollment-card>.delivery-notice{
+  position:relative;
+  padding:17px 20px 17px 22px;
+  border:1px solid #e2d6c8;
+  border-radius:14px;
+  background:#fbf8f3
+}
+
+.subscription-enrollment-card>.delivery-notice:before{
+  content:"";
+  position:absolute;
+  left:0;
+  top:15px;
+  bottom:15px;
+  width:3px;
+  border-radius:99px;
+  background:#b88b50
+}
+
+.subscription-enrollment-card>.delivery-notice strong{
+  margin-bottom:5px;
+  font-size:16px
+}
+
+.subscription-enrollment-card>.delivery-notice p{
+  font-size:13px;
+  line-height:1.7
+}
+
+.subscription-enrollment-card>.terms-check{
+  margin:18px 0 2px!important
+}
+
+.subscription-enrollment-fields{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:16px 18px;
+  margin-top:16px
+}
+
+.subscription-enrollment-fields>label{
+  margin:0!important
+}
+
+.subscription-enrollment-fields>label select,
+.subscription-enrollment-fields>label input{
+  min-height:48px;
+  margin-top:7px;
+  padding:11px 14px;
+  border:1px solid #d6c8b8;
+  border-radius:8px;
+  background:#fff
+}
+
+.subscription-enrollment-summary{
+  grid-column:1/-1;
+  display:grid;
+  gap:5px;
+  padding:14px 16px;
+  border:1px solid #e5d9cb;
+  border-radius:12px;
+  background:#f8f4ee
+}
+
+.subscription-enrollment-summary strong{
+  font-size:12px;
+  letter-spacing:.08em;
+  color:#896a48
+}
+
+.subscription-enrollment-summary span{
+  display:block;
+  font-size:13px;
+  line-height:1.55;
+  color:#605248
+}
+
+.subscription-renewal-preview{
+  grid-column:1/-1;
+  overflow:hidden;
+  border:1px solid #d8c7b3;
+  border-radius:15px;
+  background:#fff;
+  box-shadow:0 7px 22px rgba(54,37,25,.06)
+}
+
+.subscription-renewal-preview header{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:18px;
+  padding:17px 19px;
+  background:#2a201a;
+  color:#f8f0e7
+}
+
+.subscription-renewal-preview header div{
+  display:grid;
+  gap:2px
+}
+
+.subscription-renewal-preview header small{
+  font-size:9px;
+  letter-spacing:.17em;
+  color:#bdae9f
+}
+
+.subscription-renewal-preview header strong{
+  font-size:15px
+}
+
+.subscription-renewal-preview header>b{
+  color:#d9b477;
+  font-family:Georgia,"Noto Serif TC",serif;
+  font-size:24px;
+  white-space:nowrap
+}
+
+.subscription-renewal-row{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:18px;
+  padding:10px 18px;
+  border-bottom:1px solid #eee4d9;
+  font-size:12px
+}
+
+.subscription-renewal-row span{
+  color:#75665a
+}
+
+.subscription-renewal-row strong{
+  color:#33251d;
+  font-size:13px;
+  text-align:right
+}
+
+.subscription-renewal-row.saving{
+  background:#fdfaf6
+}
+
+.subscription-renewal-row.saving strong{
+  color:#91512f
+}
+
+.subscription-renewal-preview footer{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:18px;
+  padding:13px 18px;
+  border-top:1px solid #e7dccf;
+  background:#f7f1e8
+}
+
+.subscription-renewal-preview footer span{
+  color:#6c5b4d;
+  font-size:11px
+}
+
+.subscription-renewal-preview footer strong{
+  padding:5px 10px;
+  border-radius:999px;
+  background:#ead7ba;
+  color:#70451f;
+  font-size:14px
+}
+
+.subscription-renewal-note{
+  display:block;
+  padding:9px 18px 13px;
+  background:#faf7f2;
+  color:#958679;
+  font-size:9px;
+  line-height:1.55
+}
+
+.member-commerce-callout{
+  display:grid;
+  gap:7px
+}
+
+.member-commerce-callout .member-danger-soft{
+  display:inline-flex;
+  justify-self:start;
+  align-items:center;
+  justify-content:center;
+  margin-top:9px;
+  padding:9px 14px;
+  border:1px solid #dfb6ae;
+  border-radius:999px;
+  background:#fff0ed;
+  color:#8a3026;
+  font:inherit;
+  font-size:12px;
+  font-weight:750;
+  cursor:pointer
+}
+
+@media(max-width:700px){
+  .subscription-enrollment-card{
+    padding:21px 18px 24px
+  }
+
+  .subscription-enrollment-fields{
+    grid-template-columns:1fr;
+    gap:14px
+  }
+
+  .subscription-enrollment-summary,
+  .subscription-renewal-preview{
+    grid-column:1
+  }
+
+  .subscription-renewal-preview header{
+    padding:15px 16px
+  }
+
+  .subscription-renewal-preview header>b{
+    font-size:21px
+  }
+}
+
+
+/* KD CHECKOUT SUBSCRIPTION COLOR V3 */
+
+/* 整體定期購區域：暖白、低對比 */
+.subscription-enrollment-card{
+  background:#fdfaf6
+}
+
+/* 首筆取貨提示 */
+.subscription-enrollment-card>.delivery-notice{
+  border-color:#e5dbcf;
+  background:#faf6f0
+}
+
+.subscription-enrollment-card>.delivery-notice:before{
+  background:#ad895c
+}
+
+.subscription-enrollment-card>.delivery-notice strong{
+  color:#30251e
+}
+
+.subscription-enrollment-card>.delivery-notice p{
+  color:#706259
+}
+
+/* Checkbox 改為品牌咖啡金 */
+.subscription-enrollment-card input[type="checkbox"]{
+  accent-color:#9b754c
+}
+
+/* Select / Date */
+.subscription-enrollment-fields>label select,
+.subscription-enrollment-fields>label input{
+  border-color:#d9cdbf;
+  background:#fffdf9;
+  color:#31261f
+}
+
+.subscription-enrollment-fields>label select:focus,
+.subscription-enrollment-fields>label input:focus{
+  border-color:#a88661;
+  outline:2px solid rgba(168,134,97,.12);
+  outline-offset:0
+}
+
+/* 定期配送設定摘要 */
+.subscription-enrollment-summary{
+  border-color:#e7ddd1;
+  background:#f7f1e9
+}
+
+.subscription-enrollment-summary strong{
+  color:#8d6d49
+}
+
+.subscription-enrollment-summary span{
+  color:#62554b
+}
+
+/* 下次續訂預估：移除黑色大區塊 */
+.subscription-renewal-preview{
+  border-color:#dfd3c5;
+  background:#fffdf9;
+  box-shadow:0 8px 26px rgba(60,45,31,.05)
+}
+
+.subscription-renewal-preview header{
+  border-bottom:1px solid #e1d5c7;
+  background:#f3ece3;
+  color:#30251e
+}
+
+.subscription-renewal-preview header small{
+  color:#9a8167
+}
+
+.subscription-renewal-preview header strong{
+  color:#382b23
+}
+
+.subscription-renewal-preview header>b{
+  color:#9b6e3d
+}
+
+/* 一般價格列 */
+.subscription-renewal-row{
+  border-bottom-color:#eee5da;
+  background:#fffdf9
+}
+
+.subscription-renewal-row span{
+  color:#74665b
+}
+
+.subscription-renewal-row strong{
+  color:#32271f
+}
+
+/* 優惠列：柔和香檳米 */
+.subscription-renewal-row.saving{
+  background:#faf5ed
+}
+
+.subscription-renewal-row.saving span{
+  color:#69594d
+}
+
+.subscription-renewal-row.saving strong{
+  color:#966b3f
+}
+
+/* 每期省多少：不要橘、不要黑 */
+.subscription-renewal-preview footer{
+  border-top-color:#e5d8ca;
+  background:#f4ede4
+}
+
+.subscription-renewal-preview footer span{
+  color:#64564c
+}
+
+.subscription-renewal-preview footer strong{
+  border:1px solid #dbc5aa;
+  background:#eadcc9;
+  color:#79532d;
+  box-shadow:none
+}
+
+/* 最下方小字 */
+.subscription-renewal-note{
+  border-top-color:#eee5da;
+  background:#fffdf9;
+  color:#948579
+}
+
+/* 會員中心取消按鈕也一起統一色系 */
+.member-commerce-callout .member-danger-soft{
+  border-color:#d6bca9;
+  background:#fffaf5;
+  color:#86563c
+}
+
+.member-commerce-callout .member-danger-soft:hover{
+  border-color:#b99477;
+  background:#f6ece2
+}
+
+@media(max-width:700px){
+  .subscription-renewal-preview header{
+    background:#f3ece3
+  }
+}
+
+
+/* KD CHECKOUT RENEWAL PREVIEW RECOLOR 2026-09-22 */
+
+.subscription-renewal-preview{
+  border:1px solid #d8dfd5;
+  border-radius:18px;
+  background:#fcfcfa;
+  box-shadow:0 10px 28px rgba(61,71,58,.05);
+  overflow:hidden
+}
+
+.subscription-renewal-preview header{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:18px;
+  padding:18px 20px;
+  border-bottom:1px solid #dbe3d8;
+  background:linear-gradient(135deg,#eef4ee 0%,#f6f4ed 100%);
+  color:#2c2a27
+}
+
+.subscription-renewal-preview header div{
+  display:grid;
+  gap:4px
+}
+
+.subscription-renewal-preview header small{
+  font-size:10px;
+  letter-spacing:.18em;
+  color:#6f7d70
+}
+
+.subscription-renewal-preview header strong{
+  font-size:17px;
+  font-weight:800;
+  color:#2e2a26
+}
+
+.subscription-renewal-preview header>b{
+  color:#5d7360;
+  font-family:Georgia,"Noto Serif TC",serif;
+  font-size:22px;
+  line-height:1;
+  white-space:nowrap
+}
+
+.subscription-renewal-row{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:18px;
+  padding:14px 18px;
+  border-bottom:1px solid #ecefe9;
+  background:#fffdfa;
+  font-size:13px
+}
+
+.subscription-renewal-row span{
+  color:#6d675f
+}
+
+.subscription-renewal-row strong{
+  color:#2f2924;
+  font-weight:750;
+  text-align:right
+}
+
+.subscription-renewal-row.saving{
+  background:#f4f8f2
+}
+
+.subscription-renewal-row.saving span{
+  color:#5d685d
+}
+
+.subscription-renewal-row.saving strong{
+  color:#58705b
+}
+
+.subscription-renewal-preview footer{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:18px;
+  padding:14px 18px;
+  border-top:1px solid #dfe7dc;
+  background:#f2f6f1
+}
+
+.subscription-renewal-preview footer span{
+  color:#5f665f;
+  font-size:12px
+}
+
+.subscription-renewal-preview footer strong{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  padding:7px 14px;
+  border:1px solid #cbd8cb;
+  border-radius:999px;
+  background:#dde9dc;
+  color:#4f6552;
+  font-size:14px;
+  font-weight:800;
+  white-space:nowrap
+}
+
+.subscription-renewal-note{
+  display:block;
+  padding:12px 18px 15px;
+  background:#f8faf7;
+  color:#8a9088;
+  font-size:11px;
+  line-height:1.65
+}
+
+@media (max-width: 700px){
+  .subscription-renewal-preview header{
+    padding:16px 16px
+  }
+
+  .subscription-renewal-preview header>b{
+    font-size:20px
+  }
+
+  .subscription-renewal-row,
+  .subscription-renewal-preview footer{
+    padding:13px 15px
+  }
+}
+
+
+/* KD MEMBER SUBSCRIPTION STATUS DETAIL */
+
+.member-subscription-status-wrap{
+  display:flex;
+  flex-direction:column;
+  align-items:flex-end;
+  gap:5px
+}
+
+.member-subscription-status-wrap small{
+  color:#8a7a6e;
+  font-size:11px;
+  line-height:1.4;
+  text-align:right
+}
+
+@media(max-width:700px){
+  .member-subscription-status-wrap{
+    align-items:flex-start
+  }
+
+  .member-subscription-status-wrap small{
+    text-align:left
   }
 }

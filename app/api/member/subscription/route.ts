@@ -6,6 +6,7 @@ import {
   MembershipRevisionConflictError,
   generateSubscriptionCycle,
   getMemberCommerceDashboard,
+  hideTerminatedSubscriptionFromMember,
   lockSubscriptionCycle,
   memberSkipCycle,
   modifyCycleDate,
@@ -54,6 +55,16 @@ export async function PATCH(request: Request) {
     } else if (action === "skip") {
       const cycle = await memberSkipCycle({ memberId: member.id, cycleId: String(body.cycleId), expectedRevision: Number(body.expectedRevision), idempotencyKey });
       actionResult.subscriptionId = cycle.subscriptionId;
+    } else if (action === "hide-terminated") {
+      const subscription =
+        await hideTerminatedSubscriptionFromMember({
+          memberId: member.id,
+          subscriptionId: String(body.subscriptionId),
+          expectedRevision: Number(body.expectedRevision),
+          idempotencyKey,
+        });
+
+      actionResult.subscriptionId = subscription.subscriptionId;
     } else if (["pause", "resume", "terminate"].includes(action)) {
       const beforeDashboard = action === "resume"
         ? await getMemberCommerceDashboard(member.id)

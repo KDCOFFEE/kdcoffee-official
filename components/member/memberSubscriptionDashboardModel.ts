@@ -34,10 +34,10 @@ export type DashboardCycleLike = {
 };
 
 export const subscriptionStatusLabel = (status: DashboardSubscriptionStatus) => ({
-  pending_activation: "等待首筆訂單取貨",
-  active: "配送中",
-  paused: "已暫停",
-  terminated: "已停止",
+  pending_activation: "等待首次取貨",
+  active: "定期配送啟用中",
+  paused: "定期配送已暫停",
+  terminated: "定期配送已停止",
 })[status];
 
 function newest<T extends { createdAt?: string }>(items: T[]) {

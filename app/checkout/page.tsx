@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { cartItemKey, useCart } from "@/components/commerce/CartProvider";
+import { cartItemKey, cartSkuKey, useCart } from "@/components/commerce/CartProvider";
 import StoreSelector from "@/components/commerce/StoreSelector";
 import {
   addDateOnlyDays,
@@ -26,7 +26,14 @@ function getOrCreateIdempotencyKey() {
 }
 
 export default function CheckoutPage() {
-  const { items, subtotal, clearCart, ready } = useCart();
+  const {
+    items,
+    subtotal,
+    clearCart,
+    ready,
+    updateQuantity,
+    removeItem,
+  } = useCart();
   const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -40,7 +47,7 @@ export default function CheckoutPage() {
   const [subscriptionInterval, setSubscriptionInterval] = useState(30);
   const [subscriptionIntervalMode, setSubscriptionIntervalMode] = useState<"preset" | "custom">("preset");
   const [subscriptionStartDate, setSubscriptionStartDate] = useState("");
-  const [operationalRules, setOperationalRules] = useState<{ pickup: { earliestStandardDate: string; earliestCustomRoastDate: string; blockedDates: string[] }; subscription: { intervalsDays: number[]; customCycleEnabled: boolean; customCycleMinDays: number; customCycleMaxDays: number; earliestDate: string }; credit: { uiMode: "amount-and-maximum" | "use-or-not" | "automatic-maximum" | "custom-amount"; showAmountInput: boolean; showMaximumButton: boolean; automaticallyUseMaximum: boolean; allowZeroTotal: boolean; appliesToShipping: boolean } } | null>(null);
+  const [operationalRules, setOperationalRules] = useState<{ pickup: { earliestStandardDate: string; earliestCustomRoastDate: string; blockedDates: string[] }; shipping: { subscriptionFreeShipping: boolean; subscriptionShippingFee: number }; money: { roundingMode: string }; subscription: { discountPercent: number; intervalsDays: number[]; customCycleEnabled: boolean; customCycleMinDays: number; customCycleMaxDays: number; earliestDate: string }; credit: { uiMode: "amount-and-maximum" | "use-or-not" | "automatic-maximum" | "custom-amount"; showAmountInput: boolean; showMaximumButton: boolean; automaticallyUseMaximum: boolean; allowZeroTotal: boolean; appliesToShipping: boolean } } | null>(null);
   const [creditQuote, setCreditQuote] = useState<{ availableBalance: number; maximumUsable: number; minimumPayable: number } | null>(null);
   const [requestedCredit, setRequestedCredit] = useState(0);
   const [useCredit, setUseCredit] = useState(false);
@@ -48,6 +55,79 @@ export default function CheckoutPage() {
   const today = getDateOnlyInTimeZone(new Date());
   const hasCustomRoast = items.some(item => item.customRoast);
   const earliestPickupDate = operationalRules ? (hasCustomRoast ? operationalRules.pickup.earliestCustomRoastDate : operationalRules.pickup.earliestStandardDate) : addDateOnlyDays(today, hasCustomRoast ? 3 : 0);
+
+  const subscriptionDiscountPercent =
+    operationalRules?.subscription.discountPercent ?? null;
+
+  const subscriptionDiscountLabel =
+    subscriptionDiscountPercent == null
+      ? "目前定期購優惠"
+      : subscriptionDiscountPercent >= 100
+        ? "目前定期購價格"
+        : subscriptionDiscountPercent % 10 === 0
+          ? `${subscriptionDiscountPercent / 10} 折`
+          : `${subscriptionDiscountPercent} 折`;
+
+  function applyConfiguredPercentage(
+    amount: number,
+    percent: number,
+  ) {
+    const numerator = amount * percent;
+
+    if (numerator % 100 === 0) {
+      return numerator / 100;
+    }
+
+    const roundingMode =
+      operationalRules?.money.roundingMode;
+
+    if (roundingMode === "round-down") {
+      return Math.floor(numerator / 100);
+    }
+
+    if (roundingMode === "round-up") {
+      return Math.ceil(numerator / 100);
+    }
+
+    return Math.floor((numerator + 50) / 100);
+  }
+
+  const subscriptionRenewalProductTotal =
+    subscriptionDiscountPercent == null
+      ? subtotal
+      : applyConfiguredPercentage(
+          subtotal,
+          subscriptionDiscountPercent,
+        );
+
+  const subscriptionProductSavings =
+    Math.max(
+      0,
+      subtotal - subscriptionRenewalProductTotal,
+    );
+
+  const subscriptionRenewalShipping =
+    mode === "711_cod"
+      ? operationalRules?.shipping
+          .subscriptionFreeShipping
+        ? 0
+        : operationalRules?.shipping
+            .subscriptionShippingFee ?? 0
+      : 0;
+
+  const subscriptionShippingSavings =
+    mode === "711_cod" &&
+    operationalRules?.shipping.subscriptionFreeShipping
+      ? operationalRules.shipping.subscriptionShippingFee
+      : 0;
+
+  const subscriptionRenewalTotal =
+    subscriptionRenewalProductTotal +
+    subscriptionRenewalShipping;
+
+  const subscriptionTotalSavings =
+    subscriptionProductSavings +
+    subscriptionShippingSavings;
 
   useEffect(()=>{
     fetch("/api/member/me",{cache:"no-store"}).then(r=>r.json()).then(({member})=>{
@@ -79,6 +159,24 @@ export default function CheckoutPage() {
       if (operationalRules?.credit.automaticallyUseMaximum) setUseCredit(quote.maximumUsable > 0);
     }).catch(() => undefined);
   }, [member, operationalRules?.credit.automaticallyUseMaximum, shipping, subtotal]);
+
+  function requestCheckoutItemRemoval(key: string) {
+    if (items.length === 1) {
+      const confirmed = window.confirm(
+        "這是訂單最後一項商品。\n\n移除後購物車會變成空的，並返回作品區重新選購。\n\n確定要移除嗎？",
+      );
+
+      if (!confirmed) {
+        return;
+      }
+
+      removeItem(key);
+      router.push("/works");
+      return;
+    }
+
+    removeItem(key);
+  }
 
   async function submitOrder(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setError(""); setWarning("");
@@ -173,7 +271,35 @@ export default function CheckoutPage() {
           {member && creditQuote && creditQuote.availableBalance > 0 && <section className="form-card"><div className="form-card-head"><span>04</span><h2>會員抵用金</h2></div><div className="delivery-notice"><strong>目前可用 NT$ {creditQuote.availableBalance.toLocaleString("zh-TW")}</strong><p>本次最多可折 NT$ {creditQuote.maximumUsable.toLocaleString("zh-TW")}；系統會優先使用較早到期的額度。</p></div>{operationalRules?.credit.uiMode === "use-or-not" ? <label className="terms-check"><input type="checkbox" checked={useCredit} onChange={(event) => { setUseCredit(event.target.checked); setRequestedCredit(event.target.checked ? creditQuote.maximumUsable : 0); }} />使用本次可折抵的最高金額</label> : operationalRules?.credit.uiMode === "automatic-maximum" ? <p className="member-notice">已自動套用最大折抵 NT$ {creditQuote.maximumUsable.toLocaleString("zh-TW")}</p> : <div className="subscription-enrollment-fields"><label>本次折抵金額<input type="number" min={0} max={creditQuote.maximumUsable} value={requestedCredit} onChange={(event) => setRequestedCredit(Math.min(creditQuote.maximumUsable, Math.max(0, Number(event.target.value) || 0)))} /></label>{operationalRules?.credit.showMaximumButton && <button type="button" onClick={() => setRequestedCredit(creditQuote.maximumUsable)}>最大折抵</button>}</div>}<div className="subscription-enrollment-summary"><span>折抵後預計應付 NT$ {Math.max(0, subtotal + shipping - requestedCredit).toLocaleString("zh-TW")}</span></div></section>}
           <section className="form-card"><div className="form-card-head"><span>04</span><h2>備註</h2></div><label>其他說明 <small>選填</small><textarea name="note" maxLength={300} rows={4} placeholder="有需要我們特別注意的事項，請寫在這裡" /></label></section>
           {member && joinSubscription && operationalRules?.subscription.customCycleEnabled && <button type="button" className="text-link" onClick={() => { setSubscriptionIntervalMode("custom"); setSubscriptionInterval(operationalRules.subscription.customCycleMinDays); }}>改用自訂配送週期</button>}
-          {member && <section className="form-card subscription-enrollment-card"><div className="form-card-head"><span>05</span><h2>從這次開始定期配送</h2></div><label className="terms-check"><input type="checkbox" checked={joinSubscription} onChange={(event) => setJoinSubscription(event.target.checked)} />我想在這筆訂單成功取貨後，開始定期配送</label>{joinSubscription && <div className="subscription-enrollment-fields"><div className="delivery-notice"><strong>這筆仍以一般原價購買</strong><p>成功取貨後才啟動；第一次續訂起享定期價格。開啟或返回此頁都不會自動建立訂單。</p></div><label>配送週期<select
+          {member && <section className="form-card subscription-enrollment-card">
+            <div className="form-card-head">
+              <span>05</span>
+              <h2>從這次開始定期配送</h2>
+            </div>
+
+            <div className="delivery-notice">
+              <strong>
+                首筆取貨成功後才開始定期配送
+              </strong>
+              <p>
+                第一次續訂起享
+                <b> {subscriptionDiscountLabel}</b>
+                ；之後可在會員中心調整或隨時停止後續定期配送。
+              </p>
+            </div>
+
+            <label className="terms-check">
+              <input
+                type="checkbox"
+                checked={joinSubscription}
+                onChange={(event) =>
+                  setJoinSubscription(event.target.checked)
+                }
+              />
+              我想在這筆訂單成功取貨後，開始定期配送
+            </label>
+
+            {joinSubscription && <div className="subscription-enrollment-fields"><label>配送週期<select
   value={subscriptionIntervalMode === "custom" ? "custom" : subscriptionInterval}
   onChange={(event) => {
     if (event.target.value === "custom") {
@@ -186,11 +312,187 @@ export default function CheckoutPage() {
     setSubscriptionIntervalMode("preset");
     setSubscriptionInterval(Number(event.target.value));
   }}
->{(operationalRules?.subscription.intervalsDays ?? [30,45,60,75,90]).map((days) => <option value={days} key={days}>每 {days} 天</option>)}{operationalRules?.subscription.customCycleEnabled && <option value="custom">自訂天數</option>}</select></label>{operationalRules?.subscription.customCycleEnabled && subscriptionIntervalMode === "custom" && <label>自訂配送週期<input type="number" min={operationalRules.subscription.customCycleMinDays} max={operationalRules.subscription.customCycleMaxDays} value={subscriptionInterval} onChange={(event) => setSubscriptionInterval(Number(event.target.value))} /><small>可設定 {operationalRules.subscription.customCycleMinDays}～{operationalRules.subscription.customCycleMaxDays} 天；伺服器會再次驗證。</small></label>}<label>希望第一次續訂日期<input type="date" value={subscriptionStartDate} min={operationalRules?.subscription.earliestDate ?? addDateOnlyDays(today, 3)} onChange={(event) => setSubscriptionStartDate(event.target.value)} required={joinSubscription} /></label><div className="subscription-enrollment-summary"><strong>加入內容確認</strong><span>{items.length} 組作品・每 {subscriptionInterval} 天</span><span>首筆原價 {`NT$ ${subtotal.toLocaleString("zh-TW")}`}；取貨成功後才生效</span></div></div>}</section>}
+>{(operationalRules?.subscription.intervalsDays ?? [30,45,60,75,90]).map((days) => <option value={days} key={days}>每 {days} 天</option>)}{operationalRules?.subscription.customCycleEnabled && <option value="custom">自訂天數</option>}</select></label>{operationalRules?.subscription.customCycleEnabled && subscriptionIntervalMode === "custom" && <label>自訂配送週期<input type="number" min={operationalRules.subscription.customCycleMinDays} max={operationalRules.subscription.customCycleMaxDays} value={subscriptionInterval} onChange={(event) => setSubscriptionInterval(Number(event.target.value))} /><small>可設定 {operationalRules.subscription.customCycleMinDays}～{operationalRules.subscription.customCycleMaxDays} 天；伺服器會再次驗證。</small></label>}<label>希望第一次續訂日期<input type="date" value={subscriptionStartDate} min={operationalRules?.subscription.earliestDate ?? addDateOnlyDays(today, 3)} onChange={(event) => setSubscriptionStartDate(event.target.value)} required={joinSubscription} /></label><div className="subscription-enrollment-summary">
+  <strong>定期配送設定</strong>
+
+  <span>
+    每 {subscriptionInterval} 天配送一次
+  </span>
+
+  <span>
+    本次訂單仍以一般價格結帳；
+    成功取貨後才開始定期配送
+  </span>
+</div>
+
+<div className="subscription-renewal-preview">
+  <header>
+    <div>
+      <small>NEXT RENEWAL</small>
+      <strong>下次續訂預估</strong>
+    </div>
+
+    <b>
+      NT$ {subscriptionRenewalTotal.toLocaleString("zh-TW")}
+    </b>
+  </header>
+
+  <div className="subscription-renewal-row">
+    <span>同樣商品原價</span>
+    <strong>
+      NT$ {subtotal.toLocaleString("zh-TW")}
+    </strong>
+  </div>
+
+  <div className="subscription-renewal-row saving">
+    <span>定期購 {subscriptionDiscountLabel}</span>
+    <strong>
+      − NT$ {subscriptionProductSavings.toLocaleString("zh-TW")}
+    </strong>
+  </div>
+
+  {mode === "711_cod" &&
+    operationalRules?.shipping.subscriptionFreeShipping && (
+      <div className="subscription-renewal-row saving">
+        <span>定期配送運費</span>
+        <strong>
+          免運・再省 NT$ {subscriptionShippingSavings.toLocaleString("zh-TW")}
+        </strong>
+      </div>
+    )}
+
+  {mode === "711_cod" &&
+    operationalRules &&
+    !operationalRules.shipping.subscriptionFreeShipping && (
+      <div className="subscription-renewal-row">
+        <span>定期配送運費</span>
+        <strong>
+          NT$ {subscriptionRenewalShipping.toLocaleString("zh-TW")}
+        </strong>
+      </div>
+    )}
+
+  <footer>
+    <span>依目前設定，每期預估優惠</span>
+    <strong>
+      省 NT$ {subscriptionTotalSavings.toLocaleString("zh-TW")}
+    </strong>
+  </footer>
+
+  <small className="subscription-renewal-note">
+    依目前商品內容與後台定期購設定試算；
+    實際金額以續訂訂單建立時的商品、活動與營運規則為準。
+  </small>
+</div></div>}</section>}
           <label className="terms-check"><input type="checkbox" required />我已確認聯絡資料正確，並同意 KD Coffee 為處理本次訂購而聯絡我。</label>
           {error && <p className="form-error">{error}</p>}{warning && <p className="form-error">{warning}</p>}
         </div>
-        <aside className="checkout-summary"><h2>訂單摘要</h2>{items.map(item=><div className="summary-item" key={cartItemKey(item)}><span>{item.name}<small>{item.optionLabel}{item.preparationLabel ? ` · ${item.preparationLabel}` : ""} × {item.quantity}</small>{item.customRoast ? <div className="summary-custom-roast"><strong>專屬烘焙｜{item.roastLevel || "待確認"}</strong>{item.roastNote ? <em>{item.roastNote}</em> : null}</div> : null}</span><b>NT$ {(item.unitPrice*item.quantity).toLocaleString("zh-TW")}</b></div>)}<div className="summary-line"><span>商品小計</span><b>NT$ {subtotal.toLocaleString("zh-TW")}</b></div><div className="summary-line"><span>{mode === "studio_pickup" ? "工作室自取" : "7-ELEVEN 運費"}</span><b>{shipping ? `NT$ ${shipping}` : "免運"}</b></div>{requestedCredit > 0 && <div className="summary-line"><span>會員抵用金</span><b>- NT$ {requestedCredit.toLocaleString("zh-TW")}</b></div>}<div className="summary-total"><span>{mode === "studio_pickup" ? "訂單總額" : "取貨付款總額"}</span><strong>NT$ {Math.max(0, subtotal + shipping - requestedCredit).toLocaleString("zh-TW")}</strong></div><button type="submit" disabled={submitting||!ready||!items.length}>{submitting?"資料傳送中…":"確認並傳送訂單"}</button><p>系統會先保存訂單，再傳送至 KD Coffee 的 LINE 訂單群組。</p></aside>
+        <aside className="checkout-summary">
+          <h2>訂單摘要</h2>
+
+          {items.map((item) => {
+            const key = cartItemKey(item);
+
+            const stockLimit =
+              typeof item.stock === "number" &&
+              Number.isInteger(item.stock) &&
+              item.stock >= 0
+                ? item.stock
+                : undefined;
+
+            const skuQuantity = items.reduce(
+              (sum, entry) =>
+                sum +
+                (cartSkuKey(entry) === cartSkuKey(item)
+                  ? entry.quantity
+                  : 0),
+              0,
+            );
+
+            const atStockLimit =
+              stockLimit !== undefined &&
+              skuQuantity >= stockLimit;
+
+            return (
+              <div className="summary-item" key={key}>
+                <span>
+                  {item.name}
+
+                  <small>
+                    {item.optionLabel}
+                    {item.preparationLabel
+                      ? ` · ${item.preparationLabel}`
+                      : ""}
+                  </small>
+
+                  {item.customRoast ? (
+                    <div className="summary-custom-roast">
+                      <strong>
+                        專屬烘焙｜
+                        {item.roastLevel || "待確認"}
+                      </strong>
+                      {item.roastNote ? (
+                        <em>{item.roastNote}</em>
+                      ) : null}
+                    </div>
+                  ) : null}
+
+                  <div className="quantity-control">
+                    <button
+                      type="button"
+                      aria-label={`減少 ${item.name} 數量`}
+                      onClick={() =>
+                        item.quantity <= 1
+                          ? requestCheckoutItemRemoval(key)
+                          : updateQuantity(
+                              key,
+                              item.quantity - 1,
+                            )
+                      }
+                    >
+                      −
+                    </button>
+
+                    <span>{item.quantity}</span>
+
+                    <button
+                      type="button"
+                      aria-label={`增加 ${item.name} 數量`}
+                      disabled={atStockLimit}
+                      title={
+                        atStockLimit
+                          ? "已達現貨庫存上限"
+                          : undefined
+                      }
+                      onClick={() =>
+                        updateQuantity(
+                          key,
+                          item.quantity + 1,
+                        )
+                      }
+                    >
+                      ＋
+                    </button>
+                  </div>
+
+                  <button
+                    type="button"
+                    className="cart-remove-button"
+                    onClick={() =>
+                      requestCheckoutItemRemoval(key)
+                    }
+                  >
+                    刪除此商品
+                  </button>
+                </span>
+
+                <b>
+                  NT$ {(item.unitPrice * item.quantity)
+                    .toLocaleString("zh-TW")}
+                </b>
+              </div>
+            );
+          })}<div className="summary-line"><span>商品小計</span><b>NT$ {subtotal.toLocaleString("zh-TW")}</b></div><div className="summary-line"><span>{mode === "studio_pickup" ? "工作室自取" : "7-ELEVEN 運費"}</span><b>{shipping ? `NT$ ${shipping}` : "免運"}</b></div>{requestedCredit > 0 && <div className="summary-line"><span>會員抵用金</span><b>- NT$ {requestedCredit.toLocaleString("zh-TW")}</b></div>}<div className="summary-total"><span>{mode === "studio_pickup" ? "訂單總額" : "取貨付款總額"}</span><strong>NT$ {Math.max(0, subtotal + shipping - requestedCredit).toLocaleString("zh-TW")}</strong></div><button type="submit" disabled={submitting||!ready||!items.length}>{submitting?"資料傳送中…":"確認並傳送訂單"}</button><p>系統會先保存訂單，再傳送至 KD Coffee 的 LINE 訂單群組。</p></aside>
       </form>
     </section>
   </main>;

@@ -69,6 +69,7 @@ export type Subscription = {
   createdAt: string;
   updatedAt: string;
   revision: number;
+  memberHiddenAt?: string | null;
 };
 
 export type PricingSnapshot = {
@@ -1293,7 +1294,13 @@ export async function setSubscriptionStatus(input: { subscriptionId: string; sta
     assertMemberOwns(subscription, input.memberId);
     assertRevision(subscription, input.expectedRevision);
     const before = subscription.status;
-    const allowed = (before === "active" && ["paused", "terminated"].includes(input.status)) || (before === "paused" && ["active", "terminated"].includes(input.status));
+    const allowed =
+      (before === "pending_activation" &&
+        input.status === "terminated") ||
+      (before === "active" &&
+        ["paused", "terminated"].includes(input.status)) ||
+      (before === "paused" &&
+        ["active", "terminated"].includes(input.status));
     if (!allowed) throw new MembershipCommerceError("定期購狀態無法進行這項變更");
     if (before === "paused" && input.status === "active") {
       if (version.rules.subscription.pauseResumeAnchorPolicy === OWNER_DECISION_REQUIRED) throw new MembershipCommerceError("恢復配送後的基準日期尚待 Owner 決定");
@@ -1315,6 +1322,92 @@ export async function setSubscriptionStatus(input: { subscriptionId: string; sta
     audit(state, { actor: "member", action: `subscription-${input.status}`, entityType: "subscription", entityId: subscription.subscriptionId, before: { status: before }, after: { status: input.status }, reason: input.reason, sourceEvent: source.eventId }, now);
     return subscription;
   }, { now: input.now, filePath: input.stateFilePath });
+}
+
+export async function hideTerminatedSubscriptionFromMember(input: {
+  subscriptionId: string;
+  memberId: string;
+  expectedRevision?: number;
+  idempotencyKey: string;
+  now?: Date;
+  stateFilePath?: string;
+}) {
+  const key = `subscription:member-hide:${input.idempotencyKey}`;
+
+  return transaction((state, now) => {
+    const subscription = state.subscriptions[input.subscriptionId];
+
+    if (!subscription) {
+      throw new MembershipCommerceError("找不到定期配送");
+    }
+
+    const rememberedId = remembered(state, key);
+
+    if (rememberedId) {
+      return subscription;
+    }
+
+    assertMemberOwns(subscription, input.memberId);
+    assertRevision(subscription, input.expectedRevision);
+
+    if (subscription.status !== "terminated") {
+      throw new MembershipCommerceError(
+        "只有已停止的定期配送才能從會員中心刪除",
+      );
+    }
+
+    if (subscription.memberHiddenAt) {
+      remember(state, key, subscription.subscriptionId, now);
+      return subscription;
+    }
+
+    const hiddenAt = nowIso(now);
+
+    subscription.memberHiddenAt = hiddenAt;
+    touch(subscription, now);
+
+    remember(state, key, subscription.subscriptionId, now);
+
+    const source = event(
+      state,
+      "subscription_hidden_from_member",
+      {
+        hiddenAt,
+        reason: "會員刪除已停止的定期配送顯示",
+      },
+      now,
+      {
+        memberId: subscription.memberId,
+        subscriptionId: subscription.subscriptionId,
+      },
+    );
+
+    audit(
+      state,
+      {
+        actor: "member",
+        action: "subscription-hidden-from-member",
+        entityType: "subscription",
+        entityId: subscription.subscriptionId,
+        before: {
+          status: subscription.status,
+          memberHiddenAt: subscription.memberHiddenAt ?? "",
+        },
+        after: {
+          status: subscription.status,
+          memberHiddenAt: hiddenAt,
+        },
+        reason: "會員刪除已停止的定期配送顯示",
+        sourceEvent: source.eventId,
+      },
+      now,
+    );
+
+    return subscription;
+  }, {
+    now: input.now,
+    filePath: input.stateFilePath,
+  });
 }
 
 export async function markUncollected(input: { subscriptionId: string; cycleId?: string; orderId: string; idempotencyKey: string; now?: Date; stateFilePath?: string; rulesFilePath?: string }) {
@@ -3204,7 +3297,11 @@ export function safeReferralMemberView(state: MembershipCommerceState, referrerM
 
 export async function getMemberCommerceDashboard(memberId: string, now = new Date(), filePath = getMembershipCommerceStateFile()) {
   const state = await readMembershipCommerceState(filePath);
-  const subscriptions = Object.values(state.subscriptions).filter((item) => item.memberId === memberId);
+  const subscriptions = Object.values(state.subscriptions).filter(
+    (item) =>
+      item.memberId === memberId &&
+      !item.memberHiddenAt,
+  );
   const subscriptionIds = new Set(subscriptions.map((item) => item.subscriptionId));
   const cycles = Object.values(state.cycles).filter((item) => subscriptionIds.has(item.subscriptionId)).sort((a, b) => a.plannedDate.localeCompare(b.plannedDate));
   const credits: MemberCreditHistoryEntry[] = Object.values(state.creditEntries).filter((item) => item.memberId === memberId).map((item) => {

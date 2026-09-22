@@ -18,7 +18,17 @@ export async function GET() {
       blockedDates: rules.pickup.blockedDates,
       datePickerMode: rules.pickup.datePickerMode,
     },
+    shipping: {
+      subscriptionFreeShipping:
+        rules.shipping.subscriptionFreeShipping,
+      subscriptionShippingFee:
+        rules.shipping.subscriptionShippingFee,
+    },
+    money: {
+      roundingMode: rules.money.roundingMode,
+    },
     subscription: {
+      discountPercent: rules.subscription.discountPercent,
       intervalsDays: rules.subscription.intervalOptions.filter((item) => item.enabled).map((item) => item.days),
       customCycleEnabled: rules.subscription.customCycleEnabled,
       customCycleMinDays: rules.subscription.customCycleMinDays,
