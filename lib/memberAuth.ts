@@ -422,6 +422,73 @@ export async function resetEmailMemberPassword(token: string, password: string) 
   });
 }
 
+export async function resetEmailMemberPasswordByAdmin(
+  memberIdInput: string,
+  password: string,
+) {
+  const rawMemberId = memberIdInput.trim();
+  if (!/^[A-Za-z0-9_-]{3,160}$/.test(rawMemberId) || password.length < 8) {
+    return { status: "invalid-input" as const };
+  }
+
+  const registry = await getIdentityRegistrySnapshot();
+  const canonicalId = registry.legacyAliases[rawMemberId] || rawMemberId;
+  const candidateIds = [
+    canonicalId,
+    ...Object.entries(registry.legacyAliases)
+      .filter(([, targetId]) => targetId === canonicalId)
+      .map(([legacyId]) => legacyId),
+  ];
+
+  let physicalId = "";
+  for (const candidateId of [...new Set(candidateIds)]) {
+    if (await readMember(candidateId)) {
+      physicalId = candidateId;
+      break;
+    }
+  }
+
+  if (!physicalId) return { status: "not-found" as const };
+
+  const filePath = memberFilePath(physicalId);
+  return withFileLock(filePath, async () => {
+    const current = await readMember(physicalId);
+    if (!current) return { status: "not-found" as const };
+
+    const hasEmailPassword = Boolean(
+      current.passwordHash &&
+      current.passwordSalt &&
+      (current.loginEmail || current.email),
+    );
+    if (!hasEmailPassword) {
+      return { status: "email-login-unavailable" as const };
+    }
+
+    const passwordSalt = randomBytes(16).toString("base64url");
+    const passwordHash = (await derivePassword(password, passwordSalt)).toString(
+      "base64url",
+    );
+    const updatedAt = new Date().toISOString();
+    const updated: Member = {
+      ...current,
+      passwordSalt,
+      passwordHash,
+      updatedAt,
+    };
+
+    delete updated.passwordResetTokenHash;
+    delete updated.passwordResetExpiresAt;
+    delete updated.passwordResetRequestedAt;
+
+    await atomicWriteJson(filePath, updated);
+    return {
+      status: "updated" as const,
+      memberId: canonicalId,
+      updatedAt,
+    };
+  });
+}
+
 export async function registerEmailMember(emailInput: string, password: string) {
   const email = normalizeEmail(emailInput);
   const existing = (await readAllMembers()).some(
