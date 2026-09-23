@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { getActiveMembershipRules } from "@/lib/membershipBusinessRules";
+import { publicAtmTransferSettings } from "@/lib/homeDeliveryPayment";
 import { getDateOnlyInTimeZone } from "@/lib/checkoutRules";
 import { addTaipeiCalendarDays, resolveCreditMemberPolicy } from "@/lib/membershipPolicies";
 
@@ -31,6 +32,9 @@ export async function GET() {
         rules.shipping.homeDeliveryCodFee,
       subscriptionShippingDiscount:
         rules.shipping.subscriptionShippingDiscount,
+    },
+    payment: {
+      atmTransfer: publicAtmTransferSettings(rules),
     },
     openingYearFreeShipping: rules.membership.openingYearFreeShipping,
     money: {

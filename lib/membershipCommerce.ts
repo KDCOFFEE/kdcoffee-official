@@ -807,8 +807,7 @@ function subscriptionDeliveryPreference(input: { shippingMethod: string; storeSe
     return { storeSelection: input.storeSelection ? structuredClone(input.storeSelection) : null, deliveryAddress: null, paymentMethod: null };
   }
   if (input.shippingMethod === "home_delivery") {
-    if (input.paymentMethod !== "atm_transfer" && input.paymentMethod !== "cash_on_delivery") throw new MembershipCommerceError("請選擇宅配付款方式");
-    return { storeSelection: null, deliveryAddress: validateDeliveryAddress(input.deliveryAddress), paymentMethod: input.paymentMethod };
+    return { storeSelection: null, deliveryAddress: validateDeliveryAddress(input.deliveryAddress), paymentMethod: "cash_on_delivery" as const };
   }
   throw new MembershipCommerceError("不支援的取貨方式");
 }

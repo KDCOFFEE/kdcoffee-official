@@ -156,9 +156,11 @@ export async function PATCH(request: Request) {
         try { deliveryAddress = validateDeliveryAddress(body.deliveryAddress); }
         catch (error) { throw new MembershipCommerceError(error instanceof Error ? error.message : "宅配地址不正確"); }
       }
-      const paymentMethod = shippingMethod === "home_delivery" ? String(body.paymentMethod || "") : null;
-      if (shippingMethod === "home_delivery" && paymentMethod !== "atm_transfer" && paymentMethod !== "cash_on_delivery") throw new MembershipCommerceError("請選擇可用的宅配付款方式");
-      await updateSubscriptionPreferences({ memberId: member.id, subscriptionId: String(body.subscriptionId), expectedRevision: Number(body.expectedRevision), shippingMethod, storeSelection, deliveryAddress, paymentMethod: paymentMethod as "atm_transfer" | "cash_on_delivery" | null, idempotencyKey });
+      if (shippingMethod === "home_delivery" && body.paymentMethod != null && String(body.paymentMethod) !== "cash_on_delivery") {
+        throw new MembershipCommerceError("宅配定期配送僅支援貨到付款");
+      }
+      const paymentMethod = shippingMethod === "home_delivery" ? "cash_on_delivery" : null;
+      await updateSubscriptionPreferences({ memberId: member.id, subscriptionId: String(body.subscriptionId), expectedRevision: Number(body.expectedRevision), shippingMethod, storeSelection, deliveryAddress, paymentMethod, idempotencyKey });
     } else if (action === "change-items") {
       const dashboard = await getMemberCommerceDashboard(member.id);
       const cycle = dashboard.cycles.find((item) => item.cycleId === String(body.cycleId));

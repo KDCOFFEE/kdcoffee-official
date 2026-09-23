@@ -259,18 +259,21 @@ export async function POST(
 
   const isMonthlyMenu =
     assetGroup === "monthly-menu";
+  const isAtmBankbook =
+    assetGroup === "atm-bankbook";
 
-  if (isMonthlyMenu) {
+  if (isMonthlyMenu || isAtmBankbook) {
     const allowedTypes = ["image/webp", "image/jpeg", "image/png"];
     if (!allowedTypes.includes(file.type)) {
       return NextResponse.json(
-        { error: "豆單背景只接受 WebP、JPG、JPEG 或 PNG 圖片" },
+        { error: isAtmBankbook ? "ATM 存簿圖片只接受 WebP、JPG、JPEG 或 PNG 圖片" : "豆單背景只接受 WebP、JPG、JPEG 或 PNG 圖片" },
         { status: 400 },
       );
     }
-    if (file.size > 20 * 1024 * 1024) {
+    const imageLimit = isAtmBankbook ? 8 * 1024 * 1024 : 20 * 1024 * 1024;
+    if (file.size > imageLimit) {
       return NextResponse.json(
-        { error: "豆單背景圖片不可超過 20MB" },
+        { error: isAtmBankbook ? "ATM 存簿圖片不可超過 8MB" : "豆單背景圖片不可超過 20MB" },
         { status: 400 },
       );
     }
@@ -331,9 +334,11 @@ export async function POST(
       ? getHome003UploadDir()
       : isCampaign
         ? getCampaignUploadDir()
-        : getArtworkUploadDir(
-            artworkSlug,
-          );
+        : isAtmBankbook
+          ? getArtworkUploadDir("payment")
+          : getArtworkUploadDir(
+              artworkSlug,
+            );
 
   await fs.mkdir(
     uploadDir,
@@ -417,7 +422,9 @@ export async function POST(
      */
     const maxWidth = isMonthlyMenu
       ? 3000
-      : isHome003 || isCampaign
+      : isAtmBankbook
+        ? 1600
+        : isHome003 || isCampaign
         ? 1600
         : 1800;
 
@@ -477,7 +484,9 @@ export async function POST(
       ? `/images/home003/${fileName}`
       : isCampaign
         ? `/images/campaigns/${fileName}`
-        : `/uploads/artworks/${artworkSlug}/${fileName}`;
+        : isAtmBankbook
+          ? `/uploads/artworks/payment/${fileName}`
+          : `/uploads/artworks/${artworkSlug}/${fileName}`;
 
   /**
    * 回傳原本既有欄位，

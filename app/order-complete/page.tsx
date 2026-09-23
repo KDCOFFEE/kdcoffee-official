@@ -49,7 +49,7 @@ export default async function OrderCompletePage({ searchParams }: { searchParams
             </li>
             <li>
               <b>{homeDelivery ? payment === "atm_transfer" ? "確認轉帳" : "安排宅配" : studioPickup ? "確認自取時間" : "建立 7-ELEVEN 取貨付款寄件單"}</b>
-              <span>{homeDelivery ? payment === "atm_transfer" ? "請依網站／客服提供的轉帳資訊完成付款；確認入帳後安排出貨。" : "工作室將安排宅配，貨到時付款。" : studioPickup ? "請留意電話或 LINE 聯絡。" : "商品到店後，再依通知前往付款取貨。"}</span>
+              <span>{homeDelivery ? payment === "atm_transfer" ? "請依訂單中的 ATM 資訊完成付款，再進入訂單詳情回報匯款帳號末五碼與匯款時間；工作室確認入帳後安排出貨。" : "工作室將安排宅配，貨到時付款。" : studioPickup ? "請留意電話或 LINE 聯絡。" : "商品到店後，再依通知前往付款取貨。"}</span>
             </li>
             <li>
               <b>新鮮烘焙與出貨</b>
@@ -67,7 +67,7 @@ export default async function OrderCompletePage({ searchParams }: { searchParams
 
         <div className="order-success-notice">
           <strong>{homeDelivery ? payment === "atm_transfer" ? "ATM 轉帳待確認" : "宅配貨到付款" : studioPickup ? "工作室會主動聯絡你確認。" : "本訂單不需要信用卡付款，也不會另外傳送付款連結。"}</strong>
-          <p>{homeDelivery ? "請至訂單詳情查看地址、付款狀態與金額；如需協助請聯絡工作室。" : studioPickup ? "請留意電話或 LINE 聯絡。" : "請留意 7-ELEVEN 到店通知，並在期限內取貨付款。"}</p>
+          <p>{homeDelivery ? "請至訂單詳情查看地址、付款狀態與金額；ATM 轉帳完成後，也請在訂單詳情回報末五碼與匯款時間，方便工作室核對入帳。" : studioPickup ? "請留意電話或 LINE 聯絡。" : "請留意 7-ELEVEN 到店通知，並在期限內取貨付款。"}</p>
         </div>
 
         <div className="order-success-actions">

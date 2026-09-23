@@ -41,7 +41,7 @@ import {
   subscriptionHasDedicatedRoast,
 } from "@/lib/subscriptionRoastPolicy";
 import { validateDeliveryAddress, type DeliveryAddress } from "@/lib/deliveryAddress";
-import type { ActiveHomeDeliveryPaymentMethod, HomeDeliveryPaymentMethod } from "@/lib/homeDeliveryPayment";
+import type { HomeDeliveryPaymentMethod } from "@/lib/homeDeliveryPayment";
 
 type Subscription = {
   subscriptionId: string;
@@ -186,7 +186,6 @@ export default function MemberSubscriptionExperience(initial: Props) {
   const [rushConfirmation, setRushConfirmation] = useState<PendingRushConfirmation | null>(null);
   const [shippingMethodDraft, setShippingMethodDraft] = useState<"studio_pickup" | "711_cod" | "home_delivery">(initialEditorSubscription?.shippingMethod === "711_cod" ? "711_cod" : initialEditorSubscription?.shippingMethod === "home_delivery" ? "home_delivery" : "studio_pickup");
   const [deliveryAddressDraft, setDeliveryAddressDraft] = useState<DeliveryAddress>(initialEditorSubscription?.deliveryAddress ?? { recipientName: "", phone: "", postalCode: "", city: "", district: "", addressLine: "" });
-  const [paymentMethodDraft, setPaymentMethodDraft] = useState<ActiveHomeDeliveryPaymentMethod>(initialEditorSubscription?.paymentMethod === "cash_on_delivery" ? "cash_on_delivery" : "atm_transfer");
   const [terminateConfirmationId, setTerminateConfirmationId] = useState("");
   const [hideTerminatedConfirmationId, setHideTerminatedConfirmationId] = useState("");
   const [editorItems, setEditorItems] = useState(() => initializeSubscriptionEditorItems(initialEditorSource, initial.products));
@@ -279,7 +278,7 @@ export default function MemberSubscriptionExperience(initial: Props) {
     : subscription?.storeSelection;
   const supportedShippingMethod = shippingMethod === "711_cod" ? "711_cod" : shippingMethod === "home_delivery" ? "home_delivery" : "studio_pickup";
   const displayedDeliveryAddress = lockedPricing ? pricingCycle?.shippingSnapshot?.deliveryAddress : subscription?.deliveryAddress;
-  const displayedPaymentMethod = lockedPricing ? pricingCycle?.shippingSnapshot?.paymentMethod : subscription?.paymentMethod;
+  const displayedPaymentMethod = lockedPricing ? pricingCycle?.shippingSnapshot?.paymentMethod : supportedShippingMethod === "home_delivery" ? "cash_on_delivery" : null;
   const displayedCodServiceFee = lockedPricing ? lockedPricing.codServiceFee ?? pricingCycle?.shippingSnapshot?.codServiceFee ?? 0 : supportedShippingMethod === "home_delivery" && displayedPaymentMethod === "cash_on_delivery" ? initial.rules.homeDeliveryCodFee : 0;
   const currentShippingRules = { shipping: initial.rules };
   const lockedShippingRules = pricingCycle?.rulesSnapshot?.rules;
@@ -327,7 +326,6 @@ export default function MemberSubscriptionExperience(initial: Props) {
     setSelectedSubscriptionId(selected.subscriptionId);
     setShippingMethodDraft(selected.shippingMethod === "711_cod" ? "711_cod" : selected.shippingMethod === "home_delivery" ? "home_delivery" : "studio_pickup");
     setDeliveryAddressDraft(selected.deliveryAddress ?? { recipientName: "", phone: "", postalCode: "", city: "", district: "", addressLine: "" });
-    setPaymentMethodDraft(selected.paymentMethod === "cash_on_delivery" ? "cash_on_delivery" : "atm_transfer");
     setResumeInterval(selected.intervalDays);
     setResumeIntervalMode(initial.rules.intervalsDays.includes(selected.intervalDays) ? "preset" : "custom");
     setEditorItems(initializeSubscriptionEditorItems(editorSource, initial.products));
@@ -670,12 +668,12 @@ export default function MemberSubscriptionExperience(initial: Props) {
               try { address = validateDeliveryAddress(deliveryAddressDraft); }
               catch (error) { setMessage(error instanceof Error ? error.message : "請填寫完整宅配地址"); return; }
             }
-            void mutate("change-shipping", { subscriptionId: subscription.subscriptionId, expectedRevision: subscription.revision, shippingMethod: shippingMethodDraft, storeId: shippingMethodDraft === "711_cod" ? form.get("storeId") : null, storeName: shippingMethodDraft === "711_cod" ? form.get("storeName") : null, deliveryAddress: address, paymentMethod: shippingMethodDraft === "home_delivery" ? paymentMethodDraft : null });
+            void mutate("change-shipping", { subscriptionId: subscription.subscriptionId, expectedRevision: subscription.revision, shippingMethod: shippingMethodDraft, storeId: shippingMethodDraft === "711_cod" ? form.get("storeId") : null, storeName: shippingMethodDraft === "711_cod" ? form.get("storeName") : null, deliveryAddress: address, paymentMethod: shippingMethodDraft === "home_delivery" ? "cash_on_delivery" : null });
           }}><fieldset className="member-shipping-method-options"><legend>未來定期配送方式</legend><label><input type="radio" name="shippingMethodChoice" value="studio_pickup" checked={shippingMethodDraft === "studio_pickup"} onChange={() => setShippingMethodDraft("studio_pickup")} />工作室自取</label><label><input type="radio" name="shippingMethodChoice" value="711_cod" checked={shippingMethodDraft === "711_cod"} onChange={() => setShippingMethodDraft("711_cod")} />7-ELEVEN 取貨</label><label><input type="radio" name="shippingMethodChoice" value="home_delivery" checked={shippingMethodDraft === "home_delivery"} onChange={() => setShippingMethodDraft("home_delivery")} />宅配</label></fieldset>
           {shippingMethodDraft === "711_cod" && <StoreSelector key={`${subscription.subscriptionId}:${subscription.storeSelection?.storeId ?? "new"}`} initialStore={subscription.storeSelection ? { id: subscription.storeSelection.storeId, name: subscription.storeSelection.storeName, address: "" } : undefined} />}
           {shippingMethodDraft === "home_delivery" && <><div className="store-selector-grid">{([
             ["recipientName", "收件人姓名", 40], ["phone", "手機／聯絡電話", 20], ["postalCode", "郵遞區號", 6], ["city", "縣市", 20], ["district", "區／鄉鎮市", 30], ["addressLine", "詳細地址", 120],
-          ] as const).map(([key, label, maxLength]) => <label key={key}>{label}<input name={key} value={deliveryAddressDraft[key]} onChange={(event) => setDeliveryAddressDraft((current) => ({ ...current, [key]: event.target.value }))} maxLength={maxLength} required /></label>)}</div><fieldset className="member-shipping-method-options"><legend>未來宅配付款方式</legend><label><input type="radio" name="homePaymentChoice" value="atm_transfer" checked={paymentMethodDraft === "atm_transfer"} onChange={() => setPaymentMethodDraft("atm_transfer")} />ATM 轉帳</label><label><input type="radio" name="homePaymentChoice" value="cash_on_delivery" checked={paymentMethodDraft === "cash_on_delivery"} onChange={() => setPaymentMethodDraft("cash_on_delivery")} />貨到付款</label></fieldset>{paymentMethodDraft === "cash_on_delivery" && <small>目前貨到付款手續費 NT$ {initial.rules.homeDeliveryCodFee.toLocaleString("zh-TW")}；實際金額以每期鎖定時的設定為準。</small>}</>}
+          ] as const).map(([key, label, maxLength]) => <label key={key}>{label}<input name={key} value={deliveryAddressDraft[key]} onChange={(event) => setDeliveryAddressDraft((current) => ({ ...current, [key]: event.target.value }))} maxLength={maxLength} required /></label>)}</div><div className="delivery-notice"><strong>宅配定期配送付款方式：貨到付款</strong><p>貨到付款手續費 NT$ {initial.rules.homeDeliveryCodFee.toLocaleString("zh-TW")}／次；實際金額以每期鎖定時的設定為準。</p></div></>}
           <small>此變更只套用未來配送；已鎖定期次與已建立的訂單保留原快照。</small><button disabled={Boolean(busy)} type="submit">儲存配送方式</button></form></details>
           <details><summary>暫停、恢復或停止未來定期配送</summary><div className="member-action-panel"><p>這裡只管理未來的定期配送；停止定期配送不會取消已建立的本次訂單。</p>{subscription.status === "active" && <button disabled={Boolean(busy)} onClick={() => void mutate("pause", { subscriptionId: subscription.subscriptionId, expectedRevision: subscription.revision })}>暫停未來定期配送</button>}{subscription.status === "paused" && <><label>恢復日期<input type="date" value={resumeDate} onChange={(event) => setResumeDate(event.target.value)} /></label><label>新的配送週期<select
   value={resumeIntervalMode === "custom" ? "custom" : resumeInterval}

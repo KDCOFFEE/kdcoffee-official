@@ -15,6 +15,7 @@ import { subscriptionShippingFee, subscriptionShippingSaving } from "@/lib/shipp
 import { generalCheckoutShipping } from "@/lib/checkoutShipping";
 import { validateDeliveryAddress, type DeliveryAddress } from "@/lib/deliveryAddress";
 import type { ActiveHomeDeliveryPaymentMethod } from "@/lib/homeDeliveryPayment";
+import AtmTransferInfoDialog from "@/components/orders/AtmTransferInfoDialog";
 
 type OrderMode = "711_cod" | "studio_pickup" | "home_delivery";
 type Member = { displayName:string; pickupName?:string; phone?:string; email?:string; favoriteStore?:{id:string;name:string;address:string;city?:string;district?:string} };
@@ -53,13 +54,16 @@ export default function CheckoutPage() {
   const [subscriptionInterval, setSubscriptionInterval] = useState(30);
   const [subscriptionIntervalMode, setSubscriptionIntervalMode] = useState<"preset" | "custom">("preset");
   const [subscriptionStartDate, setSubscriptionStartDate] = useState("");
-  const [operationalRules, setOperationalRules] = useState<{ pickup: { earliestStandardDate: string; earliestCustomRoastDate: string; blockedDates: string[] }; shipping: { subscriptionFreeShipping: boolean; subscriptionShippingFee: number; sevenElevenShippingFee: number; homeDeliveryShippingFee: number; homeDeliveryCodFee: number; subscriptionShippingDiscount: number }; openingYearFreeShipping: { enabled: boolean; startDate: string; endDate: string; shippingMethods: string[] }; money: { roundingMode: string }; subscription: { discountPercent: number; intervalsDays: number[]; customCycleEnabled: boolean; customCycleMinDays: number; customCycleMaxDays: number; earliestDate: string }; credit: { uiMode: "amount-and-maximum" | "use-or-not" | "automatic-maximum" | "custom-amount"; showAmountInput: boolean; showMaximumButton: boolean; automaticallyUseMaximum: boolean; allowZeroTotal: boolean; appliesToShipping: boolean } } | null>(null);
+  const [operationalRules, setOperationalRules] = useState<{ pickup: { earliestStandardDate: string; earliestCustomRoastDate: string; blockedDates: string[] }; shipping: { subscriptionFreeShipping: boolean; subscriptionShippingFee: number; sevenElevenShippingFee: number; homeDeliveryShippingFee: number; homeDeliveryCodFee: number; subscriptionShippingDiscount: number }; payment: { atmTransfer: { configured: boolean; bankName: string; bankCode: string; branchName: string; accountName: string; accountNumber: string; instructions: string; bankbookImageUrl: string | null; showBankbookImageAtCheckout: boolean } }; openingYearFreeShipping: { enabled: boolean; startDate: string; endDate: string; shippingMethods: string[] }; money: { roundingMode: string }; subscription: { discountPercent: number; intervalsDays: number[]; customCycleEnabled: boolean; customCycleMinDays: number; customCycleMaxDays: number; earliestDate: string }; credit: { uiMode: "amount-and-maximum" | "use-or-not" | "automatic-maximum" | "custom-amount"; showAmountInput: boolean; showMaximumButton: boolean; automaticallyUseMaximum: boolean; allowZeroTotal: boolean; appliesToShipping: boolean } } | null>(null);
   const [creditQuote, setCreditQuote] = useState<{ availableBalance: number; maximumUsable: number; minimumPayable: number } | null>(null);
   const [requestedCredit, setRequestedCredit] = useState(0);
   const [useCredit, setUseCredit] = useState(false);
+  const [subscriptionBlockedDialogOpen, setSubscriptionBlockedDialogOpen] = useState(false);
   const today = getDateOnlyInTimeZone(new Date());
   const shipping = generalCheckoutShipping({ mode, subtotal, homeDeliveryShippingFee: operationalRules?.shipping.homeDeliveryShippingFee, member: Boolean(member), date: today, openingYearFreeShipping: operationalRules?.openingYearFreeShipping });
   const codServiceFee = mode === "home_delivery" && paymentMethod === "cash_on_delivery" ? operationalRules?.shipping.homeDeliveryCodFee ?? 0 : 0;
+  const subscriptionHomeDeliveryBlocked = mode === "home_delivery" && paymentMethod === "atm_transfer";
+  const subscriptionRenewalCodServiceFee = mode === "home_delivery" ? operationalRules?.shipping.homeDeliveryCodFee ?? 0 : 0;
   const hasCustomRoast = items.some(item => item.customRoast);
   const earliestPickupDate = operationalRules ? (hasCustomRoast ? operationalRules.pickup.earliestCustomRoastDate : operationalRules.pickup.earliestStandardDate) : addDateOnlyDays(today, hasCustomRoast ? 3 : 0);
 
@@ -123,7 +127,7 @@ export default function CheckoutPage() {
 
   const subscriptionRenewalTotal =
     subscriptionRenewalProductTotal +
-    subscriptionRenewalShipping + codServiceFee;
+    subscriptionRenewalShipping + subscriptionRenewalCodServiceFee;
 
   const subscriptionTotalSavings =
     subscriptionProductSavings +
@@ -150,6 +154,11 @@ export default function CheckoutPage() {
       }
     }).catch(() => undefined);
   }, []);
+  useEffect(() => {
+    if (subscriptionHomeDeliveryBlocked && joinSubscription) {
+      setJoinSubscription(false);
+    }
+  }, [joinSubscription, subscriptionHomeDeliveryBlocked]);
   useEffect(() => {
     if (!member) return;
     fetch(`/api/member/credit/quote?subtotal=${subtotal}&shipping=${shipping}`, { cache: "no-store" }).then((response) => response.ok ? response.json() : null).then((quote) => {
@@ -192,6 +201,12 @@ export default function CheckoutPage() {
     if (mode === "home_delivery") {
       try { validateDeliveryAddress(deliveryAddress); }
       catch (reason) { return setError(reason instanceof Error ? reason.message : "請填寫完整宅配地址"); }
+      if (paymentMethod === "atm_transfer" && !operationalRules?.payment.atmTransfer.configured) {
+        return setError("ATM 轉帳資訊尚未完整設定，請改用貨到付款或聯繫 KD Coffee 客服。");
+      }
+      if (member && joinSubscription && paymentMethod === "atm_transfer") {
+        return setError("ATM 轉帳僅提供單次宅配訂單；宅配定期配送請改用貨到付款。");
+      }
     }
     setSubmitting(true);
     try {
@@ -281,7 +296,48 @@ export default function CheckoutPage() {
               ["postalCode", "郵遞區號", 6, "postal-code"], ["city", "縣市", 20, "address-level1"],
               ["district", "區／鄉鎮市", 30, "address-level2"], ["addressLine", "詳細地址", 120, "street-address"],
             ] as const).map(([key, label, maxLength, autoComplete]) => <label key={key}>{label}<input name={key} value={deliveryAddress[key]} onChange={(event) => setDeliveryAddress((current) => ({ ...current, [key]: event.target.value }))} maxLength={maxLength} autoComplete={autoComplete} required /></label>)}
-          </div><fieldset className="member-shipping-method-options"><legend>付款方式</legend><label><input type="radio" name="homePaymentMethod" value="atm_transfer" checked={paymentMethod === "atm_transfer"} onChange={() => setPaymentMethod("atm_transfer")} />ATM 轉帳</label><label><input type="radio" name="homePaymentMethod" value="cash_on_delivery" checked={paymentMethod === "cash_on_delivery"} onChange={() => setPaymentMethod("cash_on_delivery")} />貨到付款</label></fieldset>{paymentMethod === "atm_transfer" ? <p className="field-help">訂單成立後請依網站／客服提供的轉帳資訊完成付款，確認入帳後安排出貨。</p> : <p className="field-help">貨到付款手續費 NT$ {codServiceFee.toLocaleString("zh-TW")}</p>}</section>}
+          </div>
+          <fieldset className="member-shipping-method-options">
+            <legend>付款方式</legend>
+            <label><input type="radio" name="homePaymentMethod" value="atm_transfer" checked={paymentMethod === "atm_transfer"} onChange={() => { setPaymentMethod("atm_transfer"); setJoinSubscription(false); }} />ATM 轉帳</label>
+            <label><input type="radio" name="homePaymentMethod" value="cash_on_delivery" checked={paymentMethod === "cash_on_delivery"} onChange={() => setPaymentMethod("cash_on_delivery")} />貨到付款</label>
+          </fieldset>
+          {paymentMethod === "atm_transfer" ? (
+            operationalRules?.payment.atmTransfer.configured ? (
+              <div
+                style={{
+                  marginTop: 18,
+                  padding: "16px 18px",
+                  border: "1px solid #e4d6c8",
+                  borderRadius: 18,
+                  background: "#fbf7f1",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 16,
+                  flexWrap: "wrap",
+                }}
+              >
+                <div style={{ minWidth: 0 }}>
+                  <strong style={{ display: "block", marginBottom: 4 }}>ATM 轉帳</strong>
+                  <span className="field-help">查看銀行帳號、複製全部匯款資料或存簿圖片。</span>
+                </div>
+                <AtmTransferInfoDialog
+                  data={{
+                    bankName: operationalRules.payment.atmTransfer.bankName,
+                    bankCode: operationalRules.payment.atmTransfer.bankCode,
+                    branchName: operationalRules.payment.atmTransfer.branchName,
+                    accountName: operationalRules.payment.atmTransfer.accountName,
+                    accountNumber: operationalRules.payment.atmTransfer.accountNumber,
+                    instructions: operationalRules.payment.atmTransfer.instructions,
+                    bankbookImageUrl: operationalRules.payment.atmTransfer.bankbookImageUrl,
+                    showBankbookImage: operationalRules.payment.atmTransfer.showBankbookImageAtCheckout,
+                  }}
+                />
+              </div>
+            ) : <p className="field-help form-error">ATM 轉帳資訊尚未完整設定，請改用貨到付款或聯繫 KD Coffee 客服。</p>
+          ) : <p className="field-help">貨到付款手續費 NT$ {codServiceFee.toLocaleString("zh-TW")}</p>}
+        </section>}
           {member && creditQuote && creditQuote.availableBalance > 0 && <section className="form-card"><div className="form-card-head"><span>04</span><h2>會員抵用金</h2></div><div className="delivery-notice"><strong>目前可用 NT$ {creditQuote.availableBalance.toLocaleString("zh-TW")}</strong><p>本次最多可折 NT$ {creditQuote.maximumUsable.toLocaleString("zh-TW")}；系統會優先使用較早到期的額度。</p></div>{operationalRules?.credit.uiMode === "use-or-not" ? <label className="terms-check"><input type="checkbox" checked={useCredit} onChange={(event) => { setUseCredit(event.target.checked); setRequestedCredit(event.target.checked ? creditQuote.maximumUsable : 0); }} />使用本次可折抵的最高金額</label> : operationalRules?.credit.uiMode === "automatic-maximum" ? <p className="member-notice">已自動套用最大折抵 NT$ {creditQuote.maximumUsable.toLocaleString("zh-TW")}</p> : <div className="subscription-enrollment-fields"><label>本次折抵金額<input type="number" min={0} max={creditQuote.maximumUsable} value={requestedCredit} onChange={(event) => setRequestedCredit(Math.min(creditQuote.maximumUsable, Math.max(0, Number(event.target.value) || 0)))} /></label>{operationalRules?.credit.showMaximumButton && <button type="button" onClick={() => setRequestedCredit(creditQuote.maximumUsable)}>最大折抵</button>}</div>}<div className="subscription-enrollment-summary"><span>折抵後預計應付 NT$ {Math.max(0, subtotal + shipping + codServiceFee - requestedCredit).toLocaleString("zh-TW")}</span></div></section>}
           <section className="form-card"><div className="form-card-head"><span>04</span><h2>備註</h2></div><label>其他說明 <small>選填</small><textarea name="note" maxLength={300} rows={4} placeholder="有需要我們特別注意的事項，請寫在這裡" /></label></section>
           {member && joinSubscription && operationalRules?.subscription.customCycleEnabled && <button type="button" className="text-link" onClick={() => { setSubscriptionIntervalMode("custom"); setSubscriptionInterval(operationalRules.subscription.customCycleMinDays); }}>改用自訂配送週期</button>}
@@ -302,16 +358,99 @@ export default function CheckoutPage() {
               </p>
             </div>
 
-            <label className="terms-check">
+            <label
+              className="terms-check"
+              style={subscriptionHomeDeliveryBlocked ? { cursor: "pointer", opacity: 0.78 } : undefined}
+            >
               <input
                 type="checkbox"
                 checked={joinSubscription}
-                onChange={(event) =>
-                  setJoinSubscription(event.target.checked)
-                }
+                aria-disabled={subscriptionHomeDeliveryBlocked}
+                onChange={(event) => {
+                  if (subscriptionHomeDeliveryBlocked) {
+                    setSubscriptionBlockedDialogOpen(true);
+                    return;
+                  }
+                  setJoinSubscription(event.target.checked);
+                }}
               />
               我想在這筆訂單成功取貨後，開始定期配送
+              {subscriptionHomeDeliveryBlocked ? <small style={{ marginLeft: 8 }}>ATM 單次購買限定</small> : null}
             </label>
+
+            {subscriptionBlockedDialogOpen ? (
+              <div
+                role="presentation"
+                onMouseDown={(event) => {
+                  if (event.currentTarget === event.target) setSubscriptionBlockedDialogOpen(false);
+                }}
+                style={{
+                  position: "fixed",
+                  inset: 0,
+                  zIndex: 2100,
+                  background: "rgba(34, 24, 18, 0.48)",
+                  display: "grid",
+                  placeItems: "center",
+                  padding: 18,
+                }}
+              >
+                <section
+                  role="dialog"
+                  aria-modal="true"
+                  aria-labelledby="subscription-atm-block-title"
+                  style={{
+                    width: "min(500px, 100%)",
+                    background: "#fffdf9",
+                    border: "1px solid #dfd1c3",
+                    borderRadius: 22,
+                    boxShadow: "0 24px 70px rgba(48, 32, 22, 0.28)",
+                    padding: 22,
+                  }}
+                >
+                  <p style={{ margin: 0, fontSize: 12, letterSpacing: ".14em", color: "#8a6f57", fontWeight: 700 }}>SUBSCRIPTION NOTICE</p>
+                  <h2 id="subscription-atm-block-title" style={{ margin: "7px 0 12px" }}>ATM 轉帳無法使用定期配送</h2>
+                  <p style={{ lineHeight: 1.75, margin: 0 }}>
+                    ATM 轉帳僅提供本次單次宅配訂單。為避免後續每期付款與配送中斷，宅配定期配送目前固定使用「貨到付款」。
+                  </p>
+                  <div style={{ display: "grid", gap: 10, marginTop: 20 }}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPaymentMethod("cash_on_delivery");
+                        setJoinSubscription(true);
+                        setSubscriptionBlockedDialogOpen(false);
+                      }}
+                      style={{
+                        border: "1px solid #4b3022",
+                        borderRadius: 999,
+                        background: "#4b3022",
+                        color: "#fffdf8",
+                        padding: "12px 16px",
+                        fontWeight: 700,
+                        cursor: "pointer",
+                      }}
+                    >
+                      改用貨到付款並啟用定期配送
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSubscriptionBlockedDialogOpen(false)}
+                      style={{
+                        border: "1px solid #d8c8b8",
+                        borderRadius: 999,
+                        background: "#fff",
+                        color: "#4b3022",
+                        padding: "11px 16px",
+                        fontWeight: 700,
+                        cursor: "pointer",
+                      }}
+                    >
+                      維持 ATM 單次購買
+                    </button>
+                  </div>
+                </section>
+              </div>
+            ) : null}
 
             {joinSubscription && <div className="subscription-enrollment-fields"><label>配送週期<select
   value={subscriptionIntervalMode === "custom" ? "custom" : subscriptionInterval}
@@ -394,7 +533,7 @@ export default function CheckoutPage() {
       <strong>− NT$ {subscriptionShippingSavings.toLocaleString("zh-TW")}</strong>
     </div>
   )}
-  {mode === "home_delivery" && paymentMethod === "cash_on_delivery" && <div className="subscription-renewal-row"><span>貨到付款手續費</span><strong>NT$ {codServiceFee.toLocaleString("zh-TW")}</strong></div>}
+  {mode === "home_delivery" && <div className="subscription-renewal-row"><span>貨到付款手續費</span><strong>NT$ {subscriptionRenewalCodServiceFee.toLocaleString("zh-TW")}</strong></div>}
 
   <footer>
     <span>依目前設定，每期預估優惠</span>

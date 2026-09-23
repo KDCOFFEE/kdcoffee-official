@@ -19,6 +19,7 @@ import { sendInternalLineNotification } from "@/lib/internalLineNotifications";
 import { buildOrderTimeline } from "@/lib/orderTimeline";
 import { projectOrderFinancialBreakdown } from "@/lib/orderFinancialProjection";
 import { getSafeOrderCreditReservation, type SafeOrderCreditReservation } from "@/lib/membershipCommerce";
+import { normalizeAtmTransferClaims } from "@/lib/homeDeliveryPayment";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -43,6 +44,15 @@ function customerOrderDto(order: Awaited<ReturnType<typeof readOrder>>, creditRe
         : order.orderMode === "home_delivery" ? "宅配" : "企業送禮洽詢",
     deliveryAddress: order.orderMode === "home_delivery" ? order.deliveryAddress ?? null : null,
     paymentDetails: order.orderMode === "home_delivery" ? order.paymentDetails ?? null : null,
+    atmTransferSnapshot: order.orderMode === "home_delivery" && order.paymentDetails?.method === "atm_transfer" ? order.atmTransferSnapshot ?? null : null,
+    atmTransferClaims: order.orderMode === "home_delivery" && order.paymentDetails?.method === "atm_transfer" ? normalizeAtmTransferClaims(order.atmTransferClaims) : [],
+    cancellation: order.status === "cancelled"
+      ? {
+          reason: typeof order.cancellationReason === "string" && order.cancellationReason.trim() ? order.cancellationReason.trim() : null,
+          cancelledAt: typeof order.cancelledAt === "string" ? order.cancelledAt : null,
+          cancelledBy: order.cancelledBy === "admin" || order.cancelledBy === "member" ? order.cancelledBy : null,
+        }
+      : null,
     financialBreakdown,
     creditReservation,
   };

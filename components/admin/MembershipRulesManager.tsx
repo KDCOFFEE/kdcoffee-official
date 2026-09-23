@@ -43,6 +43,8 @@ export default function MembershipRulesManager({ initialRevision, initialVersion
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [giftProduct, setGiftProduct] = useState("");
+  const [atmImageUploading, setAtmImageUploading] = useState(false);
+  const [atmImageMessage, setAtmImageMessage] = useState("");
   const [impact, setImpact] = useState<{ affectedCycles: number; activeSubscriptions: number; lockedCyclesPreserved: number; changedAreas: string[]; missingPv?: Array<{productName:string;skuLabel:string}>; pvSwitchBlocked?: boolean } | null>(null);
   const dirty = useMemo(() => JSON.stringify(rules) !== JSON.stringify(savedRules), [rules, savedRules]);
 
@@ -84,6 +86,28 @@ export default function MembershipRulesManager({ initialRevision, initialVersion
       setMessage(error instanceof Error ? error.message : "儲存失敗");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function uploadAtmBankbook(file: File) {
+    setAtmImageUploading(true);
+    setAtmImageMessage("");
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      form.append("assetGroup", "atm-bankbook");
+      form.append("artworkSlug", "payment");
+      form.append("assetType", "atm-bankbook");
+      form.append("desiredName", "kdcoffee-atm-bankbook");
+      const response = await fetch("/api/admin/homepage/upload", { method: "POST", body: form });
+      const result = await response.json();
+      if (!response.ok || !result.path) throw new Error(result.error || "存簿圖片上傳失敗");
+      change((draft) => { draft.payment.atmTransfer.bankbookImageUrl = String(result.path); });
+      setAtmImageMessage("圖片已上傳。請記得按『確認並儲存新設定』。 ");
+    } catch (error) {
+      setAtmImageMessage(error instanceof Error ? error.message : "存簿圖片上傳失敗");
+    } finally {
+      setAtmImageUploading(false);
     }
   }
 
@@ -165,6 +189,32 @@ export default function MembershipRulesManager({ initialRevision, initialVersion
           </div>
         </details>
       </div>
+    </section>
+
+    <section className="membership-rule-card">
+      <header><span>ATM</span><div><h2>ATM 轉帳設定</h2><p>設定宅配 ATM 付款時提供給客人的銀行資料與存簿圖片。</p></div></header>
+      <div className="membership-fields two">
+        <label className="membership-text-field"><span className="rule-field-title"><span>銀行名稱</span></span><input type="text" maxLength={80} value={rules.payment.atmTransfer.bankName} onChange={(event) => change((draft) => { draft.payment.atmTransfer.bankName = event.target.value; })} placeholder="例如：臺灣銀行" /></label>
+        <label className="membership-text-field"><span className="rule-field-title"><span>銀行代碼</span></span><input type="text" maxLength={12} value={rules.payment.atmTransfer.bankCode} onChange={(event) => change((draft) => { draft.payment.atmTransfer.bankCode = event.target.value; })} placeholder="例如：004" /></label>
+        <label className="membership-text-field"><span className="rule-field-title"><span>分行名稱（選填）</span></span><input type="text" maxLength={80} value={rules.payment.atmTransfer.branchName} onChange={(event) => change((draft) => { draft.payment.atmTransfer.branchName = event.target.value; })} /></label>
+        <label className="membership-text-field"><span className="rule-field-title"><span>戶名</span></span><input type="text" maxLength={80} value={rules.payment.atmTransfer.accountName} onChange={(event) => change((draft) => { draft.payment.atmTransfer.accountName = event.target.value; })} /></label>
+        <label className="membership-text-field"><span className="rule-field-title"><span>帳號</span></span><input type="text" maxLength={40} value={rules.payment.atmTransfer.accountNumber} onChange={(event) => change((draft) => { draft.payment.atmTransfer.accountNumber = event.target.value; })} /></label>
+        <label className="membership-text-field"><span className="rule-field-title"><span>ATM 付款說明（選填）</span></span><textarea rows={3} maxLength={500} value={rules.payment.atmTransfer.instructions} onChange={(event) => change((draft) => { draft.payment.atmTransfer.instructions = event.target.value; })} placeholder="例如：轉帳後請保留交易明細，確認入帳後安排出貨。" /></label>
+      </div>
+      <fieldset className="membership-intervals">
+        <legend>存簿／匯款資訊圖片</legend>
+        {rules.payment.atmTransfer.bankbookImageUrl ? <div className="kd-media-upload-preview"><img src={rules.payment.atmTransfer.bankbookImageUrl} alt="ATM 存簿預覽" /></div> : <p className="membership-effective-note">目前尚未上傳存簿圖片。</p>}
+        <div className="membership-interval-actions">
+          <label className="text-link" style={{ cursor: atmImageUploading ? "wait" : "pointer" }}>
+            {atmImageUploading ? "上傳中…" : rules.payment.atmTransfer.bankbookImageUrl ? "更換存簿圖片" : "上傳存簿圖片"}
+            <input type="file" accept="image/jpeg,image/png,image/webp" hidden disabled={atmImageUploading} onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void uploadAtmBankbook(file); }} />
+          </label>
+          {rules.payment.atmTransfer.bankbookImageUrl ? <button type="button" onClick={() => change((draft) => { draft.payment.atmTransfer.bankbookImageUrl = null; draft.payment.atmTransfer.showBankbookImageAtCheckout = false; })}>移除圖片</button> : null}
+        </div>
+        {atmImageMessage ? <p className="membership-save-feedback" role="status">{atmImageMessage}</p> : null}
+        <label className="membership-switch"><input type="checkbox" checked={rules.payment.atmTransfer.showBankbookImageAtCheckout} disabled={!rules.payment.atmTransfer.bankbookImageUrl} onChange={(event) => change((draft) => { draft.payment.atmTransfer.showBankbookImageAtCheckout = event.target.checked; })} /><span><b>結帳頁顯示存簿圖片</b><small>關閉時仍顯示銀行名稱、代碼、戶名與完整帳號，只隱藏圖片。</small></span></label>
+      </fieldset>
+      <p className="membership-effective-note">ATM 必填：銀行名稱、銀行代碼、戶名、帳號。未完整設定時，前台會禁止送出 ATM 訂單；客人仍可改選貨到付款。</p>
     </section>
 
     <section className="membership-rule-card">

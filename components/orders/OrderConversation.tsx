@@ -4,10 +4,11 @@ import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 
 import OrderTimeline from "@/components/orders/OrderTimeline";
+import AtmTransferInfoDialog from "@/components/orders/AtmTransferInfoDialog";
 import type { OrderMessage } from "@/lib/orderConversation";
 import type { OrderTimelineEntry } from "@/lib/orderTimeline";
 import type { DeliveryAddress } from "@/lib/deliveryAddress";
-import type { HomeDeliveryPaymentDetails } from "@/lib/homeDeliveryPayment";
+import type { AtmTransferClaim, AtmTransferSnapshot, HomeDeliveryPaymentDetails } from "@/lib/homeDeliveryPayment";
 
 type CustomerOrderSummary = {
   orderNumber: string;
@@ -18,6 +19,13 @@ type CustomerOrderSummary = {
   modeLabel: string;
   deliveryAddress: DeliveryAddress | null;
   paymentDetails: HomeDeliveryPaymentDetails | null;
+  atmTransferSnapshot: AtmTransferSnapshot | null;
+  atmTransferClaims: AtmTransferClaim[];
+  cancellation: {
+    reason: string | null;
+    cancelledAt: string | null;
+    cancelledBy: "admin" | "member" | null;
+  } | null;
   financialBreakdown: {
     subtotal: number;
     shipping: number;
@@ -30,6 +38,12 @@ type CustomerOrderSummary = {
 };
 
 const money = (value: number) => `NT$ ${value.toLocaleString("zh-TW")}`;
+
+function currentLocalDateTimeValue() {
+  const now = new Date();
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+}
 
 const DIRECT_MEMBER_CANCELLATION_STATUSES = new Set([
   "new_order",
@@ -124,9 +138,17 @@ export default function OrderConversation({ orderNumber }: { orderNumber: string
   const [cancelling, setCancelling] = useState(false);
   const [cancellationNotice, setCancellationNotice] = useState("");
   const [cancellationError, setCancellationError] = useState("");
+  const [claimLast5, setClaimLast5] = useState("");
+  const [claimTransferredAt, setClaimTransferredAt] = useState(currentLocalDateTimeValue);
+  const [claimReceipt, setClaimReceipt] = useState<File | null>(null);
+  const [claimSubmitting, setClaimSubmitting] = useState(false);
+  const [claimNotice, setClaimNotice] = useState("");
+  const [claimError, setClaimError] = useState("");
   const token = useRef("");
   const actionId = useRef("");
   const cancellationActionId = useRef("");
+  const claimActionId = useRef("");
+  const claimReceiptInput = useRef<HTMLInputElement>(null);
 
   const loadOrder = useCallback(async () => {
     const response = await fetch(`/api/orders/${encodeURIComponent(orderNumber)}/messages`, {
@@ -147,6 +169,55 @@ export default function OrderConversation({ orderNumber }: { orderNumber: string
       .catch((reason) => setError(reason instanceof Error ? reason.message : "無法讀取訂單。"))
       .finally(() => setLoading(false));
   }, [loadOrder, orderNumber]);
+
+  async function submitAtmTransferClaim(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!order || order.orderMode !== "home_delivery" || order.paymentDetails?.method !== "atm_transfer") return;
+    setClaimError("");
+    setClaimNotice("");
+
+    if (!/^\d{5}$/.test(claimLast5.trim())) {
+      setClaimError("請輸入匯款帳號末五碼（5 位數字）。");
+      return;
+    }
+    const transferredAtDate = new Date(claimTransferredAt);
+    if (!claimTransferredAt || Number.isNaN(transferredAtDate.getTime())) {
+      setClaimError("請填寫正確的匯款日期與時間。");
+      return;
+    }
+    if (claimReceipt && claimReceipt.size > 5 * 1024 * 1024) {
+      setClaimError("匯款明細圖片不可超過 5MB。");
+      return;
+    }
+
+    if (!claimActionId.current) claimActionId.current = crypto.randomUUID();
+    setClaimSubmitting(true);
+    try {
+      const form = new FormData();
+      form.append("actionId", claimActionId.current);
+      form.append("accountLast5", claimLast5.trim());
+      form.append("transferredAt", transferredAtDate.toISOString());
+      if (claimReceipt) form.append("receipt", claimReceipt);
+
+      const response = await fetch(`/api/orders/${encodeURIComponent(orderNumber)}/transfer-claim`, {
+        method: "POST",
+        headers: token.current ? { "X-Order-Access-Token": token.current } : undefined,
+        body: form,
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || "匯款回報暫時無法送出。");
+
+      setClaimNotice(result.message || "匯款資料已回報，等待 KD Coffee 核對入帳。");
+      setClaimReceipt(null);
+      if (claimReceiptInput.current) claimReceiptInput.current.value = "";
+      claimActionId.current = "";
+      await loadOrder();
+    } catch (reason) {
+      setClaimError(reason instanceof Error ? reason.message : "匯款回報暫時無法送出。");
+    } finally {
+      setClaimSubmitting(false);
+    }
+  }
 
   async function cancelOrder(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -246,6 +317,10 @@ export default function OrderConversation({ orderNumber }: { orderNumber: string
     );
   }
 
+  const latestAtmClaim = order.atmTransferClaims.length
+    ? order.atmTransferClaims[order.atmTransferClaims.length - 1]
+    : null;
+
   return (
     <section className="order-conversation-card">
       <header className="customer-order-summary">
@@ -263,7 +338,305 @@ export default function OrderConversation({ orderNumber }: { orderNumber: string
         {order.financialBreakdown.totalBeforeCredit !== null ? <><span>折抵前總額</span><b>{money(order.financialBreakdown.totalBeforeCredit)}</b></> : null}
         <strong>訂單總計</strong><strong>{money(order.financialBreakdown.total)}</strong>
       </div>
-      {order.orderMode === "home_delivery" && <div className="customer-order-financials"><strong>宅配資料</strong><span>{order.deliveryAddress ? `${order.deliveryAddress.recipientName}・${order.deliveryAddress.phone}` : "地址待確認"}</span><span>{order.deliveryAddress ? `${order.deliveryAddress.postalCode} ${order.deliveryAddress.city}${order.deliveryAddress.district}${order.deliveryAddress.addressLine}` : ""}</span><span>{order.paymentDetails?.method === "atm_transfer" ? "ATM 轉帳" : "貨到付款"}</span><span>{order.paymentDetails?.status === "paid" ? "已收款" : "待收款"}</span>{order.paymentDetails?.method === "atm_transfer" && order.paymentDetails.status === "pending" && <p>請依網站／客服提供的轉帳資訊完成付款，確認入帳後安排出貨。</p>}</div>}
+
+      {order.status === "cancelled" ? (
+        <section
+          aria-label="訂單取消資訊"
+          style={{
+            marginTop: 18,
+            padding: "16px 18px",
+            border: "1px solid #dfcbb9",
+            borderRadius: 18,
+            background: "#fbf3e9",
+          }}
+        >
+          <strong style={{ display: "block", fontSize: 17, color: "#3e2d23" }}>
+            此訂單已取消
+          </strong>
+          <p style={{ margin: "8px 0 0", lineHeight: 1.7, color: "#5f493b" }}>
+            取消原因：<b>{order.cancellation?.reason || "此筆歷史訂單未記錄取消原因，如有疑問請聯繫 KD Coffee。"}</b>
+          </p>
+          {order.cancellation?.cancelledAt ? (
+            <p style={{ margin: "4px 0 0", color: "#7b6555", fontSize: 13 }}>
+              取消時間：{new Date(order.cancellation.cancelledAt).toLocaleString("zh-TW")}
+            </p>
+          ) : null}
+        </section>
+      ) : null}
+      {order.orderMode === "home_delivery" && (
+        <section
+          aria-label="宅配資料"
+          style={{
+            marginTop: 18,
+            padding: "18px",
+            border: "1px solid #eadfd4",
+            borderRadius: 18,
+            background: "#faf6f0",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+            <strong style={{ fontSize: 17 }}>宅配資料</strong>
+            <span style={{ fontSize: 13, color: "#765f4e" }}>
+              {order.paymentDetails?.method === "atm_transfer" ? "ATM 轉帳" : "貨到付款"}
+            </span>
+          </div>
+
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))",
+              gap: 14,
+              marginTop: 14,
+            }}
+          >
+            <div>
+              <small style={{ display: "block", color: "#8a725f", marginBottom: 4 }}>收件人</small>
+              <strong>{order.deliveryAddress?.recipientName || "待確認"}</strong>
+            </div>
+            <div>
+              <small style={{ display: "block", color: "#8a725f", marginBottom: 4 }}>聯絡電話</small>
+              <strong>{order.deliveryAddress?.phone || "待確認"}</strong>
+            </div>
+            <div style={{ gridColumn: "1 / -1" }}>
+              <small style={{ display: "block", color: "#8a725f", marginBottom: 4 }}>配送地址</small>
+              <strong style={{ lineHeight: 1.65 }}>
+                {order.deliveryAddress
+                  ? `${order.deliveryAddress.postalCode} ${order.deliveryAddress.city}${order.deliveryAddress.district}${order.deliveryAddress.addressLine}`
+                  : "地址待確認"}
+              </strong>
+            </div>
+            <div>
+              <small style={{ display: "block", color: "#8a725f", marginBottom: 4 }}>付款方式</small>
+              <strong>{order.paymentDetails?.method === "atm_transfer" ? "ATM 轉帳" : "貨到付款"}</strong>
+            </div>
+            <div>
+              <small style={{ display: "block", color: "#8a725f", marginBottom: 4 }}>付款狀態</small>
+              <strong>{order.paymentDetails?.status === "paid" ? "已收款" : order.status === "cancelled" ? "訂單已取消" : "待收款"}</strong>
+            </div>
+          </div>
+
+          {order.status !== "cancelled" && order.paymentDetails?.method === "atm_transfer" && order.atmTransferSnapshot ? (
+            <div style={{ marginTop: 16, paddingTop: 16, borderTop: "1px solid #e8dbcf" }}>
+              <AtmTransferInfoDialog
+                data={{
+                  bankName: order.atmTransferSnapshot.bankName,
+                  bankCode: order.atmTransferSnapshot.bankCode,
+                  branchName: order.atmTransferSnapshot.branchName,
+                  accountName: order.atmTransferSnapshot.accountName,
+                  accountNumber: order.atmTransferSnapshot.accountNumber,
+                  instructions: order.atmTransferSnapshot.instructions,
+                  bankbookImageUrl: order.atmTransferSnapshot.bankbookImageUrl,
+                  showBankbookImage: order.atmTransferSnapshot.showBankbookImage,
+                }}
+              />
+            </div>
+          ) : null}
+        </section>
+      )}
+
+      {order.status !== "cancelled" && order.orderMode === "home_delivery" && order.paymentDetails?.method === "atm_transfer" ? (
+        <section
+          className="order-conversation-form"
+          aria-label="ATM 匯款回報"
+          style={{ marginTop: 22, padding: "22px", borderRadius: 20 }}
+        >
+          <div>
+            <p className="eyebrow dark">ATM TRANSFER REPORT</p>
+            <h2>{order.paymentDetails.status === "paid" ? "ATM 已確認入帳" : "回報 ATM 匯款"}</h2>
+          </div>
+
+          {latestAtmClaim ? (
+            <div
+              style={{
+                marginTop: 12,
+                padding: "16px 18px",
+                border: "1px solid #d9e5d7",
+                borderRadius: 16,
+                background: "#f5faf4",
+              }}
+            >
+              <strong style={{ display: "block", marginBottom: 9 }}>
+                {order.paymentDetails.status === "paid" ? "✓ 工作室已確認收到款項" : "✓ 已回報匯款，等待工作室核對入帳"}
+              </strong>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 8 }}>
+                <span>末五碼：<b>{latestAtmClaim.accountLast5}</b></span>
+                <span>回報金額：<b>{money(latestAtmClaim.amount)}</b></span>
+                <span style={{ gridColumn: "1 / -1" }}>匯款時間：<b>{new Date(latestAtmClaim.transferredAt).toLocaleString("zh-TW")}</b></span>
+              </div>
+              {latestAtmClaim.receipt ? (
+                <a href={latestAtmClaim.receipt.url} target="_blank" rel="noreferrer" style={{ display: "inline-block", marginTop: 10 }}>
+                  查看已上傳的匯款明細
+                </a>
+              ) : <p style={{ marginBottom: 0 }}>未上傳匯款明細圖片。</p>}
+              {order.paymentDetails.status === "pending" ? <p style={{ marginBottom: 0 }}>若末五碼或時間填錯，可重新送出；系統會保留回報紀錄供工作室核對。</p> : null}
+            </div>
+          ) : (
+            <div style={{ marginTop: 10, lineHeight: 1.75, color: "#5f493b" }}>
+              <p>完成轉帳後，請回報帳號末五碼與匯款時間。應付金額由系統直接帶入，避免人工填錯。</p>
+            </div>
+          )}
+
+          {order.paymentDetails.status === "pending" ? (
+            <form onSubmit={submitAtmTransferClaim} style={{ marginTop: 18 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: 14 }}>
+                <label style={{ display: "grid", gap: 7 }}>
+                  <span>匯款帳號末五碼</span>
+                  <input id="atm-transfer-last5" inputMode="numeric" pattern="[0-9]{5}" maxLength={5} value={claimLast5} onChange={(event) => setClaimLast5(event.target.value.replace(/\D/g, "").slice(0, 5))} placeholder="例如：82641" required disabled={claimSubmitting} />
+                </label>
+                <label style={{ display: "grid", gap: 7 }}>
+                  <span>匯款日期與時間</span>
+                  <input id="atm-transfer-time" type="datetime-local" value={claimTransferredAt} onChange={(event) => setClaimTransferredAt(event.target.value)} required disabled={claimSubmitting} />
+                </label>
+              </div>
+
+              <div style={{ marginTop: 14, padding: "12px 14px", borderRadius: 14, background: "#f6f0e8" }}>
+                本訂單核對金額：<b>{money(order.financialBreakdown.total)}</b>
+              </div>
+
+              <div style={{ marginTop: 16 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                  <strong style={{ fontSize: 15 }}>匯款明細圖片</strong>
+                  <span
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      minHeight: 22,
+                      padding: "2px 8px",
+                      borderRadius: 999,
+                      background: "#f0e8df",
+                      color: "#6d5748",
+                      fontSize: 12,
+                      fontWeight: 700,
+                    }}
+                  >
+                    選填
+                  </span>
+                </div>
+
+                <input
+                  ref={claimReceiptInput}
+                  id="atm-transfer-receipt"
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  onChange={(event) => setClaimReceipt(event.target.files?.[0] || null)}
+                  disabled={claimSubmitting}
+                  style={{
+                    position: "absolute",
+                    width: 1,
+                    height: 1,
+                    padding: 0,
+                    margin: -1,
+                    overflow: "hidden",
+                    clip: "rect(0, 0, 0, 0)",
+                    whiteSpace: "nowrap",
+                    border: 0,
+                  }}
+                />
+
+                <label
+                  htmlFor="atm-transfer-receipt"
+                  aria-disabled={claimSubmitting}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 14,
+                    minHeight: 78,
+                    padding: "14px 16px",
+                    border: "1px dashed #cbb9a7",
+                    borderRadius: 16,
+                    background: claimReceipt ? "#f7f2eb" : "#fcfaf7",
+                    cursor: claimSubmitting ? "not-allowed" : "pointer",
+                    opacity: claimSubmitting ? 0.65 : 1,
+                  }}
+                >
+                  <span
+                    aria-hidden="true"
+                    style={{
+                      display: "grid",
+                      placeItems: "center",
+                      width: 40,
+                      height: 40,
+                      flex: "0 0 40px",
+                      borderRadius: 999,
+                      background: "#efe4d8",
+                      color: "#4b3528",
+                      fontSize: 24,
+                      lineHeight: 1,
+                    }}
+                  >
+                    +
+                  </span>
+
+                  <span style={{ display: "grid", gap: 3, minWidth: 0, flex: 1 }}>
+                    <strong>{claimReceipt ? "已選擇匯款明細" : "選擇匯款明細圖片"}</strong>
+                    <small style={{ color: "#7b6555", overflowWrap: "anywhere" }}>
+                      {claimReceipt
+                        ? `${claimReceipt.name} · ${Math.max(1, Math.round(claimReceipt.size / 1024)).toLocaleString("zh-TW")} KB`
+                        : "JPEG / PNG / WebP · 5MB 以內"}
+                    </small>
+                  </span>
+
+                  <span
+                    style={{
+                      flex: "0 0 auto",
+                      padding: "8px 12px",
+                      border: "1px solid #3e2d23",
+                      borderRadius: 999,
+                      background: "#fff",
+                      color: "#3e2d23",
+                      fontSize: 13,
+                      fontWeight: 700,
+                    }}
+                  >
+                    {claimReceipt ? "重新選擇" : "選擇圖片"}
+                  </span>
+                </label>
+
+                <p style={{ margin: "8px 2px 0", color: "#7b6555", fontSize: 13, lineHeight: 1.65 }}>
+                  上傳後系統會自動縮小尺寸並轉為 WebP 儲存；請先遮蔽帳戶餘額等非必要資訊。
+                </p>
+
+                {claimReceipt ? (
+                  <button
+                    type="button"
+                    disabled={claimSubmitting}
+                    onClick={() => {
+                      setClaimReceipt(null);
+                      if (claimReceiptInput.current) claimReceiptInput.current.value = "";
+                    }}
+                    style={{
+                      marginTop: 8,
+                      padding: 0,
+                      border: 0,
+                      background: "transparent",
+                      color: "#735b4b",
+                      fontSize: 13,
+                      textDecoration: "underline",
+                      cursor: claimSubmitting ? "not-allowed" : "pointer",
+                    }}
+                  >
+                    移除已選圖片
+                  </button>
+                ) : null}
+              </div>
+
+              <label style={{ display: "flex", gap: 9, alignItems: "flex-start", marginTop: 14, lineHeight: 1.55 }}>
+                <input type="checkbox" required disabled={claimSubmitting} />
+                <span>我確認末五碼、匯款時間與本次回報資料正確。</span>
+              </label>
+
+              <p style={{ marginTop: 12 }}>
+                送出後會通知 KD Coffee 工作室；工作室核對銀行實際入帳後，訂單才會標記為已付款。
+              </p>
+              {claimError ? <p className="form-error" role="alert">{claimError}</p> : null}
+              {claimNotice ? <p className="form-success" role="status">{claimNotice}</p> : null}
+              <button type="submit" disabled={claimSubmitting || claimLast5.length !== 5} style={{ marginTop: 8 }}>
+                {claimSubmitting ? "送出中…" : latestAtmClaim ? "重新回報匯款資料" : "我已完成轉帳，送出回報"}
+              </button>
+            </form>
+          ) : null}
+        </section>
+      ) : null}
       {order.creditReservation?.status === "released" ? <p className="customer-credit-returned" role="status">訂單取消，{money(order.creditReservation.amount)} 抵用金已返還。</p> : null}
 
       <OrderTimeline entries={timeline} audience="customer" />

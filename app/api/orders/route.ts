@@ -31,7 +31,7 @@ import { getLiveWebsiteData } from "@/data/websiteData";
 import { subscriptionItemsFromStoredOrderItems } from "@/lib/subscriptionSkuModel";
 import { validateDeliveryAddress, validateOrderDeliverySelection } from "@/lib/deliveryAddress";
 import { generalCheckoutShipping } from "@/lib/checkoutShipping";
-import { quoteHomeDeliveryPayable, type ActiveHomeDeliveryPaymentMethod } from "@/lib/homeDeliveryPayment";
+import { createAtmTransferSnapshot, quoteHomeDeliveryPayable, type ActiveHomeDeliveryPaymentMethod } from "@/lib/homeDeliveryPayment";
 
 function clean(value: unknown, max = 200) { return String(value ?? "").trim().slice(0, max); }
 function validPhone(value: string) { return /^09\d{8}$/.test(value); }
@@ -93,6 +93,9 @@ export async function POST(request: Request) {
     if (!Number.isSafeInteger(requestedCredit) || requestedCredit < 0) throw new Error("抵用金金額不正確");
     if (requestedCredit > 0 && !member) throw new Error("請先登入會員才能使用抵用金");
     const subscriptionIntent = member && body.subscriptionIntent?.consent === true ? { consent: true, intervalDays: Number(body.subscriptionIntent.intervalDays), firstRenewalDate: clean(body.subscriptionIntent.firstRenewalDate, 10) } : null;
+    if (subscriptionIntent && orderMode === "home_delivery" && paymentMethod !== "cash_on_delivery") {
+      throw new Error("ATM 轉帳僅提供單次宅配訂單；宅配定期配送僅支援貨到付款。");
+    }
     if (subscriptionIntent) {
       if (!resolveSubscriptionInterval(subscriptionIntent.intervalDays, rulesVersion.rules).allowed || !/^\d{4}-\d{2}-\d{2}$/.test(subscriptionIntent.firstRenewalDate)) throw new Error("定期配送日期或週期不正確");
       const subscriptionAvailability = resolveSubscriptionDateAvailability({ requestedDate: subscriptionIntent.firstRenewalDate, today: getDateOnlyInTimeZone(new Date()), customRoast: false, rules: rulesVersion.rules });
@@ -154,8 +157,9 @@ export async function POST(request: Request) {
             if (orderMode === "home_delivery") {
               const shipping = generalCheckoutShipping({ mode: "home_delivery", subtotal: priced.subtotal, homeDeliveryShippingFee: rulesVersion.rules.shipping.homeDeliveryShippingFee, member: Boolean(member), date: getDateOnlyInTimeZone(new Date(createdAt)), openingYearFreeShipping: rulesVersion.rules.membership.openingYearFreeShipping });
               const payment = quoteHomeDeliveryPayable({ merchandiseSubtotal: priced.subtotal, shipping, availableCredit: 0, requestedCredit: 0, method: paymentMethod as ActiveHomeDeliveryPaymentMethod, rules: rulesVersion.rules });
+              const atmTransferSnapshot = paymentMethod === "atm_transfer" ? createAtmTransferSnapshot(rulesVersion.rules) : null;
               return {
-                order: { orderNumber: candidateOrderNumber, createdAt, status: "new_order", orderMode, customer, member: memberInfo, guestOrderAccess, deliveryAddress, subscriptionIntent, payment: payment.payment, paymentDetails: { ...payment.paymentDetails, paidAt: null }, codServiceFee: payment.codServiceFee, delivery: "宅配", lineNotification: { sent: false, status: "pending" }, idempotencyKey, idempotencyRequestHash: requestHash, ...priced, shipping, totalBeforeCredit: payment.totalBeforeCredit, total: payment.total },
+                order: { orderNumber: candidateOrderNumber, createdAt, status: "new_order", orderMode, customer, member: memberInfo, guestOrderAccess, deliveryAddress, subscriptionIntent, payment: payment.payment, paymentDetails: { ...payment.paymentDetails, paidAt: null }, atmTransferSnapshot, codServiceFee: payment.codServiceFee, delivery: "宅配", lineNotification: { sent: false, status: "pending" }, idempotencyKey, idempotencyRequestHash: requestHash, ...priced, shipping, totalBeforeCredit: payment.totalBeforeCredit, total: payment.total },
                 lineText: `【KD Coffee 新訂單｜宅配】\n\n訂單編號：${candidateOrderNumber}\n會員：${member ? `${member.displayName}（LINE 會員）` : "訪客"}\n姓名：${customer.name}\n手機：${customer.phone}\nEmail：${customer.email || "未提供"}\n\n收件人：${deliveryAddress!.recipientName}\n聯絡電話：${deliveryAddress!.phone}\n宅配地址：${deliveryAddress!.postalCode} ${deliveryAddress!.city}${deliveryAddress!.district}${deliveryAddress!.addressLine}\n付款方式：${paymentMethod === "atm_transfer" ? "ATM 轉帳" : "貨到付款"}\n\n訂購內容：\n${itemLines}\n\n商品小計：NT$ ${priced.subtotal.toLocaleString("zh-TW")}\n運費：NT$ ${shipping.toLocaleString("zh-TW")}\n貨到付款手續費：NT$ ${payment.codServiceFee.toLocaleString("zh-TW")}\n應付總額：NT$ ${payment.total.toLocaleString("zh-TW")}\n\n備註：${customer.note || "無"}`,
               };
             }

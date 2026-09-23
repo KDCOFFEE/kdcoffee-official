@@ -24,9 +24,9 @@ function schedulerOrder(cycle: SubscriptionCycle, subscription: Awaited<ReturnTy
   const lockedDelivery = cycle.shippingSnapshot;
   const method = lockedDelivery.method;
   if (method === "711_cod" && !lockedDelivery.storeSelection?.storeId) throw new Error("尚未設定 7-ELEVEN 取貨門市");
-  if (method === "home_delivery" && (!lockedDelivery.deliveryAddress || !["atm_transfer", "cash_on_delivery"].includes(lockedDelivery.paymentMethod || ""))) throw new Error("宅配快照資料不完整");
+  if (method === "home_delivery" && (!lockedDelivery.deliveryAddress || lockedDelivery.paymentMethod !== "cash_on_delivery")) throw new Error("定期配送宅配僅支援貨到付款；本期付款快照需由工作室確認");
   if (!["711_cod", "studio_pickup", "home_delivery"].includes(method)) throw new Error("不支援的配送方式");
-  const homePayment = method === "home_delivery" ? lockedDelivery.paymentMethod : null;
+  const homePayment = method === "home_delivery" ? "cash_on_delivery" : null;
   const codServiceFee = method === "home_delivery" ? lockedDelivery.codServiceFee ?? cycle.pricingSnapshot.codServiceFee ?? 0 : 0;
   const orderNumber = deterministicOrderNumber(cycle);
 

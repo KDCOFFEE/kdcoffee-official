@@ -38,6 +38,18 @@ export const DEFAULT_MEMBERSHIP_RULES: MembershipBusinessRules = {
     },
   },
   shipping: { subscriptionFreeShipping: true, subscriptionShippingFee: 60, sevenElevenShippingFee: 60, homeDeliveryShippingFee: 100, homeDeliveryCodFee: 0, subscriptionShippingDiscount: 60 },
+  payment: {
+    atmTransfer: {
+      bankName: "",
+      bankCode: "",
+      branchName: "",
+      accountName: "",
+      accountNumber: "",
+      instructions: "",
+      bankbookImageUrl: null,
+      showBankbookImageAtCheckout: false,
+    },
+  },
   subscription: {
     discountPercent: 95,
     intervalsDays: [30, 45, 60, 75, 90],
@@ -190,6 +202,18 @@ export function normalizeMembershipBusinessRules(value: unknown, options: Member
     ...source,
     membership: { ...DEFAULT_MEMBERSHIP_RULES.membership, ...membership, openingYearFreeShipping: { ...DEFAULT_MEMBERSHIP_RULES.membership.openingYearFreeShipping, ...opening } },
     shipping: { ...DEFAULT_MEMBERSHIP_RULES.shipping, ...nested("shipping") },
+    payment: (() => {
+      const supplied = nested("payment");
+      const atmTransfer = object(supplied.atmTransfer) ? supplied.atmTransfer : {};
+      return {
+        ...DEFAULT_MEMBERSHIP_RULES.payment,
+        ...supplied,
+        atmTransfer: {
+          ...DEFAULT_MEMBERSHIP_RULES.payment.atmTransfer,
+          ...atmTransfer,
+        },
+      };
+    })(),
     subscription: (() => {
       const supplied = nested("subscription");
       const intervals = Array.isArray(supplied.intervalsDays) ? supplied.intervalsDays : DEFAULT_MEMBERSHIP_RULES.subscription.intervalsDays;
@@ -307,6 +331,25 @@ export function validateMembershipBusinessRules(value: unknown, options: Members
   integer(rules.shipping.homeDeliveryShippingFee, 0, 10_000, "home delivery shipping fee");
   integer(rules.shipping.homeDeliveryCodFee, 0, 50, "home delivery COD service fee");
   integer(rules.shipping.subscriptionShippingDiscount, 0, 10_000, "subscription shipping discount");
+  if (!object(rules.payment) || !object(rules.payment.atmTransfer)) throw new MembershipRulesValidationError("ATM 轉帳設定不完整");
+  const atm = rules.payment.atmTransfer;
+  const textFields: Array<[unknown, number, string]> = [
+    [atm.bankName, 80, "銀行名稱"],
+    [atm.bankCode, 12, "銀行代碼"],
+    [atm.branchName, 80, "分行名稱"],
+    [atm.accountName, 80, "戶名"],
+    [atm.accountNumber, 40, "帳號"],
+    [atm.instructions, 500, "ATM 付款說明"],
+  ];
+  for (const [value, max, label] of textFields) {
+    if (typeof value !== "string" || value.length > max || /[\u0000-\u001F\u007F]/.test(value)) {
+      throw new MembershipRulesValidationError(`${label}設定不正確`);
+    }
+  }
+  if (atm.bankbookImageUrl !== null && (typeof atm.bankbookImageUrl !== "string" || atm.bankbookImageUrl.length > 500 || !atm.bankbookImageUrl.startsWith("/uploads/"))) {
+    throw new MembershipRulesValidationError("ATM 存簿圖片設定不正確");
+  }
+  if (typeof atm.showBankbookImageAtCheckout !== "boolean") throw new MembershipRulesValidationError("ATM 存簿圖片顯示設定不正確");
   if (!object(rules.subscription)) throw new MembershipRulesValidationError("定期購設定不完整");
   percent(rules.subscription.discountPercent, "定期購價格");
   if (!Array.isArray(rules.subscription.intervalsDays) || rules.subscription.intervalsDays.length > 20 || (rules.subscription.intervalsDays.length === 0 && !rules.subscription.customCycleEnabled)) throw new MembershipRulesValidationError("配送週期至少需要一個快捷或自訂選項");
