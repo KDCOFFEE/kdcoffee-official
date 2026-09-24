@@ -30,9 +30,12 @@ export type SelfPurchaseRewardAccumulationBasis =
   | "single_order"
   | "rolling_period";
 
-export type SelfPurchaseRewardTierThresholdBasis =
+export type RewardCalculationBasis =
   | "paid_amount"
   | "pv";
+
+export type SelfPurchaseRewardTierThresholdBasis =
+  RewardCalculationBasis;
 
 export type SelfPurchaseRewardTierCalculationMethod =
   | "whole_order"
@@ -64,8 +67,10 @@ export type SelfPurchaseRewardTierRules = {
 export type RetailPromotionRules = {
   /** Guest retail promotion is independent from member referral rewards. */
   enabled: boolean;
-  /** Percentage of canonical merchandise value awarded as KD credit. */
+  /** Percentage of the selected immutable order basis awarded as KD credit. */
   rewardRate: number;
+  /** Immutable reward calculation basis captured when the guest order is created. */
+  calculationBasis: RewardCalculationBasis;
   /** Lifetime of the last valid public member-share click. */
   attributionWindowDays: number;
 };
@@ -114,7 +119,7 @@ export type MembershipBusinessRules = {
     referralAttributionSessionMinutes: number;
     referralMaxRewardDepth: number;
     levels: Array<{ level: number; enabled: boolean; newReferralRewardRate: number; repeatPurchaseRewardRate: number; subscriptionRewardRate: number }>;
-    referralRewardCalculationMode: "paid_amount" | "pv";
+    referralRewardCalculationMode: RewardCalculationBasis;
     /** Owner-editable display name for the internal PV unit. Internal data fields remain PV for compatibility. */
     pointDisplayName: string;
     /**

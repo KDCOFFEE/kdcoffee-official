@@ -192,13 +192,24 @@ export default function MembershipRulesManager({ initialRevision, initialVersion
     </section>
 
     <section className="membership-rule-card">
-      <header><span>03A</span><div><h2>推廣零售獎金</h2><p>只適用於會員分享帶來的非會員訪客訂單；已登入會員的消費仍只走會員自己的消費與推薦制度。</p></div></header>
-      <div className="membership-fields three">
+      <header><span>03A</span><div><h2>推廣零售獎金</h2><p>會員分享網站連結後，未登入會員的訪客在有效期間內完成購買，該筆訂單會列入分享會員的推廣零售業績，並依下方設定計算獎金。已登入會員的消費仍屬於會員自己的消費。</p></div></header>
+      <div className="membership-fields two">
         <label className="membership-switch"><input type="checkbox" checked={rules.retailPromotion.enabled} onChange={(event) => change((draft) => { draft.retailPromotion.enabled = event.target.checked; })} /><span><b>啟用推廣零售獎金</b><small>關閉後不記錄新的訪客推廣訂單</small></span></label>
-        <NumberField label="推廣零售獎金比例" value={rules.retailPromotion.rewardRate} min={0} max={100} unit="%" onChange={(value) => change((draft) => { draft.retailPromotion.rewardRate = value; })} />
-        <NumberField label="分享來源有效期間" value={rules.retailPromotion.attributionWindowDays} min={1} max={365} unit="天" onChange={(value) => change((draft) => { draft.retailPromotion.attributionWindowDays = value; })} />
+        <fieldset className="membership-choice-group">
+          <legend>推廣零售獎金計算基礎</legend>
+          <label><input type="radio" name="retail-promotion-calculation-basis" value="paid_amount" checked={rules.retailPromotion.calculationBasis === "paid_amount"} onChange={() => change((draft) => { draft.retailPromotion.calculationBasis = "paid_amount"; })} /><span><b>實付商品金額</b><small>以訪客訂單的有效商品實付金額計算</small></span></label>
+          <label><input type="radio" name="retail-promotion-calculation-basis" value="pv" checked={rules.retailPromotion.calculationBasis === "pv"} onChange={() => change((draft) => { draft.retailPromotion.calculationBasis = "pv"; })} /><span><b>KD點（PV）</b><small>以訂單建立時保存的有效 KD點計算</small></span></label>
+        </fieldset>
+        <div className="membership-field-with-note">
+          <NumberField label="推廣零售獎金比例" value={rules.retailPromotion.rewardRate} min={0} max={100} unit="%" onChange={(value) => change((draft) => { draft.retailPromotion.rewardRate = value; })} />
+          <small>{rules.retailPromotion.calculationBasis === "pv" ? `依訪客訂單的有效 KD點（PV）× 此比例計算，再依每 1 KD點 = NT$ ${rules.referral.pvRewardMoneyValue.toLocaleString("zh-TW")} 的現有回饋規則換算抵用金。` : `依訪客有效商品實付金額 × 此比例計算推廣零售獎金。例如有效商品金額 NT$2,000、比例 ${rules.retailPromotion.rewardRate}%，依現有回饋規則計算。`}</small>
+        </div>
+        <div className="membership-field-with-note">
+          <NumberField label="分享來源有效期間" value={rules.retailPromotion.attributionWindowDays} min={1} max={365} unit="天" onChange={(value) => change((draft) => { draft.retailPromotion.attributionWindowDays = value; })} />
+          <small>訪客點擊會員分享連結後，在此期間內以訪客身分建立訂單，該筆訂單會保留該會員的推廣來源。訂單建立後，來源會固定，不受之後重新分享或登入狀態影響。</small>
+        </div>
       </div>
-      <p className="membership-inline-note">訪客訂單建立時會固定保存分享會員、比例、規則版次與安全等待快照。之後調整比例或有效期間，不會回算既有訂單。</p>
+      <p className="membership-inline-note">訂單建立時會固定保存計算基礎、有效業績、比例與規則版次；之後調整設定，不會回算既有訂單。</p>
     </section>
 
     <section className="membership-rule-card">

@@ -10,6 +10,10 @@ type ShareIdentity = {
   settings: { enabled: boolean };
 };
 
+function ShareIcon() {
+  return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a3 3 0 1 0-2.83-4A3 3 0 0 0 15 5c0 .18.02.35.05.52L8.91 8.59a3 3 0 1 0 0 4.82l6.14 3.07A3 3 0 0 0 15 17a3 3 0 1 0 .91-2.16l-6.14-3.07a3.1 3.1 0 0 0 0-1.54l6.14-3.07A3 3 0 0 0 18 8Z" /></svg>;
+}
+
 export default function RetailPromotionShareButton() {
   const pathname = usePathname();
   const [identity, setIdentity] = useState<ShareIdentity | null>(null);
@@ -46,7 +50,7 @@ export default function RetailPromotionShareButton() {
 
   return (
     <aside className="retail-promotion-share" aria-live="polite">
-      <button type="button" onClick={() => void shareCurrentPage()}>分享目前頁面</button>
+      <button type="button" aria-label="分享這個頁面" onClick={() => void shareCurrentPage()}><ShareIcon /><span>分享</span></button>
       {feedback ? <span>{feedback}</span> : null}
     </aside>
   );

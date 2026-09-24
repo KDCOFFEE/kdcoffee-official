@@ -32,7 +32,7 @@ import { subscriptionItemsFromStoredOrderItems } from "@/lib/subscriptionSkuMode
 import { validateDeliveryAddress, validateOrderDeliverySelection } from "@/lib/deliveryAddress";
 import { generalCheckoutShipping } from "@/lib/checkoutShipping";
 import { createAtmTransferSnapshot, quoteHomeDeliveryPayable, type ActiveHomeDeliveryPaymentMethod } from "@/lib/homeDeliveryPayment";
-import { readRetailPromotionOrderSnapshot, type RetailPromotionOrderSnapshot } from "@/lib/retailPromotionAttribution";
+import { finalizeRetailPromotionOrderSnapshot, readRetailPromotionOrderSnapshot, type RetailPromotionOrderSnapshot } from "@/lib/retailPromotionAttribution";
 
 function clean(value: unknown, max = 200) { return String(value ?? "").trim().slice(0, max); }
 function validPhone(value: string) { return /^09\d{8}$/.test(value); }
@@ -154,13 +154,19 @@ export async function POST(request: Request) {
           reuseOrderNumber: existing.action === "retry" ? existing.orderNumber : undefined,
           generateOrderNumber: makeOrderNumber,
           buildOrder: (candidateOrderNumber, priced) => {
+            const orderRetailPromotionAttribution = retailPromotionAttribution
+              ? finalizeRetailPromotionOrderSnapshot(retailPromotionAttribution, {
+                  merchandisePaidAmount: priced.subtotal,
+                  effectivePV: priced.items.reduce((sum, item) => sum + Math.max(0, Number(item.effectivePV || 0)) * item.quantity, 0),
+                })
+              : null;
             const itemLines = priced.items.map(item => `${item.name}｜${item.optionLabel} ${item.optionDetail}${item.preparationLabel ? `｜${item.preparationLabel}` : ""} × ${item.quantity}${item.customRoast ? `｜專屬烘焙：${item.roastLevel}${item.roastNote ? `（${item.roastNote}）` : ""}` : ""}｜NT$ ${item.lineTotal.toLocaleString("zh-TW")}`).join("\n");
             if (orderMode === "711_cod") {
               const store = { id: clean(body.store?.id, 10), name: clean(body.store?.name, 30), address: clean(body.store?.address, 100) };
               if (!validStoreId(store.id) || !store.name || !store.address) throw new Error("請選擇正確且完整的 7-ELEVEN 門市");
               favoriteStore = store;
               return {
-                order: { orderNumber: candidateOrderNumber, createdAt, status: "waiting_merchant_create_cod_shipment", orderMode, customer, member: memberInfo, guestOrderAccess, ...(retailPromotionAttribution ? { retailPromotionAttribution } : {}), store, deliveryAddress: null, subscriptionIntent, payment: "cash_on_delivery", delivery: "7-ELEVEN 門市取貨付款", lineNotification: { sent: false, status: "pending" }, idempotencyKey, idempotencyRequestHash: requestHash, ...priced },
+                order: { orderNumber: candidateOrderNumber, createdAt, status: "waiting_merchant_create_cod_shipment", orderMode, customer, member: memberInfo, guestOrderAccess, ...(orderRetailPromotionAttribution ? { retailPromotionAttribution: orderRetailPromotionAttribution } : {}), store, deliveryAddress: null, subscriptionIntent, payment: "cash_on_delivery", delivery: "7-ELEVEN 門市取貨付款", lineNotification: { sent: false, status: "pending" }, idempotencyKey, idempotencyRequestHash: requestHash, ...priced },
                 lineText: `【KD Coffee 新訂單｜7-ELEVEN 取貨付款】\n\n訂單編號：${candidateOrderNumber}\n會員：${member ? `${member.displayName}（LINE 會員）` : "訪客"}\n姓名：${customer.name}\n手機：${customer.phone}\nEmail：${customer.email || "未提供"}\n\n門市店號：${store.id}\n門市名稱：${store.name}\n門市地址：${store.address}\n\n訂購內容：\n${itemLines}\n\n商品小計：NT$ ${priced.subtotal.toLocaleString("zh-TW")}\n運費：${priced.shipping ? `NT$ ${priced.shipping}` : "免運"}\n取貨付款總額：NT$ ${priced.total.toLocaleString("zh-TW")}\n\n備註：${customer.note || "無"}\n\n下一步：請核對門市資料後，建立 7-ELEVEN 取貨付款寄件單。`,
               };
             }
@@ -169,7 +175,7 @@ export async function POST(request: Request) {
               const payment = quoteHomeDeliveryPayable({ merchandiseSubtotal: priced.subtotal, shipping, availableCredit: 0, requestedCredit: 0, method: paymentMethod as ActiveHomeDeliveryPaymentMethod, rules: rulesVersion.rules });
               const atmTransferSnapshot = paymentMethod === "atm_transfer" ? createAtmTransferSnapshot(rulesVersion.rules) : null;
               return {
-                order: { orderNumber: candidateOrderNumber, createdAt, status: "new_order", orderMode, customer, member: memberInfo, guestOrderAccess, ...(retailPromotionAttribution ? { retailPromotionAttribution } : {}), deliveryAddress, subscriptionIntent, payment: payment.payment, paymentDetails: { ...payment.paymentDetails, paidAt: null }, atmTransferSnapshot, codServiceFee: payment.codServiceFee, delivery: "宅配", lineNotification: { sent: false, status: "pending" }, idempotencyKey, idempotencyRequestHash: requestHash, ...priced, shipping, totalBeforeCredit: payment.totalBeforeCredit, total: payment.total },
+                order: { orderNumber: candidateOrderNumber, createdAt, status: "new_order", orderMode, customer, member: memberInfo, guestOrderAccess, ...(orderRetailPromotionAttribution ? { retailPromotionAttribution: orderRetailPromotionAttribution } : {}), deliveryAddress, subscriptionIntent, payment: payment.payment, paymentDetails: { ...payment.paymentDetails, paidAt: null }, atmTransferSnapshot, codServiceFee: payment.codServiceFee, delivery: "宅配", lineNotification: { sent: false, status: "pending" }, idempotencyKey, idempotencyRequestHash: requestHash, ...priced, shipping, totalBeforeCredit: payment.totalBeforeCredit, total: payment.total },
                 lineText: `【KD Coffee 新訂單｜宅配】\n\n訂單編號：${candidateOrderNumber}\n會員：${member ? `${member.displayName}（LINE 會員）` : "訪客"}\n姓名：${customer.name}\n手機：${customer.phone}\nEmail：${customer.email || "未提供"}\n\n收件人：${deliveryAddress!.recipientName}\n聯絡電話：${deliveryAddress!.phone}\n宅配地址：${deliveryAddress!.postalCode} ${deliveryAddress!.city}${deliveryAddress!.district}${deliveryAddress!.addressLine}\n付款方式：${paymentMethod === "atm_transfer" ? "ATM 轉帳" : "貨到付款"}\n\n訂購內容：\n${itemLines}\n\n商品小計：NT$ ${priced.subtotal.toLocaleString("zh-TW")}\n運費：NT$ ${shipping.toLocaleString("zh-TW")}\n貨到付款手續費：NT$ ${payment.codServiceFee.toLocaleString("zh-TW")}\n應付總額：NT$ ${payment.total.toLocaleString("zh-TW")}\n\n備註：${customer.note || "無"}`,
               };
             }
@@ -179,7 +185,7 @@ export async function POST(request: Request) {
             const pickupAvailability = resolvePickupDateAvailability({ requestedDate: pickup.preferredDate, today: taipeiToday, customRoast: hasCustomRoast, rules: rulesVersion.rules });
             if (!pickupAvailability.allowed) throw new Error(pickupAvailability.reason === "blocked-date" ? "這一天工作室暫停自取，請選擇其他日期" : `工作室自取最早可選 ${pickupAvailability.earliestDate}`);
             return {
-              order: { orderNumber: candidateOrderNumber, createdAt, status: "waiting_studio_pickup_confirmation", orderMode, customer, member: memberInfo, guestOrderAccess, ...(retailPromotionAttribution ? { retailPromotionAttribution } : {}), studioPickup: pickup, deliveryAddress: null, subscriptionIntent, payment: "pickup_confirmation", delivery: "KD Coffee 工作室自取", lineNotification: { sent: false, status: "pending" }, idempotencyKey, idempotencyRequestHash: requestHash, ...priced, shipping: 0, total: priced.subtotal },
+              order: { orderNumber: candidateOrderNumber, createdAt, status: "waiting_studio_pickup_confirmation", orderMode, customer, member: memberInfo, guestOrderAccess, ...(orderRetailPromotionAttribution ? { retailPromotionAttribution: orderRetailPromotionAttribution } : {}), studioPickup: pickup, deliveryAddress: null, subscriptionIntent, payment: "pickup_confirmation", delivery: "KD Coffee 工作室自取", lineNotification: { sent: false, status: "pending" }, idempotencyKey, idempotencyRequestHash: requestHash, ...priced, shipping: 0, total: priced.subtotal },
               lineText: `【KD Coffee 新訂單｜工作室自取】\n\n訂單編號：${candidateOrderNumber}\n會員：${member ? `${member.displayName}（LINE 會員）` : "訪客"}\n姓名：${customer.name}\n手機：${customer.phone}\nEmail：${customer.email || "未提供"}\n\n希望取貨日期：${pickup.preferredDate || "未指定"}\n取貨時間：由工作室確認後通知\n\n訂購內容：\n${itemLines}\n\n訂單總額：NT$ ${priced.subtotal.toLocaleString("zh-TW")}\n備註：${customer.note || "無"}`,
             };
           },

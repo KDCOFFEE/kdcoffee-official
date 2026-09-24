@@ -15,6 +15,7 @@ import {
   type RulesVersion,
 } from "./membershipBusinessRules";
 import type {
+  RewardCalculationBasis,
   SelfPurchaseRewardTierRules,
 } from "./membershipRuleTypes";
 import {
@@ -399,7 +400,11 @@ export type RetailPromotionReward = {
   attributionExpiresAt: string;
   attributionSource: "member-share-link";
   eligibleMerchandiseAmount: number;
+  calculationBasis?: RewardCalculationBasis;
+  calculationBaseValue?: number;
   rewardRate: number;
+  rewardPV?: number;
+  pvRewardMoneyValue?: number;
   calculatedCreditAmount: number;
   ruleVersion: number;
   roundingModeSnapshot: MembershipBusinessRules["money"]["roundingMode"];
@@ -614,6 +619,10 @@ export function validateMembershipCommerceState(value: unknown): MembershipComme
     if (!reward || typeof reward.rewardId !== "string" || typeof reward.sourceOrderNumber !== "string" || typeof reward.beneficiaryMemberId !== "string" || typeof reward.referralCode !== "string" || reward.attributionSource !== "member-share-link" || !Number.isFinite(Date.parse(reward.attributedAt)) || !Number.isFinite(Date.parse(reward.attributionExpiresAt)) || !Number.isSafeInteger(reward.ruleVersion) || !Number.isFinite(Date.parse(reward.successfulCompletionAt)) || !Number.isFinite(Date.parse(reward.releaseEligibleBusinessDate))) throw new MembershipCommerceError("推廣零售獎金格式不正確");
     assertIntegerMoney(reward.eligibleMerchandiseAmount, "推廣零售有效業績");
     assertIntegerMoney(reward.calculatedCreditAmount, "推廣零售獎金");
+    if (reward.calculationBasis !== undefined) {
+      if (!["paid_amount", "pv"].includes(reward.calculationBasis) || typeof reward.calculationBaseValue !== "number" || !Number.isFinite(reward.calculationBaseValue) || reward.calculationBaseValue < 0) throw new MembershipCommerceError("推廣零售計算基礎快照不正確");
+      if (typeof reward.rewardPV !== "number" || !Number.isFinite(reward.rewardPV) || reward.rewardPV < 0 || typeof reward.pvRewardMoneyValue !== "number" || !Number.isFinite(reward.pvRewardMoneyValue) || reward.pvRewardMoneyValue < 0) throw new MembershipCommerceError("推廣零售 PV 換算快照不正確");
+    }
     if (typeof reward.rewardRate !== "number" || !Number.isFinite(reward.rewardRate) || reward.rewardRate < 0 || reward.rewardRate > 100) throw new MembershipCommerceError("推廣零售獎金比例不正確");
     if (!["scheduled", "released", "cancelled", "reversed"].includes(reward.status)) throw new MembershipCommerceError("推廣零售獎金狀態不正確");
   }
@@ -1577,6 +1586,25 @@ function rewardRound(value: number, mode: MembershipBusinessRules["money"]["roun
   if (!Number.isFinite(value) || value < 0) throw new MembershipCommerceError("推薦獎勵計算結果不正確");
   if (mode === OWNER_DECISION_REQUIRED) throw new MembershipCommerceError("金額尾數處理方式尚待 Owner 決定");
   return mode === "round-down" ? Math.floor(value) : mode === "round-up" ? Math.ceil(value) : Math.floor(value + 0.5);
+}
+
+function percentageRewardPayout(input: {
+  calculationBasis: RewardCalculationBasis;
+  calculationBaseValue: number;
+  rewardRate: number;
+  pvRewardMoneyValue: number;
+  roundingMode: MembershipBusinessRules["money"]["roundingMode"];
+}) {
+  const rewardPV = input.calculationBasis === "pv"
+    ? input.calculationBaseValue * input.rewardRate / 100
+    : 0;
+  const rawCredit = input.calculationBasis === "pv"
+    ? rewardPV * input.pvRewardMoneyValue
+    : input.calculationBaseValue * input.rewardRate / 100;
+  return {
+    rewardPV,
+    calculatedCreditAmount: Math.max(0, rewardRound(rawCredit, input.roundingMode)),
+  };
 }
 
 function validForSelfPurchaseTier(consumption: ValidConsumptionEvent) {
@@ -2782,7 +2810,15 @@ export async function createRetailPromotionRewardFromFulfillment(input: {
     const attribution = input.attribution;
     if (attribution.version !== 1 || attribution.source !== "member-share-link" || !Number.isSafeInteger(attribution.ruleVersionId) || attribution.rewardRate < 0 || attribution.rewardRate > 100) throw new MembershipCommerceError("推廣零售訂單快照不完整");
     const eligibleMerchandiseAmount = assertIntegerMoney(input.eligibleMerchandiseAmount, "推廣零售有效業績");
-    const calculatedCreditAmount = Math.max(0, rewardRound(eligibleMerchandiseAmount * attribution.rewardRate / 100, attribution.roundingMode));
+    const calculationBasis: RewardCalculationBasis = attribution.calculationBasis === "pv" ? "pv" : "paid_amount";
+    const calculationBaseValue = attribution.calculationBaseValue === undefined && calculationBasis === "paid_amount"
+      ? eligibleMerchandiseAmount
+      : Number(attribution.calculationBaseValue);
+    if (!Number.isFinite(calculationBaseValue) || calculationBaseValue < 0) throw new MembershipCommerceError("推廣零售訂單計算基礎快照不完整");
+    const pvRewardMoneyValue = Number(attribution.pvRewardMoneyValue ?? 0);
+    if (!Number.isFinite(pvRewardMoneyValue) || pvRewardMoneyValue < 0 || (calculationBasis === "pv" && attribution.pvRewardMoneyValue === undefined)) throw new MembershipCommerceError("推廣零售 PV 換算快照不完整");
+    const payout = percentageRewardPayout({ calculationBasis, calculationBaseValue, rewardRate: attribution.rewardRate, pvRewardMoneyValue, roundingMode: attribution.roundingMode });
+    const { rewardPV, calculatedCreditAmount } = payout;
     if (calculatedCreditAmount < 1) {
       remember(state, key, "none", now);
       return null;
@@ -2799,7 +2835,11 @@ export async function createRetailPromotionRewardFromFulfillment(input: {
       attributionExpiresAt: attribution.expiresAt,
       attributionSource: attribution.source,
       eligibleMerchandiseAmount,
+      calculationBasis,
+      calculationBaseValue,
       rewardRate: attribution.rewardRate,
+      rewardPV,
+      pvRewardMoneyValue,
       calculatedCreditAmount,
       ruleVersion: attribution.ruleVersionId,
       roundingModeSnapshot: attribution.roundingMode,
@@ -2821,7 +2861,7 @@ export async function createRetailPromotionRewardFromFulfillment(input: {
       idempotencyKey: input.idempotencyKey,
     };
     state.retailPromotionRewards[rewardId] = reward;
-    event(state, "retail_promotion_reward_scheduled", { rewardId, eligibleMerchandiseAmount, rewardRate: attribution.rewardRate, rewardAmount: calculatedCreditAmount }, now, { memberId: attribution.referrerMemberId, orderId: input.orderId });
+    event(state, "retail_promotion_reward_scheduled", { rewardId, eligibleMerchandiseAmount, calculationBasis, calculationBaseValue, rewardRate: attribution.rewardRate, rewardPV, rewardAmount: calculatedCreditAmount }, now, { memberId: attribution.referrerMemberId, orderId: input.orderId });
     remember(state, key, rewardId, now);
     return reward;
   }, { now: input.now, filePath: input.stateFilePath });
@@ -3608,13 +3648,26 @@ export async function getMemberRetailPromotionCenter(memberId: string, options: 
     const eligibleSales = Math.max(0, subtotal - appliedCredit);
     const rewardRate = Number(attribution.rewardRate);
     if (!Number.isFinite(rewardRate) || rewardRate < 0 || rewardRate > 100 || !Number.isSafeInteger(attribution.ruleVersionId)) return [];
+    const calculationBasis: RewardCalculationBasis = attribution.calculationBasis === "pv" ? "pv" : "paid_amount";
+    const calculationBaseValue = typeof attribution.calculationBaseValue === "number" && Number.isFinite(attribution.calculationBaseValue) && attribution.calculationBaseValue >= 0
+      ? attribution.calculationBaseValue
+      : calculationBasis === "paid_amount"
+        ? eligibleSales
+        : NaN;
+    const pvRewardMoneyValue = Number(attribution.pvRewardMoneyValue ?? 0);
+    if (!Number.isFinite(calculationBaseValue) || !Number.isFinite(pvRewardMoneyValue) || pvRewardMoneyValue < 0) return [];
+    const payout = percentageRewardPayout({ calculationBasis, calculationBaseValue, rewardRate, pvRewardMoneyValue, roundingMode: attribution.roundingMode! });
     return [{
       rewardId: `pending:${order.orderNumber}`,
       date: order.createdAt,
       orderReference: maskOrderNumber(order.orderNumber),
       eligibleSales,
+      calculationBasis,
+      calculationBaseValue,
       rewardRate,
-      rewardAmount: Math.max(0, rewardRound(eligibleSales * rewardRate / 100, attribution.roundingMode!)),
+      rewardPV: payout.rewardPV,
+      pvRewardMoneyValue,
+      rewardAmount: payout.calculatedCreditAmount,
       status: "pending_completion" as const,
       releaseEligibleBusinessDate: "",
       releasedAt: null,
@@ -3626,7 +3679,11 @@ export async function getMemberRetailPromotionCenter(memberId: string, options: 
     date: reward.successfulCompletionAt,
     orderReference: maskOrderNumber(reward.sourceOrderNumber),
     eligibleSales: reward.eligibleMerchandiseAmount,
+    calculationBasis: reward.calculationBasis === "pv" ? "pv" as const : "paid_amount" as const,
+    calculationBaseValue: typeof reward.calculationBaseValue === "number" ? reward.calculationBaseValue : reward.eligibleMerchandiseAmount,
     rewardRate: reward.rewardRate,
+    rewardPV: typeof reward.rewardPV === "number" ? reward.rewardPV : 0,
+    pvRewardMoneyValue: typeof reward.pvRewardMoneyValue === "number" ? reward.pvRewardMoneyValue : 0,
     rewardAmount: reward.calculatedCreditAmount,
     status: reward.status,
     releaseEligibleBusinessDate: reward.releaseEligibleBusinessDate,
@@ -3638,7 +3695,10 @@ export async function getMemberRetailPromotionCenter(memberId: string, options: 
     settings: {
       enabled: version.rules.retailPromotion.enabled,
       rewardRate: version.rules.retailPromotion.rewardRate,
+      calculationBasis: version.rules.retailPromotion.calculationBasis,
       attributionWindowDays: version.rules.retailPromotion.attributionWindowDays,
+      pointDisplayName: version.rules.referral.pointDisplayName || "KD點",
+      pvRewardMoneyValue: version.rules.referral.pvRewardMoneyValue,
     },
     summary: {
       promotionSales: active.reduce((sum, reward) => sum + reward.eligibleMerchandiseAmount, 0),
@@ -3646,6 +3706,16 @@ export async function getMemberRetailPromotionCenter(memberId: string, options: 
       promotionReward: active.reduce((sum, reward) => sum + reward.calculatedCreditAmount, 0),
       pendingReward: rewards.filter((reward) => reward.status === "scheduled").reduce((sum, reward) => sum + reward.calculatedCreditAmount, 0),
       releasedReward: rewards.filter((reward) => reward.status === "released").reduce((sum, reward) => sum + reward.calculatedCreditAmount, 0),
+      performanceByBasis: {
+        paidAmount: {
+          completed: rewardHistory.filter((item) => item.calculationBasis === "paid_amount" && ["scheduled", "released"].includes(item.status)).reduce((sum, item) => sum + item.calculationBaseValue, 0),
+          pending: pendingOrders.filter((item) => item.calculationBasis === "paid_amount").reduce((sum, item) => sum + item.calculationBaseValue, 0),
+        },
+        pv: {
+          completed: rewardHistory.filter((item) => item.calculationBasis === "pv" && ["scheduled", "released"].includes(item.status)).reduce((sum, item) => sum + item.calculationBaseValue, 0),
+          pending: pendingOrders.filter((item) => item.calculationBasis === "pv").reduce((sum, item) => sum + item.calculationBaseValue, 0),
+        },
+      },
     },
     history: [...pendingOrders, ...rewardHistory].sort((left, right) => right.date.localeCompare(left.date)),
   };

@@ -12,7 +12,7 @@ import {
 import { getMembershipRulesFile } from "./storagePaths";
 
 export { MEMBERSHIP_RULES_SCHEMA_VERSION, OWNER_DECISION_REQUIRED } from "./membershipRuleTypes";
-export type { MembershipBusinessRules, MembershipRulesStore, MoneyRoundingMode, ReferralExcessConsumptionMode, ReferralPayoutQualificationMode, ReferralPayoutQualificationRules, ReferralQualificationBasis, RetailPromotionRules, RulesVersion } from "./membershipRuleTypes";
+export type { MembershipBusinessRules, MembershipRulesStore, MoneyRoundingMode, ReferralExcessConsumptionMode, ReferralPayoutQualificationMode, ReferralPayoutQualificationRules, ReferralQualificationBasis, RetailPromotionRules, RewardCalculationBasis, RulesVersion } from "./membershipRuleTypes";
 
 export class MembershipRulesValidationError extends Error {
   constructor(message: string) {
@@ -149,6 +149,7 @@ export const DEFAULT_MEMBERSHIP_RULES: MembershipBusinessRules = {
     // Legacy rule versions normalize to disabled so rollout is prospective.
     enabled: false,
     rewardRate: 5,
+    calculationBasis: "paid_amount",
     attributionWindowDays: 30,
   },
   credit: {
@@ -623,6 +624,7 @@ export function validateMembershipBusinessRules(value: unknown, options: Members
   if (!object(rules.retailPromotion)) throw new MembershipRulesValidationError("推廣零售獎金設定不完整");
   if (typeof rules.retailPromotion.enabled !== "boolean") throw new MembershipRulesValidationError("推廣零售獎金開關不正確");
   percent(rules.retailPromotion.rewardRate, "推廣零售獎金比例");
+  validateOwnerChoice(rules.retailPromotion.calculationBasis, ["paid_amount", "pv"], "推廣零售獎金計算基礎");
   integer(rules.retailPromotion.attributionWindowDays, 1, 365, "分享來源有效期間");
 
   if (!object(rules.credit) || !object(rules.credit.redemption)) throw new MembershipRulesValidationError("抵用金設定不完整");

@@ -13,6 +13,11 @@ import { listActiveSkusMissingPv } from "@/lib/referralPv";
 
 export const dynamic = "force-dynamic";
 
+function requiresCompletePvCatalog(rules: unknown) {
+  const candidate = rules as { referral?: { referralRewardCalculationMode?: unknown }; retailPromotion?: { calculationBasis?: unknown } } | null;
+  return candidate?.referral?.referralRewardCalculationMode === "pv" || candidate?.retailPromotion?.calculationBasis === "pv";
+}
+
 export async function GET() {
   if (!(await isAdminAuthenticated())) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const store = await readMembershipRulesStore();
@@ -23,7 +28,7 @@ export async function PUT(request: Request) {
   if (!(await isAdminAuthenticated())) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   try {
     const body = await request.json();
-    if (body.rules?.referral?.referralRewardCalculationMode === "pv") {
+    if (requiresCompletePvCatalog(body.rules)) {
       const missingPv = listActiveSkusMissingPv(await getLiveWebsiteData());
       if (missingPv.length) return NextResponse.json({ error: `尚有 ${missingPv.length} 個販售中規格未設定 PV，無法切換。`, missingPv }, { status: 400 });
     }
@@ -41,7 +46,7 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     const impact = await previewMembershipRulesImpact(body.rules);
-    const missingPv = body.rules?.referral?.referralRewardCalculationMode === "pv" ? listActiveSkusMissingPv(await getLiveWebsiteData()) : [];
+    const missingPv = requiresCompletePvCatalog(body.rules) ? listActiveSkusMissingPv(await getLiveWebsiteData()) : [];
     return NextResponse.json({ ...impact, missingPv, pvSwitchBlocked: missingPv.length > 0 });
   } catch (error) {
     if (error instanceof MembershipRulesValidationError) return NextResponse.json({ error: error.message }, { status: 400 });

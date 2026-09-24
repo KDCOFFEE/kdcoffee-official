@@ -6,6 +6,7 @@ import { getIdentityRegistrySnapshot } from "./memberIdentity";
 import { getActiveMembershipRules, type RulesVersion } from "./membershipBusinessRules";
 import { referralCodeForMember } from "./membershipCommerce";
 import { normalizeReferralAttributionCode } from "./referralAttribution";
+import type { RewardCalculationBasis } from "./membershipRuleTypes";
 
 export const RETAIL_PROMOTION_ATTRIBUTION_COOKIE = "kd_retail_promotion_attribution";
 
@@ -26,6 +27,9 @@ export type RetailPromotionOrderSnapshot = {
   source: "member-share-link";
   ruleVersionId: number;
   rewardRate: number;
+  calculationBasis?: RewardCalculationBasis;
+  calculationBaseValue?: number;
+  pvRewardMoneyValue?: number;
   baseWaitingDays: number;
   returnProtectionDays: number;
   reversalPolicy: "cancel-pending-and-reverse-released" | "cancel-pending-only";
@@ -141,9 +145,27 @@ export async function readRetailPromotionOrderSnapshot(input: {
     source: token.source,
     ruleVersionId: version.rulesVersion,
     rewardRate: rules.rewardRate,
+    calculationBasis: rules.calculationBasis,
+    pvRewardMoneyValue: version.rules.referral.pvRewardMoneyValue,
     baseWaitingDays: version.rules.referral.referralRewardBaseWaitingDays,
     returnProtectionDays: version.rules.referral.referralRewardReturnProtectionDays,
     reversalPolicy: version.rules.referral.reversalPolicy,
     roundingMode: version.rules.money.roundingMode,
+  };
+}
+
+/** Adds trusted order-pricing evidence. Existing finalized snapshots remain immutable on retries. */
+export function finalizeRetailPromotionOrderSnapshot(
+  snapshot: RetailPromotionOrderSnapshot,
+  input: { merchandisePaidAmount: number; effectivePV: number },
+): RetailPromotionOrderSnapshot {
+  if (typeof snapshot.calculationBaseValue === "number" && Number.isFinite(snapshot.calculationBaseValue)) return structuredClone(snapshot);
+  const calculationBasis = snapshot.calculationBasis ?? "paid_amount";
+  const merchandisePaidAmount = Math.max(0, Number(input.merchandisePaidAmount) || 0);
+  const effectivePV = Math.max(0, Number(input.effectivePV) || 0);
+  return {
+    ...structuredClone(snapshot),
+    calculationBasis,
+    calculationBaseValue: calculationBasis === "pv" ? effectivePV : merchandisePaidAmount,
   };
 }
