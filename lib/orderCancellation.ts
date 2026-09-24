@@ -7,6 +7,7 @@ import {
 } from "@/lib/adminOrders";
 import { withFileLock } from "@/lib/jsonFileStore";
 import {
+  cancelOrReverseRetailPromotionRewards,
   cancelSubscriptionCycleForOrder,
   handleReferralQualificationOrderOutcome,
   settleCreditReservationForOrder,
@@ -213,6 +214,16 @@ export async function cancelOrderCanonically(input: CancelOrderInput): Promise<C
     } catch (error) {
       console.error(`Order ${input.orderNumber} cancelled but referral qualification sync failed:`, error);
     }
+  }
+  if (!memberId && result.order.retailPromotionAttribution) {
+    await cancelOrReverseRetailPromotionRewards({
+      orderId: input.orderNumber,
+      outcome: "cancelled",
+      idempotencyKey: stableKey,
+      now: now(),
+      stateFilePath: input.membershipStateFilePath,
+      rulesFilePath: input.membershipRulesFilePath,
+    });
   }
   await cancelSubscriptionCycleForOrder({
     orderId: input.orderNumber,

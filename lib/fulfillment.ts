@@ -6,7 +6,8 @@ import { updateStoredOrderSafely, withStoredOrderUpdateLock, readOrder, type Sto
 import { assessOrderInventoryTransaction } from "./orderInventoryPolicy";
 import type { HomeDeliveryPaymentDetails } from "./homeDeliveryPayment";
 import { atomicWriteJson, withFileLock } from "./jsonFileStore";
-import { handleCanonicalOrderOutcome, handleReferralQualificationOrderOutcome } from "./membershipCommerce";
+import { cancelOrReverseRetailPromotionRewards, handleCanonicalOrderOutcome, handleReferralQualificationOrderOutcome } from "./membershipCommerce";
+import type { RetailPromotionOrderSnapshot } from "./retailPromotionAttribution";
 import { getFulfillmentSettingsFile, getFulfillmentStateFile } from "./storagePaths";
 import { parseSevenElevenEmail, type FulfillmentEmailEvidence, type ParsedFulfillmentEvidence } from "./sevenElevenEmailParser";
 import {
@@ -217,6 +218,7 @@ async function runConsequence(order: StoredOrder, event: FulfillmentEvent) {
   if (event.state === "cancelled") {
     const memberId = typeof order.member?.memberId === "string" ? order.member.memberId : undefined;
     if (memberId) await handleReferralQualificationOrderOutcome({ memberId, orderId: order.orderNumber, outcome: "cancelled", idempotencyKey: `fulfillment:${event.eventId}`, now: new Date(event.occurredAt) });
+    if (!memberId && order.retailPromotionAttribution) await cancelOrReverseRetailPromotionRewards({ orderId: order.orderNumber, outcome: "cancelled", idempotencyKey: `fulfillment:${event.eventId}:retail-promotion`, now: new Date(event.occurredAt) });
     return;
   }
   if (event.state !== "completed" && event.state !== "uncollected") return;
@@ -229,6 +231,7 @@ async function runConsequence(order: StoredOrder, event: FulfillmentEvent) {
     orderId: order.orderNumber,
     outcome: event.state,
     memberId: typeof order.member?.memberId === "string" ? order.member.memberId : undefined,
+    retailPromotionAttribution: typeof order.member?.memberId === "string" ? null : order.retailPromotionAttribution as RetailPromotionOrderSnapshot | undefined,
     merchandiseAmount,
     basePV,
     effectivePV,

@@ -61,6 +61,15 @@ export type SelfPurchaseRewardTierRules = {
   tiers: SelfPurchaseRewardTier[];
 };
 
+export type RetailPromotionRules = {
+  /** Guest retail promotion is independent from member referral rewards. */
+  enabled: boolean;
+  /** Percentage of canonical merchandise value awarded as KD credit. */
+  rewardRate: number;
+  /** Lifetime of the last valid public member-share click. */
+  attributionWindowDays: number;
+};
+
 export type ReferralPayoutQualificationRules = {
   mode: ReferralPayoutQualificationMode;
   qualificationBasis: ReferralQualificationBasis;
@@ -153,6 +162,7 @@ export type MembershipBusinessRules = {
     referrerEligibility: { mode: typeof OWNER_DECISION_REQUIRED } | { mode: "active-subscription" } | { mode: "none" } | { mode: "completed-orders"; minimumOrders: number } | { mode: "lifetime-spend"; minimumAmount: number } | { mode: "recent-valid-purchase"; withinDays: number };
     reward: ({ mode: typeof OWNER_DECISION_REQUIRED } | { mode: "fixed"; amount: number } | { mode: "percentage"; percent: number } | { mode: "per-eligible-item"; amount: number }) & { repeatedRewards: boolean };
   };
+  retailPromotion: RetailPromotionRules;
   credit: {
     expiryCalendarMonths: number;
     expiryReminderDays: number;

@@ -14,6 +14,7 @@ import {
   clearReferralAttributionCookie,
   resolveReferralAttributionCandidate,
 } from "@/lib/referralAttribution";
+import { clearRetailPromotionAttributionCookie } from "@/lib/retailPromotionAttribution";
 
 export async function POST(request: Request) {
   try {
@@ -75,6 +76,7 @@ export async function POST(request: Request) {
       memberSessionCookieOptions(process.env.NODE_ENV === "production"),
     );
     clearReferralAttributionCookie(response);
+    clearRetailPromotionAttributionCookie(response);
     return response;
   } catch {
     return NextResponse.json({ error: "建立會員失敗，請稍後再試" }, { status: 500 });

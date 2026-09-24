@@ -12,6 +12,7 @@ import MemberMobileDisclosure from "@/components/member/MemberMobileDisclosure";
 import MemberSectionNav from "@/components/member/MemberSectionNav";
 import MemberSubscriptionExperience from "@/components/member/MemberSubscriptionExperience";
 import MemberReferralCenter from "@/components/member/MemberReferralCenter";
+import RetailPromotionCenter from "@/components/member/RetailPromotionCenter";
 import MemberQualificationProgress from "@/components/member/MemberQualificationProgress";
 import { getMemberCommerceDashboard, getMemberReferralCenter } from "@/lib/membershipCommerce";
 import { getActiveMembershipRules } from "@/lib/membershipBusinessRules";
@@ -497,6 +498,7 @@ export default async function MemberPage({
           <MemberSubscriptionExperience {...commerce} products={subscriptionProducts} rules={{ intervalsDays: rulesVersion.rules.subscription.intervalOptions.filter((item) => item.enabled).map((item) => item.days), customCycleEnabled: rulesVersion.rules.subscription.customCycleEnabled, customCycleMinDays: rulesVersion.rules.subscription.customCycleMinDays, customCycleMaxDays: rulesVersion.rules.subscription.customCycleMaxDays, delayQuickOptionsDays: rulesVersion.rules.subscription.delayQuickOptionsDays, advanceQuickOptionsDays: rulesVersion.rules.subscription.advanceQuickOptionsDays, preparationLeadDays: rulesVersion.rules.subscription.preparationLeadDays, discountPercent: rulesVersion.rules.subscription.discountPercent, sevenElevenShippingFee: rulesVersion.rules.shipping.sevenElevenShippingFee, homeDeliveryShippingFee: rulesVersion.rules.shipping.homeDeliveryShippingFee, homeDeliveryCodFee: rulesVersion.rules.shipping.homeDeliveryCodFee, subscriptionShippingDiscount: rulesVersion.rules.shipping.subscriptionShippingDiscount, datePickerMode: rulesVersion.rules.subscription.datePickerMode, maxModificationsPerCycle: rulesVersion.rules.subscription.maxModificationsPerCycle, allowOtherSubscriptionProducts: rulesVersion.rules.subscription.allowOtherSubscriptionProducts, allowHalfToOnePound: rulesVersion.rules.subscription.allowHalfToOnePound, allowOneToHalfPound: rulesVersion.rules.subscription.allowOneToHalfPound, allowMixedOnePound: rulesVersion.rules.subscription.allowMixedOnePound, allowQuantityChange: rulesVersion.rules.subscription.allowQuantityChange, maxItems: MEMBER_SUBSCRIPTION_MAX_ITEMS }} />
         </MemberMobileDisclosure>
         <MemberMobileDisclosure eyebrow="REFERRAL" title="推薦與回饋" summary={`直接推薦 ${commerce.referrals.length} 人・待入帳 ${pendingRewardPoints.toLocaleString("zh-TW")} ${pointDisplayName}`}>
+          <RetailPromotionCenter />
           <MemberReferralCenter />
         </MemberMobileDisclosure>
 

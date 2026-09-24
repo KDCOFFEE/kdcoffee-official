@@ -8,6 +8,11 @@ import {
   normalizeReferralAttributionCode,
   setReferralAttributionCookie,
 } from "@/lib/referralAttribution";
+import {
+  clearRetailPromotionAttributionCookie,
+  getRetailPromotionAttributionPolicy,
+  setRetailPromotionAttributionCookie,
+} from "@/lib/retailPromotionAttribution";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +28,7 @@ export async function POST(request: Request) {
       });
 
       clearReferralAttributionCookie(response);
+      clearRetailPromotionAttributionCookie(response);
       return response;
     }
 
@@ -33,9 +39,12 @@ export async function POST(request: Request) {
         body.referralCode,
       );
 
-    const policy = await getReferralAttributionPolicy();
+    const [referralPolicy, retailPromotionPolicy] = await Promise.all([
+      getReferralAttributionPolicy(),
+      getRetailPromotionAttributionPolicy(),
+    ]);
 
-    if (!policy.enabled) {
+    if (!referralPolicy.enabled && !retailPromotionPolicy.enabled) {
       const response = NextResponse.json({
         ok: true,
         tracked: false,
@@ -43,6 +52,7 @@ export async function POST(request: Request) {
       });
 
       clearReferralAttributionCookie(response);
+      clearRetailPromotionAttributionCookie(response);
       return response;
     }
 
@@ -62,14 +72,25 @@ export async function POST(request: Request) {
     const response = NextResponse.json({
       ok: true,
       tracked: true,
-      sessionMinutes: policy.sessionMinutes,
+      referralTracked: referralPolicy.enabled,
+      retailPromotionTracked: retailPromotionPolicy.enabled,
+      sessionMinutes: referralPolicy.enabled ? referralPolicy.sessionMinutes : undefined,
+      attributionWindowDays: retailPromotionPolicy.enabled ? retailPromotionPolicy.attributionWindowDays : undefined,
     });
 
-    setReferralAttributionCookie(
-      response,
-      referralCode,
-      policy.sessionMinutes,
-    );
+    if (referralPolicy.enabled) {
+      setReferralAttributionCookie(response, referralCode, referralPolicy.sessionMinutes);
+    } else {
+      clearReferralAttributionCookie(response);
+    }
+    if (retailPromotionPolicy.enabled) {
+      setRetailPromotionAttributionCookie(response, {
+        referralCode,
+        attributionWindowDays: retailPromotionPolicy.attributionWindowDays,
+      });
+    } else {
+      clearRetailPromotionAttributionCookie(response);
+    }
 
     return response;
   } catch {

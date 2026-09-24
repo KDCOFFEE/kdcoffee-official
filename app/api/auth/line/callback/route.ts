@@ -16,6 +16,7 @@ import {
   clearReferralAttributionCookie,
   resolveReferralAttributionCandidate,
 } from "@/lib/referralAttribution";
+import { clearRetailPromotionAttributionCookie } from "@/lib/retailPromotionAttribution";
 
 function env(name: string) {
   return process.env[name]?.trim();
@@ -182,6 +183,7 @@ export async function GET(request: NextRequest) {
       const linked = NextResponse.redirect(`${baseUrl}/member?linked=line`);
       clearOAuthCookies(linked);
       clearReferralAttributionCookie(linked);
+      clearRetailPromotionAttributionCookie(linked);
       return linked;
     }
 
@@ -196,6 +198,7 @@ export async function GET(request: NextRequest) {
       const linkRequired = NextResponse.redirect(`${baseUrl}/member?error=account_link_required`);
       clearOAuthCookies(linkRequired);
       clearReferralAttributionCookie(linkRequired);
+      clearRetailPromotionAttributionCookie(linkRequired);
       return linkRequired;
     }
 
@@ -229,6 +232,7 @@ export async function GET(request: NextRequest) {
     );
     clearOAuthCookies(response);
     clearReferralAttributionCookie(response);
+    clearRetailPromotionAttributionCookie(response);
     return response;
   } catch (err) {
     console.error("LINE login callback failed", {

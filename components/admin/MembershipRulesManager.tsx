@@ -192,6 +192,16 @@ export default function MembershipRulesManager({ initialRevision, initialVersion
     </section>
 
     <section className="membership-rule-card">
+      <header><span>03A</span><div><h2>推廣零售獎金</h2><p>只適用於會員分享帶來的非會員訪客訂單；已登入會員的消費仍只走會員自己的消費與推薦制度。</p></div></header>
+      <div className="membership-fields three">
+        <label className="membership-switch"><input type="checkbox" checked={rules.retailPromotion.enabled} onChange={(event) => change((draft) => { draft.retailPromotion.enabled = event.target.checked; })} /><span><b>啟用推廣零售獎金</b><small>關閉後不記錄新的訪客推廣訂單</small></span></label>
+        <NumberField label="推廣零售獎金比例" value={rules.retailPromotion.rewardRate} min={0} max={100} unit="%" onChange={(value) => change((draft) => { draft.retailPromotion.rewardRate = value; })} />
+        <NumberField label="分享來源有效期間" value={rules.retailPromotion.attributionWindowDays} min={1} max={365} unit="天" onChange={(value) => change((draft) => { draft.retailPromotion.attributionWindowDays = value; })} />
+      </div>
+      <p className="membership-inline-note">訪客訂單建立時會固定保存分享會員、比例、規則版次與安全等待快照。之後調整比例或有效期間，不會回算既有訂單。</p>
+    </section>
+
+    <section className="membership-rule-card">
       <header><span>ATM</span><div><h2>ATM 轉帳設定</h2><p>設定宅配 ATM 付款時提供給客人的銀行資料與存簿圖片。</p></div></header>
       <div className="membership-fields two">
         <label className="membership-text-field"><span className="rule-field-title"><span>銀行名稱</span></span><input type="text" maxLength={80} value={rules.payment.atmTransfer.bankName} onChange={(event) => change((draft) => { draft.payment.atmTransfer.bankName = event.target.value; })} placeholder="例如：臺灣銀行" /></label>

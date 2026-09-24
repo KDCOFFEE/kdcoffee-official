@@ -3,6 +3,7 @@ import Script from "next/script";
 import { Suspense } from "react";
 import { CartProvider } from "@/components/commerce/CartProvider";
 import ReferralAttributionCapture from "@/components/member/ReferralAttributionCapture";
+import RetailPromotionShareButton from "@/components/member/RetailPromotionShareButton";
 import FloatingCart from "@/components/commerce/FloatingCart";
 import "./globals.css";
 
@@ -14,5 +15,5 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="zh-Hant" suppressHydrationWarning><body><CartProvider><Suspense fallback={null}><ReferralAttributionCapture /></Suspense>{children}<FloatingCart /></CartProvider><Script id="works-motion-bootstrap" strategy="beforeInteractive">{`(function(){var root=document.documentElement;root.dataset.worksMotionCapable="true";window.addEventListener("works-motion-runtime-ready",function(){root.dataset.worksMotionRuntimeReady="true"},{once:true});window.setTimeout(function(){if(!root.dataset.worksMotionRuntimeReady){delete root.dataset.worksMotionCapable;}},1500);})();`}</Script></body></html>;
+  return <html lang="zh-Hant" suppressHydrationWarning><body><CartProvider><Suspense fallback={null}><ReferralAttributionCapture /></Suspense>{children}<RetailPromotionShareButton /><FloatingCart /></CartProvider><Script id="works-motion-bootstrap" strategy="beforeInteractive">{`(function(){var root=document.documentElement;root.dataset.worksMotionCapable="true";window.addEventListener("works-motion-runtime-ready",function(){root.dataset.worksMotionRuntimeReady="true"},{once:true});window.setTimeout(function(){if(!root.dataset.worksMotionRuntimeReady){delete root.dataset.worksMotionCapable;}},1500);})();`}</Script></body></html>;
 }

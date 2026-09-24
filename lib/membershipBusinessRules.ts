@@ -12,7 +12,7 @@ import {
 import { getMembershipRulesFile } from "./storagePaths";
 
 export { MEMBERSHIP_RULES_SCHEMA_VERSION, OWNER_DECISION_REQUIRED } from "./membershipRuleTypes";
-export type { MembershipBusinessRules, MembershipRulesStore, MoneyRoundingMode, ReferralExcessConsumptionMode, ReferralPayoutQualificationMode, ReferralPayoutQualificationRules, ReferralQualificationBasis, RulesVersion } from "./membershipRuleTypes";
+export type { MembershipBusinessRules, MembershipRulesStore, MoneyRoundingMode, ReferralExcessConsumptionMode, ReferralPayoutQualificationMode, ReferralPayoutQualificationRules, ReferralQualificationBasis, RetailPromotionRules, RulesVersion } from "./membershipRuleTypes";
 
 export class MembershipRulesValidationError extends Error {
   constructor(message: string) {
@@ -144,6 +144,12 @@ export const DEFAULT_MEMBERSHIP_RULES: MembershipBusinessRules = {
     reversalPolicy: "cancel-pending-and-reverse-released",
     referrerEligibility: { mode: "none" },
     reward: { mode: "percentage", percent: 5, repeatedRewards: true },
+  },
+  retailPromotion: {
+    // Legacy rule versions normalize to disabled so rollout is prospective.
+    enabled: false,
+    rewardRate: 5,
+    attributionWindowDays: 30,
   },
   credit: {
     expiryCalendarMonths: 3,
@@ -287,6 +293,10 @@ export function normalizeMembershipBusinessRules(value: unknown, options: Member
         }),
       };
     })(),
+    retailPromotion: {
+      ...DEFAULT_MEMBERSHIP_RULES.retailPromotion,
+      ...nested("retailPromotion"),
+    },
     credit: { ...DEFAULT_MEMBERSHIP_RULES.credit, ...nested("credit") },
     campaign: { ...DEFAULT_MEMBERSHIP_RULES.campaign, ...nested("campaign") },
     notification: { ...DEFAULT_MEMBERSHIP_RULES.notification, ...notification, events } as MembershipBusinessRules["notification"],
@@ -609,6 +619,11 @@ export function validateMembershipBusinessRules(value: unknown, options: Members
   if (rules.referral.reward.mode === "fixed") integer(rules.referral.reward.amount, 1, 1_000_000, "推薦獎勵金額");
   if (rules.referral.reward.mode === "percentage") percent(rules.referral.reward.percent, "推薦獎勵比例");
   if (rules.referral.reward.mode === "per-eligible-item") integer(rules.referral.reward.amount, 1, 1_000_000, "每件推薦獎勵");
+
+  if (!object(rules.retailPromotion)) throw new MembershipRulesValidationError("推廣零售獎金設定不完整");
+  if (typeof rules.retailPromotion.enabled !== "boolean") throw new MembershipRulesValidationError("推廣零售獎金開關不正確");
+  percent(rules.retailPromotion.rewardRate, "推廣零售獎金比例");
+  integer(rules.retailPromotion.attributionWindowDays, 1, 365, "分享來源有效期間");
 
   if (!object(rules.credit) || !object(rules.credit.redemption)) throw new MembershipRulesValidationError("抵用金設定不完整");
   integer(rules.credit.expiryCalendarMonths, 1, 120, "抵用金期限");

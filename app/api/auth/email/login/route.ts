@@ -9,6 +9,7 @@ import {
   normalizeEmail,
 } from "@/lib/memberAuth";
 import { clearReferralAttributionCookie } from "@/lib/referralAttribution";
+import { clearRetailPromotionAttributionCookie } from "@/lib/retailPromotionAttribution";
 
 const LOGIN_ERROR = "Email 或密碼錯誤";
 
@@ -30,6 +31,7 @@ export async function POST(request: Request) {
       memberSessionCookieOptions(process.env.NODE_ENV === "production"),
     );
     clearReferralAttributionCookie(response);
+    clearRetailPromotionAttributionCookie(response);
     return response;
   } catch (error) {
     if (error instanceof MemberAccountDisabledError) {

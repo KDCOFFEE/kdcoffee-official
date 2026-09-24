@@ -2,7 +2,7 @@ import { createHash, randomBytes } from "crypto";
 import { promises as fs } from "fs";
 import path from "path";
 
-import { readOrder } from "./adminOrders";
+import { listOrders, readOrder } from "./adminOrders";
 import { getDateOnlyInTimeZone } from "./checkoutRules";
 import { atomicWriteJson, withFileLock } from "./jsonFileStore";
 import { getCanonicalMemberRecord, getIdentityRegistrySnapshot } from "./memberIdentity";
@@ -48,6 +48,7 @@ import {
   dedicatedRoastRushRequired,
   subscriptionHasDedicatedRoast,
 } from "./subscriptionRoastPolicy";
+import type { RetailPromotionOrderSnapshot } from "./retailPromotionAttribution";
 
 export const MEMBERSHIP_COMMERCE_SCHEMA_VERSION = 1 as const;
 
@@ -389,6 +390,37 @@ export type ReferralReward = {
   idempotencyKey: string;
 };
 
+export type RetailPromotionReward = {
+  rewardId: string;
+  sourceOrderNumber: string;
+  beneficiaryMemberId: string;
+  referralCode: string;
+  attributedAt: string;
+  attributionExpiresAt: string;
+  attributionSource: "member-share-link";
+  eligibleMerchandiseAmount: number;
+  rewardRate: number;
+  calculatedCreditAmount: number;
+  ruleVersion: number;
+  roundingModeSnapshot: MembershipBusinessRules["money"]["roundingMode"];
+  baseWaitingDaysSnapshot: number;
+  returnProtectionDaysSnapshot: number;
+  totalWaitingDaysSnapshot: number;
+  reversalPolicySnapshot: MembershipBusinessRules["referral"]["reversalPolicy"];
+  successfulCompletionAt: string;
+  successfulPickupBusinessDate: string;
+  releaseEligibleBusinessDate: string;
+  createdAt: string;
+  releasedAt: string | null;
+  reversedAt?: string | null;
+  sourceOrderFinalState: "completed" | "cancelled" | "uncollected" | "refunded" | "returned";
+  status: "scheduled" | "released" | "cancelled" | "reversed";
+  cancellationReason?: string | null;
+  rewardCreditEntryId: string | null;
+  reversalCreditEntryId: string | null;
+  idempotencyKey: string;
+};
+
 export type CreditEntry = {
   creditEntryId: string;
   memberId: string;
@@ -425,7 +457,7 @@ export type MemberCreditHistoryEntry = {
   expiresAt: string;
   status: CreditEntry["status"];
   direction: "grant" | "deduct";
-  sourceLabel: "推薦回饋" | "會員續購回饋" | "KD Coffee 贈送" | "會員抵用金" | "抵用金調整";
+  sourceLabel: "推薦回饋" | "會員續購回饋" | "推廣零售獎金" | "KD Coffee 贈送" | "會員抵用金" | "抵用金調整";
   orderRedemptions: Array<{
     orderNumber: string;
     amount: number;
@@ -488,6 +520,7 @@ export type MembershipCommerceState = {
   referrals: Record<string, ReferralRelationship>;
   referralConversions: Record<string, ReferralConversion>;
   referralRewards: Record<string, ReferralReward>;
+  retailPromotionRewards: Record<string, RetailPromotionReward>;
   validConsumptionEvents: Record<string, ValidConsumptionEvent>;
   qualificationRounds: Record<string, QualificationRound>;
   referralRewardCoverages: Record<string, ReferralRewardCoverage>;
@@ -529,7 +562,7 @@ function nowIso(now = new Date()) {
 
 function emptyState(now = new Date()): MembershipCommerceState {
   const timestamp = nowIso(now);
-  return { schemaVersion: 1, revision: 0, createdAt: timestamp, updatedAt: timestamp, subscriptions: {}, cycles: {}, referrals: {}, referralConversions: {}, referralRewards: {}, validConsumptionEvents: {}, qualificationRounds: {}, referralRewardCoverages: {}, referralRewardMaturations: {}, creditEntries: {}, creditReservations: {}, events: [], notifications: [], audit: [], idempotency: {} };
+  return { schemaVersion: 1, revision: 0, createdAt: timestamp, updatedAt: timestamp, subscriptions: {}, cycles: {}, referrals: {}, referralConversions: {}, referralRewards: {}, retailPromotionRewards: {}, validConsumptionEvents: {}, qualificationRounds: {}, referralRewardCoverages: {}, referralRewardMaturations: {}, creditEntries: {}, creditReservations: {}, events: [], notifications: [], audit: [], idempotency: {} };
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -539,11 +572,12 @@ function isObject(value: unknown): value is Record<string, unknown> {
 export function validateMembershipCommerceState(value: unknown): MembershipCommerceState {
   if (!isObject(value) || value.schemaVersion !== 1 || !Number.isSafeInteger(value.revision) || typeof value.createdAt !== "string" || typeof value.updatedAt !== "string") throw new MembershipCommerceError("會員商務資料格式不正確");
   if (!isObject(value.referralRewards)) value.referralRewards = {};
+  if (!isObject(value.retailPromotionRewards)) value.retailPromotionRewards = {};
   if (!isObject(value.validConsumptionEvents)) value.validConsumptionEvents = {};
   if (!isObject(value.qualificationRounds)) value.qualificationRounds = {};
   if (!isObject(value.referralRewardCoverages)) value.referralRewardCoverages = {};
   if (!isObject(value.referralRewardMaturations)) value.referralRewardMaturations = {};
-  for (const field of ["subscriptions", "cycles", "referrals", "referralConversions", "referralRewards", "validConsumptionEvents", "qualificationRounds", "referralRewardCoverages", "referralRewardMaturations", "creditEntries", "creditReservations", "idempotency"] as const) if (!isObject(value[field])) throw new MembershipCommerceError("會員商務資料集合不完整");
+  for (const field of ["subscriptions", "cycles", "referrals", "referralConversions", "referralRewards", "retailPromotionRewards", "validConsumptionEvents", "qualificationRounds", "referralRewardCoverages", "referralRewardMaturations", "creditEntries", "creditReservations", "idempotency"] as const) if (!isObject(value[field])) throw new MembershipCommerceError("會員商務資料集合不完整");
   for (const field of ["events", "notifications", "audit"] as const) if (!Array.isArray(value[field])) throw new MembershipCommerceError("會員商務事件集合不完整");
   for (const reward of Object.values(value.referralRewards as Record<string, ReferralReward>)) {
     if (
@@ -575,6 +609,13 @@ export function validateMembershipCommerceState(value: unknown): MembershipComme
         || !Number.isFinite(Date.parse(snapshot.windowEndedAt))
       ) throw new MembershipCommerceError("本人消費動態級距快照格式不正確");
     }
+  }
+  for (const reward of Object.values(value.retailPromotionRewards as Record<string, RetailPromotionReward>)) {
+    if (!reward || typeof reward.rewardId !== "string" || typeof reward.sourceOrderNumber !== "string" || typeof reward.beneficiaryMemberId !== "string" || typeof reward.referralCode !== "string" || reward.attributionSource !== "member-share-link" || !Number.isFinite(Date.parse(reward.attributedAt)) || !Number.isFinite(Date.parse(reward.attributionExpiresAt)) || !Number.isSafeInteger(reward.ruleVersion) || !Number.isFinite(Date.parse(reward.successfulCompletionAt)) || !Number.isFinite(Date.parse(reward.releaseEligibleBusinessDate))) throw new MembershipCommerceError("推廣零售獎金格式不正確");
+    assertIntegerMoney(reward.eligibleMerchandiseAmount, "推廣零售有效業績");
+    assertIntegerMoney(reward.calculatedCreditAmount, "推廣零售獎金");
+    if (typeof reward.rewardRate !== "number" || !Number.isFinite(reward.rewardRate) || reward.rewardRate < 0 || reward.rewardRate > 100) throw new MembershipCommerceError("推廣零售獎金比例不正確");
+    if (!["scheduled", "released", "cancelled", "reversed"].includes(reward.status)) throw new MembershipCommerceError("推廣零售獎金狀態不正確");
   }
   for (const consumption of Object.values(value.validConsumptionEvents as Record<string, ValidConsumptionEvent>)) {
     if (!consumption || typeof consumption.eventId !== "string" || typeof consumption.memberId !== "string" || typeof consumption.sourceOrderId !== "string" || typeof consumption.finalizedAt !== "string" || !Number.isFinite(Date.parse(consumption.finalizedAt)) || typeof consumption.createdAt !== "string" || !Number.isSafeInteger(consumption.rulesVersion)) throw new MembershipCommerceError("有效消費事件格式不正確");
@@ -623,7 +664,7 @@ export function validateMembershipCommerceState(value: unknown): MembershipComme
     maturedCoverageIds.add(maturation.coverageId);
   }
   for (const entry of Object.values(value.creditEntries as Record<string, CreditEntry>)) {
-    const isNegativeLedgerEntry = entry.sourceReference.startsWith("referral_reward_reversal:") || entry.sourceReference.startsWith("admin_credit_adjustment:deduct:");
+    const isNegativeLedgerEntry = entry.sourceReference.startsWith("referral_reward_reversal:") || entry.sourceReference.startsWith("retail_promotion_reward_reversal:") || entry.sourceReference.startsWith("admin_credit_adjustment:deduct:");
     if (isNegativeLedgerEntry) {
       if (!Number.isSafeInteger(entry.amount) || entry.amount >= 0) throw new MembershipCommerceError("推薦獎勵沖回金額不正確");
     } else assertIntegerMoney(entry.amount, "抵用金");
@@ -935,7 +976,7 @@ async function activateSubscriptionFromCompletedFirstOrder(input: {
 }
 
 /** One membership entry point for canonical order outcomes. */
-export async function handleCanonicalOrderOutcome(input: { orderId: string; outcome: "completed" | "uncollected"; memberId?: string; merchandiseAmount: number; basePV?: number; effectivePV?: number; discountRatio?: number; eligibleItemCount?: number; idempotencyKey: string; now?: Date; stateFilePath?: string; rulesFilePath?: string }) {
+export async function handleCanonicalOrderOutcome(input: { orderId: string; outcome: "completed" | "uncollected"; memberId?: string; retailPromotionAttribution?: RetailPromotionOrderSnapshot | null; merchandiseAmount: number; basePV?: number; effectivePV?: number; discountRatio?: number; eligibleItemCount?: number; idempotencyKey: string; now?: Date; stateFilePath?: string; rulesFilePath?: string }) {
   const snapshot = await readMembershipCommerceState(input.stateFilePath);
   const subscription = Object.values(snapshot.subscriptions).find((item) => item.startedFromOrderId === input.orderId);
   const cycle = Object.values(snapshot.cycles).find((item) => item.createdOrderId === input.orderId);
@@ -1013,11 +1054,35 @@ export async function handleCanonicalOrderOutcome(input: { orderId: string; outc
     await cancelOrReverseReferralRewards({ orderId: input.orderId, outcome: input.outcome, idempotencyKey: `${input.idempotencyKey}:self-reward-reversal`, now: input.now, stateFilePath: input.stateFilePath, rulesFilePath: input.rulesFilePath });
   }
 
+  // Absolute identity precedence: authenticated/member orders can never enter
+  // the guest retail-promotion domain, even if a forged snapshot is supplied.
+  if (!input.memberId && input.retailPromotionAttribution) {
+    if (input.outcome === "completed") {
+      await createRetailPromotionRewardFromFulfillment({
+        orderId: input.orderId,
+        attribution: input.retailPromotionAttribution,
+        eligibleMerchandiseAmount: input.merchandiseAmount,
+        idempotencyKey: `${input.idempotencyKey}:retail-promotion-v1`,
+        now: input.now,
+        stateFilePath: input.stateFilePath,
+      });
+    } else {
+      await cancelOrReverseRetailPromotionRewards({
+        orderId: input.orderId,
+        outcome: input.outcome,
+        idempotencyKey: `${input.idempotencyKey}:retail-promotion-reversal`,
+        now: input.now,
+        stateFilePath: input.stateFilePath,
+        rulesFilePath: input.rulesFilePath,
+      });
+    }
+  }
+
   if (input.outcome === "completed") await runReferralRewardReleaseScheduler({ now: input.now, stateFilePath: input.stateFilePath, rulesFilePath: input.rulesFilePath });
 
   await settleCreditReservationForOrder({ orderId: input.orderId, action: input.outcome === "completed" ? "consume" : "release", idempotencyKey: `${input.idempotencyKey}:credit`, reason: input.outcome === "completed" ? "訂單成功取貨" : "訂單未取貨，釋放抵用金", now: input.now, stateFilePath: input.stateFilePath });
 
-  return { subscriptionHandled: Boolean(subscription || cycle), referralEvaluated: Boolean(relationship) };
+  return { subscriptionHandled: Boolean(subscription || cycle), referralEvaluated: Boolean(relationship), retailPromotionEvaluated: Boolean(!input.memberId && input.retailPromotionAttribution) };
 }
 
 export async function generateSubscriptionCycle(input: { subscriptionId: string; sequence: number; plannedDate: string; kind?: CycleKind; idempotencyKey: string; now?: Date; stateFilePath?: string; rulesFilePath?: string }) {
@@ -2698,6 +2763,70 @@ export async function createSelfPurchaseRewardFromFulfillment(input: { sourceMem
   }, { now: input.now, filePath: input.stateFilePath });
 }
 
+/** Creates one direct, guest-only retail promotion reward from an order snapshot. */
+export async function createRetailPromotionRewardFromFulfillment(input: {
+  orderId: string;
+  attribution: RetailPromotionOrderSnapshot;
+  eligibleMerchandiseAmount: number;
+  idempotencyKey: string;
+  now?: Date;
+  stateFilePath?: string;
+}) {
+  if (referralCodeForMember(input.attribution.referrerMemberId) !== input.attribution.referralCode) {
+    throw new MembershipCommerceError("推廣零售訂單快照與分享會員不一致");
+  }
+  const key = `retail-promotion-reward:create:${input.idempotencyKey}`;
+  return transaction((state, now) => {
+    const existingId = remembered(state, key);
+    if (existingId) return existingId === "none" ? null : state.retailPromotionRewards[existingId] ?? null;
+    const attribution = input.attribution;
+    if (attribution.version !== 1 || attribution.source !== "member-share-link" || !Number.isSafeInteger(attribution.ruleVersionId) || attribution.rewardRate < 0 || attribution.rewardRate > 100) throw new MembershipCommerceError("推廣零售訂單快照不完整");
+    const eligibleMerchandiseAmount = assertIntegerMoney(input.eligibleMerchandiseAmount, "推廣零售有效業績");
+    const calculatedCreditAmount = Math.max(0, rewardRound(eligibleMerchandiseAmount * attribution.rewardRate / 100, attribution.roundingMode));
+    if (calculatedCreditAmount < 1) {
+      remember(state, key, "none", now);
+      return null;
+    }
+    const successfulPickupBusinessDate = getDateOnlyInTimeZone(now);
+    const releaseEligibleBusinessDate = referralReleaseEligibleBusinessDate(successfulPickupBusinessDate, attribution.baseWaitingDays, attribution.returnProtectionDays);
+    const rewardId = deterministicId("retail_reward", `${input.orderId}:${attribution.referrerMemberId}`);
+    const reward: RetailPromotionReward = {
+      rewardId,
+      sourceOrderNumber: input.orderId,
+      beneficiaryMemberId: attribution.referrerMemberId,
+      referralCode: attribution.referralCode,
+      attributedAt: attribution.attributedAt,
+      attributionExpiresAt: attribution.expiresAt,
+      attributionSource: attribution.source,
+      eligibleMerchandiseAmount,
+      rewardRate: attribution.rewardRate,
+      calculatedCreditAmount,
+      ruleVersion: attribution.ruleVersionId,
+      roundingModeSnapshot: attribution.roundingMode,
+      baseWaitingDaysSnapshot: attribution.baseWaitingDays,
+      returnProtectionDaysSnapshot: attribution.returnProtectionDays,
+      totalWaitingDaysSnapshot: attribution.baseWaitingDays + attribution.returnProtectionDays,
+      reversalPolicySnapshot: attribution.reversalPolicy,
+      successfulCompletionAt: nowIso(now),
+      successfulPickupBusinessDate,
+      releaseEligibleBusinessDate,
+      createdAt: nowIso(now),
+      releasedAt: null,
+      reversedAt: null,
+      sourceOrderFinalState: "completed",
+      status: "scheduled",
+      cancellationReason: null,
+      rewardCreditEntryId: null,
+      reversalCreditEntryId: null,
+      idempotencyKey: input.idempotencyKey,
+    };
+    state.retailPromotionRewards[rewardId] = reward;
+    event(state, "retail_promotion_reward_scheduled", { rewardId, eligibleMerchandiseAmount, rewardRate: attribution.rewardRate, rewardAmount: calculatedCreditAmount }, now, { memberId: attribution.referrerMemberId, orderId: input.orderId });
+    remember(state, key, rewardId, now);
+    return reward;
+  }, { now: input.now, filePath: input.stateFilePath });
+}
+
 /**
  * New-model rewards may only be paid from the immutable Coverage → Maturation
  * chain.  The legacy qualification-order fields intentionally do not
@@ -2850,6 +2979,33 @@ export async function runReferralRewardReleaseScheduler(input: { now?: Date; sta
         results.push({ rewardId: reward.rewardId, status: "released" });
       } catch (error) { results.push({ rewardId: reward.rewardId, status: "failed", error: error instanceof Error ? error.message : "發放失敗" }); }
     }
+    const dueRetailPromotionRewards = Object.values(state.retailPromotionRewards)
+      .filter((reward) => reward.status === "scheduled" && reward.sourceOrderFinalState === "completed" && isReferralReleaseBusinessDateDue(today, reward.releaseEligibleBusinessDate))
+      .sort((left, right) => left.releaseEligibleBusinessDate.localeCompare(right.releaseEligibleBusinessDate) || left.createdAt.localeCompare(right.createdAt) || left.rewardId.localeCompare(right.rewardId));
+    for (const reward of dueRetailPromotionRewards) {
+      try {
+        const credit = issueCreditInState(state, version.rules, {
+          memberId: reward.beneficiaryMemberId,
+          sourceType: "promotion",
+          sourceReference: `retail_promotion_reward:${reward.rewardId}`,
+          amount: reward.calculatedCreditAmount,
+          metadata: {
+            rewardId: reward.rewardId,
+            orderId: reward.sourceOrderNumber,
+            rewardType: "retail_promotion",
+            ruleVersion: reward.ruleVersion,
+          },
+        }, now);
+        reward.status = "released";
+        reward.releasedAt = nowIso(now);
+        reward.rewardCreditEntryId = credit.creditEntryId;
+        const source = event(state, "retail_promotion_reward_released", { amount: credit.amount, rewardType: "retail_promotion" }, now, { memberId: reward.beneficiaryMemberId, orderId: reward.sourceOrderNumber });
+        notify(state, version.rules, "credit_issued", source.eventId, now, { memberId: reward.beneficiaryMemberId, safeData: { amount: credit.amount, retailPromotion: true } });
+        results.push({ rewardId: reward.rewardId, status: "released" });
+      } catch (error) {
+        results.push({ rewardId: reward.rewardId, status: "failed", error: error instanceof Error ? error.message : "推廣零售獎金發放失敗" });
+      }
+    }
     return results;
   }, { now: input.now, filePath: input.stateFilePath });
 }
@@ -2935,6 +3091,54 @@ function refreshScheduledSelfPurchaseTierRewardsForReversedConsumption(
   }
 
   return changed;
+}
+
+export async function cancelOrReverseRetailPromotionRewards(input: { orderId: string; outcome?: "cancelled" | "uncollected" | "refunded" | "returned"; idempotencyKey: string; now?: Date; stateFilePath?: string; rulesFilePath?: string }) {
+  const version = await getActiveMembershipRules(input.now, input.rulesFilePath);
+  return transaction((state, now) => {
+    const key = `retail-promotion-rewards:reverse:${input.idempotencyKey}`;
+    if (remembered(state, key)) return [];
+    const changed: RetailPromotionReward[] = [];
+    const outcome = input.outcome ?? "cancelled";
+    for (const reward of Object.values(state.retailPromotionRewards).filter((item) => item.sourceOrderNumber === input.orderId)) {
+      reward.sourceOrderFinalState = outcome;
+      if (reward.status === "scheduled") {
+        reward.status = "cancelled";
+        reward.cancellationReason = "source_transaction_reversed_before_release";
+        event(state, "retail_promotion_reward_cancelled", { amount: reward.calculatedCreditAmount, outcome }, now, { memberId: reward.beneficiaryMemberId, orderId: reward.sourceOrderNumber });
+        changed.push(reward);
+        continue;
+      }
+      if (reward.status !== "released" || reward.reversalPolicySnapshot !== "cancel-pending-and-reverse-released") continue;
+      const original = reward.rewardCreditEntryId ? state.creditEntries[reward.rewardCreditEntryId] : undefined;
+      if (original) {
+        original.remainingAmount = Math.max(0, original.remainingAmount - reward.calculatedCreditAmount);
+        if (original.remainingAmount === 0) original.status = "consumed";
+      }
+      const reversalId = deterministicId("credit_reversal", `retail-promotion:${reward.rewardId}`);
+      state.creditEntries[reversalId] = {
+        creditEntryId: reversalId,
+        memberId: reward.beneficiaryMemberId,
+        sourceType: "promotion",
+        sourceReference: `retail_promotion_reward_reversal:${reward.rewardId}`,
+        amount: -reward.calculatedCreditAmount,
+        remainingAmount: 0,
+        issuedAt: nowIso(now),
+        expiresAt: nowIso(now),
+        status: "consumed",
+        createdAt: nowIso(now),
+        metadata: { rewardId: reward.rewardId, reversalAmount: reward.calculatedCreditAmount, reversesCreditEntryId: reward.rewardCreditEntryId ?? "", outcome },
+      };
+      reward.status = "reversed";
+      reward.reversedAt = nowIso(now);
+      reward.reversalCreditEntryId = reversalId;
+      const source = event(state, "retail_promotion_reward_reversed", { amount: reward.calculatedCreditAmount, outcome }, now, { memberId: reward.beneficiaryMemberId, orderId: reward.sourceOrderNumber });
+      notify(state, version.rules, "referral_conversion", source.eventId, now, { memberId: reward.beneficiaryMemberId, safeData: { rewardAmount: 0, retailPromotion: true } });
+      changed.push(reward);
+    }
+    remember(state, key, changed[0]?.rewardId ?? "none", now);
+    return changed;
+  }, { now: input.now, filePath: input.stateFilePath });
 }
 
 export async function cancelOrReverseReferralRewards(input: { orderId: string; outcome?: "cancelled" | "uncollected" | "refunded" | "returned"; idempotencyKey: string; now?: Date; stateFilePath?: string; rulesFilePath?: string }) {
@@ -3339,6 +3543,8 @@ export async function getMemberCommerceDashboard(memberId: string, now = new Dat
       ? "會員續購回饋" as const
       : item.sourceType === "referral"
         ? "推薦回饋" as const
+      : item.sourceReference.startsWith("retail_promotion_reward:")
+        ? "推廣零售獎金" as const
       : item.sourceReference.startsWith("admin_credit_adjustment:grant:")
         ? "KD Coffee 贈送" as const
         : direction === "deduct"
@@ -3362,8 +3568,87 @@ export async function getMemberCommerceDashboard(memberId: string, now = new Dat
       (sum, reward) =>
         sum + (reward.projectedCreditAmount ?? reward.calculatedCreditAmount),
       0,
-    );
+    ) + Object.values(state.retailPromotionRewards)
+      .filter((reward) => reward.beneficiaryMemberId === memberId && reward.status === "scheduled")
+      .reduce((sum, reward) => sum + reward.calculatedCreditAmount, 0);
   return { subscriptions: structuredClone(subscriptions), cycles: structuredClone(cycles), credits: structuredClone(credits), pendingCredit, referrals: safeReferralMemberView(state, memberId) };
+}
+
+export async function getMemberRetailPromotionCenter(memberId: string, options: { filePath?: string; rulesFilePath?: string } = {}) {
+  const [state, version, orders] = await Promise.all([
+    readMembershipCommerceState(options.filePath),
+    getActiveMembershipRules(new Date(), options.rulesFilePath),
+    listOrders(),
+  ]);
+  const rewards = Object.values(state.retailPromotionRewards)
+    .filter((reward) => reward.beneficiaryMemberId === memberId)
+    .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+  const active = rewards.filter((reward) => reward.status === "scheduled" || reward.status === "released");
+  const maskOrderNumber = (orderNumber: string) => {
+    const suffix = orderNumber.slice(-4);
+    return `KD••••-${suffix}`;
+  };
+  const rewardedOrders = new Set(rewards.map((reward) => reward.sourceOrderNumber));
+  const pendingOrders = orders.flatMap((order) => {
+    const attribution = order.retailPromotionAttribution as Partial<RetailPromotionOrderSnapshot> | undefined;
+    if (
+      !attribution ||
+      attribution.version !== 1 ||
+      attribution.source !== "member-share-link" ||
+      attribution.referrerMemberId !== memberId ||
+      attribution.referralCode !== referralCodeForMember(memberId) ||
+      order.member?.memberId ||
+      order.orderMode === "corporate_gift" ||
+      ["completed", "cancelled", "uncollected"].includes(order.status) ||
+      rewardedOrders.has(order.orderNumber)
+    ) return [];
+    const subtotal = Number(order.subtotal);
+    const appliedCredit = Number(order.credit?.appliedAmount ?? 0);
+    if (!Number.isSafeInteger(subtotal) || subtotal < 0 || !Number.isSafeInteger(appliedCredit) || appliedCredit < 0) return [];
+    const eligibleSales = Math.max(0, subtotal - appliedCredit);
+    const rewardRate = Number(attribution.rewardRate);
+    if (!Number.isFinite(rewardRate) || rewardRate < 0 || rewardRate > 100 || !Number.isSafeInteger(attribution.ruleVersionId)) return [];
+    return [{
+      rewardId: `pending:${order.orderNumber}`,
+      date: order.createdAt,
+      orderReference: maskOrderNumber(order.orderNumber),
+      eligibleSales,
+      rewardRate,
+      rewardAmount: Math.max(0, rewardRound(eligibleSales * rewardRate / 100, attribution.roundingMode!)),
+      status: "pending_completion" as const,
+      releaseEligibleBusinessDate: "",
+      releasedAt: null,
+      ruleVersion: attribution.ruleVersionId,
+    }];
+  });
+  const rewardHistory = rewards.map((reward) => ({
+    rewardId: reward.rewardId,
+    date: reward.successfulCompletionAt,
+    orderReference: maskOrderNumber(reward.sourceOrderNumber),
+    eligibleSales: reward.eligibleMerchandiseAmount,
+    rewardRate: reward.rewardRate,
+    rewardAmount: reward.calculatedCreditAmount,
+    status: reward.status,
+    releaseEligibleBusinessDate: reward.releaseEligibleBusinessDate,
+    releasedAt: reward.releasedAt,
+    ruleVersion: reward.ruleVersion,
+  }));
+  return {
+    referralCode: referralCodeForMember(memberId),
+    settings: {
+      enabled: version.rules.retailPromotion.enabled,
+      rewardRate: version.rules.retailPromotion.rewardRate,
+      attributionWindowDays: version.rules.retailPromotion.attributionWindowDays,
+    },
+    summary: {
+      promotionSales: active.reduce((sum, reward) => sum + reward.eligibleMerchandiseAmount, 0),
+      pendingPromotionSales: pendingOrders.reduce((sum, order) => sum + order.eligibleSales, 0),
+      promotionReward: active.reduce((sum, reward) => sum + reward.calculatedCreditAmount, 0),
+      pendingReward: rewards.filter((reward) => reward.status === "scheduled").reduce((sum, reward) => sum + reward.calculatedCreditAmount, 0),
+      releasedReward: rewards.filter((reward) => reward.status === "released").reduce((sum, reward) => sum + reward.calculatedCreditAmount, 0),
+    },
+    history: [...pendingOrders, ...rewardHistory].sort((left, right) => right.date.localeCompare(left.date)),
+  };
 }
 
 export async function getMemberReferralCenter(memberId: string, options: { baseUrl?: string; depth?: number; filePath?: string; rulesFilePath?: string } = {}) {
@@ -3648,8 +3933,10 @@ export async function getAdminReferralOverview(input: { query?: string; from?: s
   const query = input.query?.trim().toLowerCase() ?? "";
   const relationships = Object.values(state.referrals).map((item) => ({ ...item, referrerNumber: registry.members[item.referrerMemberId]?.memberNumber ?? "—", referredNumber: registry.members[item.referredMemberId]?.memberNumber ?? "—" })).filter((item) => !query || item.referrerNumber.toLowerCase().includes(query) || item.referredNumber.toLowerCase().includes(query) || item.safeDisplayName.toLowerCase().includes(query));
   const rewards = Object.values(state.referralRewards).filter((item) => (!input.from || item.createdAt.slice(0, 10) >= input.from) && (!input.to || item.createdAt.slice(0, 10) <= input.to));
+  const retailPromotionRewards = Object.values(state.retailPromotionRewards).filter((item) => (!input.from || item.createdAt.slice(0, 10) >= input.from) && (!input.to || item.createdAt.slice(0, 10) <= input.to));
   const sum = (status?: ReferralReward["status"], type?: ReferralReward["rewardType"], mode?: ReferralReward["calculationMode"]) => rewards.filter((item) => (!status || item.status === status) && (!type || item.rewardType === type) && (!mode || item.calculationMode === mode)).reduce((total, item) => total + item.calculatedCreditAmount, 0);
-  return { relationships, rewards, statistics: { newReferralRewards: sum(undefined, "new_referral"), repeatPurchaseRewards: sum(undefined, "repeat_purchase"), subscriptionRewards: sum(undefined, "subscription"), selfPurchaseRewards: sum(undefined, "self_purchase"), pendingAmount: rewards.filter((item) => item.status === "scheduled" && item.qualificationStatus !== "expired").reduce((total, item) => total + item.calculatedCreditAmount, 0), expiredAmount: rewards.filter((item) => item.qualificationStatus === "expired").reduce((total, item) => total + item.calculatedCreditAmount, 0), releasedAmount: sum("released"), reversedAmount: sum("reversed"), paidAmountModeRewards: sum(undefined, undefined, "paid_amount"), pvModeRewards: sum(undefined, undefined, "pv"), totalRewardCost: sum("released") } };
+  const retailSum = (status?: RetailPromotionReward["status"]) => retailPromotionRewards.filter((item) => !status || item.status === status).reduce((total, item) => total + item.calculatedCreditAmount, 0);
+  return { relationships, rewards, retailPromotionRewards, statistics: { newReferralRewards: sum(undefined, "new_referral"), repeatPurchaseRewards: sum(undefined, "repeat_purchase"), subscriptionRewards: sum(undefined, "subscription"), selfPurchaseRewards: sum(undefined, "self_purchase"), retailPromotionRewards: retailSum(), retailPromotionSales: retailPromotionRewards.reduce((total, item) => total + item.eligibleMerchandiseAmount, 0), pendingAmount: rewards.filter((item) => item.status === "scheduled" && item.qualificationStatus !== "expired").reduce((total, item) => total + item.calculatedCreditAmount, 0) + retailSum("scheduled"), expiredAmount: rewards.filter((item) => item.qualificationStatus === "expired").reduce((total, item) => total + item.calculatedCreditAmount, 0), releasedAmount: sum("released") + retailSum("released"), reversedAmount: sum("reversed") + retailSum("reversed"), paidAmountModeRewards: sum(undefined, undefined, "paid_amount"), pvModeRewards: sum(undefined, undefined, "pv"), totalRewardCost: sum("released") + retailSum("released") } };
 }
 
 export async function enqueueScheduledMembershipNotifications(input: { today: string; now?: Date; stateFilePath?: string; rulesFilePath?: string }) {
