@@ -18,7 +18,7 @@ try {
   const password = "Initial-Test-Password-2026";
   const registered = await auth.registerEmailMember(email, password);
   assert.ok(registered);
-  assert.match(registered.memberNumber || "", /^KD-\d{6}$/);
+  assert.match(registered.memberNumber || "", /^1962\d{5}$/);
   assert.match(registered.id, /^member_/);
   checks += 3;
 
@@ -80,7 +80,7 @@ try {
   assert.equal(legacyLogin.status, "authenticated");
   if (legacyLogin.status !== "authenticated") assert.fail("Legacy LINE member did not resolve");
   assert.equal(legacyLogin.member.id, legacyId);
-  assert.match(legacyLogin.member.memberNumber || "", /^KD-\d{6}$/);
+  assert.match(legacyLogin.member.memberNumber || "", /^1962\d{5}$/);
   checks += 3;
 
   console.log(`Member auth compatibility: PASS (${checks} assertions)`);

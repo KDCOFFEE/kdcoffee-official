@@ -1,6 +1,10 @@
 import { listOrders, type StoredOrder } from "@/lib/adminOrders";
 import { listMembers, type Member } from "@/lib/memberAuth";
-import { getIdentityRegistrySnapshot, type CanonicalMemberStatus } from "@/lib/memberIdentity";
+import {
+  getIdentityRegistrySnapshot,
+  type CanonicalMemberStatus,
+  type IdentityProvider,
+} from "@/lib/memberIdentity";
 import {
   effectiveCreditRemaining,
   readMembershipCommerceState,
@@ -12,7 +16,7 @@ import {
 export type AdminMemberListFilters = {
   query?: string;
   sort?: "newest" | "oldest";
-  login?: "all" | "email" | "line" | "both";
+  login?: "all" | "email" | "line" | "phone" | "both";
   subscription?: "all" | "active" | "inactive";
   credit?: "all" | "available";
   referral?: "all" | "participating";
@@ -25,7 +29,7 @@ export type AdminMemberListRow = {
   memberNumber: string | null;
   email: string | null;
   phone: string | null;
-  loginMethods: Array<"email" | "line">;
+  loginMethods: IdentityProvider[];
   joinedAt: string;
   orderCount: number;
   lifetimeSpend: number;
@@ -73,10 +77,10 @@ function buildListRows(members: Member[], orders: StoredOrder[], state: Membersh
     const id = registry.legacyAliases[rawId] || rawId;
     ordersByMember.set(id, [...(ordersByMember.get(id) ?? []), order]);
   }
-  const identitiesByMember = new Map<string, Set<"email" | "line">>();
+  const identitiesByMember = new Map<string, Set<IdentityProvider>>();
   for (const identity of Object.values(registry.identities)) {
     if (identity.status !== "active") continue;
-    const providers = identitiesByMember.get(identity.memberId) ?? new Set<"email" | "line">();
+    const providers = identitiesByMember.get(identity.memberId) ?? new Set<IdentityProvider>();
     providers.add(identity.provider);
     identitiesByMember.set(identity.memberId, providers);
   }
@@ -88,7 +92,7 @@ function buildListRows(members: Member[], orders: StoredOrder[], state: Membersh
     const hasReferrer = Object.values(state.referrals).some((item) => item.referredMemberId === id && item.status !== "inactive");
     const hasReferrals = Object.values(state.referrals).some((item) => item.referrerMemberId === id && item.status !== "inactive");
     const registryMember = registry.members[id];
-    const providers = identitiesByMember.get(id) ?? new Set<"email" | "line">();
+    const providers = identitiesByMember.get(id) ?? new Set<IdentityProvider>();
     if (!providers.size && member.authProvider) providers.add(member.authProvider);
     if (member.passwordHash && (member.loginEmail || member.email)) providers.add("email");
     if (member.lineUserId) providers.add("line");
@@ -118,7 +122,7 @@ export async function getAdminMemberList(filters: AdminMemberListFilters = {}) {
   const query = filters.query?.trim().toLocaleLowerCase("zh-TW") ?? "";
   let rows = buildListRows(members, orders, state, registry);
   if (query) rows = rows.filter((row) => [row.name, row.memberNumber, row.email, row.phone].some((value) => value?.toLocaleLowerCase("zh-TW").includes(query)));
-  if (filters.login && filters.login !== "all") rows = rows.filter((row) => filters.login === "both" ? row.loginMethods.includes("email") && row.loginMethods.includes("line") : row.loginMethods.includes(filters.login as "email" | "line"));
+  if (filters.login && filters.login !== "all") rows = rows.filter((row) => filters.login === "both" ? row.loginMethods.includes("email") && row.loginMethods.includes("line") : row.loginMethods.includes(filters.login as IdentityProvider));
   if (filters.subscription === "active") rows = rows.filter((row) => row.subscriptionStatus === "active");
   if (filters.subscription === "inactive") rows = rows.filter((row) => row.subscriptionStatus !== "active");
   if (filters.credit === "available") rows = rows.filter((row) => row.availableCredit > 0);

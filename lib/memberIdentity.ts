@@ -11,7 +11,7 @@ export const MEMBER_IDENTITY_SCHEMA_VERSION = 1 as const;
 export const MEMBER_NUMBER_PATTERN = /^(?:KD-\d{6,9}|1962\d{5})$/;
 export const LINE_LINK_TTL_MS = 10 * 60 * 1000;
 
-export type IdentityProvider = "email" | "line";
+export type IdentityProvider = "email" | "line" | "phone";
 export type CanonicalMemberStatus = "active" | "disabled" | "possible-duplicate" | "merged-tombstone";
 export type IdentityStatus = "active" | "unlinked";
 export type LinkTransactionStatus = "pending" | "completed" | "rejected" | "expired";
@@ -30,7 +30,8 @@ export type MemberIdentityRecord = {
   memberId: string;
   provider: IdentityProvider;
   subjectHash: string;
-  verifiedAt: string;
+  /** Ownership verification time. Password-only phone identities remain unverified. */
+  verifiedAt?: string;
   linkedAt: string;
   status: IdentityStatus;
 };
@@ -103,6 +104,22 @@ export function normalizeIdentityEmail(value: string) {
   return value.trim().toLowerCase();
 }
 
+/**
+ * Normalizes Taiwan mobile numbers without accepting arbitrary international
+ * numbers. Password registration establishes a login identifier only; it does
+ * not prove possession of the telephone number.
+ */
+export function normalizeTaiwanMobile(value: string) {
+  const compact = value.trim().replace(/[ -]/gu, "");
+  if (/^09\d{8}$/u.test(compact)) return `+886${compact.slice(1)}`;
+  if (/^\+8869\d{8}$/u.test(compact)) return compact;
+  return null;
+}
+
+export function isValidTaiwanMobile(value: string) {
+  return normalizeTaiwanMobile(value) !== null;
+}
+
 export function hasMatchingEmailIdentity(email: string, knownLoginEmails: Iterable<string>) {
   const candidate = normalizeIdentityEmail(email);
   return Boolean(candidate) && [...knownLoginEmails].some(
@@ -115,7 +132,11 @@ export function canUnlinkIdentity(activeIdentityCount: number) {
 }
 
 export function identitySubjectHash(provider: IdentityProvider, subject: string) {
-  const normalized = provider === "email" ? normalizeIdentityEmail(subject) : subject.trim();
+  const normalized = provider === "email"
+    ? normalizeIdentityEmail(subject)
+    : provider === "phone"
+      ? normalizeTaiwanMobile(subject)
+      : subject.trim();
   if (!normalized) throw new IdentityValidationError("登入識別資料不可為空");
 
   return createHmac("sha256", identitySecret())
@@ -226,13 +247,15 @@ export function validateMemberIdentityRegistry(value: unknown): MemberIdentityRe
       !isObject(raw) ||
       typeof raw.identityId !== "string" ||
       !raw.identityId ||
-      !["email", "line"].includes(String(raw.provider)) ||
+      !["email", "line", "phone"].includes(String(raw.provider)) ||
       !["active", "unlinked"].includes(String(raw.status)) ||
       typeof raw.subjectHash !== "string" ||
       key !== identityKey(raw.provider as IdentityProvider, raw.subjectHash) ||
       typeof raw.memberId !== "string" ||
       !value.members[raw.memberId] ||
-      !isIsoTimestamp(raw.verifiedAt) ||
+      (raw.provider === "phone"
+        ? raw.verifiedAt !== undefined && !isIsoTimestamp(raw.verifiedAt)
+        : !isIsoTimestamp(raw.verifiedAt)) ||
       !isIsoTimestamp(raw.linkedAt)
     ) {
       throw new IdentityValidationError("登入方式資料無效");
@@ -251,7 +274,7 @@ export function validateMemberIdentityRegistry(value: unknown): MemberIdentityRe
       raw.transactionId !== transactionId ||
       typeof raw.memberId !== "string" ||
       !value.members[raw.memberId] ||
-      !["email", "line"].includes(String(raw.provider)) ||
+      !["email", "line", "phone"].includes(String(raw.provider)) ||
       !["pending", "completed", "rejected", "expired"].includes(String(raw.status)) ||
       typeof raw.stateHash !== "string" ||
       !isIsoTimestamp(raw.createdAt) ||
@@ -357,10 +380,10 @@ function bindIdentity(
     memberId,
     provider,
     subjectHash,
-    verifiedAt: timestamp,
     linkedAt: timestamp,
     status: "active",
   };
+  if (provider !== "phone") identity.verifiedAt = timestamp;
   registry.identities[key] = identity;
   return identity;
 }

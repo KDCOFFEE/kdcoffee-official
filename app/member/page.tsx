@@ -8,6 +8,7 @@ import { getOrdersDir, getWebsiteDataFile } from "@/lib/storagePaths";
 import MemberProfileForm from "@/components/member/MemberProfileForm";
 import MemberAvatarForm from "@/components/member/MemberAvatarForm";
 import EmailAuthForms from "@/components/member/EmailAuthForms";
+import PhoneAuthForms from "@/components/member/PhoneAuthForms";
 import MemberMobileDisclosure from "@/components/member/MemberMobileDisclosure";
 import MemberSectionNav from "@/components/member/MemberSectionNav";
 import MemberSubscriptionExperience from "@/components/member/MemberSubscriptionExperience";
@@ -315,7 +316,7 @@ export default async function MemberPage({
           </h1>
 
           <p>
-            可使用 LINE 快速登入，或以 Email 建立會員。登入後可查看自己的訂單與常用資料。
+            可使用 LINE、手機號碼或 Email 登入。登入後可查看自己的訂單與常用資料。
           </p>
 
           {params.error && (
@@ -332,6 +333,12 @@ export default async function MemberPage({
           >
             使用 LINE 登入／註冊
           </a>
+
+          <PhoneAuthForms returnTo={returnTo} />
+
+          <div className="member-auth-divider" aria-hidden="true">
+            <span>或</span>
+          </div>
 
           <EmailAuthForms returnTo={returnTo} />
 

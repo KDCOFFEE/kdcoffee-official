@@ -21,6 +21,8 @@ import {
   getMemberIdentityState,
   hasMatchingEmailIdentity,
   IdentityConflictError,
+  IdentityValidationError,
+  normalizeTaiwanMobile,
   provisionCanonicalMember,
   resolveCanonicalMemberId,
   resolveMemberByIdentity,
@@ -46,7 +48,7 @@ export type Member = {
   /** Email 登入憑證識別；聯絡 Email 可獨立更新。 */
   loginEmail?: string;
   memberNumber?: string;
-  authProvider?: "line" | "email";
+  authProvider?: "line" | "email" | "phone";
   passwordHash?: string;
   passwordSalt?: string;
   passwordResetTokenHash?: string;
@@ -66,6 +68,8 @@ const membersDir = () => getMembersDir();
 const scrypt = promisify(scryptCallback);
 const PASSWORD_KEY_LENGTH = 64;
 const DUMMY_PASSWORD_SALT = "kd-coffee-email-login";
+const DUMMY_PHONE_PASSWORD_SALT = "kd-coffee-phone-login";
+export const MIN_MEMBER_PASSWORD_LENGTH = 8;
 const PASSWORD_RESET_TOKEN_BYTES = 32;
 const PASSWORD_RESET_TTL_MS = 30 * 60 * 1000;
 const PASSWORD_RESET_COOLDOWN_MS = 60 * 1000;
@@ -308,6 +312,19 @@ async function derivePassword(password: string, salt: string) {
   return (await scrypt(password, salt, PASSWORD_KEY_LENGTH)) as Buffer;
 }
 
+async function passwordMatches(password: string, member: Member | null, dummySalt: string) {
+  const salt = member?.passwordSalt || dummySalt;
+  const candidateHash = await derivePassword(password, salt);
+  if (!member?.passwordHash || !member.passwordSalt) return false;
+
+  try {
+    const storedHash = Buffer.from(member.passwordHash, "base64url");
+    return storedHash.length === candidateHash.length && timingSafeEqual(storedHash, candidateHash);
+  } catch {
+    return false;
+  }
+}
+
 function hashPasswordResetToken(token: string) {
   return createHash("sha256").update(token).digest("base64url");
 }
@@ -541,6 +558,53 @@ export async function registerEmailMember(emailInput: string, password: string) 
   }
 }
 
+export async function registerPhoneMember(phoneInput: string, password: string) {
+  const phone = normalizeTaiwanMobile(phoneInput);
+  if (!phone) throw new IdentityValidationError("台灣手機號碼格式不正確");
+  if (password.length < MIN_MEMBER_PASSWORD_LENGTH) {
+    throw new IdentityValidationError(`密碼至少需要 ${MIN_MEMBER_PASSWORD_LENGTH} 個字元`);
+  }
+  if (await resolveMemberByIdentity("phone", phone)) return null;
+
+  await fs.mkdir(membersDir(), { recursive: true });
+  const passwordSalt = randomBytes(16).toString("base64url");
+  const passwordHash = (await derivePassword(password, passwordSalt)).toString("base64url");
+  const now = new Date().toISOString();
+
+  try {
+    let created: Member | null = null;
+    await provisionCanonicalMember({
+      provider: "phone",
+      subject: phone,
+      persistMember: async (id, memberNumber) => {
+        created = {
+          id,
+          memberNumber,
+          displayName: "KD Coffee 會員",
+          // Keep the profile/contact field in its existing local Taiwan format.
+          // The canonical +886 subject remains authoritative in the identity registry.
+          phone: `0${phone.slice(4)}`,
+          authProvider: "phone",
+          passwordHash,
+          passwordSalt,
+          createdAt: now,
+          lastLoginAt: now,
+          updatedAt: now,
+        };
+        await fs.writeFile(memberFilePath(id), `${JSON.stringify(created, null, 2)}\n`, {
+          encoding: "utf8",
+          flag: "wx",
+          mode: 0o600,
+        });
+      },
+    });
+    return created as Member | null;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "EEXIST" || error instanceof IdentityConflictError) return null;
+    throw error;
+  }
+}
+
 export class MemberAccountDisabledError extends Error {
   constructor() {
     super("此會員帳號目前已由 KD Coffee 停用。");
@@ -560,20 +624,7 @@ export async function authenticateEmailMember(
       normalizeEmail(candidate.loginEmail || candidate.email || "") === email,
   );
 
-  const salt = member?.passwordSalt || DUMMY_PASSWORD_SALT;
-  const candidateHash = await derivePassword(password, salt);
-  let valid = false;
-
-  if (member?.passwordHash && member.passwordSalt) {
-    try {
-      const storedHash = Buffer.from(member.passwordHash, "base64url");
-      valid =
-        storedHash.length === candidateHash.length &&
-        timingSafeEqual(storedHash, candidateHash);
-    } catch {
-      valid = false;
-    }
-  }
+  const valid = await passwordMatches(password, member ?? null, DUMMY_PASSWORD_SALT);
 
   if (!member || !valid) return null;
 
@@ -603,6 +654,25 @@ export async function authenticateEmailMember(
 
   const canonical = await attachCanonicalIdentity(updated);
   return saveMember(canonical);
+}
+
+export async function authenticatePhoneMember(phoneInput: string, password: string) {
+  const phone = normalizeTaiwanMobile(phoneInput);
+  const mapped = phone ? await resolveMemberByIdentity("phone", phone) : null;
+  const member = mapped ? await readMember(mapped.memberId) : null;
+  const valid = await passwordMatches(password, member, DUMMY_PHONE_PASSWORD_SALT);
+
+  if (!phone || !mapped || !member || !valid) return null;
+  if (mapped.status === "disabled") throw new MemberAccountDisabledError();
+
+  const now = new Date().toISOString();
+  return saveMember({
+    ...member,
+    memberNumber: mapped.memberNumber,
+    displayName: member.displayName?.trim() || "KD Coffee 會員",
+    lastLoginAt: now,
+    updatedAt: now,
+  });
 }
 
 export type LineLoginResult =
@@ -763,6 +833,7 @@ export async function getMemberLoginMethods(member: Member) {
     memberNumber: state.member?.memberNumber || canonical.memberNumber || "",
     emailLinked: state.providers.includes("email"),
     lineLinked: state.providers.includes("line"),
+    phoneLinked: state.providers.includes("phone"),
   };
 }
 
@@ -783,6 +854,7 @@ export async function getMemberIdentityAdminSummary() {
     pendingNumberCount: Math.max(0, members.length - Object.keys(registry.members).length),
     emailIdentityCount: activeIdentities.filter((item) => item.provider === "email").length,
     lineIdentityCount: activeIdentities.filter((item) => item.provider === "line").length,
+    phoneIdentityCount: activeIdentities.filter((item) => item.provider === "phone").length,
     bothLinkedCount: Object.keys(registry.members).filter((memberId) => {
       const providers = new Set(activeIdentities.filter((item) => item.memberId === memberId).map((item) => item.provider));
       return providers.has("email") && providers.has("line");

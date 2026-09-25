@@ -158,7 +158,7 @@ export type AdminMemberDetail = {
     loginEmail: string;
     lastLoginAt: string;
     avatarStatus: { customAvatar: boolean; providerPicture: boolean };
-    providers: Array<{ provider: string; status: string; verifiedAt: string; linkedAt: string }>;
+    providers: Array<{ provider: string; status: string; verifiedAt?: string; linkedAt: string }>;
     aliases: string[];
   };
   organization: {
