@@ -3,10 +3,10 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { cartItemKey, useCart } from "./CartProvider";
+import { cartItemKey, cartSkuKey, useCart } from "./CartProvider";
 
 export default function FloatingCart() {
-  const { count, items, removeItem, subtotal, ready } = useCart();
+  const { count, items, removeItem, subtotal, updateQuantity, ready } = useCart();
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [pendingRemove, setPendingRemove] = useState<string | null>(null);
@@ -94,15 +94,31 @@ export default function FloatingCart() {
           <div className="mini-cart-items">
             {items.length ? items.map((item) => {
               const key = cartItemKey(item);
+              const stockLimit = typeof item.stock === "number" && Number.isInteger(item.stock) && item.stock >= 0 ? item.stock : 99;
+              const skuQuantity = items.reduce((sum, entry) => sum + (cartSkuKey(entry) === cartSkuKey(item) ? entry.quantity : 0), 0);
+              const atStockLimit = skuQuantity >= stockLimit;
               return <article className="mini-cart-row" key={key}>
-                <div><strong>{item.name}</strong><small>{specification(item)}</small><span>數量 {item.quantity}</span></div>
-                <b>NT$ {(item.unitPrice * item.quantity).toLocaleString("zh-TW")}</b>
-                <button type="button" className="mini-cart-remove" aria-label={`刪除 ${item.name}`} onClick={() => setPendingRemove(key)}>⌫</button>
+                <div className="mini-cart-line-head">
+                  <strong>{item.name}</strong>
+                  <button type="button" className="mini-cart-remove" aria-label={`刪除 ${item.name}`} onClick={() => setPendingRemove(key)}>刪除</button>
+                </div>
+                <div className="mini-cart-line-copy">
+                  <small>{specification(item)}</small>
+                  <span>NT$ {item.unitPrice.toLocaleString("zh-TW")}</span>
+                </div>
+                <div className="mini-cart-line-actions">
+                  <div className="mini-cart-quantity" aria-label={`${item.name} 數量`}>
+                    <button type="button" aria-label={`減少 ${item.name} 數量`} disabled={item.quantity <= 1} onClick={() => updateQuantity(key, item.quantity - 1)}>−</button>
+                    <span aria-live="polite">{item.quantity}</span>
+                    <button type="button" aria-label={`增加 ${item.name} 數量`} disabled={atStockLimit} title={atStockLimit ? "已達現貨庫存上限" : undefined} onClick={() => updateQuantity(key, item.quantity + 1)}>＋</button>
+                  </div>
+                  <p>小計 <b>NT$ {(item.unitPrice * item.quantity).toLocaleString("zh-TW")}</b></p>
+                </div>
               </article>;
             }) : <p className="mini-cart-empty">購物車目前是空的</p>}
           </div>
           {items.length ? <footer>
-            <p>商品共 <b>{count}</b> 件 <strong>小計 NT$ {subtotal.toLocaleString("zh-TW")}</strong></p>
+            <p>商品總計（{count} 件） <strong>NT$ {subtotal.toLocaleString("zh-TW")}</strong></p>
             <div><Link href="/cart" onClick={() => setOpen(false)}>查看購物車</Link><Link href="/checkout" onClick={() => setOpen(false)}>前往結帳</Link></div>
           </footer> : <footer className="mini-cart-empty-footer"><Link href="/works" onClick={() => setOpen(false)}>繼續選購</Link></footer>}
           {pendingItem ? <section className="mini-cart-confirm" role="dialog" aria-modal="true" aria-label="確認刪除商品">

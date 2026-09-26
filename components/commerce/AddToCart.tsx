@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useCart } from "./CartProvider";
 import type { CoffeeArtwork, PurchaseOption } from "@/data/websiteData";
 import {
@@ -33,6 +34,7 @@ function normalizeOptions(product: CoffeeArtwork): PurchaseOption[] {
 
 export default function AddToCart({ product, showPv = false, pointDisplayName = "KD點" }: { product: CoffeeArtwork; showPv?: boolean; pointDisplayName?: string }) {
   const { addItem, items } = useCart();
+  const router = useRouter();
   const options = useMemo(() => normalizeOptions(product), [product]);
   const [selectedId, setSelectedId] = useState(options[0]?.id || "");
   const [preparation, setPreparation] = useState("咖啡豆");
@@ -41,6 +43,9 @@ export default function AddToCart({ product, showPv = false, pointDisplayName = 
   const [roastLevel, setRoastLevel] = useState("");
   const [roastNote, setRoastNote] = useState("");
   const [notice, setNotice] = useState("");
+  const [emptyCartDialogOpen, setEmptyCartDialogOpen] = useState(false);
+  const emptyCartDialogRef = useRef<HTMLDialogElement>(null);
+  const checkoutTriggerRef = useRef<HTMLButtonElement>(null);
   const option = options.find((item) => item.id === selectedId) || options[0];
   const needsPreparation = !!option && isCustomRoastSku(option);
   const selectedLine = option
@@ -67,6 +72,13 @@ export default function AddToCart({ product, showPv = false, pointDisplayName = 
     : 0;
   const remainingStock = Math.max(0, optionStock - sameSkuInCart);
   const unavailable = product.purchasable === false || product.status === "sold_out" || !option || option.enabled === false || optionStock === 0;
+
+  useEffect(() => {
+    const dialog = emptyCartDialogRef.current;
+    if (!dialog) return;
+    if (emptyCartDialogOpen && !dialog.open) dialog.showModal();
+    if (!emptyCartDialogOpen && dialog.open) dialog.close();
+  }, [emptyCartDialogOpen]);
 
   function resetCustomRoast() {
     setCustomRoast(false);
@@ -101,7 +113,7 @@ export default function AddToCart({ product, showPv = false, pointDisplayName = 
     }
   }
 
-  function commit(goCheckout: boolean) {
+  function addSelectedItem() {
     if (!option || unavailable) return setNotice("此規格目前暫停供應。");
     if (remainingStock <= 0) return setNotice(`購物車已達此規格的現貨上限（${optionStock} 包）。`);
     if (quantity > remainingStock) return setNotice(`目前現貨最多還可加入 ${remainingStock} 包。`);
@@ -122,13 +134,17 @@ export default function AddToCart({ product, showPv = false, pointDisplayName = 
       stock: optionStock,
     }, quantity);
 
-    if (goCheckout) {
-      window.setTimeout(() => window.location.assign("/checkout"), 80);
-      return;
-    }
     const roastText = customRoast ? `・專屬烘焙 ${roastLevel}` : "";
     setNotice(`已加入購物車：${product.name}・${option.label}${prep ? `・${prep}` : ""}${roastText} × ${quantity}`);
     window.dispatchEvent(new CustomEvent("kdcoffee:cart-added"));
+  }
+
+  function goToCheckout() {
+    if (!items.length) {
+      setEmptyCartDialogOpen(true);
+      return;
+    }
+    router.push("/checkout");
   }
 
   if (!options.length) return <div className="buy-panel unavailable"><p>此作品目前尚未設定販售規格，請先到後台 Commerce 分頁啟用規格。</p></div>;
@@ -138,10 +154,21 @@ export default function AddToCart({ product, showPv = false, pointDisplayName = 
       <div className="buy-step"><span>1</span><b>選擇商品規格</b></div>
       <div className="buy-options" role="radiogroup" aria-label="選擇商品規格">
         {options.map((item) => {
-          const soldOut = item.stock === 0;
+          const itemStock = typeof item.stock === "number" ? item.stock : 0;
+          const soldOut = itemStock === 0;
+          const lowStock = itemStock > 0 && itemStock <= 5;
           const active = option?.id === item.id;
           return <button key={item.id} type="button" aria-pressed={active} className={active ? "active" : ""} onClick={() => chooseOption(item)} disabled={soldOut}>
-            <span><strong>{item.label}</strong><small>{item.detail}{soldOut ? "・暫時售完" : `・現貨 ${Math.max(0, Number(item.stock) || 0)} 包`}{showPv && item.pvEnabled ? `・${item.pvValue ?? 0} ${pointDisplayName}` : ""}</small></span><b>NT$ {item.price.toLocaleString("zh-TW")}</b>
+            <span className="buy-option-copy">
+              <strong>{item.label}</strong>
+              {item.detail ? <small>{item.detail}</small> : null}
+              {soldOut ? <em className="buy-option-stock is-sold-out">暫時售完</em> : lowStock ? <em className="buy-option-stock">僅剩少量</em> : null}
+            </span>
+            <span className="buy-option-value">
+              <b>NT$ {item.price.toLocaleString("zh-TW")}</b>
+              {showPv && item.pvEnabled && typeof item.pvValue === "number" ? <small>☆ 可獲得 {item.pvValue.toLocaleString("zh-TW")} {pointDisplayName}</small> : null}
+            </span>
+            <span className="buy-option-check" aria-hidden="true">✓</span>
           </button>;
         })}
       </div>
@@ -158,13 +185,12 @@ export default function AddToCart({ product, showPv = false, pointDisplayName = 
       <div className="buy-step"><span>{needsPreparation ? 3 : 2}</span><b>選擇數量</b></div>
       <div className="buy-actions">
         <div className="quantity-control" aria-label="購買數量">
-          <button type="button" aria-label="減少數量" onClick={() => changeQuantity(quantity - 1)}>−</button>
+          <button type="button" aria-label="減少數量" disabled={quantity <= 1} onClick={() => changeQuantity(quantity - 1)}>−</button>
           <span>{quantity}</span>
-          <button type="button" aria-label="增加數量" onClick={() => changeQuantity(quantity + 1)}>＋</button>
+          <button type="button" aria-label="增加數量" disabled={remainingStock <= quantity} onClick={() => changeQuantity(quantity + 1)}>＋</button>
         </div>
-        <button type="button" className="add-cart-button" onClick={() => commit(false)} disabled={unavailable}>加入購物車</button>
       </div>
-      {option && optionStock > 0 ? <p className="buy-hint">目前現貨上限 {optionStock} 包{sameSkuInCart > 0 ? `；購物車已有 ${sameSkuInCart} 包，還可加入 ${remainingStock} 包。` : "。"}</p> : null}
+      {option && optionStock > 0 && optionStock <= 5 ? <p className="buy-hint buy-availability-hint">僅剩少量，數量仍以結帳前庫存為準。</p> : null}
 
       {customRoastEligible ? <section className="custom-roast-panel" aria-live="polite">
         <div className="custom-roast-badge">已達 2 磅</div>
@@ -177,10 +203,29 @@ export default function AddToCart({ product, showPv = false, pointDisplayName = 
         </div> : null}
       </section> : needsPreparation ? <p className="custom-roast-progress">此規格再選 {Math.max(0, CUSTOM_ROAST_MIN_QUANTITY - quantity)} 包，即達 2 磅並可選擇專屬烘焙服務。</p> : null}
 
-      <button type="button" className="buy-now-button" onClick={() => commit(true)} disabled={unavailable}>立即購買，前往結帳</button>
+      <div className="purchase-cta-group">
+        <button type="button" className="add-cart-button" onClick={addSelectedItem} disabled={unavailable}>加入購物車</button>
+        <button ref={checkoutTriggerRef} type="button" className="buy-now-button" onClick={goToCheckout}>立即結帳</button>
+      </div>
+      <p className="checkout-direct-hint">直接前往結帳，不會再次加入此商品</p>
       {notice ? <p className="commerce-live-notice" role="status">{notice}</p> : null}
       <div className="buy-assurance"><span>✓ 7-ELEVEN 取貨付款</span><span>✓ 工作室自取</span><span>✓ 少量庫存管理</span></div>
       {needsPreparation ? <p className="buy-hint">選擇咖啡粉時，請在結帳備註填寫手沖、義式或其他沖煮方式。</p> : null}
+      <dialog
+        ref={emptyCartDialogRef}
+        className="empty-cart-checkout-dialog"
+        aria-labelledby="empty-cart-checkout-title"
+        onClose={() => {
+          setEmptyCartDialogOpen(false);
+          window.requestAnimationFrame(() => checkoutTriggerRef.current?.focus());
+        }}
+      >
+        <div className="empty-cart-checkout-shell">
+          <button type="button" className="empty-cart-checkout-close" aria-label="關閉購物車提示" onClick={() => emptyCartDialogRef.current?.close()}>×</button>
+          <h2 id="empty-cart-checkout-title">目前購物車沒有商品，請繼續選購</h2>
+          <button type="button" className="empty-cart-checkout-action" autoFocus onClick={() => emptyCartDialogRef.current?.close()}>繼續選購</button>
+        </div>
+      </dialog>
     </div>
   );
 }
