@@ -15,6 +15,7 @@ import MemberSubscriptionExperience from "@/components/member/MemberSubscription
 import MemberReferralCenter from "@/components/member/MemberReferralCenter";
 import RetailPromotionCenter from "@/components/member/RetailPromotionCenter";
 import MemberQualificationSummary from "@/components/member/MemberQualificationSummary";
+import memberExperienceStyles from "@/components/member/MemberCenterExperience.module.css";
 import { getMemberCommerceDashboard, getMemberReferralCenter } from "@/lib/membershipCommerce";
 import { getActiveMembershipRules } from "@/lib/membershipBusinessRules";
 import { fulfillmentRecordForOrder, readFulfillmentStore } from "@/lib/fulfillment";
@@ -467,7 +468,7 @@ export default async function MemberPage({
           </div>
         </section>
 
-        <section className="member-recent-activity" aria-labelledby="member-recent-activity-title">
+        <section className={`member-recent-activity ${memberExperienceStyles.recentActivity}`} aria-labelledby="member-recent-activity-title">
           <header><h2 id="member-recent-activity-title">最近動態</h2></header>
           <div className="member-activity-list">
             {latestOrder ? (

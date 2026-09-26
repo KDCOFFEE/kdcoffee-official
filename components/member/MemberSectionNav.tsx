@@ -1,6 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+
+import styles from "./MemberCenterExperience.module.css";
 
 const items = [
   { id: "member-overview", label: "會員總覽", mobileLabel: "總覽" },
@@ -29,21 +32,27 @@ export default function MemberSectionNav() {
   }, [activate]);
 
   return (
-    <nav className="member-center-nav" aria-label="會員中心導覽" role="tablist">
-      {items.map((item) => (
-        <a
-          key={item.id}
-          href={`#${item.id}`}
-          className={activeId === item.id ? "is-active" : undefined}
-          role="tab"
-          aria-selected={activeId === item.id}
-          aria-controls={item.id}
-          onClick={() => activate(item.id)}
-        >
-          <span className="member-nav-desktop-label">{item.label}</span>
-          <span className="member-nav-mobile-label">{item.mobileLabel}</span>
-        </a>
-      ))}
+    <nav className={`member-center-nav ${styles.navigation}`} aria-label="會員中心導覽">
+      <div className={styles.tabList} role="tablist" aria-label="會員中心功能">
+        {items.map((item) => (
+          <a
+            key={item.id}
+            href={`#${item.id}`}
+            className={activeId === item.id ? "is-active" : undefined}
+            role="tab"
+            aria-selected={activeId === item.id}
+            aria-controls={item.id}
+            onClick={() => activate(item.id)}
+          >
+            <span className="member-nav-desktop-label">{item.label}</span>
+            <span className="member-nav-mobile-label">{item.mobileLabel}</span>
+          </a>
+        ))}
+      </div>
+      <Link href="/" className={styles.homeLink}>
+        <span className={styles.homeIcon} aria-hidden="true">⌂</span>
+        <span>返回首頁</span>
+      </Link>
     </nav>
   );
 }
