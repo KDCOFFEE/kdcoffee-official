@@ -51,7 +51,8 @@ export default function MemberSectionNav() {
       </div>
       <Link href="/" className={styles.homeLink}>
         <span className={styles.homeIcon} aria-hidden="true">⌂</span>
-        <span>返回首頁</span>
+        <span className={styles.homeLabelDesktop}>返回首頁</span>
+        <span className={styles.homeLabelMobile}>首頁</span>
       </Link>
     </nav>
   );

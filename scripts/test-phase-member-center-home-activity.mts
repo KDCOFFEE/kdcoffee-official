@@ -4,10 +4,11 @@ import path from "node:path";
 
 const root = process.cwd();
 const read = (file: string) => readFile(path.join(root, file), "utf8");
-const [page, nav, styles] = await Promise.all([
+const [page, nav, styles, globals] = await Promise.all([
   read("app/member/page.tsx"),
   read("components/member/MemberSectionNav.tsx"),
   read("components/member/MemberCenterExperience.module.css"),
+  read("app/globals.css"),
 ]);
 
 let passed = 0;
@@ -24,6 +25,11 @@ await test("homepage action is outside tablist semantics", () => {
   const homeLink = nav.match(/<Link href="\/"[\s\S]*?<\/Link>/)?.[0] ?? "";
   assert.doesNotMatch(homeLink, /role="tab"/);
   assert.match(nav, /<div className=\{styles\.tabList\} role="tablist"/);
+});
+await test("homepage uses compact mobile and understandable desktop labels", () => {
+  assert.match(nav, /className=\{styles\.homeLabelDesktop\}>返回首頁<\/span>/);
+  assert.match(nav, /className=\{styles\.homeLabelMobile\}>首頁<\/span>/);
+  assert.match(nav, /className=\{styles\.homeIcon\} aria-hidden="true">⌂<\/span>/);
 });
 await test("existing five member tabs remain", () => assert.equal((nav.match(/\{ id: "/g) ?? []).length, 5));
 await test("existing tab labels remain unchanged", () => {
@@ -42,6 +48,21 @@ await test("active tab behavior remains intact", () => {
 await test("homepage action has a comfortable target and visible focus", () => {
   assert.match(styles, /\.navigation \.homeLink \{[\s\S]*?min-height: 44px/);
   assert.match(styles, /\.navigation \.homeLink:focus-visible \{[\s\S]*?outline:/);
+});
+await test("mobile homepage and five tabs share one overflow-safe row", () => {
+  assert.match(styles, /@media \(max-width: 700px\)[\s\S]*?\.navigation\.navigation \{[\s\S]*?grid-template-columns: 44px minmax\(0, 1fr\);[\s\S]*?max-width: 100%;/);
+  assert.match(styles, /\.tabList \{[\s\S]*?grid-row: 1;[\s\S]*?grid-column: 2;[\s\S]*?grid-template-columns: repeat\(5, minmax\(0, 1fr\)\);[\s\S]*?min-width: 0;/);
+  assert.match(styles, /\.navigation \.homeLink \{[\s\S]*?grid-row: 1;[\s\S]*?grid-column: 1;[\s\S]*?min-width: 0;[\s\S]*?min-height: 44px;/);
+  assert.doesNotMatch(styles, /@media \(max-width: 700px\)[\s\S]*?\.navigation\.navigation \{[^}]*grid-template-columns: 1fr;/);
+});
+await test("mobile Member Center keeps a compact warm margin without changing desktop spacing", () => {
+  assert.match(globals, /\.member-page\{padding:16px 12px 30px\}\.member-card/);
+  assert.match(globals, /@media\(min-width:721px\)\{[\s\S]*?\.member-page\{padding:76px 20px 46px\}/);
+});
+await test("homepage never participates in active tab styling", () => {
+  const homeLink = nav.match(/<Link href="\/"[\s\S]*?<\/Link>/)?.[0] ?? "";
+  assert.doesNotMatch(homeLink, /is-active|aria-selected|role="tab"/);
+  assert.doesNotMatch(styles, /homeLink[^,{]*\.is-active|homeLink[^,{]*\[aria-selected/);
 });
 await test("Recent Activity still renders all existing activity types", () => {
   for (const label of ["最近訂單", "定期配送", "會員回饋"]) assert.match(page, new RegExp(label));
