@@ -13,7 +13,6 @@ import MemberMobileDisclosure from "@/components/member/MemberMobileDisclosure";
 import MemberSectionNav from "@/components/member/MemberSectionNav";
 import MemberSubscriptionExperience from "@/components/member/MemberSubscriptionExperience";
 import MemberReferralCenter from "@/components/member/MemberReferralCenter";
-import RetailPromotionCenter from "@/components/member/RetailPromotionCenter";
 import MemberQualificationSummary from "@/components/member/MemberQualificationSummary";
 import memberExperienceStyles from "@/components/member/MemberCenterExperience.module.css";
 import { getMemberCommerceDashboard, getMemberReferralCenter } from "@/lib/membershipCommerce";
@@ -391,6 +390,32 @@ export default async function MemberPage({
   const subscriptionShipping = primarySubscription
     ? primarySubscription.shippingMethod === "711_cod" ? `7-ELEVEN${primarySubscription.storeSelection?.storeName ? `・${primarySubscription.storeSelection.storeName}` : ""}` : primarySubscription.shippingMethod === "home_delivery" ? "宅配" : "工作室自取"
     : "尚未設定";
+  const referralRules = rulesVersion.rules.referral;
+  const referralExperienceData = {
+    ...referralCenter,
+    displayRules: {
+      pointDisplayName: referralRules.pointDisplayName,
+      pvRewardMoneyValue: referralRules.pvRewardMoneyValue,
+      payoutQualification: {
+        mode: referralRules.payoutQualification.mode,
+        qualificationBasis: referralRules.payoutQualification.qualificationBasis,
+        generalMember: {
+          windowDays: referralRules.payoutQualification.generalMember.rollingWindowDays,
+          threshold: referralRules.payoutQualification.qualificationBasis === "pv"
+            ? referralRules.payoutQualification.generalMember.cumulativeValidPVThreshold
+            : referralRules.payoutQualification.generalMember.cumulativeValidConsumptionThreshold,
+        },
+        activeSubscriptionMember: {
+          windowDays: referralRules.payoutQualification.activeSubscriptionMember.rollingWindowDays,
+          threshold: referralRules.payoutQualification.qualificationBasis === "pv"
+            ? referralRules.payoutQualification.activeSubscriptionMember.cumulativeValidPVThreshold
+            : referralRules.payoutQualification.activeSubscriptionMember.cumulativeValidConsumptionThreshold,
+        },
+      },
+      baseWaitingDays: referralRules.referralRewardBaseWaitingDays,
+      returnProtectionDays: referralRules.referralRewardReturnProtectionDays,
+    },
+  };
 
   return (
     <main className="member-page">
@@ -439,7 +464,7 @@ export default async function MemberPage({
               <strong>{availableCredit.toLocaleString("zh-TW")} 元</strong>
               <span>已正式入帳，結帳時可自行選擇使用</span>
             </a>
-            <a className="member-dashboard-card" href="#referral">
+            <a className="member-dashboard-card" href="#rewards">
               <small>待入帳回饋</small>
               <strong>{pendingRewardPoints.toLocaleString("zh-TW")} {pointDisplayName}</strong>
               <span>查看點數來源、資格條件與折抵價值</span>
@@ -461,7 +486,7 @@ export default async function MemberPage({
         <section className="member-quick-actions" aria-label="快速功能">
           <header><h2>快速功能</h2></header>
           <div className="member-quick-action-grid">
-            <a href="#referral"><strong>我的回饋</strong></a>
+            <a href="#rewards"><strong>我的回饋</strong></a>
             <a href="#subscription"><strong>配送設定</strong></a>
             <a href="#orders"><strong>我的訂單</strong></a>
             <a href="#account"><strong>帳戶設定</strong></a>
@@ -492,7 +517,7 @@ export default async function MemberPage({
               </a>
             ) : null}
             {pendingRewardPoints > 0 ? (
-              <a className="member-activity-row" href="#referral">
+              <a className="member-activity-row" href="#rewards">
                 <span className="member-activity-copy">
                   <small>會員回饋</small>
                   <strong>回饋待入帳</strong>
@@ -559,11 +584,7 @@ export default async function MemberPage({
           <MemberSubscriptionExperience {...commerce} products={subscriptionProducts} rules={{ intervalsDays: rulesVersion.rules.subscription.intervalOptions.filter((item) => item.enabled).map((item) => item.days), customCycleEnabled: rulesVersion.rules.subscription.customCycleEnabled, customCycleMinDays: rulesVersion.rules.subscription.customCycleMinDays, customCycleMaxDays: rulesVersion.rules.subscription.customCycleMaxDays, delayQuickOptionsDays: rulesVersion.rules.subscription.delayQuickOptionsDays, advanceQuickOptionsDays: rulesVersion.rules.subscription.advanceQuickOptionsDays, preparationLeadDays: rulesVersion.rules.subscription.preparationLeadDays, discountPercent: rulesVersion.rules.subscription.discountPercent, sevenElevenShippingFee: rulesVersion.rules.shipping.sevenElevenShippingFee, homeDeliveryShippingFee: rulesVersion.rules.shipping.homeDeliveryShippingFee, homeDeliveryCodFee: rulesVersion.rules.shipping.homeDeliveryCodFee, subscriptionShippingDiscount: rulesVersion.rules.shipping.subscriptionShippingDiscount, datePickerMode: rulesVersion.rules.subscription.datePickerMode, maxModificationsPerCycle: rulesVersion.rules.subscription.maxModificationsPerCycle, allowOtherSubscriptionProducts: rulesVersion.rules.subscription.allowOtherSubscriptionProducts, allowHalfToOnePound: rulesVersion.rules.subscription.allowHalfToOnePound, allowOneToHalfPound: rulesVersion.rules.subscription.allowOneToHalfPound, allowMixedOnePound: rulesVersion.rules.subscription.allowMixedOnePound, allowQuantityChange: rulesVersion.rules.subscription.allowQuantityChange, maxItems: MEMBER_SUBSCRIPTION_MAX_ITEMS }} />
         </MemberMobileDisclosure>
         </section>
-        <section id="referral" className="member-ia-section" aria-labelledby="member-referral-title" data-member-section role="tabpanel" hidden>
-          <header className="member-ia-section-head"><div><p className="eyebrow dark">REWARDS</p><h2 id="member-referral-title">推薦與回饋</h2></div><p>先看目前數字，再按需要開啟規則、團隊與歷史。</p></header>
-          <RetailPromotionCenter />
-          <MemberReferralCenter />
-        </section>
+        <MemberReferralCenter initialData={referralExperienceData} />
 
         <section id="orders" data-member-section role="tabpanel" hidden>
         <MemberMobileDisclosure eyebrow="ORDERS" title="我的訂單" actionLabel="查看" summary={<span className="member-ia-summary"><span>{latestOrder ? (latestOrder.fulfillment ? fulfillmentStateLabels[latestOrder.fulfillment.currentState] : statusLabel(latestOrder.status)) : "尚無訂單"}</span><span>{latestOrder ? latestOrder.orderNumber : "完成第一筆訂購後會顯示於此"}</span><span>{latestOrder ? `NT$ ${(latestOrder.total ?? latestOrder.subtotal ?? 0).toLocaleString("zh-TW")}` : ""}</span></span>}>

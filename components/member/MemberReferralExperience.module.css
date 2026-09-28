@@ -1,0 +1,114 @@
+.referralExperience {
+  display: grid;
+  gap: 18px;
+}
+
+.referralOverview {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(240px, .65fr);
+  gap: 12px;
+}
+
+.shareCard,
+.inviterCard {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  min-width: 0;
+  padding: 19px;
+  border: 1px solid #e4d7ca;
+  border-radius: 17px;
+  background: #fcfaf7;
+}
+
+.shareCard h3,
+.inviterCard h3 {
+  margin: 3px 0 0;
+}
+
+.shareCard > p,
+.inviterCard > p {
+  margin: 0;
+  color: #78695f;
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.shareMeta,
+.inviterCard dl {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.shareMeta > div,
+.inviterCard dl > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 11px 12px;
+  border-radius: 11px;
+  background: #fff;
+}
+
+.shareMeta dt,
+.inviterCard dt {
+  color: #85756a;
+  font-size: 11px;
+}
+
+.shareMeta dd,
+.inviterCard dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: #382b22;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.inviterCard > strong {
+  color: #3f3027;
+  font-size: 18px;
+}
+
+.inviterCard dl {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.primaryAction {
+  justify-self: start;
+  min-height: 44px;
+  padding: 10px 17px;
+  border: 1px solid #5b4332;
+  border-radius: 999px;
+  background: #5b4332;
+  color: #fff;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.primaryAction:focus-visible {
+  outline: 3px solid rgba(139, 114, 95, .34);
+  outline-offset: 3px;
+}
+
+.rewardPrimary {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+@media (max-width: 700px) {
+  .referralOverview {
+    grid-template-columns: 1fr;
+  }
+
+  .shareCard,
+  .inviterCard {
+    padding: 15px;
+  }
+
+  .primaryAction {
+    width: 100%;
+  }
+}

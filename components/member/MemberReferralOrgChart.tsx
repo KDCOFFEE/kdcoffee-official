@@ -259,6 +259,7 @@ function MemberReferralOrgChartDialog({ data, onClose }: Omit<Props, "open">) {
       <button className="member-org-backdrop" type="button" aria-label="關閉推薦組織圖" onClick={onClose} />
       <div className="member-org-shell">
         <header className="member-org-header">
+          <button type="button" className="member-org-return" onClick={onClose}>← 返回推薦</button>
           <div>
             <p className="eyebrow dark">REFERRAL ORGANIZATION</p>
             <h2 id="member-org-title">推薦組織圖 <span>顯示 3 代內</span></h2>

@@ -2,8 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import KdShareDialog from "@/components/member/KdShareDialog";
-
 type CalculationBasis = "paid_amount" | "pv";
 
 type RetailPromotionData = {
@@ -40,18 +38,12 @@ const amount = (value: number) => value.toLocaleString("zh-TW", { maximumFractio
 const shortDate = (value: string) => new Intl.DateTimeFormat("zh-TW", { timeZone: "Asia/Taipei", month: "2-digit", day: "2-digit" }).format(new Date(value));
 const statusLabel = (status: RetailPromotionData["history"][number]["status"]) => status === "pending_completion" ? "待訂單完成" : status === "scheduled" ? "待入帳" : status === "released" ? "已入帳" : status === "reversed" ? "已沖回" : "已取消";
 
-function ShareIcon() {
-  return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a3 3 0 1 0-2.83-4A3 3 0 0 0 15 5c0 .18.02.35.05.52L8.91 8.59a3 3 0 1 0 0 4.82l6.14 3.07A3 3 0 0 0 15 17a3 3 0 1 0 .91-2.16l-6.14-3.07a3.1 3.1 0 0 0 0-1.54l6.14-3.07A3 3 0 0 0 18 8Z" /></svg>;
-}
-
 export default function RetailPromotionCenter() {
   const [data, setData] = useState<RetailPromotionData | null>(null);
   const [error, setError] = useState("");
   const [detailsOpen, setDetailsOpen] = useState(false);
-  const [shareOpen, setShareOpen] = useState(false);
   const dialogRef = useRef<HTMLDialogElement>(null);
   const detailsTriggerRef = useRef<HTMLButtonElement>(null);
-  const shareTriggerRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     void fetch("/api/member/retail-promotion", { credentials: "same-origin", cache: "no-store" })
@@ -81,7 +73,7 @@ export default function RetailPromotionCenter() {
         <div className="retail-promotion-intro">
           <p className="eyebrow dark">RETAIL PROMOTION</p>
           <h2>推廣零售</h2>
-          {data ? <p>{data.settings.enabled ? <>分享給朋友，訪客完成購買即可依 <strong>{data.settings.rewardRate}%</strong> 比例獲得推廣零售獎金</> : "目前未啟用新的推廣零售獎金"}</p> : <p>分享好咖啡，也累積你的推廣零售獎金。</p>}
+          {data ? <p>{data.settings.enabled ? <>朋友透過你在「推薦」中的分享連結，以訪客身分完成購買，即可依 <strong>{data.settings.rewardRate}%</strong> 比例獲得推廣零售獎金。</> : "目前未啟用新的推廣零售獎金；分享功能仍集中在「推薦」。"}</p> : <p>訪客購買帶來的推廣零售成果會顯示在這裡；分享請前往「推薦」。</p>}
         </div>
         {error ? <p className="form-error">{error}</p> : !data ? <p>讀取中…</p> : <>
           <div className="retail-promotion-reward-summary" aria-label="推廣零售獎金摘要">
@@ -89,10 +81,8 @@ export default function RetailPromotionCenter() {
             <article><small>已入帳</small><strong>{money(data.summary.releasedReward)}</strong></article>
           </div>
           <div className="retail-promotion-actions">
-            <button ref={shareTriggerRef} className="retail-promotion-primary-action" type="button" onClick={() => setShareOpen(true)}><ShareIcon /><span>分享</span></button>
             <button ref={detailsTriggerRef} className="retail-promotion-detail-action" type="button" onClick={() => setDetailsOpen(true)}>查看詳情</button>
           </div>
-          <KdShareDialog open={shareOpen} referralCode={data.referralCode} onClose={() => { setShareOpen(false); window.setTimeout(() => shareTriggerRef.current?.focus(), 0); }} />
           <dialog ref={dialogRef} className="retail-promotion-dialog" aria-labelledby="retail-promotion-dialog-title" onClose={finishClosingDetails}>
             <div className="retail-promotion-dialog-shell">
               <header>

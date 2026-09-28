@@ -3934,6 +3934,12 @@ export async function getMemberReferralCenter(memberId: string, options: { baseU
     const levelRewards = rewards.filter((item) => item.referralLevel === level);
     return { level, members: nodes.filter((item) => item.level === level).length, pendingCredit: levelRewards.filter((item) => item.status === "scheduled" && item.qualificationStatus !== "expired").reduce((sum, item) => sum + item.calculatedCreditAmount, 0), releasedCredit: levelRewards.filter((item) => item.status === "released").reduce((sum, item) => sum + item.calculatedCreditAmount, 0), aggregateEligibleSpend: levelRewards.reduce((sum, item) => sum + item.paidAmountBasis, 0) };
   });
+  const referringRelationship = Object.values(state.referrals).find(
+    (item) => item.referredMemberId === memberId && item.status !== "inactive",
+  );
+  const referrerMemberNumber = referringRelationship
+    ? registry.members[referringRelationship.referrerMemberId]?.memberNumber ?? null
+    : null;
   const referralCode = referralCodeForMember(memberId);
   const referralUrl = `${(options.baseUrl ?? "").replace(/\/$/, "")}/member?ref=${encodeURIComponent(referralCode)}`;
   const uniqueOrderNumbers = [...new Set(rewards.map((item) => item.sourceOrderNumber).filter(Boolean))];
@@ -3981,7 +3987,7 @@ export async function getMemberReferralCenter(memberId: string, options: { baseU
       now: new Date(),
     });
 
-  return { referralCode, referralUrl, mode: version.rules.referral.referralRewardCalculationMode, pointDisplayName, qualificationProgress, pvDisclosure: version.rules.referral.referralRewardCalculationMode === "pv" ? `本制度以 ${pointDisplayName} 計算，非商品售價百分比。${pointDisplayName} 是商品回饋計算單位，不是貨幣或可交易資產。` : null, maxDepth: depth, summaries, nodes, orgChart, rewards: rewards.map((item) => {
+  return { referralCode, referralUrl, referrerMemberNumber, mode: version.rules.referral.referralRewardCalculationMode, pointDisplayName, qualificationProgress, pvDisclosure: version.rules.referral.referralRewardCalculationMode === "pv" ? `本制度以 ${pointDisplayName} 計算，非商品售價百分比。${pointDisplayName} 是商品回饋計算單位，不是貨幣或可交易資產。` : null, maxDepth: depth, summaries, nodes, orgChart, rewards: rewards.map((item) => {
     const sourceOrder = sourceOrders.get(item.sourceOrderNumber);
 
     const qualificationCoverage =

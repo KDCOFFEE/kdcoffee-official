@@ -1,12 +1,16 @@
 "use client";
 
 import { useEffect, useRef, useState, type ComponentProps } from "react";
+import KdShareDialog from "./KdShareDialog";
 import MemberReferralOrgChart, { type ReferralOrgChartData } from "./MemberReferralOrgChart";
 import MemberQualificationProgress from "./MemberQualificationProgress";
+import RetailPromotionCenter from "./RetailPromotionCenter";
+import styles from "./MemberReferralExperience.module.css";
 
-type Center = {
+export type MemberReferralCenterData = {
   referralCode: string;
   referralUrl: string;
+  referrerMemberNumber: string | null;
   pointDisplayName: string;
   pvDisclosure: string | null;
   qualificationProgress: ComponentProps<typeof MemberQualificationProgress>["progress"];
@@ -132,39 +136,19 @@ function rewardStatusLabel(
   return qualificationLabel;
 }
 
-export default function MemberReferralCenter() {
-  const [data, setData] = useState<Center | null>(null);
-  const [message, setMessage] = useState("");
+export default function MemberReferralCenter({ initialData: data }: { initialData: MemberReferralCenterData }) {
   const [teamPath, setTeamPath] = useState<Array<{ memberNumber: string; level: number }>>([]);
   const [rewardFilter, setRewardFilter] = useState<"all" | "pending" | "released">("all");
   const [rewardLevel, setRewardLevel] = useState(0);
   const [rewardPage, setRewardPage] = useState(1);
+  const [shareOpen, setShareOpen] = useState(false);
   const [orgChartOpen, setOrgChartOpen] = useState(false);
-  const [teamDetailsOpen, setTeamDetailsOpen] = useState(false);
   const [rewardDetailsOpen, setRewardDetailsOpen] = useState(false);
-  const teamDialogRef = useRef<HTMLDialogElement>(null);
   const rewardDialogRef = useRef<HTMLDialogElement>(null);
-  const teamTriggerRef = useRef<HTMLButtonElement>(null);
+  const shareTriggerRef = useRef<HTMLButtonElement>(null);
+  const orgChartTriggerRef = useRef<HTMLButtonElement>(null);
   const rewardTriggerRef = useRef<HTMLButtonElement>(null);
   const rewardsPerPage = 10;
-
-  useEffect(() => {
-    fetch("/api/member/referral")
-      .then(async (response) => {
-        const result = await response.json();
-        if (!response.ok) throw new Error(result.error || "推薦資料暫時無法讀取");
-        return result;
-      })
-      .then(setData)
-      .catch((error) => setMessage(error instanceof Error ? error.message : "推薦資料暫時無法讀取"));
-  }, []);
-
-  useEffect(() => {
-    const dialog = teamDialogRef.current;
-    if (!dialog) return;
-    if (teamDetailsOpen && !dialog.open) dialog.showModal();
-    if (!teamDetailsOpen && dialog.open) dialog.close();
-  }, [teamDetailsOpen]);
 
   useEffect(() => {
     const dialog = rewardDialogRef.current;
@@ -172,10 +156,6 @@ export default function MemberReferralCenter() {
     if (rewardDetailsOpen && !dialog.open) dialog.showModal();
     if (!rewardDetailsOpen && dialog.open) dialog.close();
   }, [rewardDetailsOpen]);
-
-  if (!data) {
-    return <section className="member-commerce-section"><div className="member-section-head"><div><p className="eyebrow dark">REFERRAL</p><h2>我的推薦</h2></div></div><p>{message || "讀取中…"}</p></section>;
-  }
 
   const displayPointName = /^[A-Za-z]+$/.test(data.pointDisplayName || "")
     ? data.pointDisplayName.toUpperCase()
@@ -216,30 +196,32 @@ export default function MemberReferralCenter() {
   const pagedRewards = filteredRewards.slice((safeRewardPage - 1) * rewardsPerPage, safeRewardPage * rewardsPerPage);
 
   return (
-    <section className="member-commerce-section member-referral-center-v2">
-      <div className="member-section-head"><div><p className="eyebrow dark">MEMBER REWARDS</p><h2>會員回饋</h2><p>先看目前結果，需要時再開啟資格、計算與歷史明細。</p></div></div>
-      {message && <p className="member-notice" role="status" aria-live="polite">{message}</p>}
-      <div className="member-referral-primary-grid">
-        <article className="member-referral-primary-card">
-          <div><p className="eyebrow dark">MY REWARDS</p><h3>我的回饋</h3></div>
-          <dl><div><dt>待入帳</dt><dd>NT$ {pendingRewardCredit.toLocaleString("zh-TW")}</dd></div><div><dt>已入帳</dt><dd>NT$ {releasedRewardCredit.toLocaleString("zh-TW")}</dd></div></dl>
-          <button ref={rewardTriggerRef} type="button" onClick={() => setRewardDetailsOpen(true)}>查看明細</button>
-        </article>
-        <article className="member-referral-primary-card">
-          <div><p className="eyebrow dark">MY TEAM</p><h3>我的推薦團隊</h3></div>
-          <dl><div><dt>直接推薦</dt><dd>{directMembers} 人</dd></div><div><dt>團隊人數</dt><dd>{data.nodes.length} 人</dd></div></dl>
-          <button ref={teamTriggerRef} type="button" onClick={() => setTeamDetailsOpen(true)}>查看團隊</button>
-        </article>
-      </div>
-
-      <dialog ref={teamDialogRef} className="member-ia-dialog" aria-labelledby="member-team-dialog-title" onClose={() => { setTeamDetailsOpen(false); window.setTimeout(() => teamTriggerRef.current?.focus(), 0); }}>
-        <div className="member-ia-dialog-shell">
-          <header><div><p className="eyebrow dark">MY TEAM</p><h2 id="member-team-dialog-title">我的推薦團隊</h2></div><button type="button" aria-label="關閉推薦團隊" onClick={() => teamDialogRef.current?.close()}>×</button></header>
-          <div className="member-ia-dialog-body">
-      <section className="member-referral-team-v2">
+    <>
+      <section id="referral" className="member-ia-section" aria-labelledby="member-referral-title" data-member-section role="tabpanel" hidden>
+        <header className="member-ia-section-head"><div><p className="eyebrow dark">REFERRAL</p><h2 id="member-referral-title">推薦</h2></div><p>分享咖啡、查看推薦人與團隊，並直接開啟三代組織圖。</p></header>
+        <section className={`member-commerce-section member-referral-center-v2 ${styles.referralExperience}`}>
+          <div className={styles.referralOverview}>
+            <article className={styles.shareCard}>
+              <div><p className="eyebrow dark">SHARE KD COFFEE</p><h3>分享給朋友</h3></div>
+              <p>這是會員中心唯一的分享入口。朋友透過你的專屬連結加入會員，系統會保留推薦關係；訪客完成有效購買，也可能帶來推廣零售回饋。</p>
+              <dl className={styles.shareMeta}>
+                <div><dt>我的推薦碼</dt><dd>{data.referralCode}</dd></div>
+                <div><dt>專屬連結</dt><dd>{data.referralUrl || "KD Coffee 首頁＋你的分享碼"}</dd></div>
+              </dl>
+              <button ref={shareTriggerRef} className={styles.primaryAction} type="button" onClick={() => setShareOpen(true)}>分享 KD Coffee</button>
+            </article>
+            <article className={styles.inviterCard}>
+              <div><p className="eyebrow dark">INVITED BY</p><h3>誰邀請我</h3></div>
+              <strong>{data.referrerMemberNumber ? `會員 ${data.referrerMemberNumber}` : "無推薦人資料"}</strong>
+              <p>{data.referrerMemberNumber ? "這是你的推薦關係來源；會員聯絡資料不會在此顯示。" : "目前沒有其他會員的推薦關係紀錄。"}</p>
+              <dl><div><dt>直接推薦</dt><dd>{directMembers} 人</dd></div><div><dt>團隊人數</dt><dd>{data.nodes.length} 人</dd></div></dl>
+            </article>
+          </div>
+          <KdShareDialog open={shareOpen} referralCode={data.referralCode} onClose={() => { setShareOpen(false); window.setTimeout(() => shareTriggerRef.current?.focus(), 0); }} />
+          <section className="member-referral-team-v2">
         <div className="member-referral-team-title-row">
           <div className="member-referral-subhead"><p className="eyebrow dark">MY TEAM</p><h3>我的推薦團隊</h3><p>先看自己的第一代；也可以打開三代樹狀組織圖，點選會員後以他為中心繼續往下查看。</p></div>
-          <button type="button" className="member-org-open-button" onClick={() => setOrgChartOpen(true)}>查看組織圖</button>
+          <button ref={orgChartTriggerRef} type="button" className="member-org-open-button" onClick={() => setOrgChartOpen(true)}>查看組織圖</button>
         </div>
         <div className="member-team-explorer-head">
           <div className="member-team-explorer-context">
@@ -256,18 +238,29 @@ export default function MemberReferralCenter() {
           <div><strong>會員 {node.memberNumber}</strong><small>你的第 {node.level} 代</small></div>
           <div className="member-team-node-counts"><span>直推 <b>{node.directReferralCount}</b> 人</span><span>團隊 <b>{node.teamCount}</b> 人</span>{node.directReferralCount > 0 ? <em>查看下線 ›</em> : <em className="is-empty">尚無下線</em>}</div>
         </button>)}</div> : <div className="member-commerce-empty compact"><strong>{currentTeamParent ? `會員 ${currentTeamParent.memberNumber} 目前沒有直接推薦會員` : "目前還沒有第一代推薦會員"}</strong><p>{currentTeamParent ? "可返回上一層繼續查看其他推薦會員。" : "分享給朋友後，完成會員加入就會在這裡顯示。"}</p></div>}
+          </section>
+        </section>
+        <MemberReferralOrgChart open={orgChartOpen} data={data.orgChart} onClose={() => { setOrgChartOpen(false); window.setTimeout(() => orgChartTriggerRef.current?.focus(), 0); }} />
       </section>
-          </div>
-        </div>
-      </dialog>
-      <MemberReferralOrgChart open={orgChartOpen} data={data.orgChart} onClose={() => setOrgChartOpen(false)} />
 
-      <dialog ref={rewardDialogRef} className="member-ia-dialog member-reward-dialog" aria-labelledby="member-reward-ledger-title" onClose={() => { setRewardDetailsOpen(false); window.setTimeout(() => rewardTriggerRef.current?.focus(), 0); }}>
+      <section id="rewards" className="member-ia-section" aria-labelledby="member-rewards-title" data-member-section role="tabpanel" hidden>
+        <header className="member-ia-section-head"><div><p className="eyebrow dark">REWARDS</p><h2 id="member-rewards-title">回饋</h2></div><p>推廣零售、會員回饋、資格與歷史明細各自清楚呈現。</p></header>
+        <RetailPromotionCenter />
+        <section className="member-commerce-section member-referral-center-v2">
+          <div className="member-section-head"><div><p className="eyebrow dark">MEMBER REWARDS</p><h2>會員回饋</h2><p>數字直接取自正式 Reward Engine；會員頁不重新計算。</p></div></div>
+          <div className={`member-referral-primary-grid ${styles.rewardPrimary}`}>
+            <article className="member-referral-primary-card">
+              <div><p className="eyebrow dark">MY REWARDS</p><h3>我的回饋</h3></div>
+              <dl><div><dt>待入帳</dt><dd>NT$ {pendingRewardCredit.toLocaleString("zh-TW")}</dd></div><div><dt>已入帳</dt><dd>NT$ {releasedRewardCredit.toLocaleString("zh-TW")}</dd></div></dl>
+              <button ref={rewardTriggerRef} type="button" onClick={() => setRewardDetailsOpen(true)}>查看回饋明細</button>
+            </article>
+          </div>
+          <MemberQualificationProgress progress={data.qualificationProgress} />
+          <dialog ref={rewardDialogRef} className="member-ia-dialog member-reward-dialog" aria-labelledby="member-reward-ledger-title" onClose={() => { setRewardDetailsOpen(false); window.setTimeout(() => rewardTriggerRef.current?.focus(), 0); }}>
         <div className="member-ia-dialog-shell">
           <header><div><p className="eyebrow dark">REWARD DETAILS</p><h2 id="member-reward-ledger-title">推薦與會員回饋</h2></div><button type="button" aria-label="關閉回饋明細" onClick={() => rewardDialogRef.current?.close()}>×</button></header>
           <div className="member-ia-dialog-body">
       <section className="member-referral-reward-ledger" aria-labelledby="member-reward-ledger-title">
-        <MemberQualificationProgress progress={data.qualificationProgress} />
         <div className="member-referral-subhead"><p className="eyebrow dark">REWARD HISTORY</p><h3>回饋總覽</h3><p>回饋點數、資格狀態與折抵價值均直接取自正式 Reward Engine；會員頁不自行重算帳務。</p></div>
         <div className="member-reward-summary-grid" aria-label="回饋點數總覽">
           <article><small>累計回饋點數</small><strong>{pointValue(totalRewardPoints, displayPointName)}</strong><span>已入帳＋有效待入帳</span></article>
@@ -554,7 +547,9 @@ export default function MemberReferralCenter() {
       </section>
           </div>
         </div>
-      </dialog>
-    </section>
+          </dialog>
+        </section>
+      </section>
+    </>
   );
 }
