@@ -10,6 +10,7 @@ import {
   lockSubscriptionCycle,
   memberSkipCycle,
   modifyCycleDate,
+  restartTerminatedSubscription,
   setSubscriptionStatus,
   updateCycleItems,
   updateSubscriptionPreferences,
@@ -33,7 +34,7 @@ export async function GET() {
   try {
     const member = await currentMember();
     const [dashboard, version] = await Promise.all([getMemberCommerceDashboard(member.id), getActiveMembershipRules()]);
-    return NextResponse.json({ ...dashboard, rules: { intervalsDays: version.rules.subscription.intervalOptions.filter((item) => item.enabled).map((item) => item.days), customCycleEnabled: version.rules.subscription.customCycleEnabled, customCycleMinDays: version.rules.subscription.customCycleMinDays, customCycleMaxDays: version.rules.subscription.customCycleMaxDays, delayQuickOptionsDays: version.rules.subscription.delayQuickOptionsDays, advanceQuickOptionsDays: version.rules.subscription.advanceQuickOptionsDays, preparationLeadDays: version.rules.subscription.preparationLeadDays, datePickerMode: version.rules.subscription.datePickerMode, maxModificationsPerCycle: version.rules.subscription.maxModificationsPerCycle } });
+    return NextResponse.json({ ...dashboard, rules: { intervalsDays: version.rules.subscription.intervalOptions.filter((item) => item.enabled).map((item) => item.days), customCycleEnabled: version.rules.subscription.customCycleEnabled, customCycleMinDays: version.rules.subscription.customCycleMinDays, customCycleMaxDays: version.rules.subscription.customCycleMaxDays, delayQuickOptionsDays: version.rules.subscription.delayQuickOptionsDays, advanceQuickOptionsDays: version.rules.subscription.advanceQuickOptionsDays, preparationLeadDays: version.rules.subscription.preparationLeadDays, customRoastPreparationLeadDays: version.rules.subscription.customRoastPreparationLeadDays, datePickerMode: version.rules.subscription.datePickerMode, maxModificationsPerCycle: version.rules.subscription.maxModificationsPerCycle } });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "讀取失敗" }, { status: 401 });
   }
@@ -47,15 +48,17 @@ export async function PATCH(request: Request) {
     const action = String(body.action || "");
     const idempotencyKey = String(body.idempotencyKey || "").slice(0, 120);
     if (!idempotencyKey) throw new MembershipCommerceError("操作識別遺失，請再試一次");
-    const actionResult: { action: string; plannedDate?: string; subscriptionId?: string } = { action };
+    const actionResult: { action: string; plannedDate?: string; skippedDate?: string; subscriptionId?: string } = { action };
 
     if (["advance", "delay", "change-date"].includes(action)) {
       const cycle = await modifyCycleDate({ memberId: member.id, cycleId: String(body.cycleId), expectedRevision: Number(body.expectedRevision), plannedDate: String(body.plannedDate), recalculateAnchor: Boolean(body.recalculateAnchor), rushWarningAcknowledged: body.rushWarningAcknowledged === true, idempotencyKey });
       actionResult.plannedDate = cycle.plannedDate;
       actionResult.subscriptionId = cycle.subscriptionId;
     } else if (action === "skip") {
-      const cycle = await memberSkipCycle({ memberId: member.id, cycleId: String(body.cycleId), expectedRevision: Number(body.expectedRevision), idempotencyKey });
-      actionResult.subscriptionId = cycle.subscriptionId;
+      const result = await memberSkipCycle({ memberId: member.id, cycleId: String(body.cycleId), expectedRevision: Number(body.expectedRevision), idempotencyKey });
+      actionResult.subscriptionId = result.subscriptionId;
+      actionResult.skippedDate = result.skippedDate;
+      if (result.plannedDate) actionResult.plannedDate = result.plannedDate;
     } else if (action === "hide-terminated") {
       const subscription =
         await hideTerminatedSubscriptionFromMember({
@@ -66,6 +69,17 @@ export async function PATCH(request: Request) {
         });
 
       actionResult.subscriptionId = subscription.subscriptionId;
+    } else if (action === "restart") {
+      const result = await restartTerminatedSubscription({
+        memberId: member.id,
+        subscriptionId: String(body.subscriptionId),
+        expectedRevision: Number(body.expectedRevision),
+        resumeDate: String(body.resumeDate || ""),
+        intervalDays: Number(body.intervalDays),
+        idempotencyKey,
+      });
+      actionResult.subscriptionId = result.subscription.subscriptionId;
+      actionResult.plannedDate = result.plannedDate;
     } else if (["pause", "resume", "terminate"].includes(action)) {
       const beforeDashboard = action === "resume"
         ? await getMemberCommerceDashboard(member.id)
@@ -196,9 +210,6 @@ export async function PATCH(request: Request) {
       throw new MembershipCommerceError("不支援的操作");
     }
     const dashboard = await getMemberCommerceDashboard(member.id);
-    if (action === "skip" && actionResult.subscriptionId) {
-      actionResult.plannedDate = dashboard.cycles.find((cycle) => cycle.subscriptionId === actionResult.subscriptionId && ["scheduled", "modifiable"].includes(cycle.status))?.plannedDate;
-    }
     return NextResponse.json({ ok: true, ...dashboard, actionResult });
   } catch (error) {
     const status = error instanceof MembershipRevisionConflictError ? 409 : error instanceof MembershipCommerceError ? 400 : 500;

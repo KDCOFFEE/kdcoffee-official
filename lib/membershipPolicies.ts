@@ -1,5 +1,5 @@
-import type { MembershipBusinessRules, MoneyRoundingMode } from "./membershipBusinessRules";
-import { OWNER_DECISION_REQUIRED } from "./membershipBusinessRules";
+import type { MembershipBusinessRules, MoneyRoundingMode } from "./membershipRuleTypes";
+import { OWNER_DECISION_REQUIRED } from "./membershipRuleTypes";
 import {
   isBeanSubscriptionItem,
   type SubscriptionItem,

@@ -182,13 +182,13 @@ async function main() {
     check("existing current order remains intact after terminate", postTerminate.cycles[created.cycleId].createdOrderId === "KD20260915-TEST01" && postTerminate.cycles[created.cycleId].status === "order_created" && postTerminate.cycles[created.cycleId].shippingSnapshot?.method === "studio_pickup");
     check("terminated subscription remains the default view instead of silently transforming into pending subscription", dashboardModel.defaultSubscriptionId([terminated, pendingOther]) === terminated.subscriptionId);
     const selectorText = dashboardModel.subscriptionSelectorLabel(pendingOther, products);
-    check("multiple-subscription selector label identifies status, product, interval, and shipping", selectorText.includes("等待首筆訂單取貨") && selectorText.includes("喬托・初醒") && selectorText.includes("每 45 天") && selectorText.includes("7-ELEVEN 另一門市"));
+    check("multiple-subscription selector label identifies status, product, interval, and shipping", selectorText.includes("等待首次取貨") && selectorText.includes("喬托・初醒") && selectorText.includes("每 45 天") && selectorText.includes("7-ELEVEN 另一門市"));
 
     const componentSource = await readFile(path.join(process.cwd(), "components/member/MemberSubscriptionExperience.tsx"), "utf8");
     const routeSource = await readFile(path.join(process.cwd(), "app/api/member/subscription/route.ts"), "utf8");
     check("terminate entry only opens confirmation and does not mutate immediately", componentSource.includes('onClick={() => setTerminateConfirmationId(subscription.subscriptionId)}') && !componentSource.includes('onClick={() => void mutate("terminate", { subscriptionId: subscription.subscriptionId'));
-    check("explicit terminate confirmation performs the mutation", componentSource.includes("async function confirmTermination()") && componentSource.includes('await mutate("terminate"') && componentSource.includes("確認停止未來定期配送"));
-    check("terminate completion receipt and other-subscription control are present", componentSource.includes("此定期配送已停止") && componentSource.includes("已建立的本次配送仍照常") && componentSource.includes("查看其他定期配送"));
+    check("explicit terminate confirmation performs the mutation", componentSource.includes("async function confirmTermination()") && componentSource.includes('await mutate("terminate"') && componentSource.includes("確認停止定期配送"));
+    check("terminate completion receipt and restart controls are present", componentSource.includes("此定期配送已停止") && componentSource.includes("重新啟動定期配送") && componentSource.includes("查看其他定期配送"));
     check("multiple subscriptions render a visible selector", componentSource.includes("member-subscription-selector") && componentSource.includes("選擇定期配送"));
     check("bidirectional shipping API accepts studio and 7-ELEVEN while requiring a 7-ELEVEN store", routeSource.includes('"change-shipping"') && routeSource.includes('"studio_pickup", "711_cod"') && routeSource.includes("請先選擇有效的 7-ELEVEN 取貨門市"));
     check("cancellation immediate feedback is explicitly intermediate", componentSource.includes("取消處理已送出；請以重新整理後的訂單狀態為準。"));

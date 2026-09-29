@@ -15,6 +15,7 @@ const commerce = await import("../lib/membershipCommerce");
 const policy = await import("../lib/membershipPolicies");
 const rulesModule = await import("../lib/membershipBusinessRules");
 const identity = await import("../lib/memberIdentity");
+const dateMutationNow = new Date("2026-08-28T00:00:00Z");
 
 let count = 0;
 function check(code: string, name: string, condition: unknown) {
@@ -76,13 +77,13 @@ try {
 
   const dateSub = await active(memberA, "dates");
   let dateCycle = await commerce.generateSubscriptionCycle({ subscriptionId: dateSub.subscriptionId, sequence: 1, plannedDate: "2026-10-01", idempotencyKey: "date-cycle" });
-  dateCycle = await commerce.modifyCycleDate({ memberId: memberA, cycleId: dateCycle.cycleId, expectedRevision: dateCycle.revision, plannedDate: "2026-09-25", recalculateAnchor: false, idempotencyKey: "advance-once" });
+  dateCycle = await commerce.modifyCycleDate({ memberId: memberA, cycleId: dateCycle.cycleId, expectedRevision: dateCycle.revision, plannedDate: "2026-09-25", recalculateAnchor: false, idempotencyKey: "advance-once", now: dateMutationNow });
   check("M", "提前只改一次不改基準", (await commerce.readMembershipCommerceState()).subscriptions[dateSub.subscriptionId].anchorDate === "2026-09-01");
-  dateCycle = await commerce.modifyCycleDate({ memberId: memberA, cycleId: dateCycle.cycleId, expectedRevision: dateCycle.revision, plannedDate: "2026-09-24", recalculateAnchor: true, idempotencyKey: "advance-rebase" });
+  dateCycle = await commerce.modifyCycleDate({ memberId: memberA, cycleId: dateCycle.cycleId, expectedRevision: dateCycle.revision, plannedDate: "2026-09-24", recalculateAnchor: true, idempotencyKey: "advance-rebase", now: dateMutationNow });
   check("N", "提前並重算會更新基準", (await commerce.readMembershipCommerceState()).subscriptions[dateSub.subscriptionId].anchorDate === "2026-09-24");
-  dateCycle = await commerce.modifyCycleDate({ memberId: memberA, cycleId: dateCycle.cycleId, expectedRevision: dateCycle.revision, plannedDate: "2026-10-08", recalculateAnchor: false, idempotencyKey: "delay-once" });
+  dateCycle = await commerce.modifyCycleDate({ memberId: memberA, cycleId: dateCycle.cycleId, expectedRevision: dateCycle.revision, plannedDate: "2026-10-08", recalculateAnchor: false, idempotencyKey: "delay-once", now: dateMutationNow });
   check("O", "延後只改一次不改基準", (await commerce.readMembershipCommerceState()).subscriptions[dateSub.subscriptionId].anchorDate === "2026-09-24");
-  dateCycle = await commerce.modifyCycleDate({ memberId: memberA, cycleId: dateCycle.cycleId, expectedRevision: dateCycle.revision, plannedDate: "2026-10-09", recalculateAnchor: true, idempotencyKey: "delay-rebase" });
+  dateCycle = await commerce.modifyCycleDate({ memberId: memberA, cycleId: dateCycle.cycleId, expectedRevision: dateCycle.revision, plannedDate: "2026-10-09", recalculateAnchor: true, idempotencyKey: "delay-rebase", now: dateMutationNow });
   check("P", "延後並重算會更新基準", (await commerce.readMembershipCommerceState()).subscriptions[dateSub.subscriptionId].anchorDate === "2026-10-09");
   const skipped = await commerce.memberSkipCycle({ memberId: memberA, cycleId: dateCycle.cycleId, expectedRevision: dateCycle.revision, idempotencyKey: "skip-i2" });
   check("Q", "跳過只終止本期", skipped.status === "skipped");
@@ -113,13 +114,13 @@ try {
   const lockSub = await active(memberB, "lock");
   const lockCycle = await commerce.generateSubscriptionCycle({ subscriptionId: lockSub.subscriptionId, sequence: 1, plannedDate: "2026-09-01", idempotencyKey: "lock-cycle" });
   const locked = await commerce.lockSubscriptionCycle({ cycleId: lockCycle.cycleId, shipping: 0, idempotencyKey: "lock-cycle-lock" });
-  const afterLock = await Promise.allSettled([commerce.modifyCycleDate({ memberId: memberB, cycleId: locked.cycleId, expectedRevision: locked.revision, plannedDate: "2026-09-02", recalculateAnchor: false, idempotencyKey: "after-lock" })]);
+  const afterLock = await Promise.allSettled([commerce.modifyCycleDate({ memberId: memberB, cycleId: locked.cycleId, expectedRevision: locked.revision, plannedDate: "2026-09-02", recalculateAnchor: false, idempotencyKey: "after-lock", now: dateMutationNow })]);
   check("AA", "鎖定後修改明確失敗", afterLock[0].status === "rejected");
   const staleCycle = await commerce.generateSubscriptionCycle({ subscriptionId: lockSub.subscriptionId, sequence: 2, plannedDate: "2026-10-01", idempotencyKey: "stale-cycle" });
-  await commerce.modifyCycleDate({ memberId: memberB, cycleId: staleCycle.cycleId, expectedRevision: staleCycle.revision, plannedDate: "2026-10-02", recalculateAnchor: false, idempotencyKey: "stale-first" });
-  const stale = await Promise.allSettled([commerce.modifyCycleDate({ memberId: memberB, cycleId: staleCycle.cycleId, expectedRevision: staleCycle.revision, plannedDate: "2026-10-03", recalculateAnchor: false, idempotencyKey: "stale-second" })]);
+  await commerce.modifyCycleDate({ memberId: memberB, cycleId: staleCycle.cycleId, expectedRevision: staleCycle.revision, plannedDate: "2026-10-02", recalculateAnchor: false, idempotencyKey: "stale-first", now: dateMutationNow });
+  const stale = await Promise.allSettled([commerce.modifyCycleDate({ memberId: memberB, cycleId: staleCycle.cycleId, expectedRevision: staleCycle.revision, plannedDate: "2026-10-03", recalculateAnchor: false, idempotencyKey: "stale-second", now: dateMutationNow })]);
   check("AB", "舊版次更新回傳衝突", stale[0].status === "rejected" && stale[0].reason instanceof commerce.MembershipRevisionConflictError);
-  const cross = await Promise.allSettled([commerce.modifyCycleDate({ memberId: memberC, cycleId: staleCycle.cycleId, expectedRevision: staleCycle.revision + 1, plannedDate: "2026-10-04", recalculateAnchor: false, idempotencyKey: "cross-member" })]);
+  const cross = await Promise.allSettled([commerce.modifyCycleDate({ memberId: memberC, cycleId: staleCycle.cycleId, expectedRevision: staleCycle.revision + 1, plannedDate: "2026-10-04", recalculateAnchor: false, idempotencyKey: "cross-member", now: dateMutationNow })]);
   check("AC", "跨會員修改遭拒", cross[0].status === "rejected");
   const oldSnapshot = locked.rulesSnapshot?.rules.subscription.discountPercent;
   const store = await rulesModule.readMembershipRulesStore(); const changedRules = structuredClone(store.versions.at(-1)!.rules); changedRules.subscription.discountPercent = 90;

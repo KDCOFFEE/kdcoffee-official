@@ -1330,24 +1330,122 @@ export async function skipCycle(input: { cycleId: string; idempotencyKey: string
   return transitionCycle({ ...input, to: "skipped", reason: "會員跳過本次" });
 }
 
+const NEXT_SUBSCRIPTION_ARRANGEMENT_STATUSES: CycleStatus[] = [
+  "scheduled",
+  "modifiable",
+  "locked",
+  "order_created",
+  "shipped",
+  "ready_for_pickup",
+  "blocked_stock",
+];
+
+function nextSubscriptionCadenceDate(
+  state: MembershipCommerceState,
+  subscription: Subscription,
+  skippedCycle: SubscriptionCycle,
+  nextSequence: number,
+) {
+  const cadenceAnchorCycle = Object.values(state.cycles)
+    .filter((candidate) =>
+      candidate.subscriptionId === subscription.subscriptionId &&
+      candidate.kind === "scheduled" &&
+      candidate.sequence < nextSequence &&
+      candidate.plannedDate === subscription.anchorDate
+    )
+    .sort((left, right) => right.sequence - left.sequence)[0];
+  const anchorSequence = cadenceAnchorCycle?.sequence ?? 0;
+  if (anchorSequence > skippedCycle.sequence) throw new MembershipCommerceError("定期配送基準資料不一致");
+  return addTaipeiCalendarDays(
+    subscription.anchorDate,
+    subscription.intervalDays * (nextSequence - anchorSequence),
+  );
+}
+
 export async function memberSkipCycle(input: { memberId: string; cycleId: string; expectedRevision: number; idempotencyKey: string; now?: Date; stateFilePath?: string; rulesFilePath?: string }) {
   const version = await getActiveMembershipRules(input.now, input.rulesFilePath);
   const key = `cycle:member-skip:${input.idempotencyKey}`;
   return transaction((state, now) => {
     const cycle = state.cycles[input.cycleId];
     if (!cycle) throw new MembershipCommerceError("找不到配送期次");
-    if (remembered(state, key)) return cycle;
-    assertMemberOwns(state.subscriptions[cycle.subscriptionId], input.memberId);
+    const subscription = state.subscriptions[cycle.subscriptionId];
+    if (!subscription) throw new MembershipCommerceError("找不到定期購");
+    assertMemberOwns(subscription, input.memberId);
+    const rememberedId = remembered(state, key);
+    if (rememberedId) {
+      const rememberedEvent = state.events.find((record) => record.eventId === rememberedId);
+      const nextCycleId = String(rememberedEvent?.safeData.nextCycleId ?? "");
+      const nextCycle = nextCycleId ? state.cycles[nextCycleId] ?? null : null;
+      return {
+        ...cycle,
+        skippedCycle: cycle,
+        nextCycle,
+        skippedDate: String(rememberedEvent?.safeData.skippedDate ?? cycle.plannedDate),
+        plannedDate: nextCycle?.plannedDate ?? (rememberedEvent?.safeData.plannedDate ? String(rememberedEvent.safeData.plannedDate) : null),
+        nextCycleAction: String(rememberedEvent?.safeData.nextCycleAction ?? (nextCycle ? "reused" : "unavailable")) as "created" | "reused" | "unavailable",
+      };
+    }
     assertRevision(cycle, input.expectedRevision);
     if (!["scheduled", "modifiable"].includes(cycle.status)) throw new MembershipCommerceError("本期已截止修改");
+    if (subscription.status !== "active") throw new MembershipCommerceError("目前定期配送無法跳過本次安排");
     const before = cycle.status;
+    const skippedDate = cycle.plannedDate;
     cycle.status = "skipped";
     touch(cycle, now);
-    remember(state, key, cycle.cycleId, now);
-    const source = event(state, "cycle_skipped", { sequence: cycle.sequence }, now, { memberId: input.memberId, subscriptionId: cycle.subscriptionId });
+    const source = event(state, "cycle_skipped", { sequence: cycle.sequence, skippedDate }, now, { memberId: input.memberId, subscriptionId: cycle.subscriptionId });
+
+    const laterArrangements = Object.values(state.cycles)
+      .filter((candidate) =>
+        candidate.cycleId !== cycle.cycleId &&
+        candidate.subscriptionId === subscription.subscriptionId &&
+        candidate.kind === "scheduled" &&
+        candidate.sequence > cycle.sequence &&
+        NEXT_SUBSCRIPTION_ARRANGEMENT_STATUSES.includes(candidate.status)
+      )
+      .sort((left, right) => left.sequence - right.sequence || left.plannedDate.localeCompare(right.plannedDate));
+    const laterArrangement = laterArrangements.find((candidate) => candidate.plannedDate > skippedDate);
+
+    let nextCycle = laterArrangement ?? null;
+    let nextCycleAction: "created" | "reused" | "unavailable" = laterArrangement ? "reused" : "unavailable";
+    if (!nextCycle && laterArrangements.length === 0) {
+      let nextSequence = Object.values(state.cycles)
+        .filter((candidate) => candidate.subscriptionId === subscription.subscriptionId && candidate.kind === "scheduled")
+        .reduce((maximum, candidate) => Math.max(maximum, candidate.sequence), 0) + 1;
+      let plannedDate = nextSubscriptionCadenceDate(state, subscription, cycle, nextSequence);
+      while (plannedDate <= skippedDate) {
+        nextSequence += 1;
+        if (nextSequence - cycle.sequence > 1_000) throw new MembershipCommerceError("無法安全計算下一次配送日期");
+        plannedDate = nextSubscriptionCadenceDate(state, subscription, cycle, nextSequence);
+      }
+      nextCycle = createSubscriptionCycleRecord({
+        state,
+        subscription,
+        sequence: nextSequence,
+        plannedDate,
+        kind: "scheduled",
+        version,
+        now,
+        reason: "會員跳過本次後延續下一期定期配送",
+        sourceEvent: source.eventId,
+        dedicatedRoastReferenceDate: getDateOnlyInTimeZone(now),
+      }).cycle;
+      nextCycleAction = "created";
+    }
+
+    source.safeData.nextCycleId = nextCycle?.cycleId ?? "";
+    source.safeData.plannedDate = nextCycle?.plannedDate ?? "";
+    source.safeData.nextCycleAction = nextCycleAction;
+    remember(state, key, source.eventId, now);
     notify(state, version.rules, "cycle_skipped", source.eventId, now, { memberId: input.memberId });
-    audit(state, { actor: "member", action: "cycle-skipped", entityType: "cycle", entityId: cycle.cycleId, before: { status: before }, after: { status: "skipped" }, reason: "會員跳過本次", sourceEvent: source.eventId }, now);
-    return cycle;
+    audit(state, { actor: "member", action: "cycle-skipped", entityType: "cycle", entityId: cycle.cycleId, before: { status: before, plannedDate: skippedDate }, after: { status: "skipped", nextPlannedDate: nextCycle?.plannedDate ?? "" }, reason: "會員跳過本次", sourceEvent: source.eventId }, now);
+    return {
+      ...cycle,
+      skippedCycle: cycle,
+      nextCycle,
+      skippedDate,
+      plannedDate: nextCycle?.plannedDate ?? null,
+      nextCycleAction,
+    };
   }, { now: input.now, filePath: input.stateFilePath });
 }
 
@@ -1407,8 +1505,13 @@ export async function setSubscriptionStatus(input: { subscriptionId: string; sta
       if (version.rules.subscription.pauseResumeAnchorPolicy === OWNER_DECISION_REQUIRED) throw new MembershipCommerceError("恢復配送後的基準日期尚待 Owner 決定");
       if (version.rules.subscription.pauseResumeAnchorPolicy === "member-selects-date") {
         if (!input.resumeDate || !input.intervalDays || !resolveSubscriptionInterval(input.intervalDays, version.rules).allowed) throw new MembershipCommerceError("請選擇恢復配送日期與週期");
-        const earliest = addTaipeiCalendarDays(nowIso(now).slice(0, 10), version.rules.subscription.preparationLeadDays);
-        if (input.resumeDate < earliest) throw new MembershipCommerceError(`最早可從 ${earliest} 恢復配送`);
+        const availability = resolveSubscriptionDateAvailability({
+          requestedDate: input.resumeDate,
+          today: getDateOnlyInTimeZone(now),
+          customRoast: subscriptionHasDedicatedRoast(subscription.defaultItems),
+          rules: version.rules,
+        });
+        if (!availability.allowed) throw new MembershipCommerceError(`最早可從 ${availability.earliestDate} 恢復配送`);
         subscription.anchorDate = input.resumeDate;
         subscription.intervalDays = input.intervalDays;
       }
@@ -1422,6 +1525,172 @@ export async function setSubscriptionStatus(input: { subscriptionId: string; sta
     notify(state, version.rules, notificationType, source.eventId, now, { memberId: subscription.memberId });
     audit(state, { actor: "member", action: `subscription-${input.status}`, entityType: "subscription", entityId: subscription.subscriptionId, before: { status: before }, after: { status: input.status }, reason: input.reason, sourceEvent: source.eventId }, now);
     return subscription;
+  }, { now: input.now, filePath: input.stateFilePath });
+}
+
+function canRestartTerminatedSubscription(
+  state: MembershipCommerceState,
+  subscription: Subscription,
+) {
+  if (subscription.status !== "terminated") return false;
+
+  const terminationAudit = [...state.audit].reverse().find(
+    (record) =>
+      record.entityType === "subscription" &&
+      record.entityId === subscription.subscriptionId &&
+      record.after.status === "terminated",
+  );
+
+  if (
+    !terminationAudit ||
+    terminationAudit.actor !== "member" ||
+    terminationAudit.action !== "subscription-terminated" ||
+    !["active", "paused"].includes(String(terminationAudit.before.status))
+  ) return false;
+
+  const terminationEvent = state.events.find(
+    (record) =>
+      record.eventId === terminationAudit.sourceEvent &&
+      record.subscriptionId === subscription.subscriptionId &&
+      record.type === "subscription_terminated",
+  );
+
+  if (!terminationEvent) return false;
+
+  return state.events.some(
+    (record) =>
+      record.subscriptionId === subscription.subscriptionId &&
+      record.type === "qualifying_fulfillment" &&
+      record.occurredAt <= terminationAudit.timestamp,
+  );
+}
+
+export async function restartTerminatedSubscription(input: {
+  memberId: string;
+  subscriptionId: string;
+  expectedRevision: number;
+  resumeDate: string;
+  intervalDays: number;
+  idempotencyKey: string;
+  now?: Date;
+  stateFilePath?: string;
+  rulesFilePath?: string;
+}) {
+  const version = await getActiveMembershipRules(input.now, input.rulesFilePath);
+  const key = `subscription:restart:${input.idempotencyKey}`;
+
+  return transaction((state, now) => {
+    const subscription = state.subscriptions[input.subscriptionId];
+    if (!subscription) throw new MembershipCommerceError("找不到定期購");
+    assertMemberOwns(subscription, input.memberId);
+
+    const rememberedEventId = remembered(state, key);
+    if (rememberedEventId) {
+      const restartEvent = state.events.find((record) => record.eventId === rememberedEventId);
+      const cycleId = String(restartEvent?.safeData.cycleId ?? "");
+      return {
+        subscription,
+        cycle: cycleId ? state.cycles[cycleId] ?? null : null,
+        plannedDate: String(restartEvent?.safeData.plannedDate ?? subscription.anchorDate),
+        cycleAction: String(restartEvent?.safeData.cycleAction ?? "deferred") as "reused" | "created" | "deferred",
+      };
+    }
+
+    assertRevision(subscription, input.expectedRevision);
+    if (subscription.status !== "terminated") throw new MembershipCommerceError("只有已停止的定期配送可以重新啟動");
+    if (!canRestartTerminatedSubscription(state, subscription)) throw new MembershipCommerceError("這筆定期配送無法從會員中心重新啟動");
+    if (!resolveSubscriptionInterval(input.intervalDays, version.rules).allowed) throw new MembershipCommerceError("此配送週期目前未開放");
+
+    const today = getDateOnlyInTimeZone(now);
+    const availability = resolveSubscriptionDateAvailability({
+      requestedDate: input.resumeDate,
+      today,
+      customRoast: subscriptionHasDedicatedRoast(subscription.defaultItems),
+      rules: version.rules,
+    });
+    if (!availability.allowed) throw new MembershipCommerceError(`最早可從 ${availability.earliestDate} 重新啟動配送`);
+
+    const previousAnchorDate = subscription.anchorDate;
+    const previousIntervalDays = subscription.intervalDays;
+    const scheduledCycles = Object.values(state.cycles)
+      .filter((cycle) => cycle.subscriptionId === subscription.subscriptionId && cycle.kind === "scheduled");
+    const editableCycle = scheduledCycles
+      .filter((cycle) => ["scheduled", "modifiable"].includes(cycle.status))
+      .sort((left, right) => left.plannedDate.localeCompare(right.plannedDate) || left.sequence - right.sequence)[0];
+    const hasCommittedCycle = scheduledCycles.some((cycle) =>
+      ["locked", "order_created", "shipped", "ready_for_pickup", "blocked_stock"].includes(cycle.status),
+    );
+
+    subscription.status = "active";
+    subscription.anchorDate = input.resumeDate;
+    subscription.intervalDays = input.intervalDays;
+    subscription.statusReason = "會員重新啟動定期配送";
+    touch(subscription, now);
+
+    let cycle: SubscriptionCycle | null = null;
+    let cycleAction: "reused" | "created" | "deferred" = "deferred";
+
+    if (editableCycle) {
+      const previousPlannedDate = editableCycle.plannedDate;
+      Object.assign(editableCycle, cycleDates(
+        input.resumeDate,
+        version.rules.subscription.modificationCutoffDays,
+        version.rules.subscription.orderCreationLeadDays,
+      ));
+      editableCycle.dedicatedRoastRush = null;
+      touch(editableCycle, now);
+      cycle = editableCycle;
+      cycleAction = "reused";
+      audit(state, {
+        actor: "member",
+        action: "cycle-reused-for-subscription-restart",
+        entityType: "cycle",
+        entityId: editableCycle.cycleId,
+        before: { plannedDate: previousPlannedDate, status: editableCycle.status },
+        after: { plannedDate: editableCycle.plannedDate, status: editableCycle.status },
+        reason: "會員重新啟動定期配送並更新下一次配送日期",
+        sourceEvent: input.idempotencyKey,
+      }, now);
+    } else if (!hasCommittedCycle) {
+      const nextSequence = scheduledCycles.reduce(
+        (maximum, current) => Math.max(maximum, current.sequence),
+        0,
+      ) + 1;
+      cycle = createSubscriptionCycleRecord({
+        state,
+        subscription,
+        sequence: nextSequence,
+        plannedDate: input.resumeDate,
+        kind: "scheduled",
+        version,
+        now,
+        reason: "會員重新啟動定期配送後建立下一期",
+        sourceEvent: input.idempotencyKey,
+        dedicatedRoastReferenceDate: today,
+      }).cycle;
+      cycleAction = "created";
+    }
+
+    const source = event(state, "subscription_restarted", {
+      plannedDate: input.resumeDate,
+      intervalDays: input.intervalDays,
+      cycleAction,
+      cycleId: cycle?.cycleId ?? "",
+    }, now, { memberId: subscription.memberId, subscriptionId: subscription.subscriptionId });
+    remember(state, key, source.eventId, now);
+    notify(state, version.rules, "subscription_resumed", source.eventId, now, { memberId: subscription.memberId });
+    audit(state, {
+      actor: "member",
+      action: "subscription-restarted",
+      entityType: "subscription",
+      entityId: subscription.subscriptionId,
+      before: { status: "terminated", anchorDate: previousAnchorDate, intervalDays: previousIntervalDays },
+      after: { status: "active", anchorDate: subscription.anchorDate, intervalDays: subscription.intervalDays, cycleAction },
+      reason: "會員重新啟動定期配送",
+      sourceEvent: source.eventId,
+    }, now);
+
+    return { subscription, cycle, plannedDate: input.resumeDate, cycleAction };
   }, { now: input.now, filePath: input.stateFilePath });
 }
 
@@ -3568,11 +3837,16 @@ export function safeReferralMemberView(state: MembershipCommerceState, referrerM
 
 export async function getMemberCommerceDashboard(memberId: string, now = new Date(), filePath = getMembershipCommerceStateFile()) {
   const state = await readMembershipCommerceState(filePath);
-  const subscriptions = Object.values(state.subscriptions).filter(
-    (item) =>
-      item.memberId === memberId &&
-      !item.memberHiddenAt,
-  );
+  const subscriptions = Object.values(state.subscriptions)
+    .filter(
+      (item) =>
+        item.memberId === memberId &&
+        !item.memberHiddenAt,
+    )
+    .map((item) => ({
+      ...structuredClone(item),
+      restartEligible: canRestartTerminatedSubscription(state, item),
+    }));
   const subscriptionIds = new Set(subscriptions.map((item) => item.subscriptionId));
   const cycles = Object.values(state.cycles).filter((item) => subscriptionIds.has(item.subscriptionId)).sort((a, b) => a.plannedDate.localeCompare(b.plannedDate));
   const credits: MemberCreditHistoryEntry[] = Object.values(state.creditEntries).filter((item) => item.memberId === memberId).map((item) => {
@@ -3611,7 +3885,7 @@ export async function getMemberCommerceDashboard(memberId: string, now = new Dat
     ) + Object.values(state.retailPromotionRewards)
       .filter((reward) => reward.beneficiaryMemberId === memberId && reward.status === "scheduled")
       .reduce((sum, reward) => sum + reward.calculatedCreditAmount, 0);
-  return { subscriptions: structuredClone(subscriptions), cycles: structuredClone(cycles), credits: structuredClone(credits), pendingCredit, referrals: safeReferralMemberView(state, memberId) };
+  return { subscriptions, cycles: structuredClone(cycles), credits: structuredClone(credits), pendingCredit, referrals: safeReferralMemberView(state, memberId) };
 }
 
 export async function getMemberRetailPromotionCenter(memberId: string, options: { filePath?: string; rulesFilePath?: string } = {}) {

@@ -278,6 +278,64 @@ async function main() {
     check("7-ELEVEN future settings survive activation", sevenElevenActive.shippingMethod === "711_cod" && sevenElevenActive.storeSelection?.storeId === "258870" && sevenElevenActive.storeSelection.storeName === "港明");
     check("7-ELEVEN shipping snapshot is created only at normal cycle lock", lockedSevenEleven.shippingSnapshot?.method === "711_cod" && lockedSevenEleven.shippingSnapshot.storeSelection?.storeId === "258870");
 
+    const thirtyDayMemberId = await member("j5d4f4-thirty-day@example.test");
+    const thirtyDayOrder = "KD20260929-300001";
+    const thirtyDayPending = await commerce.createSubscription({
+      memberId: thirtyDayMemberId,
+      startedFromOrderId: thirtyDayOrder,
+      anchorDate: "2026-09-29",
+      intervalDays: 30,
+      shippingMethod: "studio_pickup",
+      defaultItems: [dripItem],
+      idempotencyKey: "create-thirty-day-first-order",
+      now: new Date("2026-09-29T04:00:00.000Z"),
+      stateFilePath,
+      rulesFilePath,
+    });
+    state = await commerce.readMembershipCommerceState(stateFilePath);
+    check("pending activation keeps only a provisional anchor and creates no fake first cycle", thirtyDayPending.status === "pending_activation" && !Object.values(state.cycles).some((cycle) => cycle.subscriptionId === thirtyDayPending.subscriptionId));
+    await commerce.handleCanonicalOrderOutcome({
+      orderId: thirtyDayOrder,
+      outcome: "completed",
+      merchandiseAmount: 500,
+      idempotencyKey: "complete-thirty-day-first-order",
+      now: new Date("2026-10-02T04:00:00.000Z"),
+      stateFilePath,
+      rulesFilePath,
+    });
+    state = await commerce.readMembershipCommerceState(stateFilePath);
+    const thirtyDayActive = state.subscriptions[thirtyDayPending.subscriptionId];
+    const thirtyDayCycle = Object.values(state.cycles).find((cycle) => cycle.subscriptionId === thirtyDayPending.subscriptionId && cycle.kind === "scheduled");
+    check("2026-10-02 successful pickup becomes the authoritative activation anchor", thirtyDayActive.anchorDate === "2026-10-02");
+    check("30 days from the 2026-10-02 pickup schedules the first delivery on 2026-11-01", thirtyDayCycle?.plannedDate === "2026-11-01");
+
+    const laterPickupMemberId = await member("j5d4f4-later-pickup@example.test");
+    const laterPickupOrder = "KD20260929-300002";
+    const laterPickupPending = await commerce.createSubscription({
+      memberId: laterPickupMemberId,
+      startedFromOrderId: laterPickupOrder,
+      anchorDate: "2026-09-29",
+      intervalDays: 30,
+      shippingMethod: "studio_pickup",
+      defaultItems: [dripItem],
+      idempotencyKey: "create-later-pickup-first-order",
+      now: new Date("2026-09-29T04:00:00.000Z"),
+      stateFilePath,
+      rulesFilePath,
+    });
+    await commerce.handleCanonicalOrderOutcome({
+      orderId: laterPickupOrder,
+      outcome: "completed",
+      merchandiseAmount: 500,
+      idempotencyKey: "complete-later-pickup-first-order",
+      now: new Date("2026-10-05T04:00:00.000Z"),
+      stateFilePath,
+      rulesFilePath,
+    });
+    state = await commerce.readMembershipCommerceState(stateFilePath);
+    const laterPickupCycle = Object.values(state.cycles).find((cycle) => cycle.subscriptionId === laterPickupPending.subscriptionId && cycle.kind === "scheduled");
+    check("a different actual pickup date produces its corresponding interval-based first delivery", state.subscriptions[laterPickupPending.subscriptionId].anchorDate === "2026-10-05" && laterPickupCycle?.plannedDate === "2026-11-04");
+
     const existingMemberId = await member("j5d4f4-existing@example.test");
     const existingOrder = "KD20260910-EXIST4";
     const pendingWithExistingCycle = await commerce.createSubscription({

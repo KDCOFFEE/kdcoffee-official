@@ -66,15 +66,21 @@ assert.notEqual(
 const checkoutSource = await readFile(path.join(root, "app/checkout/page.tsx"), "utf8");
 const orderRouteSource = await readFile(path.join(root, "app/api/orders/route.ts"), "utf8");
 const cartSource = await readFile(path.join(root, "components/commerce/CartProvider.tsx"), "utf8");
+const checkoutCss = await readFile(path.join(root, "app/globals.css"), "utf8");
 
 assert.match(checkoutSource, /subscriptionIntent/);
 assert.match(checkoutSource, /intervalDays/);
-assert.match(checkoutSource, /firstRenewalDate/);
+assert.doesNotMatch(checkoutSource, /firstRenewalDate|希望第一次續訂日期/);
+assert.doesNotMatch(orderRouteSource, /firstRenewalDate/);
+assert.match(checkoutSource, /首筆成功取貨後，每 \{subscriptionInterval\} 天安排一次定期配送/);
+assert.match(checkoutSource, /第一次定期配送日期會以首筆成功取貨日為基準計算/);
 assert.match(checkoutSource, /original price|原價/i);
 assert.match(orderRouteSource, /memberId:\s*member\.id/);
 assert.match(orderRouteSource, /subscriptionIntent/);
+assert.match(orderRouteSource, /provisionalPendingActivationAnchorDate/);
 assert.match(orderRouteSource, /createIdempotencyRequestHash/);
+assert.match(checkoutCss, /\.checkout-summary \.quantity-control span\{[^}]*background:#fffdf9[^}]*color:#251b16[^}]*font-weight:800/);
 assert.match(cartSource, /roastLevel/);
 assert.match(cartSource, /preparationLabel/);
 
-console.log("Order/cart/checkout regression PASS (20 assertions)");
+console.log("Order/cart/checkout regression PASS");

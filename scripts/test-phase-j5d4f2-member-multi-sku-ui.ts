@@ -168,10 +168,11 @@ async function main() {
     const componentSource = await readFile(path.join(process.cwd(), "components/member/MemberSubscriptionExperience.tsx"), "utf8");
     const editorSource = await readFile(path.join(process.cwd(), "components/member/memberSubscriptionEditorModel.ts"), "utf8");
     const safeTypesSource = await readFile(path.join(process.cwd(), "lib/subscriptionItemTypes.ts"), "utf8");
+    const datePolicySource = await readFile(path.join(process.cwd(), "lib/membershipPolicies.ts"), "utf8");
     const pageSource = await readFile(path.join(process.cwd(), "app/member/page.tsx"), "utf8");
     const cssSource = await readFile(path.join(process.cwd(), "app/globals.css"), "utf8");
-    const forbiddenClientImports = ["membershipCommerce", "membershipPolicies", "subscriptionSkuModel", "membershipBusinessRules", "jsonFileStore"];
-    check("member editor dependency boundary excludes server persistence modules", forbiddenClientImports.every((moduleName) => !componentSource.includes(`@/lib/${moduleName}`) && !editorSource.includes(`@/lib/${moduleName}`)) && !/^import\s/m.test(safeTypesSource));
+    const forbiddenClientImports = ["membershipCommerce", "subscriptionSkuModel", "membershipBusinessRules", "jsonFileStore"];
+    check("member editor dependency boundary excludes server persistence modules", forbiddenClientImports.every((moduleName) => !componentSource.includes(`@/lib/${moduleName}`) && !editorSource.includes(`@/lib/${moduleName}`)) && !/^import\s/m.test(safeTypesSource) && !/from ["'](?:fs|path)["']|jsonFileStore|membershipBusinessRules/.test(datePolicySource));
     check("member UI submits items array and no legacy productA/productB payload", /items:\s*subscriptionEditorPayload\(editorItems\)/.test(componentSource) && !/productA:\s*form\.get/.test(componentSource));
     check("editor exposes clear add, remove, and save actions", componentSource.includes("＋ 新增商品") && componentSource.includes("移除此商品") && componentSource.includes("儲存下一次配送商品"));
     check("product loader preserves all eligible beans and drip options", pageSource.includes('option.kind === "beans" || option.kind === "drip"') && pageSource.includes("options: eligibleOptions"));

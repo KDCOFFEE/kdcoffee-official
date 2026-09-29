@@ -26,7 +26,7 @@ import { getActiveMembershipRules } from "@/lib/membershipBusinessRules";
 import {
   getDateOnlyInTimeZone,
 } from "@/lib/checkoutRules";
-import { resolvePickupDateAvailability, resolveSubscriptionDateAvailability, resolveSubscriptionInterval } from "@/lib/membershipPolicies";
+import { resolvePickupDateAvailability, resolveSubscriptionInterval } from "@/lib/membershipPolicies";
 import { getLiveWebsiteData } from "@/data/websiteData";
 import { subscriptionItemsFromStoredOrderItems } from "@/lib/subscriptionSkuModel";
 import { validateDeliveryAddress, validateOrderDeliverySelection } from "@/lib/deliveryAddress";
@@ -96,14 +96,12 @@ export async function POST(request: Request) {
     const requestedCredit = Number(body.requestedCredit ?? 0);
     if (!Number.isSafeInteger(requestedCredit) || requestedCredit < 0) throw new Error("抵用金金額不正確");
     if (requestedCredit > 0 && !member) throw new Error("請先登入會員才能使用抵用金");
-    const subscriptionIntent = member && body.subscriptionIntent?.consent === true ? { consent: true, intervalDays: Number(body.subscriptionIntent.intervalDays), firstRenewalDate: clean(body.subscriptionIntent.firstRenewalDate, 10) } : null;
+    const subscriptionIntent = member && body.subscriptionIntent?.consent === true ? { consent: true, intervalDays: Number(body.subscriptionIntent.intervalDays) } : null;
     if (subscriptionIntent && orderMode === "home_delivery" && paymentMethod !== "cash_on_delivery") {
       throw new Error("ATM 轉帳僅提供單次宅配訂單；宅配定期配送僅支援貨到付款。");
     }
     if (subscriptionIntent) {
-      if (!resolveSubscriptionInterval(subscriptionIntent.intervalDays, rulesVersion.rules).allowed || !/^\d{4}-\d{2}-\d{2}$/.test(subscriptionIntent.firstRenewalDate)) throw new Error("定期配送日期或週期不正確");
-      const subscriptionAvailability = resolveSubscriptionDateAvailability({ requestedDate: subscriptionIntent.firstRenewalDate, today: getDateOnlyInTimeZone(new Date()), customRoast: false, rules: rulesVersion.rules });
-      if (!subscriptionAvailability.allowed) throw new Error(`第一次續訂最早可選 ${subscriptionAvailability.earliestDate}`);
+      if (!resolveSubscriptionInterval(subscriptionIntent.intervalDays, rulesVersion.rules).allowed) throw new Error("定期配送週期不正確");
     }
     const requestHash = createIdempotencyRequestHash({
       orderMode,
@@ -281,7 +279,8 @@ export async function POST(request: Request) {
           const storedItems = Array.isArray(core.order.items) ? core.order.items as Array<Record<string, unknown>> : [];
           const defaultItems = subscriptionItemsFromStoredOrderItems(storedItems, await getLiveWebsiteData());
           const storedStore = core.order.store as { id?: string; name?: string } | undefined;
-          await createSubscription({ memberId: member.id, startedFromOrderId: orderNumber, anchorDate: subscriptionIntent.firstRenewalDate, intervalDays: subscriptionIntent.intervalDays, shippingMethod: String(core.order.orderMode), storeSelection: storedStore ? { storeId: String(storedStore.id || ""), storeName: String(storedStore.name || "") } : null, deliveryAddress: core.order.orderMode === "home_delivery" ? validateDeliveryAddress(core.order.deliveryAddress) : null, paymentMethod: core.order.orderMode === "home_delivery" ? core.order.payment as ActiveHomeDeliveryPaymentMethod : null, defaultItems, idempotencyKey: `checkout:${idempotencyKey}` });
+          const provisionalPendingActivationAnchorDate = getDateOnlyInTimeZone(new Date(String(core.order.createdAt)));
+          await createSubscription({ memberId: member.id, startedFromOrderId: orderNumber, anchorDate: provisionalPendingActivationAnchorDate, intervalDays: subscriptionIntent.intervalDays, shippingMethod: String(core.order.orderMode), storeSelection: storedStore ? { storeId: String(storedStore.id || ""), storeName: String(storedStore.name || "") } : null, deliveryAddress: core.order.orderMode === "home_delivery" ? validateDeliveryAddress(core.order.deliveryAddress) : null, paymentMethod: core.order.orderMode === "home_delivery" ? core.order.payment as ActiveHomeDeliveryPaymentMethod : null, defaultItems, idempotencyKey: `checkout:${idempotencyKey}` });
         } catch (error) {
           warnings.push("訂單已成立；定期配送申請已保存在訂單中，工作室將協助完成確認。");
           console.error(`Order ${orderNumber} saved but subscription enrollment failed:`, error);

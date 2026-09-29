@@ -53,7 +53,6 @@ export default function CheckoutPage() {
   const [joinSubscription, setJoinSubscription] = useState(false);
   const [subscriptionInterval, setSubscriptionInterval] = useState(30);
   const [subscriptionIntervalMode, setSubscriptionIntervalMode] = useState<"preset" | "custom">("preset");
-  const [subscriptionStartDate, setSubscriptionStartDate] = useState("");
   const [operationalRules, setOperationalRules] = useState<{ pickup: { earliestStandardDate: string; earliestCustomRoastDate: string; blockedDates: string[] }; shipping: { subscriptionFreeShipping: boolean; subscriptionShippingFee: number; sevenElevenShippingFee: number; homeDeliveryShippingFee: number; homeDeliveryCodFee: number; subscriptionShippingDiscount: number }; payment: { atmTransfer: { configured: boolean; bankName: string; bankCode: string; branchName: string; accountName: string; accountNumber: string; instructions: string; bankbookImageUrl: string | null; showBankbookImageAtCheckout: boolean } }; openingYearFreeShipping: { enabled: boolean; startDate: string; endDate: string; shippingMethods: string[] }; money: { roundingMode: string }; subscription: { discountPercent: number; intervalsDays: number[]; customCycleEnabled: boolean; customCycleMinDays: number; customCycleMaxDays: number; earliestDate: string }; credit: { uiMode: "amount-and-maximum" | "use-or-not" | "automatic-maximum" | "custom-amount"; showAmountInput: boolean; showMaximumButton: boolean; automaticallyUseMaximum: boolean; allowZeroTotal: boolean; appliesToShipping: boolean } } | null>(null);
   const [creditQuote, setCreditQuote] = useState<{ availableBalance: number; maximumUsable: number; minimumPayable: number } | null>(null);
   const [requestedCredit, setRequestedCredit] = useState(0);
@@ -155,11 +154,6 @@ export default function CheckoutPage() {
     }).catch(() => undefined);
   }, []);
   useEffect(() => {
-    if (subscriptionHomeDeliveryBlocked && joinSubscription) {
-      setJoinSubscription(false);
-    }
-  }, [joinSubscription, subscriptionHomeDeliveryBlocked]);
-  useEffect(() => {
     if (!member) return;
     fetch(`/api/member/credit/quote?subtotal=${subtotal}&shipping=${shipping}`, { cache: "no-store" }).then((response) => response.ok ? response.json() : null).then((quote) => {
       if (!quote) return;
@@ -220,7 +214,7 @@ export default function CheckoutPage() {
         deliveryAddress: mode === "home_delivery" ? validateDeliveryAddress(deliveryAddress) : null,
         paymentMethod: mode === "home_delivery" ? paymentMethod : null,
         corporateGift: null,
-        subscriptionIntent: member && joinSubscription ? { consent: true, intervalDays: subscriptionInterval, firstRenewalDate: subscriptionStartDate } : null,
+        subscriptionIntent: member && joinSubscription ? { consent: true, intervalDays: subscriptionInterval } : null,
         requestedCredit: member ? requestedCredit : 0,
         items: items.map(({ slug, optionId, optionLabel, unitPrice, preparationLabel, customRoast, roastLevel, roastNote, quantity }) => ({ slug, optionId, optionLabel, quotedUnitPrice: unitPrice, preparationLabel, customRoast, roastLevel, roastNote, quantity })),
       }) });
@@ -286,7 +280,7 @@ export default function CheckoutPage() {
           <section className="form-card"><div className="form-card-head"><span>02</span><h2>取貨方式</h2></div><div className="delivery-mode-grid">
             <label className={mode === "711_cod" ? "delivery-mode active" : "delivery-mode"}><input type="radio" name="orderMode" value="711_cod" checked={mode === "711_cod"} onChange={()=>setMode("711_cod")} /><b>7-ELEVEN 取貨付款</b><span>商品到店後再付款取貨</span></label>
             <label className={mode === "studio_pickup" ? "delivery-mode active" : "delivery-mode"}><input type="radio" name="orderMode" value="studio_pickup" checked={mode === "studio_pickup"} onChange={()=>setMode("studio_pickup")} /><b>到工作室取貨</b><span>免運費，由工作室確認取貨時間</span></label>
-            <label className={mode === "home_delivery" ? "delivery-mode active" : "delivery-mode"}><input type="radio" name="orderMode" value="home_delivery" checked={mode === "home_delivery"} onChange={() => { setMode("home_delivery"); setDeliveryAddress((current) => ({ ...current, recipientName: current.recipientName || name, phone: current.phone || phone })); }} /><b>宅配</b><span>配送到指定地址</span></label>
+            <label className={mode === "home_delivery" ? "delivery-mode active" : "delivery-mode"}><input type="radio" name="orderMode" value="home_delivery" checked={mode === "home_delivery"} onChange={() => { setMode("home_delivery"); if (paymentMethod === "atm_transfer") setJoinSubscription(false); setDeliveryAddress((current) => ({ ...current, recipientName: current.recipientName || name, phone: current.phone || phone })); }} /><b>宅配</b><span>配送到指定地址</span></label>
           </div></section>
           {mode === "711_cod" && <section className="form-card"><div className="form-card-head"><span>03</span><h2>7-ELEVEN 取貨門市</h2></div><div className="delivery-notice"><strong>門市取貨付款</strong><p>選到行政區後會顯示該區所有門市，也可用路名、店名、地址或店號搜尋。</p></div><StoreSelector initialStore={member?.favoriteStore} /></section>}
           {mode === "studio_pickup" && <section className="form-card"><div className="form-card-head"><span>03</span><h2>工作室自取</h2></div><div className="delivery-notice"><strong>KD Coffee 咖啡藝術工坊自取</strong><p>{hasCustomRoast ? `本訂單含專屬烘焙，需預留製作時間，最早可於 ${earliestPickupDate} 取貨。` : `最早可於 ${earliestPickupDate} 取貨。請選擇希望日期，工作室確認後會通知你。`}</p></div><div className="store-selector-grid"><label>希望取貨日期<input type="date" name="pickupDate" min={earliestPickupDate} value={pickupDate} onChange={event=>setPickupDate(event.target.value)} required /><span className="field-help">第一版只需選日期，不需要選上午／下午時段。</span></label></div></section>}
@@ -352,7 +346,7 @@ export default function CheckoutPage() {
                 首筆取貨成功後才開始定期配送
               </strong>
               <p>
-                第一次續訂起享
+                第一次定期配送起享
                 <b> {subscriptionDiscountLabel}</b>
                 ；之後可在會員中心調整或隨時停止後續定期配送。
               </p>
@@ -465,24 +459,23 @@ export default function CheckoutPage() {
     setSubscriptionIntervalMode("preset");
     setSubscriptionInterval(Number(event.target.value));
   }}
->{(operationalRules?.subscription.intervalsDays ?? [30,45,60,75,90]).map((days) => <option value={days} key={days}>每 {days} 天</option>)}{operationalRules?.subscription.customCycleEnabled && <option value="custom">自訂天數</option>}</select></label>{operationalRules?.subscription.customCycleEnabled && subscriptionIntervalMode === "custom" && <label>自訂配送週期<input type="number" min={operationalRules.subscription.customCycleMinDays} max={operationalRules.subscription.customCycleMaxDays} value={subscriptionInterval} onChange={(event) => setSubscriptionInterval(Number(event.target.value))} /><small>可設定 {operationalRules.subscription.customCycleMinDays}～{operationalRules.subscription.customCycleMaxDays} 天；伺服器會再次驗證。</small></label>}<label>希望第一次續訂日期<input type="date" value={subscriptionStartDate} min={operationalRules?.subscription.earliestDate ?? addDateOnlyDays(today, 3)} onChange={(event) => setSubscriptionStartDate(event.target.value)} required={joinSubscription} /></label><div className="subscription-enrollment-summary">
+>{(operationalRules?.subscription.intervalsDays ?? [30,45,60,75,90]).map((days) => <option value={days} key={days}>每 {days} 天</option>)}{operationalRules?.subscription.customCycleEnabled && <option value="custom">自訂天數</option>}</select></label>{operationalRules?.subscription.customCycleEnabled && subscriptionIntervalMode === "custom" && <label>自訂配送週期<input type="number" min={operationalRules.subscription.customCycleMinDays} max={operationalRules.subscription.customCycleMaxDays} value={subscriptionInterval} onChange={(event) => setSubscriptionInterval(Number(event.target.value))} /><small>可設定 {operationalRules.subscription.customCycleMinDays}～{operationalRules.subscription.customCycleMaxDays} 天；伺服器會再次驗證。</small></label>}<div className="subscription-enrollment-summary">
   <strong>定期配送設定</strong>
 
   <span>
-    每 {subscriptionInterval} 天配送一次
+    首筆成功取貨後，每 {subscriptionInterval} 天安排一次定期配送。
   </span>
 
   <span>
-    本次訂單仍以一般價格結帳；
-    成功取貨後才開始定期配送
+    第一次定期配送日期會以首筆成功取貨日為基準計算。
   </span>
 </div>
 
 <div className="subscription-renewal-preview">
   <header>
     <div>
-      <small>NEXT RENEWAL</small>
-      <strong>下次續訂預估</strong>
+      <small>SUBSCRIPTION DELIVERY</small>
+      <strong>後續定期配送預估</strong>
     </div>
 
     <b>
@@ -544,7 +537,7 @@ export default function CheckoutPage() {
 
   <small className="subscription-renewal-note">
     依目前商品內容與後台定期購設定試算；
-    實際金額以續訂訂單建立時的商品、活動與營運規則為準。
+    實際金額以定期配送訂單建立時的商品、活動與營運規則為準。
   </small>
 </div></div>}</section>}
           <label className="terms-check"><input type="checkbox" required />我已確認聯絡資料正確，並同意 KD Coffee 為處理本次訂購而聯絡我。</label>

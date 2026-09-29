@@ -5,6 +5,7 @@ import Link from "next/link";
 
 import StoreSelector from "@/components/commerce/StoreSelector";
 import { addDateOnlyDays, ALLOWED_ROAST_LEVELS, getDateOnlyInTimeZone } from "@/lib/checkoutRules";
+import { resolveDateAvailability } from "@/lib/membershipPolicies";
 import type { MembershipBusinessRules } from "@/lib/membershipRuleTypes";
 import { regularShippingFee, subscriptionShippingFee } from "@/lib/shippingRules";
 import type { PricedSubscriptionItem } from "@/lib/subscriptionItemTypes";
@@ -53,6 +54,7 @@ type Subscription = {
   paymentMethod?: HomeDeliveryPaymentMethod | null;
   defaultItems: PricedSubscriptionItem[];
   revision: number;
+  restartEligible: boolean;
   createdAt?: string;
   updatedAt?: string;
 };
@@ -110,18 +112,24 @@ type PendingRushConfirmation =
   | { kind: "date"; action: "advance" | "delay" | "change-date"; payload: Record<string, unknown> }
   | { kind: "cancel-reschedule" };
 
-type Props = Dashboard & { products: MemberSubscriptionProduct[]; rules: { intervalsDays: number[]; customCycleEnabled: boolean; customCycleMinDays: number; customCycleMaxDays: number; delayQuickOptionsDays: number[]; advanceQuickOptionsDays: number[]; preparationLeadDays: number; discountPercent: number; sevenElevenShippingFee: number; homeDeliveryShippingFee: number; homeDeliveryCodFee: number; subscriptionShippingDiscount: number; datePickerMode: "quick-and-calendar" | "calendar-only" | "suggestion-and-calendar"; maxModificationsPerCycle: number | null; allowOtherSubscriptionProducts?: boolean; allowHalfToOnePound?: boolean; allowOneToHalfPound?: boolean; allowMixedOnePound?: boolean; allowQuantityChange?: boolean; maxItems?: number } };
+type Props = Dashboard & { products: MemberSubscriptionProduct[]; rules: { intervalsDays: number[]; customCycleEnabled: boolean; customCycleMinDays: number; customCycleMaxDays: number; delayQuickOptionsDays: number[]; advanceQuickOptionsDays: number[]; preparationLeadDays: number; customRoastPreparationLeadDays: number; discountPercent: number; sevenElevenShippingFee: number; homeDeliveryShippingFee: number; homeDeliveryCodFee: number; subscriptionShippingDiscount: number; datePickerMode: "quick-and-calendar" | "calendar-only" | "suggestion-and-calendar"; maxModificationsPerCycle: number | null; allowOtherSubscriptionProducts?: boolean; allowHalfToOnePound?: boolean; allowOneToHalfPound?: boolean; allowMixedOnePound?: boolean; allowQuantityChange?: boolean; maxItems?: number } };
 
 const money = (value: number) => `NT$ ${value.toLocaleString("zh-TW")}`;
 const redemptionLabel = (status: MemberCreditHistoryEntry["orderRedemptions"][number]["status"]) => status === "released" ? "訂單取消，抵用金已返還" : status === "reserved" ? "本筆已保留折抵" : "本筆已使用";
 const displayDate = (value?: string) => value ? value.replaceAll("-", "/") : "尚未排定";
 
-function actionSuccessMessage(action: string, plannedDate?: string) {
+function actionSuccessMessage(action: string, plannedDate?: string, skippedDate?: string) {
   if (action === "pause") return "定期配送已暫停。";
   if (action === "resume") return `定期配送已恢復。下一次配送日期：${displayDate(plannedDate)}。`;
-  if (action === "skip") return plannedDate
-    ? `已跳過本次配送。下一次配送日期：${displayDate(plannedDate)}，原配送週期維持不變。`
-    : "已跳過本次配送。原配送週期維持不變。";
+  if (action === "restart") return `定期配送已重新啟動。下一次配送日期：${displayDate(plannedDate)}。`;
+  if (action === "skip") {
+    const skippedCopy = skippedDate
+      ? `已跳過 ${displayDate(skippedDate)} 本次配送。`
+      : "已跳過本次配送。";
+    return plannedDate
+      ? `${skippedCopy}下一次配送日期：${displayDate(plannedDate)}。`
+      : `${skippedCopy}下一次配送安排尚待確認。`;
+  }
   if (["advance", "delay", "change-date"].includes(action)) return `下一次配送日期已更新。新的配送日期：${displayDate(plannedDate)}。`;
   if (["change-shipping", "change-store"].includes(action)) return "未來定期配送的取貨方式已更新。";
   if (action === "replenish") return `補貨安排已建立。預計配送日期：${displayDate(plannedDate)}。`;
@@ -179,6 +187,14 @@ export default function MemberSubscriptionExperience(initial: Props) {
       ? "preset"
       : "custom",
   );
+  const [restartPanelSubscriptionId, setRestartPanelSubscriptionId] = useState("");
+  const [restartDate, setRestartDate] = useState("");
+  const [restartInterval, setRestartInterval] = useState(initialResumeInterval);
+  const [restartIntervalMode, setRestartIntervalMode] = useState<"preset" | "custom">(
+    initial.rules.intervalsDays.includes(initialResumeInterval)
+      ? "preset"
+      : "custom",
+  );
   const [cancellationReason, setCancellationReason] = useState("");
   const [cancellationOtherReason, setCancellationOtherReason] = useState("");
   const [replacementDate, setReplacementDate] = useState("");
@@ -217,7 +233,7 @@ export default function MemberSubscriptionExperience(initial: Props) {
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "操作未完成");
       setDashboard({ subscriptions: result.subscriptions, cycles: result.cycles, credits: result.credits, pendingCredit: result.pendingCredit, referrals: result.referrals });
-      setMessage(actionSuccessMessage(action, result.actionResult?.plannedDate));
+      setMessage(actionSuccessMessage(action, result.actionResult?.plannedDate, result.actionResult?.skippedDate));
       return result;
     } catch (error) {
       const detail = error instanceof Error ? error.message : "操作未完成，請再試一次。";
@@ -269,6 +285,9 @@ export default function MemberSubscriptionExperience(initial: Props) {
     0,
     displayedOriginal - displayedSubscriptionPrice,
   );
+  const terminationTargetHasCurrentOrder = terminationTarget
+    ? Boolean(latestCreatedOrderCycle(dashboard.cycles, terminationTarget.subscriptionId))
+    : false;
 
   const shippingMethod = lockedPricing
     ? pricingCycle?.shippingSnapshot?.method
@@ -306,6 +325,25 @@ export default function MemberSubscriptionExperience(initial: Props) {
 
   const today = getDateOnlyInTimeZone(new Date());
   const earliestDate = addDateOnlyDays(today, initial.rules.preparationLeadDays);
+  const resumeHasDedicatedRoast = subscriptionHasDedicatedRoast(subscription?.defaultItems ?? []);
+  const restartHasDedicatedRoast = subscriptionHasDedicatedRoast(subscription?.defaultItems ?? []);
+  const canonicalSubscriptionMinimum = (customRoast: boolean, currentToday = today) => resolveDateAvailability({
+    requestedDate: currentToday,
+    today: currentToday,
+    leadDays: customRoast
+      ? initial.rules.customRoastPreparationLeadDays
+      : initial.rules.preparationLeadDays,
+  }).earliestDate;
+  const resumeEarliestDate = canonicalSubscriptionMinimum(resumeHasDedicatedRoast);
+  const restartEarliestDate = canonicalSubscriptionMinimum(restartHasDedicatedRoast);
+  const restartProductSummary = subscription
+    ? subscriptionItemsSummary(subscription.defaultItems, initial.products) || "尚未選擇"
+    : "尚未選擇";
+  const restartShippingSummary = subscription?.shippingMethod === "711_cod"
+    ? `7-ELEVEN ${subscription.storeSelection?.storeName ?? "取貨"}`
+    : subscription?.shippingMethod === "home_delivery"
+      ? "宅配"
+      : "工作室自取";
   const nextCycleHasDedicatedRoast = subscriptionHasDedicatedRoast(nextItems);
   const nextDateMinimum = nextCycleHasDedicatedRoast ? today : earliestDate;
   const remainingChanges = nextCycle && initial.rules.maxModificationsPerCycle !== null ? Math.max(0, initial.rules.maxModificationsPerCycle - (nextCycle.modificationCount ?? 0)) : null;
@@ -328,12 +366,80 @@ export default function MemberSubscriptionExperience(initial: Props) {
     setDeliveryAddressDraft(selected.deliveryAddress ?? { recipientName: "", phone: "", postalCode: "", city: "", district: "", addressLine: "" });
     setResumeInterval(selected.intervalDays);
     setResumeIntervalMode(initial.rules.intervalsDays.includes(selected.intervalDays) ? "preset" : "custom");
+    setRestartPanelSubscriptionId("");
+    setRestartDate("");
     setEditorItems(initializeSubscriptionEditorItems(editorSource, initial.products));
     setMessage("");
     setShowPriceDetails(false);
     setRushConfirmation(null);
     setTerminateConfirmationId("");
     setHideTerminatedConfirmationId("");
+  }
+
+  function openRestartPanel() {
+    if (!subscription?.restartEligible || subscription.status !== "terminated") return;
+    const currentToday = getDateOnlyInTimeZone(new Date());
+    const currentMinimum = canonicalSubscriptionMinimum(restartHasDedicatedRoast, currentToday);
+    const currentIntervalAllowed = initial.rules.intervalsDays.includes(subscription.intervalDays) || (
+      initial.rules.customCycleEnabled &&
+      subscription.intervalDays >= initial.rules.customCycleMinDays &&
+      subscription.intervalDays <= initial.rules.customCycleMaxDays
+    );
+    const interval = currentIntervalAllowed
+      ? subscription.intervalDays
+      : initial.rules.intervalsDays[0] ?? initial.rules.customCycleMinDays;
+    setRestartPanelSubscriptionId(subscription.subscriptionId);
+    setRestartDate(currentMinimum);
+    setRestartInterval(interval);
+    setRestartIntervalMode(initial.rules.intervalsDays.includes(interval) ? "preset" : "custom");
+  }
+
+  async function confirmRestart() {
+    if (
+      !subscription ||
+      subscription.status !== "terminated" ||
+      !subscription.restartEligible ||
+      restartPanelSubscriptionId !== subscription.subscriptionId ||
+      !restartDate
+    ) return;
+    const currentMinimum = canonicalSubscriptionMinimum(
+      restartHasDedicatedRoast,
+      getDateOnlyInTimeZone(new Date()),
+    );
+    if (restartDate < currentMinimum) {
+      setRestartDate(currentMinimum);
+      setMessage(`下一次配送日期已更新為目前最早可選的 ${displayDate(currentMinimum)}。`);
+      return;
+    }
+    const result = await mutate("restart", {
+      subscriptionId: subscription.subscriptionId,
+      expectedRevision: subscription.revision,
+      resumeDate: restartDate,
+      intervalDays: restartInterval,
+    });
+    if (!result) return;
+    setSelectedSubscriptionId(subscription.subscriptionId);
+    setRestartPanelSubscriptionId("");
+    setRestartDate("");
+  }
+
+  async function confirmResume() {
+    if (!subscription || subscription.status !== "paused" || !resumeDate) return;
+    const currentMinimum = canonicalSubscriptionMinimum(
+      resumeHasDedicatedRoast,
+      getDateOnlyInTimeZone(new Date()),
+    );
+    if (resumeDate < currentMinimum) {
+      setResumeDate(currentMinimum);
+      setMessage(`下一次配送日期已更新為目前最早可選的 ${displayDate(currentMinimum)}。`);
+      return;
+    }
+    await mutate("resume", {
+      subscriptionId: subscription.subscriptionId,
+      expectedRevision: subscription.revision,
+      resumeDate,
+      intervalDays: resumeInterval,
+    });
   }
 
   async function confirmTermination() {
@@ -497,7 +603,7 @@ export default function MemberSubscriptionExperience(initial: Props) {
         )}
       </div>
       {message && <p className="member-notice" role="status">{message}</p>}
-      {!subscription ? <div className="member-commerce-empty"><strong>還沒有定期配送</strong><p>第一次購買時可勾選加入。首筆仍是原價，成功取貨後才會開始定期配送與續訂優惠。</p><Link href="/works">挑選咖啡作品</Link></div> : <div className="member-subscription-grid">
+      {!subscription ? <div className="member-commerce-empty"><strong>還沒有定期配送</strong><p>第一次購買時可勾選加入。首筆仍是原價，成功取貨後才會開始定期配送並享有優惠。</p><Link href="/works">挑選咖啡作品</Link></div> : <div className="member-subscription-grid">
         {dashboard.subscriptions.length > 1 && <div className="member-subscription-selector"><label htmlFor="member-subscription-selector">選擇定期配送<select id="member-subscription-selector" value={subscription.subscriptionId} onChange={(event) => selectSubscription(event.target.value)}>{dashboard.subscriptions.map((item) => <option value={item.subscriptionId} key={item.subscriptionId}>{subscriptionSelectorLabel(item, initial.products)}</option>)}</select></label><small>每筆定期配送分開保存；切換後可查看各自狀態與安排。</small></div>}
         <article className="member-subscription-summary">
           <div><small>配送週期</small><strong>每 {subscription.intervalDays} 天</strong></div>
@@ -542,7 +648,7 @@ export default function MemberSubscriptionExperience(initial: Props) {
 
             <p>
               等首筆原價訂單成功取貨後，才會正式啟動。
-              啟動後第一次續訂起享
+              啟動後第一次定期配送起享
               <b> {subscriptionDiscountLabel}</b>
               定期購優惠。
             </p>
@@ -571,10 +677,94 @@ export default function MemberSubscriptionExperience(initial: Props) {
             role="status"
           >
             <strong>此定期配送已停止</strong>
-            <p>
-              已停止的定期配送不會再建立新的配送。
-              已完成與已建立的訂單紀錄仍會保留。
-            </p>
+            {subscription.restartEligible && (
+              <p>想繼續配送嗎？選擇下一次配送日期後即可重新啟動。</p>
+            )}
+
+            {subscription.restartEligible && restartPanelSubscriptionId !== subscription.subscriptionId && (
+              <button
+                type="button"
+                disabled={Boolean(busy)}
+                onClick={openRestartPanel}
+              >
+                重新啟動定期配送
+              </button>
+            )}
+
+            {subscription.restartEligible && restartPanelSubscriptionId === subscription.subscriptionId && (
+              <div className="member-action-panel">
+                <strong>重新啟動定期配送</strong>
+                <label>
+                  下一次配送日期
+                  <input
+                    type="date"
+                    min={restartEarliestDate}
+                    value={restartDate}
+                    onChange={(event) => setRestartDate(event.target.value)}
+                    onFocus={() => {
+                      const currentMinimum = canonicalSubscriptionMinimum(
+                        restartHasDedicatedRoast,
+                        getDateOnlyInTimeZone(new Date()),
+                      );
+                      setRestartDate((current) => current >= currentMinimum ? current : currentMinimum);
+                    }}
+                  />
+                  <small>最早可選：{displayDate(restartEarliestDate)}</small>
+                </label>
+                <label>
+                  配送週期
+                  <select
+                    value={restartIntervalMode === "custom" ? "custom" : restartInterval}
+                    onChange={(event) => {
+                      if (event.target.value === "custom") {
+                        setRestartIntervalMode("custom");
+                        setRestartInterval(initial.rules.customCycleMinDays);
+                        return;
+                      }
+                      setRestartIntervalMode("preset");
+                      setRestartInterval(Number(event.target.value));
+                    }}
+                  >
+                    {initial.rules.intervalsDays.map((days) => <option key={days} value={days}>每 {days} 天</option>)}
+                    {initial.rules.customCycleEnabled && <option value="custom">自訂天數</option>}
+                  </select>
+                </label>
+                {initial.rules.customCycleEnabled && restartIntervalMode === "custom" && (
+                  <label>
+                    自訂配送週期
+                    <input
+                      type="number"
+                      min={initial.rules.customCycleMinDays}
+                      max={initial.rules.customCycleMaxDays}
+                      value={restartInterval}
+                      onChange={(event) => setRestartInterval(Number(event.target.value))}
+                    />
+                    <small>可設定 {initial.rules.customCycleMinDays}～{initial.rules.customCycleMaxDays} 天</small>
+                  </label>
+                )}
+                <div className="subscription-enrollment-summary">
+                  <span>商品：{restartProductSummary}</span>
+                  <span>配送方式：{restartShippingSummary}</span>
+                </div>
+                <div className="member-action-buttons">
+                  <button
+                    type="button"
+                    className="member-danger-soft"
+                    disabled={Boolean(busy)}
+                    onClick={() => setRestartPanelSubscriptionId("")}
+                  >
+                    返回
+                  </button>
+                  <button
+                    type="button"
+                    disabled={Boolean(busy) || !restartDate}
+                    onClick={() => void confirmRestart()}
+                  >
+                    {busy === "restart" ? "處理中…" : "確認重新啟動"}
+                  </button>
+                </div>
+              </div>
+            )}
 
             <div className="member-action-buttons">
               {otherSubscription && (
@@ -607,7 +797,7 @@ export default function MemberSubscriptionExperience(initial: Props) {
         ) : <div className="member-subscription-actions">
           {currentOrderCycle && <details><summary>取消本次配送</summary><div className="member-action-panel"><p>取消本次配送與停止未來定期配送是兩件不同的事。請明確選擇要處理的範圍。</p><label>取消原因<select required value={cancellationReason} onChange={(event) => { setCancellationReason(event.target.value); if (event.target.value !== "其他") setCancellationOtherReason(""); }}><option value="" disabled>請選擇取消原因</option><option value="單純想取消">單純想取消</option><option value="行程／取貨時間不方便">行程／取貨時間不方便</option><option value="咖啡還沒喝完，暫時不需要">咖啡還沒喝完，暫時不需要</option><option value="想更換咖啡／數量／烘焙度">想更換咖啡／數量／烘焙度</option><option value="重複下單或誤操作">重複下單或誤操作</option><option value="預算考量">預算考量</option><option value="其他">其他</option></select></label>{cancellationReason === "其他" && <label>其他取消原因<textarea maxLength={197} required value={cancellationOtherReason} onChange={(event) => setCancellationOtherReason(event.target.value)} placeholder="請簡單告訴我們取消原因" /></label>}<div className="member-action-buttons"><button className="member-danger-soft" disabled={Boolean(busy) || !resolvedCancellationReason} onClick={() => void cancelCurrentDelivery("current")}>只取消本次配送</button><button className="member-danger-soft" disabled={Boolean(busy) || !resolvedCancellationReason} onClick={() => void cancelCurrentDelivery("current-and-stop")}>取消本次配送，並停止之後的定期配送</button></div>{nextCycle && <><label>保留定期配送時的下一次配送日期<input type="date" min={nextDateMinimum} value={replacementDate || nextCycle.plannedDate} onChange={(event) => setReplacementDate(event.target.value)} /></label><button disabled={Boolean(busy) || !resolvedCancellationReason} onClick={() => void cancelCurrentDelivery("current-and-reschedule")}>取消本次配送，保留定期配送並更新下次日期</button></>}<small>若此訂單已建立 7-ELEVEN 寄件資訊，送出後只是取消申請；KD Coffee 確認寄件單作廢前，訂單不會顯示為已取消，也不會回補庫存。</small></div></details>}
           {nextCycle && <details><summary>調整下一次日期</summary><div className="member-action-panel"><p>{nextCycleHasDedicatedRoast ? `本期含專屬烘焙；距配送不足 ${DEDICATED_ROAST_STANDARD_PREPARATION_DAYS} 天時會先顯示提醒，但仍可確認送出。` : `最早可配送日為 ${earliestDate}。`} 選好日期後，請決定只套用本次，或讓之後的定期購也從新日期重新計算。{remainingChanges === null ? "" : ` 本期還可修改 ${remainingChanges} 次。`}</p><label>新的配送日期<input type="date" id="member-next-date" min={nextDateMinimum} defaultValue={nextCycle.plannedDate} /></label><div className="subscription-enrollment-summary"><span>新建立訂單日與修改截止日會在確認後依目前營運規則重新計算。</span></div><div className="member-action-buttons"><button disabled={Boolean(busy) || remainingChanges === 0} onClick={() => { const plannedDate = (document.getElementById("member-next-date") as HTMLInputElement).value; void requestDateMutation("change-date", { cycleId: nextCycle.cycleId, expectedRevision: nextCycle.revision, plannedDate, recalculateAnchor: false }); }}>只套用這一次</button><button disabled={Boolean(busy) || remainingChanges === 0} onClick={() => { const plannedDate = (document.getElementById("member-next-date") as HTMLInputElement).value; void requestDateMutation("change-date", { cycleId: nextCycle.cycleId, expectedRevision: nextCycle.revision, plannedDate, recalculateAnchor: true }); }}>之後也從新日期重新計算</button></div>{initial.rules.datePickerMode !== "calendar-only" && <div className="member-quick-delays">{initial.rules.advanceQuickOptionsDays.map((days) => <button key={`advance-${days}`} type="button" disabled={Boolean(busy) || remainingChanges === 0} onClick={() => void requestDateMutation("advance", { cycleId: nextCycle.cycleId, expectedRevision: nextCycle.revision, plannedDate: addDateOnlyDays(nextCycle.plannedDate, -days), recalculateAnchor: false })}>提前 {days} 天</button>)}{initial.rules.delayQuickOptionsDays.map((days) => <button key={`delay-${days}`} type="button" disabled={Boolean(busy) || remainingChanges === 0} onClick={() => void requestDateMutation("delay", { cycleId: nextCycle.cycleId, expectedRevision: nextCycle.revision, plannedDate: addDateOnlyDays(nextCycle.plannedDate, days), recalculateAnchor: false })}>延後 {days} 天</button>)}</div>}</div></details>}
-          {nextCycle && <details><summary>跳過這一次</summary><div className="member-action-panel"><p>只跳過 {nextCycle.plannedDate} 這一次，不會改變後續配送週期。</p><button className="member-danger-soft" disabled={Boolean(busy)} onClick={() => void mutate("skip", { cycleId: nextCycle.cycleId, expectedRevision: nextCycle.revision })}>確認跳過</button></div></details>}
+          {nextCycle && <details><summary>跳過這一次</summary><div className="member-action-panel"><p>只跳過 {displayDate(nextCycle.plannedDate)} 這一次。</p><button className="member-danger-soft" disabled={Boolean(busy)} onClick={() => void mutate("skip", { cycleId: nextCycle.cycleId, expectedRevision: nextCycle.revision })}>確認跳過</button></div></details>}
           {nextCycle && <details><summary>調整下一次配送商品</summary><form className="member-action-panel member-subscription-items-editor" onSubmit={(event) => { event.preventDefault(); void saveEditorItems(); }}>
             <p>可調整下一次配送的商品、數量與咖啡豆烘焙設定。變更只套用目前這一期，除非現有產品流程明確另有規則。</p>
             {editorModificationLocked && <p className="member-subscription-editor-warning">本期已達修改次數上限，無法再調整商品。</p>}
@@ -675,7 +865,20 @@ export default function MemberSubscriptionExperience(initial: Props) {
             ["recipientName", "收件人姓名", 40], ["phone", "手機／聯絡電話", 20], ["postalCode", "郵遞區號", 6], ["city", "縣市", 20], ["district", "區／鄉鎮市", 30], ["addressLine", "詳細地址", 120],
           ] as const).map(([key, label, maxLength]) => <label key={key}>{label}<input name={key} value={deliveryAddressDraft[key]} onChange={(event) => setDeliveryAddressDraft((current) => ({ ...current, [key]: event.target.value }))} maxLength={maxLength} required /></label>)}</div><div className="delivery-notice"><strong>宅配定期配送付款方式：貨到付款</strong><p>貨到付款手續費 NT$ {initial.rules.homeDeliveryCodFee.toLocaleString("zh-TW")}／次；實際金額以每期鎖定時的設定為準。</p></div></>}
           <small>此變更只套用未來配送；已鎖定期次與已建立的訂單保留原快照。</small><button disabled={Boolean(busy)} type="submit">儲存配送方式</button></form></details>
-          <details><summary>暫停、恢復或停止未來定期配送</summary><div className="member-action-panel"><p>這裡只管理未來的定期配送；停止定期配送不會取消已建立的本次訂單。</p>{subscription.status === "active" && <button disabled={Boolean(busy)} onClick={() => void mutate("pause", { subscriptionId: subscription.subscriptionId, expectedRevision: subscription.revision })}>暫停未來定期配送</button>}{subscription.status === "paused" && <><label>恢復日期<input type="date" value={resumeDate} onChange={(event) => setResumeDate(event.target.value)} /></label><label>新的配送週期<select
+          <details onToggle={(event) => {
+            if (!event.currentTarget.open || subscription.status !== "paused") return;
+            const currentMinimum = canonicalSubscriptionMinimum(
+              resumeHasDedicatedRoast,
+              getDateOnlyInTimeZone(new Date()),
+            );
+            setResumeDate((current) => current >= currentMinimum ? current : currentMinimum);
+          }}><summary>{subscription.status === "active" ? "暫停定期配送" : "恢復或停止定期配送"}</summary><div className="member-action-panel"><p>{subscription.status === "active" ? "暫停後不會安排新的定期配送，之後可再選擇下一次配送日期恢復。" : "可選擇下一次配送日期恢復，或停止這筆定期配送。"}</p>{subscription.status === "active" && <button disabled={Boolean(busy)} onClick={() => void mutate("pause", { subscriptionId: subscription.subscriptionId, expectedRevision: subscription.revision })}>暫停未來定期配送</button>}{subscription.status === "paused" && <><label>下一次配送日期<input type="date" min={resumeEarliestDate} value={resumeDate} onChange={(event) => setResumeDate(event.target.value)} onFocus={() => {
+  const currentMinimum = canonicalSubscriptionMinimum(
+    resumeHasDedicatedRoast,
+    getDateOnlyInTimeZone(new Date()),
+  );
+  setResumeDate((current) => current >= currentMinimum ? current : currentMinimum);
+}} /><small>最早可選：{displayDate(resumeEarliestDate)}</small></label><label>新的配送週期<select
   value={resumeIntervalMode === "custom" ? "custom" : resumeInterval}
   onChange={(event) => {
     if (event.target.value === "custom") {
@@ -708,7 +911,7 @@ export default function MemberSubscriptionExperience(initial: Props) {
     </small>
   </label>
 )}
-<button disabled={Boolean(busy) || !resumeDate} onClick={() => void mutate("resume", { subscriptionId: subscription.subscriptionId, expectedRevision: subscription.revision, resumeDate, intervalDays: resumeInterval })}>確認恢復</button></>}<button className="member-danger-soft" disabled={Boolean(busy)} onClick={() => setTerminateConfirmationId(subscription.subscriptionId)}>只停止之後的定期配送，本次配送照常</button></div></details>
+<button disabled={Boolean(busy) || !resumeDate} onClick={() => void confirmResume()}>確認恢復</button><button className="member-danger-soft" disabled={Boolean(busy)} onClick={() => setTerminateConfirmationId(subscription.subscriptionId)}>停止這筆定期配送</button></>}</div></details>
           {subscription.status === "active" && <button className="member-replenish-button" disabled={Boolean(busy)} onClick={() => void mutate("replenish", { subscriptionId: subscription.subscriptionId })}>立即補貨（不改下次日期）</button>}
         </div>}
       </div>}
@@ -782,7 +985,7 @@ export default function MemberSubscriptionExperience(initial: Props) {
           <h2 id="member-terminate-confirmation-title">
             {terminationTarget?.status === "pending_activation"
               ? "取消這個定期配送設定？"
-              : "停止未來定期配送？"}
+              : "確定停止定期配送嗎？"}
           </h2>
 
           {terminationTarget?.status === "pending_activation" ? (
@@ -797,13 +1000,11 @@ export default function MemberSubscriptionExperience(initial: Props) {
             </p>
           ) : (
             <p>
-              停止後，系統將不再自動建立之後的定期配送。
-              <br />
-              已建立的本次配送不會取消。
-              <br />
-              停止後將不再享有後續
-              <b> {subscriptionDiscountLabel}</b>
-              定期購優惠。
+              停止後，之後不再安排新的定期配送。
+              {terminationTargetHasCurrentOrder && <>
+                <br />
+                這次已成立的訂單會照原安排處理。
+              </>}
             </p>
           )}
 
@@ -814,7 +1015,7 @@ export default function MemberSubscriptionExperience(initial: Props) {
               disabled={Boolean(busy)}
               onClick={() => setTerminateConfirmationId("")}
             >
-              返回
+              先不要
             </button>
 
             <button
@@ -826,7 +1027,7 @@ export default function MemberSubscriptionExperience(initial: Props) {
                 ? "處理中…"
                 : terminationTarget?.status === "pending_activation"
                   ? "確認取消定期配送"
-                  : "確認停止未來定期配送"}
+                  : "確認停止定期配送"}
             </button>
           </div>
         </div>
