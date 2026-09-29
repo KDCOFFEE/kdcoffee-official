@@ -393,6 +393,9 @@ export default async function MemberPage({
   const referralRules = rulesVersion.rules.referral;
   const referralExperienceData = {
     ...referralCenter,
+    availableCreditBalance: availableCredit,
+    rewardCreditSources: commerce.rewardCreditSources,
+    pendingRetailPromotionRewards: commerce.pendingRetailPromotionRewards,
     displayRules: {
       pointDisplayName: referralRules.pointDisplayName,
       pvRewardMoneyValue: referralRules.pvRewardMoneyValue,
@@ -459,16 +462,24 @@ export default async function MemberPage({
 
         <section className="member-dashboard" aria-label="會員總覽">
           <div className="member-dashboard-grid">
-            <a className="member-dashboard-card" href="#credit">
+            <Link
+              className="member-dashboard-card"
+              href="/member?rewardView=released#rewards"
+              data-reward-shortcut="released"
+            >
               <small>可用折抵額</small>
               <strong>{availableCredit.toLocaleString("zh-TW")} 元</strong>
               <span>已正式入帳，結帳時可自行選擇使用</span>
-            </a>
-            <a className="member-dashboard-card" href="#rewards">
+            </Link>
+            <Link
+              className="member-dashboard-card"
+              href="/member?rewardView=pending#rewards"
+              data-reward-shortcut="pending"
+            >
               <small>待入帳回饋</small>
               <strong>{pendingRewardPoints.toLocaleString("zh-TW")} {pointDisplayName}</strong>
               <span>查看點數來源、資格條件與折抵價值</span>
-            </a>
+            </Link>
             <a className="member-dashboard-card" href="#subscription">
               <small>下一次配送</small>
               <strong>{nextSubscriptionCycle ? formatTaipeiDate(nextSubscriptionCycle.plannedDate) : "尚未排定"}</strong>

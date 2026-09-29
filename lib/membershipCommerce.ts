@@ -463,6 +463,7 @@ export type MemberCreditHistoryEntry = {
   status: CreditEntry["status"];
   direction: "grant" | "deduct";
   sourceLabel: "推薦回饋" | "會員續購回饋" | "推廣零售獎金" | "KD Coffee 贈送" | "會員抵用金" | "抵用金調整";
+  sourceOrderNumber: string | null;
   orderRedemptions: Array<{
     orderNumber: string;
     amount: number;
@@ -3835,6 +3836,12 @@ export function safeReferralMemberView(state: MembershipCommerceState, referrerM
   return Object.values(state.referrals).filter((item) => item.referrerMemberId === referrerMemberId).map((item) => ({ memberNumberReference: item.referredMemberId, safeDisplayName: item.safeDisplayName, joined: true, qualifiedPurchases: Object.values(state.referralConversions).filter((conversion) => conversion.relationshipId === item.relationshipId && conversion.status === "rewarded").length, rewards: Object.values(state.referralConversions).filter((conversion) => conversion.relationshipId === item.relationshipId && conversion.status === "rewarded").reduce((sum, conversion) => sum + (conversion.rewardCreditEntryId ? state.creditEntries[conversion.rewardCreditEntryId]?.amount ?? 0 : 0), 0), status: item.status }));
 }
 
+function safeMemberOrderNumber(value: unknown) {
+  return typeof value === "string" && /^KD[0-9-]+$/u.test(value)
+    ? value
+    : null;
+}
+
 export async function getMemberCommerceDashboard(memberId: string, now = new Date(), filePath = getMembershipCommerceStateFile()) {
   const state = await readMembershipCommerceState(filePath);
   const subscriptions = Object.values(state.subscriptions)
@@ -3864,13 +3871,82 @@ export async function getMemberCommerceDashboard(memberId: string, now = new Dat
         : direction === "deduct"
           ? "抵用金調整" as const
           : "會員抵用金" as const;
+    const referralRewardId = item.sourceReference.startsWith("referral_reward:")
+      ? item.sourceReference.slice("referral_reward:".length)
+      : null;
+    const retailPromotionRewardId = item.sourceReference.startsWith("retail_promotion_reward:")
+      ? item.sourceReference.slice("retail_promotion_reward:".length)
+      : null;
+    const sourceOrderNumber = safeMemberOrderNumber(item.metadata.orderId)
+      ?? safeMemberOrderNumber(
+        referralRewardId
+          ? state.referralRewards[referralRewardId]?.sourceOrderNumber
+          : retailPromotionRewardId
+            ? state.retailPromotionRewards[retailPromotionRewardId]?.sourceOrderNumber
+            : null,
+      );
     const orderRedemptions = Object.values(state.creditReservations)
       .filter((reservation) => reservation.memberId === memberId)
       .flatMap((reservation) => reservation.allocations
         .filter((allocation) => allocation.creditEntryId === item.creditEntryId && allocation.amount > 0)
         .map((allocation) => ({ orderNumber: reservation.orderId, amount: allocation.amount, status: reservation.status })));
-    return { creditEntryId: item.creditEntryId, amount: item.amount, remainingAmount, issuedAt: item.issuedAt, expiresAt: item.expiresAt, status, direction, sourceLabel, orderRedemptions };
+    return { creditEntryId: item.creditEntryId, amount: item.amount, remainingAmount, issuedAt: item.issuedAt, expiresAt: item.expiresAt, status, direction, sourceLabel, sourceOrderNumber, orderRedemptions };
   });
+  const rewardCreditSources = Object.values(state.creditEntries)
+    .filter((item) =>
+      item.memberId === memberId
+      && item.amount > 0
+      && (
+        item.sourceType === "member_reward"
+        || item.sourceType === "referral"
+        || item.sourceReference.startsWith("retail_promotion_reward:")
+      ),
+    )
+    .map((item) => {
+      const referralRewardId = item.sourceReference.startsWith("referral_reward:")
+        ? item.sourceReference.slice("referral_reward:".length)
+        : null;
+      const retailPromotionRewardId = item.sourceReference.startsWith("retail_promotion_reward:")
+        ? item.sourceReference.slice("retail_promotion_reward:".length)
+        : null;
+      const sourceOrderNumber = safeMemberOrderNumber(item.metadata.orderId)
+        ?? safeMemberOrderNumber(
+          referralRewardId
+            ? state.referralRewards[referralRewardId]?.sourceOrderNumber
+            : retailPromotionRewardId
+              ? state.retailPromotionRewards[retailPromotionRewardId]?.sourceOrderNumber
+              : null,
+        );
+      const sourceCategory = retailPromotionRewardId
+        ? "retail_promotion" as const
+        : item.sourceType === "member_reward"
+          ? "self_purchase" as const
+          : "referral" as const;
+
+      return {
+        sourceCategory,
+        sourceLabel: sourceCategory === "retail_promotion"
+          ? "推廣零售" as const
+          : sourceCategory === "self_purchase"
+            ? "自己的消費" as const
+            : "推薦回饋" as const,
+        sourceOrderNumber,
+        creditedAmount: item.amount,
+        availableAmount: effectiveCreditRemaining(state, item, now),
+        issuedAt: item.issuedAt,
+      };
+    })
+    .sort((left, right) => right.issuedAt.localeCompare(left.issuedAt));
+  const pendingRetailPromotionRewards = Object.values(state.retailPromotionRewards)
+    .filter((reward) => reward.beneficiaryMemberId === memberId && reward.status === "scheduled")
+    .map((reward) => ({
+      sourceLabel: "推廣零售" as const,
+      sourceOrderNumber: safeMemberOrderNumber(reward.sourceOrderNumber),
+      rewardPV: typeof reward.rewardPV === "number" ? reward.rewardPV : 0,
+      projectedCreditAmount: reward.calculatedCreditAmount,
+      releaseEligibleBusinessDate: reward.releaseEligibleBusinessDate,
+    }))
+    .sort((left, right) => left.releaseEligibleBusinessDate.localeCompare(right.releaseEligibleBusinessDate));
   const pendingCredit = Object.values(state.referralRewards)
     .filter(
       (reward) =>
@@ -3885,7 +3961,15 @@ export async function getMemberCommerceDashboard(memberId: string, now = new Dat
     ) + Object.values(state.retailPromotionRewards)
       .filter((reward) => reward.beneficiaryMemberId === memberId && reward.status === "scheduled")
       .reduce((sum, reward) => sum + reward.calculatedCreditAmount, 0);
-  return { subscriptions, cycles: structuredClone(cycles), credits: structuredClone(credits), pendingCredit, referrals: safeReferralMemberView(state, memberId) };
+  return {
+    subscriptions,
+    cycles: structuredClone(cycles),
+    credits: structuredClone(credits),
+    rewardCreditSources: structuredClone(rewardCreditSources),
+    pendingRetailPromotionRewards: structuredClone(pendingRetailPromotionRewards),
+    pendingCredit,
+    referrals: safeReferralMemberView(state, memberId),
+  };
 }
 
 export async function getMemberRetailPromotionCenter(memberId: string, options: { filePath?: string; rulesFilePath?: string } = {}) {

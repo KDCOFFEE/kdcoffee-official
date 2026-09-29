@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import styles from "./MemberCenterExperience.module.css";
@@ -15,24 +16,34 @@ const items = [
 ] as const;
 
 export default function MemberSectionNav() {
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [activeId, setActiveId] = useState<(typeof items)[number]["id"]>("member-overview");
   const tabListRef = useRef<HTMLDivElement>(null);
   const tabRefs = useRef<Partial<Record<(typeof items)[number]["id"], HTMLAnchorElement | null>>>({});
 
   const activate = useCallback((requestedId: string) => {
-    const item = items.find((candidate) => candidate.id === requestedId) ?? items[0];
+    const normalizedId = requestedId === "credit" ? "rewards" : requestedId;
+    const item = items.find((candidate) => candidate.id === normalizedId) ?? items[0];
     setActiveId(item.id);
     document.querySelectorAll<HTMLElement>("[data-member-section]").forEach((section) => {
       section.hidden = section.id !== item.id;
     });
+    window.dispatchEvent(new CustomEvent("kd-member-section-activated", {
+      detail: { id: item.id },
+    }));
   }, []);
 
   useEffect(() => {
-    const syncHash = () => activate(window.location.hash.slice(1));
-    syncHash();
-    window.addEventListener("hashchange", syncHash);
-    return () => window.removeEventListener("hashchange", syncHash);
-  }, [activate]);
+    const syncRoute = () => activate(window.location.hash.slice(1));
+    syncRoute();
+    window.addEventListener("hashchange", syncRoute);
+    window.addEventListener("popstate", syncRoute);
+    return () => {
+      window.removeEventListener("hashchange", syncRoute);
+      window.removeEventListener("popstate", syncRoute);
+    };
+  }, [activate, pathname, searchParams]);
 
   useEffect(() => {
     const tabList = tabListRef.current;
@@ -48,10 +59,10 @@ export default function MemberSectionNav() {
     <nav className={`member-center-nav ${styles.navigation}`} aria-label="會員中心導覽">
       <div ref={tabListRef} className={styles.tabList} role="tablist" aria-label="會員中心功能">
         {items.map((item) => (
-          <a
+          <Link
             key={item.id}
             ref={(element) => { tabRefs.current[item.id] = element; }}
-            href={`#${item.id}`}
+            href={`/member#${item.id}`}
             className={activeId === item.id ? "is-active" : undefined}
             role="tab"
             aria-selected={activeId === item.id}
@@ -60,7 +71,7 @@ export default function MemberSectionNav() {
           >
             <span className="member-nav-desktop-label">{item.label}</span>
             <span className="member-nav-mobile-label">{item.mobileLabel}</span>
-          </a>
+          </Link>
         ))}
       </div>
       <Link href="/" className={styles.homeLink}>

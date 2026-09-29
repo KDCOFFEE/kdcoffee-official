@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 
 import OrderTimeline from "@/components/orders/OrderTimeline";
@@ -124,6 +125,7 @@ function mergeMessage(messages: OrderMessage[], message: OrderMessage) {
 }
 
 export default function OrderConversation({ orderNumber }: { orderNumber: string }) {
+  const router = useRouter();
   const [order, setOrder] = useState<CustomerOrderSummary>();
   const [access, setAccess] = useState<"member" | "guest">();
   const [messages, setMessages] = useState<OrderMessage[]>([]);
@@ -149,6 +151,24 @@ export default function OrderConversation({ orderNumber }: { orderNumber: string
   const cancellationActionId = useRef("");
   const claimActionId = useRef("");
   const claimReceiptInput = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    let reconciliationTimer: number | undefined;
+    const reconcileMemberHistory = () => {
+      reconciliationTimer = window.setTimeout(() => {
+        const pathname = window.location.pathname.replace(/\/+$/, "") || "/";
+        if (pathname === "/member" && window.location.hash === "#orders") {
+          router.replace("/member#orders");
+        }
+      }, 0);
+    };
+
+    window.addEventListener("popstate", reconcileMemberHistory);
+    return () => {
+      window.removeEventListener("popstate", reconcileMemberHistory);
+      if (reconciliationTimer !== undefined) window.clearTimeout(reconciliationTimer);
+    };
+  }, [router]);
 
   const loadOrder = useCallback(async () => {
     const response = await fetch(`/api/orders/${encodeURIComponent(orderNumber)}/messages`, {
@@ -738,7 +758,7 @@ export default function OrderConversation({ orderNumber }: { orderNumber: string
         {notice ? <p className="form-success" role="status">{notice}</p> : null}
         <button type="submit" disabled={submitting}>{submitting ? "送出中…" : "送出詢問"}</button>
       </form>
-      <Link className="order-conversation-back" href="/member">返回會員中心</Link>
+      <Link className="order-conversation-back" href={access === "member" ? "/member#orders" : "/member"}>返回會員中心</Link>
     </section>
   );
 }

@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState, type ComponentProps } from "react";
 import KdShareDialog from "./KdShareDialog";
 import MemberReferralOrgChart, { type ReferralOrgChartData } from "./MemberReferralOrgChart";
@@ -13,6 +15,22 @@ export type MemberReferralCenterData = {
   referrerMemberNumber: string | null;
   pointDisplayName: string;
   pvDisclosure: string | null;
+  availableCreditBalance: number;
+  rewardCreditSources: Array<{
+    sourceCategory: "retail_promotion" | "referral" | "self_purchase";
+    sourceLabel: "推廣零售" | "推薦回饋" | "自己的消費";
+    sourceOrderNumber: string | null;
+    creditedAmount: number;
+    availableAmount: number;
+    issuedAt: string;
+  }>;
+  pendingRetailPromotionRewards: Array<{
+    sourceLabel: "推廣零售";
+    sourceOrderNumber: string | null;
+    rewardPV: number;
+    projectedCreditAmount: number;
+    releaseEligibleBusinessDate: string;
+  }>;
   qualificationProgress: ComponentProps<typeof MemberQualificationProgress>["progress"];
   displayRules: {
     pointDisplayName: string;
@@ -137,6 +155,8 @@ function rewardStatusLabel(
 }
 
 export default function MemberReferralCenter({ initialData: data }: { initialData: MemberReferralCenterData }) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [teamPath, setTeamPath] = useState<Array<{ memberNumber: string; level: number }>>([]);
   const [rewardFilter, setRewardFilter] = useState<"all" | "pending" | "released">("all");
   const [rewardLevel, setRewardLevel] = useState(0);
@@ -144,18 +164,154 @@ export default function MemberReferralCenter({ initialData: data }: { initialDat
   const [shareOpen, setShareOpen] = useState(false);
   const [orgChartOpen, setOrgChartOpen] = useState(false);
   const [rewardDetailsOpen, setRewardDetailsOpen] = useState(false);
+  const [rewardSectionActive, setRewardSectionActive] = useState(false);
   const rewardDialogRef = useRef<HTMLDialogElement>(null);
   const shareTriggerRef = useRef<HTMLButtonElement>(null);
   const orgChartTriggerRef = useRef<HTMLButtonElement>(null);
   const rewardTriggerRef = useRef<HTMLButtonElement>(null);
+  const rewardFocusReturnRef = useRef<HTMLElement | null>(null);
+  const closingFromRouteSyncRef = useRef(false);
   const rewardsPerPage = 10;
+
+  function openRewardDetails(
+    filter: "all" | "pending" | "released",
+    focusReturn: HTMLElement | null,
+  ) {
+    setRewardFilter(filter);
+    setRewardLevel(0);
+    setRewardPage(1);
+    rewardFocusReturnRef.current = focusReturn;
+    setRewardDetailsOpen(true);
+  }
+
+  function finishClosingRewardDetails() {
+    const closedForRouteSync = closingFromRouteSyncRef.current;
+    closingFromRouteSyncRef.current = false;
+    setRewardDetailsOpen(false);
+    if (closedForRouteSync) return;
+
+    const focusReturn = rewardFocusReturnRef.current ?? rewardTriggerRef.current;
+    const currentUrl = new URL(window.location.href);
+    const hasDeepLinkIntent = currentUrl.searchParams.has("rewardView") || currentUrl.hash === "#credit";
+    const shortcutIsVisible = !currentUrl.hash || currentUrl.hash === "#member-overview";
+    const focusTarget = focusReturn?.dataset.rewardShortcut && !hasDeepLinkIntent && !shortcutIsVisible
+      ? rewardTriggerRef.current
+      : focusReturn;
+
+    if (hasDeepLinkIntent) {
+      router.replace(
+        focusReturn?.dataset.rewardShortcut
+          ? "/member#member-overview"
+          : "/member#rewards",
+        { scroll: false },
+      );
+    }
+
+    window.setTimeout(() => {
+      if (focusTarget) focusTarget.focus();
+      else rewardTriggerRef.current?.focus();
+    }, 50);
+  }
+
+  useEffect(() => {
+    const syncRewardSection = () => {
+      const rewardsSection = document.getElementById("rewards");
+      const isActive = Boolean(rewardsSection && !rewardsSection.hidden);
+      const dialog = rewardDialogRef.current;
+
+      if (!isActive && dialog?.open) {
+        closingFromRouteSyncRef.current = true;
+        dialog.close();
+      }
+
+      setRewardSectionActive(isActive);
+      if (!isActive) {
+        setRewardDetailsOpen(false);
+        return;
+      }
+
+      const hash = window.location.hash;
+      const rewardView = new URLSearchParams(window.location.search).get("rewardView");
+      const intent = hash === "#credit"
+        ? "released" as const
+        : hash === "#rewards" && (rewardView === "released" || rewardView === "pending")
+          ? rewardView
+          : null;
+
+      if (intent) {
+        rewardFocusReturnRef.current = document.querySelector<HTMLElement>(
+          `[data-reward-shortcut="${intent}"]`,
+        );
+        setRewardFilter(intent);
+        setRewardLevel(0);
+        setRewardPage(1);
+        setRewardDetailsOpen(true);
+      }
+    };
+
+    syncRewardSection();
+    window.addEventListener("kd-member-section-activated", syncRewardSection);
+
+    return () => {
+      window.removeEventListener("kd-member-section-activated", syncRewardSection);
+    };
+  }, []);
 
   useEffect(() => {
     const dialog = rewardDialogRef.current;
     if (!dialog) return;
-    if (rewardDetailsOpen && !dialog.open) dialog.showModal();
-    if (!rewardDetailsOpen && dialog.open) dialog.close();
-  }, [rewardDetailsOpen]);
+    const rewardsSection = document.getElementById("rewards");
+    const canOpen = Boolean(
+      rewardDetailsOpen
+      && rewardSectionActive
+      && rewardsSection
+      && !rewardsSection.hidden,
+    );
+
+    if (canOpen && !dialog.open) dialog.showModal();
+    if (!canOpen && dialog.open) {
+      closingFromRouteSyncRef.current = true;
+      dialog.close();
+    }
+  }, [rewardDetailsOpen, rewardSectionActive]);
+
+  useEffect(() => {
+    const syncRewardIntent = () => {
+      const hash = window.location.hash;
+      const rewardView = new URLSearchParams(window.location.search).get("rewardView");
+      const intent = hash === "#credit"
+        ? "released" as const
+        : hash === "#rewards" && (rewardView === "released" || rewardView === "pending")
+          ? rewardView
+          : null;
+
+      if (intent) {
+        rewardFocusReturnRef.current = document.querySelector<HTMLElement>(
+          `[data-reward-shortcut="${intent}"]`,
+        );
+        const rewardsSection = document.getElementById("rewards");
+        if (rewardsSection && !rewardsSection.hidden) {
+          setRewardFilter(intent);
+          setRewardLevel(0);
+          setRewardPage(1);
+          setRewardDetailsOpen(true);
+        } else {
+          setRewardDetailsOpen(false);
+        }
+      } else {
+        setRewardDetailsOpen(false);
+      }
+    };
+
+    syncRewardIntent();
+    window.addEventListener("hashchange", syncRewardIntent);
+    window.addEventListener("popstate", syncRewardIntent);
+
+    return () => {
+      window.removeEventListener("hashchange", syncRewardIntent);
+      window.removeEventListener("popstate", syncRewardIntent);
+    };
+  }, [searchParams]);
 
   const displayPointName = /^[A-Za-z]+$/.test(data.pointDisplayName || "")
     ? data.pointDisplayName.toUpperCase()
@@ -176,6 +332,11 @@ export default function MemberReferralCenter({ initialData: data }: { initialDat
   const releasedRewardCredit = releasedRewards.reduce((sum, reward) => sum + reward.creditAmount, 0);
   const pendingRewardCredit = pendingRewards.reduce((sum, reward) => sum + reward.projectedCreditAmount, 0);
   const totalRewardPoints = releasedRewardPoints + pendingRewardPoints;
+  const releasedRewardSourceCount = data.rewardCreditSources.length;
+  const pendingRewardSourceCount = pendingRewards.length + data.pendingRetailPromotionRewards.length;
+  const allRewardSourceCount = data.rewards.length
+    + data.pendingRetailPromotionRewards.length
+    + data.rewardCreditSources.filter((item) => item.sourceCategory === "retail_promotion").length;
   const currentTaipeiMonth = taipeiMonthKey(new Date());
   const currentMonthRewardPoints = releasedRewards
     .filter((reward) => reward.releasedAt && taipeiMonthKey(reward.releasedAt) === currentTaipeiMonth)
@@ -252,29 +413,36 @@ export default function MemberReferralCenter({ initialData: data }: { initialDat
             <article className="member-referral-primary-card">
               <div><p className="eyebrow dark">MY REWARDS</p><h3>我的回饋</h3></div>
               <dl><div><dt>待入帳</dt><dd>NT$ {pendingRewardCredit.toLocaleString("zh-TW")}</dd></div><div><dt>已入帳</dt><dd>NT$ {releasedRewardCredit.toLocaleString("zh-TW")}</dd></div></dl>
-              <button ref={rewardTriggerRef} type="button" onClick={() => setRewardDetailsOpen(true)}>查看回饋明細</button>
+              <button ref={rewardTriggerRef} type="button" onClick={() => openRewardDetails("all", rewardTriggerRef.current)}>查看回饋明細</button>
             </article>
           </div>
           <MemberQualificationProgress progress={data.qualificationProgress} />
-          <dialog ref={rewardDialogRef} className="member-ia-dialog member-reward-dialog" aria-labelledby="member-reward-ledger-title" onClose={() => { setRewardDetailsOpen(false); window.setTimeout(() => rewardTriggerRef.current?.focus(), 0); }}>
+          <dialog ref={rewardDialogRef} className="member-ia-dialog member-reward-dialog" aria-labelledby="member-reward-ledger-title" onClose={finishClosingRewardDetails}>
         <div className="member-ia-dialog-shell">
           <header><div><p className="eyebrow dark">REWARD DETAILS</p><h2 id="member-reward-ledger-title">推薦與會員回饋</h2></div><button type="button" aria-label="關閉回饋明細" onClick={() => rewardDialogRef.current?.close()}>×</button></header>
           <div className="member-ia-dialog-body">
       <section className="member-referral-reward-ledger" aria-labelledby="member-reward-ledger-title">
         <div className="member-referral-subhead"><p className="eyebrow dark">REWARD HISTORY</p><h3>回饋總覽</h3><p>回饋點數、資格狀態與折抵價值均直接取自正式 Reward Engine；會員頁不自行重算帳務。</p></div>
-        <div className="member-reward-summary-grid" aria-label="回饋點數總覽">
-          <article><small>累計回饋點數</small><strong>{pointValue(totalRewardPoints, displayPointName)}</strong><span>已入帳＋有效待入帳</span></article>
-          <article><small>已入帳點數</small><strong>{pointValue(releasedRewardPoints, displayPointName)}</strong><span>{releasedRewards.length} 筆</span></article>
-          <article><small>待入帳點數</small><strong>{pointValue(pendingRewardPoints, displayPointName)}</strong><span>{pendingRewards.length} 筆</span></article>
-          <article><small>本月已入帳</small><strong>{pointValue(currentMonthRewardPoints, displayPointName)}</strong><span>本月正式發放</span></article>
-        </div>
+        {rewardFilter === "released" ? (
+          <div className="member-reward-summary-grid" aria-label="已入帳抵用金總覽">
+            <article><small>目前可用折抵額</small><strong>{creditValue(data.availableCreditBalance)}</strong><span>直接取自正式抵用金帳本，不由回饋紀錄重算</span></article>
+            <article><small>回饋入帳來源</small><strong>{releasedRewardSourceCount} 筆</strong><span>推廣零售、推薦回饋與自己的消費</span></article>
+          </div>
+        ) : (
+          <div className="member-reward-summary-grid" aria-label="回饋點數總覽">
+            <article><small>累計回饋點數</small><strong>{pointValue(totalRewardPoints, displayPointName)}</strong><span>會員／推薦回饋的已入帳＋有效待入帳</span></article>
+            <article><small>已入帳點數</small><strong>{pointValue(releasedRewardPoints, displayPointName)}</strong><span>{releasedRewards.length} 筆</span></article>
+            <article><small>待入帳點數</small><strong>{pointValue(pendingRewardPoints, displayPointName)}</strong><span>{pendingRewards.length} 筆，不含以元顯示的推廣零售</span></article>
+            <article><small>本月已入帳</small><strong>{pointValue(currentMonthRewardPoints, displayPointName)}</strong><span>會員／推薦回饋本月正式發放</span></article>
+          </div>
+        )}
         {data.pvDisclosure ? <details className="member-referral-policy"><summary>推薦回饋如何計算？</summary><p>{data.pvDisclosure}</p><p>加入推薦團隊不等於立即產生回饋；仍須依活動、消費與成功取貨條件判定。</p></details> : null}
         <div className="member-reward-details">
-          <div className="member-reward-ledger-heading"><div><p className="eyebrow dark">REWARD DETAILS</p><h4>回饋明細</h4><p>查看自己的續購與推薦消費所產生的回饋與入帳狀態。</p></div><span>共 {data.rewards.length} 筆</span></div>
-        {data.rewards.length ? <>
+          <div className="member-reward-ledger-heading"><div><p className="eyebrow dark">REWARD DETAILS</p><h4>回饋明細</h4><p>查看推廣零售、推薦與自己消費所產生的回饋與入帳狀態。</p></div><span>共 {allRewardSourceCount} 筆</span></div>
+        {(data.rewards.length || data.rewardCreditSources.length || data.pendingRetailPromotionRewards.length) ? <>
           <div className="member-reward-filters" aria-label="回饋紀錄篩選">
             <div>{(["all", "pending", "released"] as const).map((filter) => {
-              const count = filter === "all" ? data.rewards.length : filter === "released" ? releasedRewards.length : pendingRewards.length;
+              const count = filter === "all" ? allRewardSourceCount : filter === "released" ? releasedRewardSourceCount : pendingRewardSourceCount;
               return <button type="button" key={filter} className={rewardFilter === filter ? "is-active" : ""} onClick={() => { setRewardFilter(filter); setRewardPage(1); }}>{filter === "all" ? "全部" : filter === "pending" ? "待入帳" : "已入帳"} <span>{count}</span></button>;
             })}</div>
             <select aria-label="依推薦代數篩選" value={rewardLevel} onChange={(event) => { setRewardLevel(Number(event.target.value)); setRewardPage(1); }}>
@@ -282,7 +450,46 @@ export default function MemberReferralCenter({ initialData: data }: { initialDat
               {data.summaries.map((summary) => <option key={summary.level} value={summary.level}>第 {summary.level} 代</option>)}
             </select>
           </div>
+          {rewardFilter === "released" ? (
+            data.rewardCreditSources.length ? (
+              <div className="member-reward-ledger-list" aria-label="已入帳回饋抵用金來源">
+                {data.rewardCreditSources.map((entry) => {
+                  const hasSourceOrder = Boolean(entry.sourceOrderNumber);
+                  return <article className="member-reward-ledger-card member-reward-ledger-item" key={`${entry.sourceCategory}:${entry.sourceOrderNumber ?? "legacy"}:${entry.issuedAt}`}>
+                    <header className="member-reward-ledger-meta"><time>{formatDate(entry.issuedAt)}</time><span className="member-reward-status is-released">已入帳 ✓</span></header>
+                    <div className="member-reward-ledger-body">
+                      <div className="member-reward-ledger-title-row"><div><small>REWARD CREDIT</small><h4>{entry.sourceLabel}</h4></div><span className="member-reward-generation">正式抵用金帳本</span></div>
+                      <div className="member-reward-order-info">
+                        <p className="member-reward-source-member"><b>來源</b><strong>{entry.sourceLabel}</strong></p>
+                        <p className="member-reward-consumption"><b>來源訂單</b>{hasSourceOrder ? <span><Link href={`/orders/${encodeURIComponent(entry.sourceOrderNumber!)}`}>{entry.sourceOrderNumber}</Link>・<Link href={`/orders/${encodeURIComponent(entry.sourceOrderNumber!)}`}>查看訂單 →</Link></span> : <span>歷史資料未記錄</span>}</p>
+                      </div>
+                      <div className="member-reward-ledger-math member-reward-ledger-bottom">
+                        <span><small>入帳金額</small>{creditValue(entry.creditedAmount)}</span>
+                        <strong><small>目前可用</small>{creditValue(entry.availableAmount)}</strong>
+                      </div>
+                      <small className="member-reward-conversion-note">入帳日期：{formatDate(entry.issuedAt)}。目前可用金額直接取自正式抵用金帳本，已使用或保留的金額不會重複顯示為可用。</small>
+                    </div>
+                  </article>;
+                })}
+              </div>
+            ) : <div className="member-commerce-empty compact"><strong>目前沒有回饋入帳來源</strong><p>可用折抵額仍以正式抵用金帳本為準。</p></div>
+          ) : <>
+          {rewardFilter === "pending" && data.pendingRetailPromotionRewards.length ? (
+            <div className="member-reward-ledger-list" aria-label="待入帳推廣零售回饋">
+              {data.pendingRetailPromotionRewards.map((entry) => <article className="member-reward-ledger-card member-reward-ledger-item" key={`retail:${entry.sourceOrderNumber ?? entry.releaseEligibleBusinessDate}`}>
+                <header className="member-reward-ledger-meta"><time>{entry.releaseEligibleBusinessDate.replaceAll("-", "/")}</time><span className="member-reward-status is-scheduled">待入帳</span></header>
+                <div className="member-reward-ledger-body">
+                  <div className="member-reward-ledger-title-row"><div><small>RETAIL PROMOTION</small><h4>推廣零售回饋</h4></div><span className="member-reward-generation">推廣零售</span></div>
+                  <div className="member-reward-order-info"><p className="member-reward-source-member"><b>來源</b><strong>{entry.sourceLabel}</strong></p><p className="member-reward-consumption"><b>來源訂單</b>{entry.sourceOrderNumber ? <span><Link href={`/orders/${encodeURIComponent(entry.sourceOrderNumber)}`}>{entry.sourceOrderNumber}</Link>・<Link href={`/orders/${encodeURIComponent(entry.sourceOrderNumber)}`}>查看訂單 →</Link></span> : <span>歷史資料未記錄</span>}</p></div>
+                  <div className="member-reward-ledger-math member-reward-ledger-bottom"><span><small>{entry.rewardPV > 0 ? `預計取得 ${displayPointName}` : "回饋類型"}</small>{entry.rewardPV > 0 ? pointValue(entry.rewardPV, displayPointName) : "推廣零售"}</span><strong><small>預計折抵價值</small>{creditValue(entry.projectedCreditAmount)}</strong></div>
+                  <small className="member-reward-conversion-note">預計可發放日期：{entry.releaseEligibleBusinessDate.replaceAll("-", "/")}。金額直接取自已保存的推廣零售獎勵紀錄。</small>
+                </div>
+              </article>)}
+            </div>
+          ) : null}
           {pagedRewards.length ? <div className="member-reward-ledger-list">{pagedRewards.map((reward) => {
+          const sourceOrderNumber = reward.sourceOrderNumber?.trim() ?? "";
+          const hasUsableSourceOrder = /^KD[0-9-]+$/u.test(sourceOrderNumber);
           const isDirectSelfPurchase =
             reward.rewardType ===
               "self_purchase" &&
@@ -463,12 +670,23 @@ export default function MemberReferralCenter({ initialData: data }: { initialDat
                     {tierBreakdownText ? <span>{tierBreakdownText}</span> : null}
                   </div>
                   <div>
-                    <small>② 預計取得</small>
+                    <small>② 來源訂單</small>
+                    {hasUsableSourceOrder ? (
+                      <>
+                        <strong><Link href={`/orders/${encodeURIComponent(sourceOrderNumber)}`}>{sourceOrderNumber}</Link></strong>
+                        <span><Link href={`/orders/${encodeURIComponent(sourceOrderNumber)}`}>查看訂單 →</Link></span>
+                      </>
+                    ) : (
+                      <strong>歷史資料未記錄</strong>
+                    )}
+                  </div>
+                  <div>
+                    <small>③ 預計取得</small>
                     <strong>{pointValue(reward.rewardPV, displayPointName)}</strong>
                     <span>點數依正式 Reward Engine 保存結果顯示</span>
                   </div>
                   <div>
-                    <small>③ {creditDisplayLabel}</small>
+                    <small>④ {creditDisplayLabel}</small>
                     <strong>{creditValue(actualCreditValue)}</strong>
                     <span>{creditDisplayNote}</span>
                   </div>
@@ -540,8 +758,9 @@ export default function MemberReferralCenter({ initialData: data }: { initialDat
               </details>
             </div>
           </article>;
-        })}</div> : <div className="member-commerce-empty compact"><strong>沒有符合目前篩選條件的回饋紀錄</strong><p>可切換狀態或代數查看其他紀錄。</p></div>}
+        })}</div> : rewardFilter === "pending" && data.pendingRetailPromotionRewards.length ? null : <div className="member-commerce-empty compact"><strong>沒有符合目前篩選條件的回饋紀錄</strong><p>可切換狀態或代數查看其他紀錄。</p></div>}
           {rewardPageCount > 1 ? <nav className="member-reward-pagination" aria-label="推薦回饋分頁"><button type="button" disabled={safeRewardPage <= 1} onClick={() => setRewardPage(Math.max(1, safeRewardPage - 1))}>上一頁</button><span>第 {safeRewardPage} / {rewardPageCount} 頁</span><button type="button" disabled={safeRewardPage >= rewardPageCount} onClick={() => setRewardPage(Math.min(rewardPageCount, safeRewardPage + 1))}>下一頁</button></nav> : null}
+          </>}
         </> : <div className="member-commerce-empty compact"><strong>目前還沒有推薦回饋紀錄</strong><p>推薦會員產生符合規則的有效消費後，回饋紀錄會顯示在這裡。</p></div>}
         </div>
       </section>
