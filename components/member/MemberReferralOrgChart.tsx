@@ -122,7 +122,7 @@ function MemberOrgOrderViewer({ node, pointDisplayName, onClose }: { node: Refer
           <div>
             <p className="eyebrow dark">NEW ORDERS</p>
             <h3 id="member-org-order-title">會員 {node.memberNumber} 的新訂單</h3>
-            <p>近 30 日共 {node.recentOrders.length} 筆；內容直接讀取既有訂單與 Reward Engine 紀錄。</p>
+            <p>近 30 日共 {node.recentOrders.length} 筆；內容直接讀取既有訂單與回饋紀錄。</p>
           </div>
           <button type="button" className="member-org-order-close" onClick={onClose} aria-label="關閉">×</button>
         </header>
@@ -219,7 +219,7 @@ function MemberReferralOrgChartDialog({ data, onClose }: Omit<Props, "open">) {
         <div id="member-org-summary" className={`member-org-kpis${summaryExpanded ? " is-expanded" : ""}`} aria-label="推薦組織圖摘要">
           <article><small>我的推薦成員</small><strong>{data.stats.teamMembers}</strong><span>人</span></article>
           <article><small>新訂單</small><strong>{data.stats.newOrders}</strong><span>近 30 日有效訂單</span></article>
-          <article><small>待入帳回饋</small><strong>{money(data.stats.pendingCredit)}</strong><span>依 Reward Engine</span></article>
+          <article><small>待入帳回饋</small><strong>{money(data.stats.pendingCredit)}</strong><span>依正式回饋紀錄</span></article>
           <article><small>本週期入帳</small><strong>{money(data.stats.currentPeriodCredit)}</strong><span>{data.periodLabel}</span></article>
         </div>
 
@@ -305,7 +305,7 @@ function MemberReferralOrgChartDialog({ data, onClose }: Omit<Props, "open">) {
 
         <footer className="member-org-footer">
           <span>拖曳移動畫布 · 滾輪或雙指縮放</span>
-          <span>新訂單／回饋數字僅讀取既有會員與 Reward Engine 資料，不另行計算獎勵規則。</span>
+          <span>新訂單／回饋數字僅顯示既有會員與回饋資料，不另行計算。</span>
         </footer>
       </div>
     </div>

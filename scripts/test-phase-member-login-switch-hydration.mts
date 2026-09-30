@@ -1,13 +1,10 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
-import {
-  formatTaipeiDate,
-  formatTaipeiDateTime,
-  formatTaipeiMonthDay,
-  formatTaipeiMonthKey,
-} from "../lib/memberRewardPresentation";
-import { installWorksMotionBootstrap } from "../components/works/WorksMotionBootstrapClient";
+// @ts-expect-error Node's TypeScript stripping requires an explicit extension.
+import { formatTaipeiDate, formatTaipeiDateTime, formatTaipeiMonthDay, formatTaipeiMonthKey } from "../lib/memberRewardPresentation.ts";
+// @ts-expect-error Node's TypeScript stripping requires an explicit extension.
+import { installWorksMotionBootstrap } from "../components/works/worksMotionBootstrap.ts";
 
 let checks = 0;
 const check = (condition: unknown, label: string) => {
@@ -76,8 +73,8 @@ check(/^[0-9/: ]+$/u.test(serverText) && !/[\u00A0\u202F]/u.test(serverText), "f
 check(formatTaipeiDateTime("invalid") === "歷史資料未記錄" && formatTaipeiDate(null, "待完成取貨後計算") === "待完成取貨後計算", "invalid and historical values use neutral fallbacks");
 
 check(sourceCard.includes("formatTaipeiDateTime(summary.completedAt)") && !sourceCard.includes("Intl.DateTimeFormat"), "source-order created and pickup timestamps use the deterministic formatter");
-check(sourceCard.includes("formatTaipeiDate(summary.releaseEligibleBusinessDate") && sourceCard.includes("formatTaipeiDateTime(summary.releasedAt)"), "projected and released source-order dates use deterministic paths");
-check(compactCard.includes("formatTaipeiMonthDay(sourceDate)") && compactCard.includes("formatTaipeiDate(transactionDateSource)"), "compact reward dates use the deterministic formatter");
+check(sourceCard.includes("rewardTimingText(summary.waitingExplanation)") && sourceCard.includes("formatTaipeiDate(summary.releaseEligibleBusinessDate") && sourceCard.includes("formatTaipeiDateTime(summary.releasedAt)"), "projected and released source-order dates use the shared deterministic paths");
+check(compactCard.includes("formatTaipeiMonthDay(sourceDate)") && compactCard.includes("rewardTimingText(explanation)"), "compact reward dates use the shared deterministic formatter");
 check(compactCard.includes("formatTaipeiDate(qualificationValidUntil)"), "qualification validity uses the deterministic formatter");
 check(orgChart.includes("RewardSourceOrderSummaryCard"), "Organization Chart reuses the same stable safe source-order date rendering");
 check(![sourceCard, compactCard, referralCenter].some((source) => source.includes("Intl.DateTimeFormat")), "shared reward rendering has no locale-sensitive date formatter");

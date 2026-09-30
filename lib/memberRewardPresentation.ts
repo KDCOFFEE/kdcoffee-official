@@ -6,6 +6,22 @@ export type RewardSourceOrderItem = {
   quantity: number;
 };
 
+export type RewardWaitingRuleSnapshot = {
+  baseWaitingDays: number;
+  returnProtectionDays: number;
+};
+
+export type RewardWaitingExplanation = {
+  state: "not_applicable" | "awaiting_completion" | "safety_wait" | "due" | "released" | "reversed" | "cancelled";
+  completedAt: string | null;
+  baseWaitingDays: number | null;
+  returnProtectionDays: number | null;
+  projectedReleaseDate: string | null;
+  releasedAt: string | null;
+  reversedAt: string | null;
+  exactDayBreakdownAvailable: boolean;
+};
+
 export type RewardSourceOrderSummary = {
   orderNumber: string;
   sourceCategory: "guest" | "downline" | "self";
@@ -25,8 +41,10 @@ export type RewardSourceOrderSummary = {
   availableCreditAmount: number | null;
   releaseEligibleBusinessDate: string | null;
   releasedAt: string | null;
+  reversedAt: string | null;
   rewardStatus: string;
   displayStatus: string;
+  waitingExplanation: RewardWaitingExplanation;
 };
 
 export type EffectiveRewardDisplayInput = {
@@ -82,6 +100,37 @@ export function formatTaipeiMonthKey(value: TaipeiDateValue) {
   return parts ? `${parts.year}-${parts.month}` : "";
 }
 
+export function rewardTimingText(
+  explanation: RewardWaitingExplanation | null | undefined,
+  compact = false,
+) {
+  if (!explanation) return null;
+  const formatProjected = compact ? formatTaipeiMonthDay : formatTaipeiDate;
+  if (explanation.state === "released") {
+    return explanation.releasedAt ? `已入帳 ${formatTaipeiDate(explanation.releasedAt)}` : "已入帳";
+  }
+  if (explanation.state === "reversed") {
+    return explanation.reversedAt ? `已沖回 ${formatTaipeiDate(explanation.reversedAt)}` : "已沖回";
+  }
+  if (explanation.state === "cancelled") return null;
+  if (explanation.state === "due") {
+    if (!explanation.projectedReleaseDate) return "已到預計發放日，系統將自動處理";
+    const dueDate = formatProjected(explanation.projectedReleaseDate);
+    return compact
+      ? `發放日 ${dueDate}・系統將自動處理`
+      : `已到預計發放日 ${dueDate}，系統將自動處理`;
+  }
+  if (explanation.state === "safety_wait") {
+    return explanation.projectedReleaseDate
+      ? `預計 ${formatProjected(explanation.projectedReleaseDate)} 入帳`
+      : "入帳日期確認中";
+  }
+  if (explanation.state === "awaiting_completion") return "待完成取貨後計算";
+  return explanation.projectedReleaseDate
+    ? `預計 ${formatProjected(explanation.projectedReleaseDate)} 入帳`
+    : null;
+}
+
 export function summarizePendingRewards(items: Array<{
   rewardPV: number | null;
   projectedCreditAmount: number;
@@ -115,6 +164,68 @@ const safeDate = (value: unknown) => {
 
 const finiteNumber = (value: unknown, fallback = 0) =>
   typeof value === "number" && Number.isFinite(value) ? value : fallback;
+
+const safeWaitingRuleSnapshot = (value: RewardWaitingRuleSnapshot | null | undefined) =>
+  value
+    && Number.isSafeInteger(value.baseWaitingDays)
+    && value.baseWaitingDays >= 0
+    && Number.isSafeInteger(value.returnProtectionDays)
+    && value.returnProtectionDays >= 0
+    ? { baseWaitingDays: value.baseWaitingDays, returnProtectionDays: value.returnProtectionDays }
+    : null;
+
+/**
+ * Selects only immutable, reward-specific timing evidence. Current business
+ * rules are deliberately not accepted as an input.
+ */
+export function selectHistoricalRewardWaitingRule(input: {
+  qualificationAuthority: EffectiveRewardDisplayInput["qualificationAuthority"];
+  rewardSnapshot?: RewardWaitingRuleSnapshot | null;
+  qualificationRoundSnapshot?: RewardWaitingRuleSnapshot | null;
+  maturationSnapshot?: RewardWaitingRuleSnapshot | null;
+}) {
+  if (input.qualificationAuthority === "qualification_coverage") {
+    return safeWaitingRuleSnapshot(input.qualificationRoundSnapshot)
+      ?? safeWaitingRuleSnapshot(input.maturationSnapshot);
+  }
+  return safeWaitingRuleSnapshot(input.rewardSnapshot);
+}
+
+export function buildRewardWaitingExplanation(input: {
+  rewardStatus: string;
+  displayStatus: string;
+  sourceCompleted: boolean;
+  completedAt?: string | null;
+  releaseEligibleBusinessDate?: string | null;
+  releasedAt?: string | null;
+  reversedAt?: string | null;
+  waitingRuleSnapshot?: RewardWaitingRuleSnapshot | null;
+}): RewardWaitingExplanation {
+  const snapshot = safeWaitingRuleSnapshot(input.waitingRuleSnapshot);
+  const state: RewardWaitingExplanation["state"] = input.rewardStatus === "released"
+    ? "released"
+    : input.rewardStatus === "reversed"
+      ? "reversed"
+      : input.rewardStatus === "cancelled"
+        ? "cancelled"
+        : !input.sourceCompleted
+          ? "awaiting_completion"
+          : input.displayStatus === "待系統入帳"
+            ? "due"
+            : input.displayStatus.includes("安全等待中")
+              ? "safety_wait"
+              : "not_applicable";
+  return {
+    state,
+    completedAt: safeDate(input.completedAt),
+    baseWaitingDays: snapshot?.baseWaitingDays ?? null,
+    returnProtectionDays: snapshot?.returnProtectionDays ?? null,
+    projectedReleaseDate: safeDate(input.releaseEligibleBusinessDate)?.slice(0, 10) ?? null,
+    releasedAt: safeDate(input.releasedAt),
+    reversedAt: safeDate(input.reversedAt),
+    exactDayBreakdownAvailable: Boolean(snapshot),
+  };
+}
 
 export function formatRewardRatePercent(value: number) {
   return `${finiteNumber(value).toLocaleString("zh-TW", { maximumFractionDigits: 2 })}%`;
@@ -215,6 +326,8 @@ export function buildSafeRewardSourceOrderSummary(input: {
   availableCreditAmount?: number | null;
   releaseEligibleBusinessDate?: string | null;
   releasedAt?: string | null;
+  reversedAt?: string | null;
+  waitingRuleSnapshot?: RewardWaitingRuleSnapshot | null;
   rewardStatus: string;
   qualificationStatus?: string | null;
   qualificationAuthority?: "legacy_order" | "qualification_coverage" | "self_purchase_direct" | null;
@@ -278,6 +391,17 @@ export function buildSafeRewardSourceOrderSummary(input: {
   const sourceCompleted = rawStatus === "completed" || Boolean(completedAt);
   const releaseEligibleBusinessDate = safeDate(input.releaseEligibleBusinessDate)?.slice(0, 10) ?? null;
   const releasedAt = safeDate(input.releasedAt);
+  const reversedAt = safeDate(input.reversedAt);
+  const displayStatus = resolveEffectiveRewardDisplayStatus({
+    status: input.rewardStatus,
+    qualificationStatus: input.qualificationStatus,
+    qualificationAuthority: input.qualificationAuthority,
+    qualificationCoverage: input.qualificationCoverage,
+    qualificationMaturation: input.qualificationMaturation,
+    releaseEligibleBusinessDate,
+    releasedAt,
+    sourceCompleted,
+  }, input.todayDate);
 
   return {
     orderNumber: input.sourceOrderNumber,
@@ -298,16 +422,18 @@ export function buildSafeRewardSourceOrderSummary(input: {
     availableCreditAmount: typeof input.availableCreditAmount === "number" && Number.isFinite(input.availableCreditAmount) ? input.availableCreditAmount : null,
     releaseEligibleBusinessDate,
     releasedAt,
+    reversedAt,
     rewardStatus: input.rewardStatus,
-    displayStatus: resolveEffectiveRewardDisplayStatus({
-      status: input.rewardStatus,
-      qualificationStatus: input.qualificationStatus,
-      qualificationAuthority: input.qualificationAuthority,
-      qualificationCoverage: input.qualificationCoverage,
-      qualificationMaturation: input.qualificationMaturation,
+    displayStatus,
+    waitingExplanation: buildRewardWaitingExplanation({
+      rewardStatus: input.rewardStatus,
+      displayStatus,
+      sourceCompleted,
+      completedAt,
       releaseEligibleBusinessDate,
       releasedAt,
-      sourceCompleted,
-    }, input.todayDate),
+      reversedAt,
+      waitingRuleSnapshot: input.waitingRuleSnapshot,
+    }),
   };
 }

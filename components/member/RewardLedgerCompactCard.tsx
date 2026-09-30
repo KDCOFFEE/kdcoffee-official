@@ -7,12 +7,15 @@ import {
   formatTaipeiDate,
   formatTaipeiMonthDay,
   formatRewardRatePercent,
+  rewardTimingText,
   summarizeRewardSourceItems,
   type RewardSourceOrderItem,
   type RewardSourceOrderSummary,
+  type RewardWaitingExplanation,
 } from "@/lib/memberRewardPresentation";
 
 import RewardSourceOrderSummaryCard from "./RewardSourceOrderSummaryCard";
+import RewardWaitingDisclosure from "./RewardWaitingDisclosure";
 import styles from "./MemberReferralExperience.module.css";
 
 type Props = {
@@ -33,6 +36,7 @@ type Props = {
   calculationBaseValue: number | null;
   rewardRate: number | null;
   sourceOrderSummary: RewardSourceOrderSummary | null;
+  waitingExplanation: RewardWaitingExplanation | null;
   sourceMemberNumber?: string | null;
   qualificationSummary: ReactNode;
   qualificationValidUntil?: string | null;
@@ -62,6 +66,7 @@ export default function RewardLedgerCompactCard({
   calculationBaseValue,
   rewardRate,
   sourceOrderSummary,
+  waitingExplanation,
   sourceMemberNumber,
   qualificationSummary,
   qualificationValidUntil,
@@ -69,12 +74,21 @@ export default function RewardLedgerCompactCard({
   lifecycleLabels,
   lifecycleStage,
 }: Props) {
-  const reversed = displayStatus.includes("已沖回");
-  const credited = Boolean(releasedAt) || sourceOrderSummary?.rewardStatus === "released";
-  const transactionDateSource = credited ? releasedAt : releaseEligibleBusinessDate;
-  const transactionText = transactionDateSource
-    ? `${reversed ? "已沖回" : credited ? "已入帳" : "預計入帳"} ${formatTaipeiDate(transactionDateSource)}`
-    : "待完成取貨後計算";
+  const explanation = waitingExplanation ?? sourceOrderSummary?.waitingExplanation ?? null;
+  const reversed = explanation?.state === "reversed" || displayStatus.includes("已沖回");
+  const credited = explanation?.state === "released" || sourceOrderSummary?.rewardStatus === "released";
+  const transactionText = rewardTimingText(explanation)
+    ?? (credited && releasedAt
+      ? `已入帳 ${formatTaipeiDate(releasedAt)}`
+      : reversed
+        ? "已沖回"
+        : displayStatus.includes("已取消")
+          ? null
+          : releaseEligibleBusinessDate
+            ? `預計 ${formatTaipeiMonthDay(releaseEligibleBusinessDate)} 入帳`
+            : sourceOrderSummary?.completedAt
+              ? "入帳日期確認中"
+              : "待完成取貨後計算");
   const basisLabel = calculationBasis === "paid_amount" ? "有效商品金額" : `有效 ${pointDisplayName}`;
   const basisValue = calculationBaseValue == null
     ? "歷史資料未記錄"
@@ -86,7 +100,10 @@ export default function RewardLedgerCompactCard({
     <article className={`${styles.compactRewardCard}${expanded ? ` ${styles.compactRewardCardExpanded}` : ""}`}>
       <div className={styles.compactRewardTopline}>
         <strong>{title}</strong>
-        <span>{compactRewardDisplayStatus(displayStatus)}</span>
+        <span style={{ display: "grid", justifyItems: "end", gap: 2, textAlign: "right" }}>
+          <b style={{ font: "inherit" }}>{compactRewardDisplayStatus(displayStatus)}</b>
+          {transactionText ? <small style={{ color: "#826f62", fontSize: 10, fontWeight: 700, whiteSpace: "nowrap" }}>{transactionText}</small> : null}
+        </span>
       </div>
       <p className={styles.compactRewardSource}>
         <time>{formatTaipeiMonthDay(sourceDate)}</time>
@@ -98,7 +115,7 @@ export default function RewardLedgerCompactCard({
         <strong>{rewardPV == null ? "點數未記錄" : `+ ${number(rewardPV)} ${pointDisplayName}`}</strong>
         <span>{money(creditAmount)}</span>
       </div>
-      <p className={styles.compactRewardDate}>{transactionText}</p>
+      <RewardWaitingDisclosure explanation={explanation} />
       <button
         type="button"
         className={styles.compactRewardToggle}
@@ -153,7 +170,7 @@ export default function RewardLedgerCompactCard({
             {lifecycleLabels.map((label, index) => {
               const step = index + 1;
               const state = step < lifecycleStage ? styles.rewardLifecycleDone : step === lifecycleStage ? styles.rewardLifecycleCurrent : "";
-              return <span key={label} className={state}><i>{step < lifecycleStage ? "✓" : step === lifecycleStage ? "●" : "○"}</i>{label}</span>;
+              return <span key={label} className={state}><i>{step < lifecycleStage ? "✓" : step === lifecycleStage ? "●" : "○"}</i>{label}{label === "安全等待" && explanation?.projectedReleaseDate ? <small>預計至 {formatTaipeiMonthDay(explanation.projectedReleaseDate)}</small> : null}</span>;
             })}
           </div>
         </section>

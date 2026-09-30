@@ -158,7 +158,7 @@ check(center.includes("displayStatus: reward.displayStatus") && !center.includes
 check(!org.includes("rewardRate * 100") && !org.includes("待完成資格消費"), "Organization Chart no longer reinterprets rate or raw qualification status");
 check(card.includes("formatRewardRatePercent(summary.rewardRate)") && card.includes("summary.rewardPV") && card.includes("summary.projectedCreditAmount"), "shared card keeps rate, reward points, and credit value separate");
 check(card.includes("summary.canViewFullOrder") && card.includes("查看完整訂單"), "full-order link is rendered only for verified order ownership");
-check(compactCard.includes("預計入帳") && compactCard.includes("releaseEligibleBusinessDate") && compactCard.includes("待完成取貨後計算"), "transaction timing uses persisted release date with a truthful fallback");
+check(compactCard.includes("rewardTimingText(explanation)") && compactCard.includes("releaseEligibleBusinessDate") && compactCard.includes("入帳日期確認中") && compactCard.includes("待完成取貨後計算"), "transaction timing uses the shared persisted projection and distinguishes completed pickup from unfinished fulfillment");
 check(compactCard.includes("推薦資格有效至") && center.includes("qualificationCoverage"), "qualification validity remains in the qualification explanation area");
 check(retail.includes("retail-promotion-dialog") && retail.includes("查看詳情"), "specialized Retail Promotion detail remains available");
 check(page.includes('/member?rewardView=released#rewards') && page.includes('/member?rewardView=pending#rewards'), "released and pending dashboard deep links remain intact");

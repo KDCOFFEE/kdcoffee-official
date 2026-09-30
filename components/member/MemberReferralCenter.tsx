@@ -13,6 +13,7 @@ import {
   sortRewardLedgerItems,
   type RewardSourceOrderItem,
   type RewardSourceOrderSummary,
+  type RewardWaitingExplanation,
 } from "@/lib/memberRewardPresentation";
 
 export type MemberReferralCenterData = {
@@ -37,6 +38,8 @@ export type MemberReferralCenterData = {
     rewardPV: number | null;
     projectedCreditAmount: number;
     releaseEligibleBusinessDate: string;
+    displayStatus: string;
+    waitingExplanation: RewardWaitingExplanation;
     sourceOrderSummary: RewardSourceOrderSummary | null;
   }>;
   qualificationProgress: ComponentProps<typeof MemberQualificationProgress>["progress"];
@@ -116,6 +119,7 @@ export type MemberReferralCenterData = {
     releaseEligibleBusinessDate: string | null;
     releasedAt: string | null;
     displayStatus: string;
+    waitingExplanation: RewardWaitingExplanation;
     sourceOrderSummary: RewardSourceOrderSummary | null;
   }>;
 };
@@ -138,6 +142,7 @@ type RewardLedgerRow = {
   calculationBaseValue: number | null;
   rewardRate: number | null;
   sourceOrderSummary: RewardSourceOrderSummary | null;
+  waitingExplanation: RewardWaitingExplanation | null;
   sourceMemberNumber: string | null;
   referralLevel: number | null;
   reward: MemberReward | null;
@@ -362,6 +367,7 @@ export default function MemberReferralCenter({ initialData: data }: { initialDat
     calculationBaseValue: reward.sourceOrderSummary?.effectivePV ?? reward.effectivePV,
     rewardRate: reward.sourceOrderSummary?.rewardRate ?? reward.rewardRate,
     sourceOrderSummary: reward.sourceOrderSummary,
+    waitingExplanation: reward.waitingExplanation,
     sourceMemberNumber: reward.rewardType === "self_purchase" ? null : reward.sourceMemberNumber,
     referralLevel: reward.referralLevel,
     reward,
@@ -370,7 +376,7 @@ export default function MemberReferralCenter({ initialData: data }: { initialDat
     stableKey: `retail-pending:${entry.sourceOrderNumber ?? "legacy"}:${entry.releaseEligibleBusinessDate}`,
     kind: "retail",
     title: "推廣零售回饋",
-    displayStatus: entry.sourceOrderSummary?.displayStatus ?? "安全等待中",
+    displayStatus: entry.displayStatus,
     sourceOrderCreatedAt: entry.sourceOrderSummary?.createdAt ?? null,
     sourceOrderNumber: entry.sourceOrderNumber,
     sourceItems: entry.sourceOrderSummary?.sourceItems ?? [],
@@ -382,6 +388,7 @@ export default function MemberReferralCenter({ initialData: data }: { initialDat
     calculationBaseValue: entry.sourceOrderSummary?.effectivePV ?? null,
     rewardRate: entry.sourceOrderSummary?.rewardRate ?? null,
     sourceOrderSummary: entry.sourceOrderSummary,
+    waitingExplanation: entry.waitingExplanation,
     sourceMemberNumber: null,
     referralLevel: null,
     reward: null,
@@ -408,6 +415,7 @@ export default function MemberReferralCenter({ initialData: data }: { initialDat
     calculationBaseValue: entry.sourceOrderSummary?.effectivePV ?? null,
     rewardRate: entry.sourceOrderSummary?.rewardRate ?? null,
     sourceOrderSummary: entry.sourceOrderSummary,
+    waitingExplanation: entry.sourceOrderSummary?.waitingExplanation ?? null,
     sourceMemberNumber: null,
     referralLevel: entry.sourceOrderSummary?.referralLevel ?? null,
     reward: null,
@@ -562,9 +570,10 @@ export default function MemberReferralCenter({ initialData: data }: { initialDat
                             ? <p>本筆回饋資格期限已結束。</p>
                             : <p>尚待取得推薦回饋資格。</p>;
                 const lifecycleStage = row.releasedAt ? 4 : effectiveQualificationStatus === "qualified" ? 3 : 2;
+                const waitingStepLabel = row.displayStatus === "待系統入帳" ? "待系統入帳" : "安全等待";
                 const lifecycleLabels = row.kind === "retail" || isDirectSelfPurchase
-                  ? ["回饋產生", "訂單完成", "安全等待", "正式入帳"]
-                  : ["回饋產生", effectiveQualificationStatus === "qualified" ? "資格確認" : "等待資格", "安全等待", "正式入帳"];
+                  ? ["回饋產生", "訂單完成", waitingStepLabel, "正式入帳"]
+                  : ["回饋產生", effectiveQualificationStatus === "qualified" ? "資格確認" : "等待資格", waitingStepLabel, "正式入帳"];
                 const detailId = `reward-ledger-detail-${row.stableKey.replace(/[^a-zA-Z0-9_-]/gu, "-")}`;
                 return (
                   <RewardLedgerCompactCard
@@ -586,6 +595,7 @@ export default function MemberReferralCenter({ initialData: data }: { initialDat
                     calculationBaseValue={row.calculationBaseValue}
                     rewardRate={row.rewardRate}
                     sourceOrderSummary={row.sourceOrderSummary}
+                    waitingExplanation={row.waitingExplanation}
                     sourceMemberNumber={row.sourceMemberNumber}
                     qualificationSummary={qualificationSummary}
                     qualificationValidUntil={qualificationDisplayUntil}

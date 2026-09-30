@@ -41,9 +41,12 @@ import {
 } from "./membershipPolicies";
 import { projectOrderFinancialBreakdown } from "./orderFinancialProjection";
 import {
+  buildRewardWaitingExplanation,
   buildSafeRewardSourceOrderSummary,
   resolveEffectiveRewardDisplayStatus,
+  selectHistoricalRewardWaitingRule,
   summarizePendingRewards,
+  type RewardWaitingRuleSnapshot,
 } from "./memberRewardPresentation";
 import { createHomeDeliveryPaymentSnapshot, type HomeDeliveryPaymentMethod } from "./homeDeliveryPayment";
 import { validateDeliveryAddress, type DeliveryAddress } from "./deliveryAddress";
@@ -2782,42 +2785,51 @@ function historicalRoundSafetySnapshot(round: QualificationRound, versions: Rule
   return { baseWaitingDays: historical.rules.referral.referralRewardBaseWaitingDays, returnProtectionDays: historical.rules.referral.referralRewardReturnProtectionDays };
 }
 
+function appendDueReferralRewardMaturations(
+  state: MembershipCommerceState,
+  now: Date,
+  ruleVersions: RulesVersion[],
+) {
+  const matured: ReferralRewardMaturation[] = [];
+  for (const coverage of Object.values(state.referralRewardCoverages).sort((left, right) => left.coverageId.localeCompare(right.coverageId))) {
+    if (Object.values(state.referralRewardMaturations).some((item) => item.referralRewardId === coverage.referralRewardId || item.coverageId === coverage.coverageId)) continue;
+    const reward = state.referralRewards[coverage.referralRewardId];
+    const round = state.qualificationRounds[coverage.qualificationRoundId];
+    if (!reward || !round || referralRewardQualificationAuthority(reward) !== "qualification_coverage") continue;
+    const safety = historicalRoundSafetySnapshot(round, ruleVersions);
+    const maturesAtMs = Date.parse(round.qualifiedAt) + (safety.baseWaitingDays + safety.returnProtectionDays) * QUALIFICATION_DAY_MS;
+    if (now.getTime() < maturesAtMs) continue;
+    const maturationId = deterministicId("maturation", coverage.coverageId);
+    const sourceReference = `reward-maturation:${coverage.coverageId}`;
+    const record: ReferralRewardMaturation = {
+      maturationId,
+      memberId: coverage.memberId,
+      referralRewardId: coverage.referralRewardId,
+      coverageId: coverage.coverageId,
+      qualificationRoundId: coverage.qualificationRoundId,
+      qualificationAt: round.qualifiedAt,
+      baseWaitingDays: safety.baseWaitingDays,
+      returnProtectionDays: safety.returnProtectionDays,
+      maturesAt: new Date(maturesAtMs).toISOString(),
+      maturedAt: nowIso(now),
+      rulesVersion: round.rulesVersion,
+      createdAt: nowIso(now),
+      sourceReference,
+      idempotencyKey: sourceReference,
+    };
+    state.referralRewardMaturations[maturationId] = record;
+    matured.push(record);
+  }
+  return matured;
+}
+
 /** Appends due maturation facts only; payout, caps, credit, reward state, and notifications are untouched. */
 export async function processReferralRewardMaturations(input: { now?: Date; stateFilePath?: string; rulesFilePath?: string } = {}) {
   const rulesStore = await readMembershipRulesStore(input.rulesFilePath);
-  return transaction((state, now) => {
-    const matured: ReferralRewardMaturation[] = [];
-    for (const coverage of Object.values(state.referralRewardCoverages).sort((left, right) => left.coverageId.localeCompare(right.coverageId))) {
-      if (Object.values(state.referralRewardMaturations).some((item) => item.referralRewardId === coverage.referralRewardId || item.coverageId === coverage.coverageId)) continue;
-      const reward = state.referralRewards[coverage.referralRewardId];
-      const round = state.qualificationRounds[coverage.qualificationRoundId];
-      if (!reward || !round || referralRewardQualificationAuthority(reward) !== "qualification_coverage") continue;
-      const safety = historicalRoundSafetySnapshot(round, rulesStore.versions);
-      const maturesAtMs = Date.parse(round.qualifiedAt) + (safety.baseWaitingDays + safety.returnProtectionDays) * QUALIFICATION_DAY_MS;
-      if (now.getTime() < maturesAtMs) continue;
-      const maturationId = deterministicId("maturation", coverage.coverageId);
-      const sourceReference = `reward-maturation:${coverage.coverageId}`;
-      const record: ReferralRewardMaturation = {
-        maturationId,
-        memberId: coverage.memberId,
-        referralRewardId: coverage.referralRewardId,
-        coverageId: coverage.coverageId,
-        qualificationRoundId: coverage.qualificationRoundId,
-        qualificationAt: round.qualifiedAt,
-        baseWaitingDays: safety.baseWaitingDays,
-        returnProtectionDays: safety.returnProtectionDays,
-        maturesAt: new Date(maturesAtMs).toISOString(),
-        maturedAt: nowIso(now),
-        rulesVersion: round.rulesVersion,
-        createdAt: nowIso(now),
-        sourceReference,
-        idempotencyKey: sourceReference,
-      };
-      state.referralRewardMaturations[maturationId] = record;
-      matured.push(record);
-    }
-    return matured;
-  }, { now: input.now, filePath: input.stateFilePath });
+  return transaction(
+    (state, now) => appendDueReferralRewardMaturations(state, now, rulesStore.versions),
+    { now: input.now, filePath: input.stateFilePath },
+  );
 }
 
 function orderWithinQualificationWindow(reward: ReferralReward, orderCreatedAt: string) {
@@ -2951,6 +2963,12 @@ export async function createReferralRewardsFromFulfillment(input: { sourceMember
     const baseWaitingDaysSnapshot = rules.referralRewardBaseWaitingDays;
     const returnProtectionDaysSnapshot = rules.referralRewardReturnProtectionDays;
     const totalWaitingDaysSnapshot = baseWaitingDaysSnapshot + returnProtectionDaysSnapshot;
+    const successfulPickupBusinessDate = getDateOnlyInTimeZone(now);
+    const releaseEligibleBusinessDate = referralReleaseEligibleBusinessDate(
+      successfulPickupBusinessDate,
+      baseWaitingDaysSnapshot,
+      returnProtectionDaysSnapshot,
+    );
     // Preserve the existing canonical cap period definition (reward createdAt YYYY-MM).
     const monthlyCapPeriodSnapshot = nowIso(now).slice(0, 7);
     let allocated = 0;
@@ -2968,7 +2986,7 @@ export async function createReferralRewardsFromFulfillment(input: { sourceMember
       if (calculatedCreditAmount < 1) continue;
       allocated += calculatedCreditAmount;
       const rewardId = deterministicId("reward", `${input.orderId}:${input.rewardType}:${level}:${beneficiaryMemberId}`);
-      const reward: ReferralReward = { rewardId, sourceOrderNumber: input.orderId, sourceMemberId: input.sourceMemberId, beneficiaryMemberId, referralLevel: level, rewardType: input.rewardType, calculationMode: rules.referralRewardCalculationMode, paidAmountBasis, basePV, discountRatio, effectivePV, rewardRate, rewardPV, pvRewardMoneyValue: rules.pvRewardMoneyValue, calculatedCreditAmount, projectedCreditAmount: calculatedCreditAmount, ruleVersion: version.rulesVersion, ancestrySnapshot: [...ancestry], organizationCapPercentSnapshot: rules.referralTotalRewardCap, organizationCapAmountSnapshot: totalCap, monthlyCapAmountSnapshot: rules.referralMonthlyCreditCap, monthlyCapPeriodSnapshot, monthlyCapUsageAtRelease: null, monthlyCapLimitedAmount: null, reversalPolicySnapshot: rules.reversalPolicy, baseWaitingDaysSnapshot, returnProtectionDaysSnapshot, totalWaitingDaysSnapshot, releasePolicyVersion: "taipei-business-date-v1", successfulPickupBusinessDate: null, releaseEligibleBusinessDate: null, sourceOrderFinalState: "completed", cancellationReason: null, qualificationWindowDays, qualificationStartedAt, qualificationExpiresAt: qualificationExpiry, qualificationStatus: "awaiting_order", qualificationOrderNumber: null, qualificationOrderCreatedAt: null, qualificationOrderFinalState: null, qualificationQualifiedAt: null, qualificationAttempts: [], qualificationAuthority: "qualification_coverage", createdAt: nowIso(now), eligibleAt: nowIso(now), scheduledReleaseAt: "", releasedAt: null, status: "scheduled", reversalCreditEntryId: null, rewardCreditEntryId: null, idempotencyKey: `${input.idempotencyKey}:${level}` };
+      const reward: ReferralReward = { rewardId, sourceOrderNumber: input.orderId, sourceMemberId: input.sourceMemberId, beneficiaryMemberId, referralLevel: level, rewardType: input.rewardType, calculationMode: rules.referralRewardCalculationMode, paidAmountBasis, basePV, discountRatio, effectivePV, rewardRate, rewardPV, pvRewardMoneyValue: rules.pvRewardMoneyValue, calculatedCreditAmount, projectedCreditAmount: calculatedCreditAmount, ruleVersion: version.rulesVersion, ancestrySnapshot: [...ancestry], organizationCapPercentSnapshot: rules.referralTotalRewardCap, organizationCapAmountSnapshot: totalCap, monthlyCapAmountSnapshot: rules.referralMonthlyCreditCap, monthlyCapPeriodSnapshot, monthlyCapUsageAtRelease: null, monthlyCapLimitedAmount: null, reversalPolicySnapshot: rules.reversalPolicy, baseWaitingDaysSnapshot, returnProtectionDaysSnapshot, totalWaitingDaysSnapshot, releasePolicyVersion: "taipei-business-date-v1", successfulPickupBusinessDate, releaseEligibleBusinessDate, sourceOrderFinalState: "completed", cancellationReason: null, qualificationWindowDays, qualificationStartedAt, qualificationExpiresAt: qualificationExpiry, qualificationStatus: "awaiting_order", qualificationOrderNumber: null, qualificationOrderCreatedAt: null, qualificationOrderFinalState: null, qualificationQualifiedAt: null, qualificationAttempts: [], qualificationAuthority: "qualification_coverage", createdAt: nowIso(now), eligibleAt: nowIso(now), scheduledReleaseAt: `${releaseEligibleBusinessDate}T00:00:00+08:00`, releasedAt: null, status: "scheduled", reversalCreditEntryId: null, rewardCreditEntryId: null, idempotencyKey: `${input.idempotencyKey}:${level}` };
       state.referralRewards[rewardId] = reward; created.push(reward);
       coverRewardFromEarliestQualificationRound(state, reward, now);
       const source = event(state, "referral_reward_scheduled", { amount: calculatedCreditAmount, level }, now, { memberId: beneficiaryMemberId, orderId: input.orderId });
@@ -3147,7 +3165,7 @@ export async function createRetailPromotionRewardFromFulfillment(input: {
  * chain.  The legacy qualification-order fields intentionally do not
  * participate in this path.
  */
-function validQualificationCoverageMaturation(state: MembershipCommerceState, reward: ReferralReward) {
+function qualificationCoverageProjectionEvidence(state: MembershipCommerceState, reward: ReferralReward) {
   if (referralRewardQualificationAuthority(reward) !== "qualification_coverage") return null;
   const coverage = Object.values(state.referralRewardCoverages).find((item) => item.referralRewardId === reward.rewardId);
   if (!coverage || coverage.memberId !== reward.beneficiaryMemberId) return null;
@@ -3158,18 +3176,81 @@ function validQualificationCoverageMaturation(state: MembershipCommerceState, re
   if (coverage.coverageStartsAt !== interval.startsAt || coverage.coverageEndsAt !== interval.endsAt || coverage.lookbackDays !== interval.lookbackDays || coverage.forwardDays !== interval.forwardDays) return null;
   const rewardGeneratedAt = Date.parse(reward.createdAt);
   if (!Number.isFinite(rewardGeneratedAt) || rewardGeneratedAt < Date.parse(coverage.coverageStartsAt) || rewardGeneratedAt > Date.parse(coverage.coverageEndsAt)) return null;
-  const maturation = Object.values(state.referralRewardMaturations).find((item) => item.referralRewardId === reward.rewardId);
-  if (!maturation || maturation.memberId !== reward.beneficiaryMemberId || maturation.coverageId !== coverage.coverageId || maturation.qualificationRoundId !== round.roundId || maturation.qualificationAt !== round.qualifiedAt || maturation.rulesVersion !== round.rulesVersion) return null;
   const safety = round.rewardSafetyRuleSnapshot;
-  if (!safety || maturation.baseWaitingDays !== safety.baseWaitingDays || maturation.returnProtectionDays !== safety.returnProtectionDays) return null;
+  if (!safety || !Number.isSafeInteger(safety.baseWaitingDays) || safety.baseWaitingDays < 0 || !Number.isSafeInteger(safety.returnProtectionDays) || safety.returnProtectionDays < 0) return null;
   const expectedMaturesAt = Date.parse(round.qualifiedAt) + (safety.baseWaitingDays + safety.returnProtectionDays) * QUALIFICATION_DAY_MS;
-  if (!Number.isFinite(expectedMaturesAt) || Date.parse(maturation.maturesAt) !== expectedMaturesAt || Date.parse(maturation.maturedAt) < expectedMaturesAt) return null;
-  return { coverage, round, maturation };
+  if (!Number.isFinite(expectedMaturesAt)) return null;
+  const maturation = Object.values(state.referralRewardMaturations).find((item) => item.referralRewardId === reward.rewardId) ?? null;
+  if (maturation) {
+    if (maturation.memberId !== reward.beneficiaryMemberId || maturation.coverageId !== coverage.coverageId || maturation.qualificationRoundId !== round.roundId || maturation.qualificationAt !== round.qualifiedAt || maturation.rulesVersion !== round.rulesVersion) return null;
+    if (maturation.baseWaitingDays !== safety.baseWaitingDays || maturation.returnProtectionDays !== safety.returnProtectionDays) return null;
+    if (Date.parse(maturation.maturesAt) !== expectedMaturesAt || Date.parse(maturation.maturedAt) < expectedMaturesAt) return null;
+  }
+  return { coverage, round, maturation, expectedMaturesAt };
+}
+
+function validRewardReleaseBusinessDate(value: string | null | undefined) {
+  return value && /^\d{4}-\d{2}-\d{2}$/u.test(value) ? value : null;
+}
+
+function referralRewardSourceSafetyBusinessDate(reward: ReferralReward) {
+  const persisted = validRewardReleaseBusinessDate(
+    reward.releaseEligibleBusinessDate ?? reward.scheduledReleaseAt?.slice(0, 10) ?? null,
+  );
+  if (persisted) return persisted;
+  if (referralRewardQualificationAuthority(reward) !== "qualification_coverage") return null;
+  if (!Number.isSafeInteger(reward.baseWaitingDaysSnapshot) || reward.baseWaitingDaysSnapshot! < 0) return null;
+  if (!Number.isSafeInteger(reward.returnProtectionDaysSnapshot) || reward.returnProtectionDaysSnapshot! < 0) return null;
+
+  const sourceBusinessDate = validRewardReleaseBusinessDate(reward.successfulPickupBusinessDate)
+    ?? (Number.isFinite(Date.parse(reward.createdAt))
+      ? getDateOnlyInTimeZone(new Date(reward.createdAt))
+      : null);
+  if (!sourceBusinessDate) return null;
+
+  return referralReleaseEligibleBusinessDate(
+    sourceBusinessDate,
+    reward.baseWaitingDaysSnapshot!,
+    reward.returnProtectionDaysSnapshot!,
+  );
+}
+
+/**
+ * Canonical qualification-coverage payout date: both immutable gates must be due.
+ * The source-order safety date uses the reward snapshot captured at fulfillment;
+ * the qualification maturation date uses the covered Qualification Round snapshot.
+ * The later Taipei business date wins, and current Admin rules are never consulted.
+ */
+function referralRewardProjectedReleaseBusinessDate(state: MembershipCommerceState, reward: ReferralReward) {
+  const sourceSafetyDate = referralRewardSourceSafetyBusinessDate(reward);
+  if (referralRewardQualificationAuthority(reward) !== "qualification_coverage") return sourceSafetyDate;
+
+  const qualificationEvidence = qualificationCoverageProjectionEvidence(state, reward);
+  const qualificationMaturationDate = qualificationEvidence
+    ? getDateOnlyInTimeZone(new Date(qualificationEvidence.expectedMaturesAt))
+    : null;
+
+  if (sourceSafetyDate && qualificationMaturationDate) {
+    return sourceSafetyDate >= qualificationMaturationDate
+      ? sourceSafetyDate
+      : qualificationMaturationDate;
+  }
+  return sourceSafetyDate ?? qualificationMaturationDate;
+}
+
+function validQualificationCoverageMaturation(state: MembershipCommerceState, reward: ReferralReward) {
+  const evidence = qualificationCoverageProjectionEvidence(state, reward);
+  if (!evidence?.maturation) return null;
+  return { coverage: evidence.coverage, round: evidence.round, maturation: evidence.maturation };
 }
 
 export async function runReferralRewardReleaseScheduler(input: { now?: Date; stateFilePath?: string; rulesFilePath?: string } = {}) {
-  const version = await getActiveMembershipRules(input.now, input.rulesFilePath);
+  const [version, rulesStore] = await Promise.all([
+    getActiveMembershipRules(input.now, input.rulesFilePath),
+    readMembershipRulesStore(input.rulesFilePath),
+  ]);
   return transaction((state, now) => {
+    appendDueReferralRewardMaturations(state, now, rulesStore.versions);
     const results: Array<{ rewardId: string; status: "released" | "failed" | "expired" | "cap_blocked"; error?: string }> = [];
     const today = getDateOnlyInTimeZone(now);
     for (const reward of Object.values(state.referralRewards).filter((item) => referralRewardQualificationAuthority(item) === "legacy_order" && item.status === "scheduled" && item.qualificationStatus === "awaiting_order" && typeof item.qualificationExpiresAt === "string" && Date.parse(item.qualificationExpiresAt) < now.getTime())) {
@@ -3264,8 +3345,18 @@ export async function runReferralRewardReleaseScheduler(input: { now?: Date; sta
     const maturedCoverageRewards = Object.values(state.referralRewards).filter((item) => {
       if (item.status !== "scheduled") return false;
       const evidence = validQualificationCoverageMaturation(state, item);
-      return Boolean(evidence && Date.parse(evidence.maturation.maturedAt) <= now.getTime());
-    }).sort((left, right) => left.createdAt.localeCompare(right.createdAt) || left.rewardId.localeCompare(right.rewardId));
+      const projectedReleaseDate = referralRewardProjectedReleaseBusinessDate(state, item);
+      return Boolean(
+        evidence
+        && Date.parse(evidence.maturation.maturedAt) <= now.getTime()
+        && projectedReleaseDate
+        && isReferralReleaseBusinessDateDue(today, projectedReleaseDate)
+      );
+    }).sort((left, right) => {
+      const leftDate = referralRewardProjectedReleaseBusinessDate(state, left) ?? left.createdAt;
+      const rightDate = referralRewardProjectedReleaseBusinessDate(state, right) ?? right.createdAt;
+      return leftDate.localeCompare(rightDate) || left.createdAt.localeCompare(right.createdAt) || left.rewardId.localeCompare(right.rewardId);
+    });
     for (const reward of maturedCoverageRewards) {
       try {
         // Re-read the complete evidence chain inside this transaction before every monetary mutation.
@@ -3847,6 +3938,27 @@ function safeMemberOrderNumber(value: unknown) {
     : null;
 }
 
+export function referralRewardWaitingRuleSnapshot(
+  state: Pick<MembershipCommerceState, "qualificationRounds" | "referralRewardCoverages" | "referralRewardMaturations">,
+  reward: ReferralReward,
+): RewardWaitingRuleSnapshot | null {
+  const coverage = Object.values(state.referralRewardCoverages)
+    .find((item) => item.referralRewardId === reward.rewardId) ?? null;
+  const round = coverage ? state.qualificationRounds[coverage.qualificationRoundId] ?? null : null;
+  const maturation = Object.values(state.referralRewardMaturations)
+    .find((item) => item.referralRewardId === reward.rewardId) ?? null;
+  return selectHistoricalRewardWaitingRule({
+    qualificationAuthority: referralRewardQualificationAuthority(reward),
+    rewardSnapshot: reward.baseWaitingDaysSnapshot != null && reward.returnProtectionDaysSnapshot != null
+      ? { baseWaitingDays: reward.baseWaitingDaysSnapshot, returnProtectionDays: reward.returnProtectionDaysSnapshot }
+      : null,
+    qualificationRoundSnapshot: round?.rewardSafetyRuleSnapshot ?? null,
+    maturationSnapshot: maturation
+      ? { baseWaitingDays: maturation.baseWaitingDays, returnProtectionDays: maturation.returnProtectionDays }
+      : null,
+  });
+}
+
 export async function getMemberCommerceDashboard(memberId: string, now = new Date(), filePath = getMembershipCommerceStateFile()) {
   const state = await readMembershipCommerceState(filePath);
   const todayDate = getDateOnlyInTimeZone(now);
@@ -3885,8 +3997,10 @@ export async function getMemberCommerceDashboard(memberId: string, now = new Dat
     projectedCreditAmount: reward.projectedCreditAmount ?? reward.calculatedCreditAmount,
     actualCreditAmount,
     availableCreditAmount,
-    releaseEligibleBusinessDate: reward.releaseEligibleBusinessDate ?? reward.scheduledReleaseAt?.slice(0, 10) ?? null,
+    releaseEligibleBusinessDate: referralRewardProjectedReleaseBusinessDate(state, reward),
     releasedAt: reward.releasedAt,
+    reversedAt: reward.reversedAt,
+    waitingRuleSnapshot: referralRewardWaitingRuleSnapshot(state, reward),
     rewardStatus: reward.status,
     qualificationStatus: reward.qualificationStatus,
     qualificationAuthority: referralRewardQualificationAuthority(reward),
@@ -3914,6 +4028,11 @@ export async function getMemberCommerceDashboard(memberId: string, now = new Dat
     availableCreditAmount,
     releaseEligibleBusinessDate: reward.releaseEligibleBusinessDate,
     releasedAt: reward.releasedAt,
+    reversedAt: reward.reversedAt,
+    waitingRuleSnapshot: {
+      baseWaitingDays: reward.baseWaitingDaysSnapshot,
+      returnProtectionDays: reward.returnProtectionDaysSnapshot,
+    },
     rewardStatus: reward.status,
     qualificationStatus: "qualified",
     qualificationAuthority: "legacy_order",
@@ -4023,14 +4142,39 @@ export async function getMemberCommerceDashboard(memberId: string, now = new Dat
     .sort((left, right) => right.issuedAt.localeCompare(left.issuedAt));
   const pendingRetailPromotionRewards = Object.values(state.retailPromotionRewards)
     .filter((reward) => reward.beneficiaryMemberId === memberId && reward.status === "scheduled")
-    .map((reward) => ({
-      sourceLabel: "推廣零售" as const,
-      sourceOrderNumber: safeMemberOrderNumber(reward.sourceOrderNumber),
-      rewardPV: reward.calculationBasis === "pv" && typeof reward.rewardPV === "number" && Number.isFinite(reward.rewardPV) ? reward.rewardPV : null,
-      projectedCreditAmount: reward.calculatedCreditAmount,
-      releaseEligibleBusinessDate: reward.releaseEligibleBusinessDate,
-      sourceOrderSummary: retailSourceSummary(reward),
-    }))
+    .map((reward) => {
+      const sourceOrderSummary = retailSourceSummary(reward);
+      const displayStatus = sourceOrderSummary?.displayStatus ?? resolveEffectiveRewardDisplayStatus({
+        status: reward.status,
+        qualificationStatus: "qualified",
+        qualificationAuthority: "legacy_order",
+        releaseEligibleBusinessDate: reward.releaseEligibleBusinessDate,
+        releasedAt: reward.releasedAt,
+        sourceCompleted: true,
+      }, todayDate);
+      return {
+        sourceLabel: "推廣零售" as const,
+        sourceOrderNumber: safeMemberOrderNumber(reward.sourceOrderNumber),
+        rewardPV: reward.calculationBasis === "pv" && typeof reward.rewardPV === "number" && Number.isFinite(reward.rewardPV) ? reward.rewardPV : null,
+        projectedCreditAmount: reward.calculatedCreditAmount,
+        releaseEligibleBusinessDate: reward.releaseEligibleBusinessDate,
+        displayStatus,
+        waitingExplanation: sourceOrderSummary?.waitingExplanation ?? buildRewardWaitingExplanation({
+          rewardStatus: reward.status,
+          displayStatus,
+          sourceCompleted: true,
+          completedAt: reward.successfulCompletionAt,
+          releaseEligibleBusinessDate: reward.releaseEligibleBusinessDate,
+          releasedAt: reward.releasedAt,
+          reversedAt: reward.reversedAt,
+          waitingRuleSnapshot: {
+            baseWaitingDays: reward.baseWaitingDaysSnapshot,
+            returnProtectionDays: reward.returnProtectionDaysSnapshot,
+          },
+        }),
+        sourceOrderSummary,
+      };
+    })
     .sort((left, right) => left.releaseEligibleBusinessDate.localeCompare(right.releaseEligibleBusinessDate));
   const pendingReferralRewards = memberReferralRewards.filter(
     (reward) => reward.status === "scheduled" && reward.qualificationStatus !== "expired",
@@ -4122,6 +4266,40 @@ export async function getMemberRetailPromotionCenter(memberId: string, options: 
   });
   const rewardHistory = rewards.map((reward) => {
     const creditEntry = reward.rewardCreditEntryId ? state.creditEntries[reward.rewardCreditEntryId] : null;
+    const sourceOrderSummary = buildSafeRewardSourceOrderSummary({
+      currentMemberId: memberId,
+      rewardBeneficiaryMemberId: reward.beneficiaryMemberId,
+      sourceOrderNumber: reward.sourceOrderNumber,
+      order: retailOrdersByNumber.get(reward.sourceOrderNumber),
+      referralLevel: null,
+      calculationBasis: reward.calculationBasis === "pv" ? "pv" : "paid_amount",
+      effectivePV: typeof reward.calculationBaseValue === "number" ? reward.calculationBaseValue : reward.eligibleMerchandiseAmount,
+      rewardRate: reward.rewardRate,
+      rewardPV: reward.calculationBasis === "pv" && typeof reward.rewardPV === "number" ? reward.rewardPV : null,
+      projectedCreditAmount: reward.calculatedCreditAmount,
+      actualCreditAmount: creditEntry?.amount ?? null,
+      availableCreditAmount: creditEntry ? effectiveCreditRemaining(state, creditEntry, new Date()) : null,
+      releaseEligibleBusinessDate: reward.releaseEligibleBusinessDate,
+      releasedAt: reward.releasedAt,
+      reversedAt: reward.reversedAt,
+      waitingRuleSnapshot: {
+        baseWaitingDays: reward.baseWaitingDaysSnapshot,
+        returnProtectionDays: reward.returnProtectionDaysSnapshot,
+      },
+      rewardStatus: reward.status,
+      qualificationStatus: "qualified",
+      qualificationAuthority: "legacy_order",
+      successfulCompletionAt: reward.successfulCompletionAt,
+      todayDate,
+    });
+    const displayStatus = sourceOrderSummary?.displayStatus ?? resolveEffectiveRewardDisplayStatus({
+      status: reward.status,
+      qualificationStatus: "qualified",
+      qualificationAuthority: "legacy_order",
+      releaseEligibleBusinessDate: reward.releaseEligibleBusinessDate,
+      releasedAt: reward.releasedAt,
+      sourceCompleted: true,
+    }, todayDate);
     return {
       date: reward.successfulCompletionAt,
       orderReference: maskOrderNumber(reward.sourceOrderNumber),
@@ -4136,27 +4314,21 @@ export async function getMemberRetailPromotionCenter(memberId: string, options: 
       releaseEligibleBusinessDate: reward.releaseEligibleBusinessDate,
       releasedAt: reward.releasedAt,
       ruleVersion: reward.ruleVersion,
-      sourceOrderSummary: buildSafeRewardSourceOrderSummary({
-        currentMemberId: memberId,
-        rewardBeneficiaryMemberId: reward.beneficiaryMemberId,
-        sourceOrderNumber: reward.sourceOrderNumber,
-        order: retailOrdersByNumber.get(reward.sourceOrderNumber),
-        referralLevel: null,
-        calculationBasis: reward.calculationBasis === "pv" ? "pv" : "paid_amount",
-        effectivePV: typeof reward.calculationBaseValue === "number" ? reward.calculationBaseValue : reward.eligibleMerchandiseAmount,
-        rewardRate: reward.rewardRate,
-        rewardPV: reward.calculationBasis === "pv" && typeof reward.rewardPV === "number" ? reward.rewardPV : null,
-        projectedCreditAmount: reward.calculatedCreditAmount,
-        actualCreditAmount: creditEntry?.amount ?? null,
-        availableCreditAmount: creditEntry ? effectiveCreditRemaining(state, creditEntry, new Date()) : null,
+      displayStatus,
+      waitingExplanation: sourceOrderSummary?.waitingExplanation ?? buildRewardWaitingExplanation({
+        rewardStatus: reward.status,
+        displayStatus,
+        sourceCompleted: true,
+        completedAt: reward.successfulCompletionAt,
         releaseEligibleBusinessDate: reward.releaseEligibleBusinessDate,
         releasedAt: reward.releasedAt,
-        rewardStatus: reward.status,
-        qualificationStatus: "qualified",
-        qualificationAuthority: "legacy_order",
-        successfulCompletionAt: reward.successfulCompletionAt,
-        todayDate,
+        reversedAt: reward.reversedAt,
+        waitingRuleSnapshot: {
+          baseWaitingDays: reward.baseWaitingDaysSnapshot,
+          returnProtectionDays: reward.returnProtectionDaysSnapshot,
+        },
       }),
+      sourceOrderSummary,
     };
   });
   return {
@@ -4340,8 +4512,10 @@ export async function getMemberReferralCenter(memberId: string, options: { baseU
           projectedCreditAmount: reward.projectedCreditAmount ?? reward.calculatedCreditAmount,
           actualCreditAmount: creditEntry?.amount ?? null,
           availableCreditAmount: creditEntry ? effectiveCreditRemaining(state, creditEntry, new Date()) : null,
-          releaseEligibleBusinessDate: reward.releaseEligibleBusinessDate ?? reward.scheduledReleaseAt?.slice(0, 10) ?? null,
+          releaseEligibleBusinessDate: referralRewardProjectedReleaseBusinessDate(state, reward),
           releasedAt: reward.releasedAt,
+          reversedAt: reward.reversedAt,
+          waitingRuleSnapshot: referralRewardWaitingRuleSnapshot(state, reward),
           rewardStatus: reward.status,
           qualificationStatus: reward.qualificationStatus,
           qualificationAuthority: referralRewardQualificationAuthority(reward),
@@ -4465,8 +4639,10 @@ export async function getMemberReferralCenter(memberId: string, options: { baseU
       projectedCreditAmount: item.projectedCreditAmount ?? item.calculatedCreditAmount,
       actualCreditAmount: creditEntry?.amount ?? null,
       availableCreditAmount: creditEntry ? effectiveCreditRemaining(state, creditEntry, new Date()) : null,
-      releaseEligibleBusinessDate: item.releaseEligibleBusinessDate ?? item.scheduledReleaseAt?.slice(0, 10) ?? null,
+      releaseEligibleBusinessDate: referralRewardProjectedReleaseBusinessDate(state, item),
       releasedAt: item.releasedAt,
+      reversedAt: item.reversedAt,
+      waitingRuleSnapshot: referralRewardWaitingRuleSnapshot(state, item),
       rewardStatus: item.status,
       qualificationStatus: item.qualificationStatus,
       qualificationAuthority: referralRewardQualificationAuthority(item),
@@ -4481,12 +4657,23 @@ export async function getMemberReferralCenter(memberId: string, options: { baseU
       qualificationAuthority: referralRewardQualificationAuthority(item),
       qualificationCoverage,
       qualificationMaturation: qualificationMaturationByRewardId.get(item.rewardId) ?? null,
-      releaseEligibleBusinessDate: item.releaseEligibleBusinessDate ?? item.scheduledReleaseAt?.slice(0, 10) ?? null,
+      releaseEligibleBusinessDate: referralRewardProjectedReleaseBusinessDate(state, item),
       releasedAt: item.releasedAt,
       sourceCompleted: Boolean(item.successfulPickupBusinessDate),
     }, todayDate);
+    const waitingRuleSnapshot = referralRewardWaitingRuleSnapshot(state, item);
+    const waitingExplanation = sourceOrderSummary?.waitingExplanation ?? buildRewardWaitingExplanation({
+      rewardStatus: item.status,
+      displayStatus,
+      sourceCompleted: Boolean(sourceOrderSummary?.completedAt || item.successfulPickupBusinessDate),
+      completedAt: sourceOrderSummary?.completedAt ?? item.successfulPickupBusinessDate,
+      releaseEligibleBusinessDate: referralRewardProjectedReleaseBusinessDate(state, item),
+      releasedAt: item.releasedAt,
+      reversedAt: item.reversedAt,
+      waitingRuleSnapshot,
+    });
 
-    return { sourceOrderNumber: item.sourceOrderNumber, sourceOrderCreatedAt: sourceOrder?.createdAt ?? null, sourceMemberNumber: registry.members[item.sourceMemberId]?.memberNumber ?? "KD-會員", sourceItems: safeOrderItems(sourceOrder ?? null), sourceOrderSummary, displayStatus, referralLevel: item.referralLevel, rewardType: item.rewardType, calculationMode: item.calculationMode, effectivePV: item.effectivePV, rewardRate: item.rewardRate, rewardPV: item.rewardPV, creditAmount: creditEntry?.amount ?? item.calculatedCreditAmount, projectedCreditAmount: item.projectedCreditAmount ?? item.calculatedCreditAmount, selfPurchaseTierSnapshot: item.selfPurchaseTierSnapshot ?? null, status: item.status, cancellationReason: item.cancellationReason ?? null, qualificationStatus: item.qualificationStatus ?? "legacy", qualificationAuthority: referralRewardQualificationAuthority(item), qualificationCoverage: qualificationCoverage ? { coverageEndsAt: qualificationCoverage.coverageEndsAt } : null, qualificationExpiresAt: item.qualificationExpiresAt ?? null, qualificationOrderNumber: item.qualificationOrderNumber ?? null, qualificationOrderCreatedAt: item.qualificationOrderCreatedAt ?? null, qualificationOrderFinalState: item.qualificationOrderFinalState ?? null, qualificationQualifiedAt: item.qualificationQualifiedAt ?? null, successfulPickupBusinessDate: item.successfulPickupBusinessDate ?? null, releaseEligibleBusinessDate: item.releaseEligibleBusinessDate ?? item.scheduledReleaseAt?.slice(0, 10) ?? null, releasedAt: item.releasedAt };
+    return { sourceOrderNumber: item.sourceOrderNumber, sourceOrderCreatedAt: sourceOrder?.createdAt ?? null, sourceMemberNumber: registry.members[item.sourceMemberId]?.memberNumber ?? "KD-會員", sourceItems: safeOrderItems(sourceOrder ?? null), sourceOrderSummary, displayStatus, waitingExplanation, referralLevel: item.referralLevel, rewardType: item.rewardType, calculationMode: item.calculationMode, effectivePV: item.effectivePV, rewardRate: item.rewardRate, rewardPV: item.rewardPV, creditAmount: creditEntry?.amount ?? item.calculatedCreditAmount, projectedCreditAmount: item.projectedCreditAmount ?? item.calculatedCreditAmount, selfPurchaseTierSnapshot: item.selfPurchaseTierSnapshot ?? null, status: item.status, cancellationReason: item.cancellationReason ?? null, qualificationStatus: item.qualificationStatus ?? "legacy", qualificationAuthority: referralRewardQualificationAuthority(item), qualificationCoverage: qualificationCoverage ? { coverageEndsAt: qualificationCoverage.coverageEndsAt } : null, qualificationExpiresAt: item.qualificationExpiresAt ?? null, qualificationOrderNumber: item.qualificationOrderNumber ?? null, qualificationOrderCreatedAt: item.qualificationOrderCreatedAt ?? null, qualificationOrderFinalState: item.qualificationOrderFinalState ?? null, qualificationQualifiedAt: item.qualificationQualifiedAt ?? null, successfulPickupBusinessDate: item.successfulPickupBusinessDate ?? null, releaseEligibleBusinessDate: referralRewardProjectedReleaseBusinessDate(state, item), releasedAt: item.releasedAt, reversedAt: item.reversedAt ?? null };
   }) };
 }
 

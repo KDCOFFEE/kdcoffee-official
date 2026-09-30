@@ -206,6 +206,94 @@
   font-size: 11px;
 }
 
+.rewardWaitingDisclosure {
+  display: grid;
+  justify-items: start;
+  margin-top: 3px;
+}
+
+.rewardWaitingToggle {
+  min-height: 34px;
+  padding: 5px 2px;
+  border: 0;
+  background: transparent;
+  color: #765438;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.rewardWaitingToggle:focus-visible {
+  border-radius: 6px;
+  outline: 3px solid rgba(139, 114, 95, .3);
+  outline-offset: 2px;
+}
+
+.rewardWaitingPanel {
+  width: 100%;
+  margin-top: 5px;
+  padding: 12px 13px;
+  border: 1px solid #eadfd5;
+  border-radius: 12px;
+  background: #fbf7f2;
+}
+
+.rewardWaitingPanel[hidden] {
+  display: none;
+}
+
+.rewardWaitingPanel p {
+  margin: 0;
+  color: #66554a;
+  font-size: 11px;
+  line-height: 1.65;
+}
+
+.rewardWaitingPanel p + p {
+  margin-top: 6px;
+}
+
+.rewardWaitingPanel dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 12px;
+  margin: 12px 0 0;
+}
+
+.rewardWaitingPanel dl > div {
+  min-width: 0;
+}
+
+.rewardWaitingPanel dt {
+  color: #927d6c;
+  font-size: 9px;
+}
+
+.rewardWaitingPanel dd {
+  margin: 3px 0 0;
+  color: #4c3729;
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.sourceRewardStatus {
+  display: grid;
+  justify-items: end;
+  gap: 4px;
+  text-align: right;
+}
+
+.sourceRewardStatus small {
+  color: #806c5c;
+  font-size: 10px;
+  font-weight: 750;
+}
+
+.sourceWaitingDisclosure {
+  margin: 4px 16px 14px;
+}
+
 .compactRewardToggle {
   display: flex;
   align-items: center;
@@ -322,6 +410,12 @@
   text-align: center;
 }
 
+.rewardLifecycle small {
+  color: inherit;
+  font-size: 8px;
+  line-height: 1.3;
+}
+
 .rewardLifecycle i {
   display: grid;
   place-items: center;
@@ -390,6 +484,15 @@
 
   .compactRewardResult strong {
     font-size: 22px;
+  }
+
+  .rewardWaitingPanel {
+    padding: 11px 12px;
+  }
+
+  .rewardWaitingPanel dl {
+    grid-template-columns: 1fr;
+    gap: 7px;
   }
 
   .rewardExpandedDetail {

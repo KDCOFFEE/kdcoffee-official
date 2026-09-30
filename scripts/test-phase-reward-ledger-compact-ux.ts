@@ -67,9 +67,9 @@ check(compactCard.includes("sourceOrderNumber") && compactCard.includes("compact
 check(compactCard.includes("summarizeRewardSourceItems(sourceItems)"), "compact card uses the shared concise product summary");
 check(compactCard.includes('`+ ${number(rewardPV)} ${pointDisplayName}`'), "compact card gives reward KD points primary emphasis");
 check(compactCard.includes("money(creditAmount)"), "compact card shows monetary credit separately");
-check(compactCard.includes('reversed ? "已沖回" : credited ? "已入帳" : "預計入帳"'), "compact card distinguishes projected, credited, and reversed dates");
+check(compactCard.includes("rewardTimingText(explanation)") && compactCard.includes('credited && releasedAt') && compactCard.includes('reversed\n        ? "已沖回"'), "compact card distinguishes projected, credited, and reversed dates through the shared timing projection");
 check(compactCard.includes('reversed ? "已沖回折抵" : credited ? "實際入帳" : "預估折抵"'), "reversed rows do not mislabel reversed credit as deposited");
-check(compactCard.includes('"待完成取貨後計算"'), "unknown release date uses the approved fallback");
+check(compactCard.includes('sourceOrderSummary?.completedAt') && compactCard.includes('"入帳日期確認中"') && compactCard.includes('"待完成取貨後計算"'), "unknown release date distinguishes completed pickup from unfinished fulfillment");
 check(compactCard.includes("hidden={!expanded}"), "calculation, qualification, lifecycle, and source detail are hidden by default");
 check(compactCard.includes('aria-expanded={expanded}') && compactCard.includes('aria-controls={detailId}'), "detail trigger exposes accessible expansion state and target");
 check(compactCard.includes('expanded ? "收合詳情" : "查看詳情"'), "one action expands and collapses the selected reward");

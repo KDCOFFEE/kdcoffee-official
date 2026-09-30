@@ -2,7 +2,13 @@
 
 import { useEffect, useRef, useState } from "react";
 import RewardSourceOrderSummaryCard from "./RewardSourceOrderSummaryCard";
-import type { RewardSourceOrderSummary } from "@/lib/memberRewardPresentation";
+import RewardWaitingDisclosure from "./RewardWaitingDisclosure";
+import {
+  compactRewardDisplayStatus,
+  rewardTimingText,
+  type RewardSourceOrderSummary,
+  type RewardWaitingExplanation,
+} from "@/lib/memberRewardPresentation";
 
 type CalculationBasis = "paid_amount" | "pv";
 
@@ -31,6 +37,8 @@ type RetailPromotionData = {
     releaseEligibleBusinessDate: string;
     releasedAt: string | null;
     ruleVersion: number;
+    displayStatus?: string;
+    waitingExplanation?: RewardWaitingExplanation;
     sourceOrderSummary?: RewardSourceOrderSummary | null;
   }>;
 };
@@ -126,7 +134,7 @@ export default function RetailPromotionCenter() {
                     />
                   ) : <article key={`${item.orderReference}:${item.date}:${item.status}`}>
                     <div><time>{shortDate(item.date)}</time><strong>訪客訂單 {item.orderReference}</strong><span>{item.calculationBasis === "pv" ? `有效 ${data.settings.pointDisplayName} ${amount(item.calculationBaseValue)} PV` : `有效業績 ${money(item.calculationBaseValue)}`}</span></div>
-                    <div><span>比例 {item.rewardRate}%</span><strong>{money(item.rewardAmount)}</strong><span className={`is-${item.status}`}>{statusLabel(item.status)}</span>{item.status === "scheduled" ? <small>預計 {item.releaseEligibleBusinessDate.replaceAll("-", "/")} 可發放</small> : null}</div>
+                    <div><span>比例 {item.rewardRate}%</span><strong>{money(item.rewardAmount)}</strong><span className={`is-${item.status}`}>{item.displayStatus ? compactRewardDisplayStatus(item.displayStatus) : statusLabel(item.status)}</span>{item.waitingExplanation ? <small>{rewardTimingText(item.waitingExplanation)}</small> : item.status === "scheduled" ? <small>預計 {item.releaseEligibleBusinessDate.replaceAll("-", "/")} 入帳</small> : null}<RewardWaitingDisclosure explanation={item.waitingExplanation} /></div>
                   </article>) : <div className="member-commerce-empty compact"><strong>目前還沒有推廣零售紀錄</strong><p>未登入訪客透過有效分享連結完成購買後，紀錄會顯示在這裡。</p></div>}
                 </section>
               </div>

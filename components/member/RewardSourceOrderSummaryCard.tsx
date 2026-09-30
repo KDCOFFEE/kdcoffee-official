@@ -1,11 +1,18 @@
+"use client";
+
 import Link from "next/link";
 
 import {
+  compactRewardDisplayStatus,
   formatTaipeiDate,
   formatTaipeiDateTime,
   formatRewardRatePercent,
+  rewardTimingText,
   type RewardSourceOrderSummary,
 } from "@/lib/memberRewardPresentation";
+
+import RewardWaitingDisclosure from "./RewardWaitingDisclosure";
+import styles from "./MemberReferralExperience.module.css";
 
 type Props = {
   summary: RewardSourceOrderSummary;
@@ -45,12 +52,32 @@ export default function RewardSourceOrderSummaryCard({
   const basisValue = summary.calculationBasis === "paid_amount"
     ? money(summary.effectivePV)
     : `${points(summary.effectivePV)} ${pointDisplayName}`;
+  const statusText = compactRewardDisplayStatus(summary.displayStatus);
+  const timingText = rewardTimingText(summary.waitingExplanation);
+  const timingLabel = summary.waitingExplanation.state === "released"
+    ? "入帳日期"
+    : summary.waitingExplanation.state === "reversed"
+      ? "沖回日期"
+      : summary.waitingExplanation.state === "cancelled"
+        ? "入帳狀態"
+        : "預計入帳日期";
+  const timingValue = summary.waitingExplanation.state === "released"
+    ? formatTaipeiDateTime(summary.releasedAt)
+    : summary.waitingExplanation.state === "reversed"
+      ? summary.reversedAt ? formatTaipeiDate(summary.reversedAt) : "已沖回"
+      : summary.waitingExplanation.state === "cancelled"
+        ? "已取消"
+        : summary.releaseEligibleBusinessDate
+          ? formatTaipeiDate(summary.releaseEligibleBusinessDate)
+          : summary.waitingExplanation.state === "awaiting_completion"
+            ? "待完成取貨後計算"
+            : "入帳日期確認中";
 
   return (
     <div className={`member-org-order-card${variant === "source-only" ? " member-org-order-card-source-only" : ""}`}>
       {variant === "full" ? <div className="member-org-order-card-top">
         <time>{formatTaipeiDateTime(summary.createdAt)}</time>
-        <span>{summary.displayStatus}</span>
+        <div className={styles.sourceRewardStatus}><span>{statusText}</span>{timingText ? <small>{timingText}</small> : null}</div>
       </div> : null}
       {variant === "full" ? <div className="member-org-order-card-title">
         <div>
@@ -84,15 +111,16 @@ export default function RewardSourceOrderSummaryCard({
         <span><small>本筆回饋</small><strong>{summary.rewardPV == null ? "歷史資料未記錄" : `${points(summary.rewardPV)} ${pointDisplayName}`}</strong></span>
         <span><small>{summary.rewardStatus === "released" ? "實際入帳" : "預估折抵價值"}</small><strong>{money(creditAmount)}</strong></span>
       </div> : null}
-      {variant === "full" ? <div className="member-org-order-source">
+      {variant === "full" && ["released", "reversed", "cancelled"].includes(summary.waitingExplanation.state) ? <div className="member-org-order-source">
         <span>
-          <small>{summary.rewardStatus === "released" ? "入帳日期" : "預計入帳日期"}</small>
-          <strong>{summary.rewardStatus === "released" ? formatTaipeiDateTime(summary.releasedAt) : formatTaipeiDate(summary.releaseEligibleBusinessDate, "待完成取貨後計算")}</strong>
+          <small>{timingLabel}</small>
+          <strong>{timingValue}</strong>
         </span>
         {summary.rewardStatus === "released" && summary.availableCreditAmount != null ? (
           <span><small>目前可用</small><strong>{money(summary.availableCreditAmount)}</strong></span>
         ) : null}
       </div> : null}
+      {variant === "full" ? <div className={styles.sourceWaitingDisclosure}><RewardWaitingDisclosure explanation={summary.waitingExplanation} /></div> : null}
       {summary.canViewFullOrder ? (
         <p className="member-reward-consumption">
           <b>完整訂單</b>
