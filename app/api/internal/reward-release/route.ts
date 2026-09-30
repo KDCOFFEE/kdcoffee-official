@@ -45,11 +45,26 @@ export async function POST(request: Request) {
       pending: deliveries.filter((item) => item.status === "pending").length,
       failed: deliveries.filter((item) => item.status === "failed").length,
     };
-    const ok = releaseSummary.failed === 0 && notificationSummary.failed === 0;
+    const accountingOk = releaseSummary.failed === 0;
+    const notificationOk = notificationSummary.pending === 0 && notificationSummary.failed === 0;
+    const notificationWarning = notificationOk
+      ? null
+      : {
+          code: "notification_delivery_incomplete",
+          message: "回饋入帳已完成，但部分通知尚未送達",
+          pending: notificationSummary.pending,
+          failed: notificationSummary.failed,
+        };
 
     return NextResponse.json(
-      { ok, release: releaseSummary, notifications: notificationSummary },
-      { status: ok ? 200 : 500 },
+      {
+        ok: accountingOk,
+        notificationOk,
+        notificationWarning,
+        release: releaseSummary,
+        notifications: notificationSummary,
+      },
+      { status: accountingOk ? 200 : 500 },
     );
   } catch {
     return NextResponse.json(

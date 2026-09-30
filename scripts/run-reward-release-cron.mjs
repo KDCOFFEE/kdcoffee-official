@@ -37,6 +37,11 @@ try {
       `[reward-release-cron] notifications processed=${result.notifications.processed} delivered=${result.notifications.delivered} pending=${result.notifications.pending} failed=${result.notifications.failed}`,
     );
   }
+  if (result?.notificationWarning) {
+    console.warn(
+      `[reward-release-cron] warning=${result.notificationWarning.code || "notification_delivery_incomplete"} pending=${result.notificationWarning.pending ?? 0} failed=${result.notificationWarning.failed ?? 0}`,
+    );
+  }
   if (!response.ok || result?.ok === false) {
     console.error(`[reward-release-cron] ${result?.error || "Reward release request failed"}`);
     process.exit(1);

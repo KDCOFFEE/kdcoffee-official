@@ -4739,17 +4739,19 @@ export async function previewMembershipRulesImpact(nextRules: unknown, filePath 
 
 export async function claimNextMembershipNotification(options: { now?: Date; stateFilePath?: string } = {}) {
   return transaction((state, now) => {
-    const notice = state.notifications.find((item) => item.status === "pending");
-    if (!notice) return null;
-    const maximum = notice.deliveryPolicy?.maxAttempts ?? 1;
-    if ((notice.attempts ?? 0) >= maximum) {
-      notice.status = "failed";
-      return null;
+    for (const notice of state.notifications) {
+      if (notice.status !== "pending") continue;
+      const maximum = notice.deliveryPolicy?.maxAttempts ?? 1;
+      if ((notice.attempts ?? 0) >= maximum) {
+        notice.status = "failed";
+        continue;
+      }
+      notice.status = "processing";
+      notice.attempts = (notice.attempts ?? 0) + 1;
+      notice.lastAttemptAt = nowIso(now);
+      return structuredClone(notice);
     }
-    notice.status = "processing";
-    notice.attempts = (notice.attempts ?? 0) + 1;
-    notice.lastAttemptAt = nowIso(now);
-    return structuredClone(notice);
+    return null;
   }, { now: options.now, filePath: options.stateFilePath });
 }
 
