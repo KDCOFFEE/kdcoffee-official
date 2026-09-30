@@ -147,14 +147,15 @@ try {
   );
   check(dashboard.credits[0]?.sourceOrderNumber === sourceOrderNumber, "legacy credit can resolve source order through existing reward linkage");
 
-  const referralUi = await fs.readFile(path.join(process.cwd(), "components/member/MemberReferralCenter.tsx"), "utf8");
+  const rewardCardUi = await fs.readFile(path.join(process.cwd(), "components/member/RewardLedgerCompactCard.tsx"), "utf8");
+  const sourceOrderUi = await fs.readFile(path.join(process.cwd(), "components/member/RewardSourceOrderSummaryCard.tsx"), "utf8");
   const creditUi = await fs.readFile(path.join(process.cwd(), "components/member/MemberSubscriptionExperience.tsx"), "utf8");
   const orderUi = await fs.readFile(path.join(process.cwd(), "components/orders/OrderConversation.tsx"), "utf8");
   const memberNav = await fs.readFile(path.join(process.cwd(), "components/member/MemberSectionNav.tsx"), "utf8");
   const cronScript = await fs.readFile(path.join(process.cwd(), "scripts/run-reward-release-cron.mjs"), "utf8");
   const routeSource = await fs.readFile(path.join(process.cwd(), "app/api/internal/reward-release/route.ts"), "utf8");
-  check(referralUi.includes("② 來源訂單") && referralUi.includes("歷史資料未記錄"), "reward detail shows source order with a neutral legacy fallback");
-  check(referralUi.includes("/orders/${encodeURIComponent(sourceOrderNumber)}") && referralUi.includes("查看訂單 →"), "reward detail links the actual canonical order number");
+  check(rewardCardUi.includes("來源訂單") && rewardCardUi.includes("歷史資料未記錄"), "expanded reward detail shows source order with a neutral legacy fallback");
+  check(sourceOrderUi.includes("summary.canViewFullOrder") && sourceOrderUi.includes("查看完整訂單 →"), "reward detail links the canonical order only after actual ownership is verified");
   check(creditUi.includes("回饋來源訂單") && creditUi.includes("entry.sourceOrderNumber"), "released credit history retains member-visible order traceability");
   check(orderUi.includes('access === "member" ? "/member#orders" : "/member"'), "authenticated order return action targets Member Center Orders");
   check(orderUi.includes('window.addEventListener("popstate"') && orderUi.includes('router.replace("/member#orders")'), "stale browser-history UI is reconciled through App Router navigation");

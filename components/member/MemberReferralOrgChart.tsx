@@ -1,21 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import RewardSourceOrderSummaryCard from "./RewardSourceOrderSummaryCard";
+import type { RewardSourceOrderSummary } from "@/lib/memberRewardPresentation";
 
-export type ReferralOrgOrderDetail = {
-  orderNumber: string;
-  createdAt: string | null;
-  sourceItems: Array<{ name: string; optionLabel: string; optionDetail: string; preparationLabel: string; quantity: number }>;
-  referralLevel: number | null;
-  effectivePV: number | null;
-  rewardRate: number | null;
-  creditAmount: number | null;
-  projectedCreditAmount: number | null;
-  status: string | null;
-  cancellationReason: string | null;
-  qualificationStatus: string | null;
-  releasedAt: string | null;
-};
+export type ReferralOrgOrderDetail = RewardSourceOrderSummary;
 
 export type ReferralOrgChartNode = {
   memberId: string;
@@ -124,25 +113,6 @@ function Branch({
   );
 }
 
-const formatOrgDate = (value: string | null) => {
-  if (!value) return "日期未記錄";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value.slice(0, 10).replaceAll("-", "/");
-  return new Intl.DateTimeFormat("zh-TW", { timeZone: "Asia/Taipei", year: "numeric", month: "2-digit", day: "2-digit" }).format(date);
-};
-
-function orgRewardStatusLabel(order: ReferralOrgOrderDetail) {
-  if (!order.status) return "此訂單未產生你的推薦回饋";
-  if (order.status === "released") return "已入帳 ✓";
-  if (order.status === "reversed") return "獎勵已沖回";
-  if (order.status === "cancelled") return "獎勵已取消";
-  if (order.qualificationStatus === "awaiting_order") return "待完成資格消費";
-  if (order.qualificationStatus === "awaiting_completion") return "等待訂單完成";
-  if (order.qualificationStatus === "qualified") return "已取得資格・等待發放";
-  if (order.qualificationStatus === "expired") return "資格已逾期";
-  return "待入帳";
-}
-
 function MemberOrgOrderViewer({ node, pointDisplayName, onClose }: { node: ReferralOrgChartNode; pointDisplayName: string; onClose: () => void }) {
   return (
     <div className="member-org-order-viewer" role="dialog" aria-modal="true" aria-labelledby="member-org-order-title">
@@ -157,37 +127,15 @@ function MemberOrgOrderViewer({ node, pointDisplayName, onClose }: { node: Refer
           <button type="button" className="member-org-order-close" onClick={onClose} aria-label="關閉">×</button>
         </header>
         <div className="member-org-order-list">
-          {node.recentOrders.map((order) => {
-            const rewardAmount = order.projectedCreditAmount ?? order.creditAmount;
-            const hasReward = order.referralLevel != null && order.effectivePV != null && order.rewardRate != null && rewardAmount != null;
-            return (
-              <article className="member-org-order-card" key={order.orderNumber}>
-                <div className="member-org-order-card-top">
-                  <time>{formatOrgDate(order.createdAt)}</time>
-                  <span>{orgRewardStatusLabel(order)}</span>
-                </div>
-                <div className="member-org-order-card-title">
-                  <div>
-                    <small>REFERRAL REWARD</small>
-                    <strong>{order.referralLevel ? `第 ${order.referralLevel} 代推薦回饋` : "下線新訂單"}</strong>
-                  </div>
-                  <em>{order.orderNumber}</em>
-                </div>
-                <div className="member-org-order-source">
-                  <span><small>來源會員</small><strong>{node.memberNumber}</strong></span>
-                  <span className="member-org-order-items"><small>消費內容</small><strong>{order.sourceItems.length ? order.sourceItems.map((item) => `${item.name}${item.optionLabel ? `・${item.optionLabel}` : ""}${item.optionDetail ? `・${item.optionDetail}` : ""}${item.preparationLabel ? `・${item.preparationLabel}` : ""} × ${item.quantity}`).join("、") : "商品明細未記錄"}</strong></span>
-                </div>
-                {hasReward ? (
-                  <div className="member-org-order-calc">
-                    <span><small>回饋計算</small><strong>{Math.round(order.effectivePV!)} {pointDisplayName || "KD點"} × {(order.rewardRate! * 100).toLocaleString("zh-TW", { maximumFractionDigits: 2 })}%</strong></span>
-                    <span><small>本筆回饋</small><strong>+ {money(rewardAmount!)}</strong></span>
-                  </div>
-                ) : (
-                  <p className="member-org-order-no-reward">此筆訂單目前沒有對你的推薦回饋紀錄；組織圖不另外計算獎勵。</p>
-                )}
-              </article>
-            );
-          })}
+          {node.recentOrders.map((order) => (
+            <RewardSourceOrderSummaryCard
+              key={order.orderNumber}
+              summary={order}
+              pointDisplayName={pointDisplayName || "KD點"}
+              title={order.referralLevel ? `第 ${order.referralLevel} 代推薦回饋` : "會員消費回饋"}
+              sourceMemberNumber={node.memberNumber}
+            />
+          ))}
         </div>
       </section>
     </div>

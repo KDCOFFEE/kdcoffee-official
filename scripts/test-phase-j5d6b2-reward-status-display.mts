@@ -13,6 +13,12 @@ const ui =
     "utf8",
   );
 
+const presentation =
+  fs.readFileSync(
+    "lib/memberRewardPresentation.ts",
+    "utf8",
+  );
+
 let pass = 0;
 
 function check(
@@ -64,54 +70,59 @@ console.log(
 );
 
 check(
-  ui.includes(
-    "hasQualificationCoverage",
+  presentation.includes(
+    "qualificationCoverage",
   ),
-  "UI detects immutable coverage evidence",
+  "shared display resolver consumes immutable coverage evidence",
 );
 
 check(
-  ui.includes(
-    "effectiveQualificationStatus",
+  presentation.includes(
+    "qualificationMaturation",
   ),
-  "UI derives effective qualification state",
+  "shared display resolver also considers maturation evidence",
 );
 
 check(
-  ui.includes(
-    '? "qualified"',
+  presentation.includes(
+    "resolveEffectiveRewardDisplayStatus",
   ),
-  "coverage evidence resolves reward as qualified",
+  "effective reward status has one canonical read-only resolver",
 );
 
 check(
-  ui.includes(
-    '"資格已確認・等待入帳"',
+  presentation.includes(
+    'return "資格已確認・安全等待中"',
   ),
   "member sees clear confirmed qualification status",
 );
 
 check(
-  ui.includes(
-    '"等待資格確認"',
+  presentation.includes(
+    'return "尚待取得推薦回饋資格"',
   ),
   "unqualified state remains clearly distinct",
 );
 
 check(
   ui.includes(
-    "本筆回饋已由目前有效的推薦回饋資格涵蓋",
+    "reward.displayStatus",
+  ),
+  "member reward details consume the canonical server-resolved status",
+);
+
+check(
+  ui.includes(
+    "本筆已由有效推薦資格涵蓋 ✓",
   ),
   "member sees qualification coverage explanation",
 );
 
 check(
-  ui.includes(
-    '"資格有效至："',
-  ),
+  ui.includes("qualificationValidUntil={qualificationDisplayUntil}"),
   "member sees coverage validity end date",
 );
 
 console.log(
-  `\nJ.5D.6B2.3 PASS — ${pass}/11 checks passed`,
+  `\nJ.5D.6B2.3 PASS — ${pass}/${pass} checks passed`,
 );

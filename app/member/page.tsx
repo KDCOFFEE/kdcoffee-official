@@ -376,9 +376,9 @@ export default async function MemberPage({
   const pointDisplayName = /^[A-Za-z]+$/.test(rawPointDisplayName)
     ? rawPointDisplayName.toUpperCase()
     : rawPointDisplayName;
-  const pendingRewardPoints = referralCenter.rewards
-    .filter((reward) => reward.status === "scheduled" && reward.qualificationStatus !== "expired")
-    .reduce((sum, reward) => sum + reward.rewardPV, 0);
+  const pendingRewardPoints = commerce.pendingRewardSummary.rewardPoints;
+  const pendingRewardCount = commerce.pendingRewardSummary.rewardCount;
+  const pendingRewardCredit = commerce.pendingRewardSummary.projectedCreditAmount;
   const latestOrder = orders[0];
   const primarySubscription = commerce.subscriptions.find((item) => ["active", "pending_activation", "paused"].includes(item.status)) ?? commerce.subscriptions[0];
   const nextSubscriptionCycle = commerce.cycles
@@ -478,7 +478,7 @@ export default async function MemberPage({
             >
               <small>待入帳回饋</small>
               <strong>{pendingRewardPoints.toLocaleString("zh-TW")} {pointDisplayName}</strong>
-              <span>查看點數來源、資格條件與折抵價值</span>
+              <span>共 {pendingRewardCount} 筆・預估折抵 NT$ {pendingRewardCredit.toLocaleString("zh-TW")}{commerce.pendingRewardSummary.hasIncompletePointHistory ? "・部分歷史點數未記錄" : ""}</span>
             </Link>
             <a className="member-dashboard-card" href="#subscription">
               <small>下一次配送</small>

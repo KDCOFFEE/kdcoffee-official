@@ -119,6 +119,8 @@ try {
   const retailCenter = await fs.readFile(path.join(process.cwd(), "components/member/RetailPromotionCenter.tsx"), "utf8");
   const order = await fs.readFile(path.join(process.cwd(), "components/orders/OrderConversation.tsx"), "utf8");
   const disclosure = await fs.readFile(path.join(process.cwd(), "components/member/MemberMobileDisclosure.tsx"), "utf8");
+  const compactCard = await fs.readFile(path.join(process.cwd(), "components/member/RewardLedgerCompactCard.tsx"), "utf8");
+  const sourceCard = await fs.readFile(path.join(process.cwd(), "components/member/RewardSourceOrderSummaryCard.tsx"), "utf8");
 
   check(page.includes('href="/member?rewardView=released#rewards"') && page.includes('data-reward-shortcut="released"'), "available-credit overview card is actionable");
   check(page.includes('href="/member?rewardView=pending#rewards"') && page.includes('data-reward-shortcut="pending"'), "pending-reward overview card is actionable");
@@ -143,9 +145,9 @@ try {
   check(!center.includes("openRewardDetails(\n          intent"), "URL intent never bypasses section activation by opening the dialog directly");
   check(center.includes("data.rewardCreditSources.map") && center.includes("推廣零售、推薦回饋與自己的消費"), "released dialog unifies Retail Promotion and member/referral credits");
   check(center.includes("data.pendingRetailPromotionRewards.map"), "pending dialog renders scheduled Retail Promotion entries");
-  check(center.includes("入帳金額") && center.includes("目前可用"), "released cards distinguish original credit from current availability");
+  check(compactCard.includes('credited ? "實際入帳" : "預估折抵"') && sourceCard.includes("目前可用"), "released cards distinguish original credit from current availability");
   check(center.includes("直接取自正式抵用金帳本，不由回饋紀錄重算"), "available-credit total remains canonical and is not reconstructed from reward records");
-  check(center.includes("查看訂單 →") && center.includes("encodeURIComponent(entry.sourceOrderNumber"), "unified detail keeps source orders visible and clickable");
+  check(sourceCard.includes("summary.canViewFullOrder") && sourceCard.includes("查看完整訂單 →"), "unified detail links only source orders owned by the signed-in member");
   check(retailCenter.includes("查看詳情") && retailCenter.includes("retail-promotion-dialog"), "existing specialized Retail Promotion detail remains available");
   check(center.includes('openRewardDetails("all", rewardTriggerRef.current)'), "existing reward-detail button still opens the all view");
   check(center.includes("rewardFocusReturnRef") && center.includes("focusTarget.focus()"), "dialog preserves accessible focus return");

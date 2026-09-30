@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import RewardSourceOrderSummaryCard from "./RewardSourceOrderSummaryCard";
+import type { RewardSourceOrderSummary } from "@/lib/memberRewardPresentation";
 
 type CalculationBasis = "paid_amount" | "pv";
 
@@ -16,7 +18,6 @@ type RetailPromotionData = {
     performanceByBasis: { paidAmount: { completed: number; pending: number }; pv: { completed: number; pending: number } };
   };
   history: Array<{
-    rewardId: string;
     date: string;
     orderReference: string;
     eligibleSales: number;
@@ -30,6 +31,7 @@ type RetailPromotionData = {
     releaseEligibleBusinessDate: string;
     releasedAt: string | null;
     ruleVersion: number;
+    sourceOrderSummary?: RewardSourceOrderSummary | null;
   }>;
 };
 
@@ -115,7 +117,14 @@ export default function RetailPromotionCenter() {
 
                 <section className="retail-promotion-history">
                   <h3>推廣零售紀錄</h3>
-                  {data.history.length ? data.history.map((item) => <article key={item.rewardId}>
+                  {data.history.length ? data.history.map((item) => item.sourceOrderSummary ? (
+                    <RewardSourceOrderSummaryCard
+                      key={`${item.sourceOrderSummary.orderNumber}:${item.date}`}
+                      summary={item.sourceOrderSummary}
+                      pointDisplayName={data.settings.pointDisplayName}
+                      title="推廣零售回饋"
+                    />
+                  ) : <article key={`${item.orderReference}:${item.date}:${item.status}`}>
                     <div><time>{shortDate(item.date)}</time><strong>訪客訂單 {item.orderReference}</strong><span>{item.calculationBasis === "pv" ? `有效 ${data.settings.pointDisplayName} ${amount(item.calculationBaseValue)} PV` : `有效業績 ${money(item.calculationBaseValue)}`}</span></div>
                     <div><span>比例 {item.rewardRate}%</span><strong>{money(item.rewardAmount)}</strong><span className={`is-${item.status}`}>{statusLabel(item.status)}</span>{item.status === "scheduled" ? <small>預計 {item.releaseEligibleBusinessDate.replaceAll("-", "/")} 可發放</small> : null}</div>
                   </article>) : <div className="member-commerce-empty compact"><strong>目前還沒有推廣零售紀錄</strong><p>未登入訪客透過有效分享連結完成購買後，紀錄會顯示在這裡。</p></div>}

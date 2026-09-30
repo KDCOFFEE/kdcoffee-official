@@ -33,9 +33,12 @@ test("Home stays outside tab semantics", () => assert.doesNotMatch(nav.match(/<L
 test("Recommendation is a top-level panel", () => assert.match(referral, /<section id="referral"[\s\S]*data-member-section role="tabpanel" hidden>/));
 test("Rewards is a top-level panel", () => assert.match(referral, /<section id="rewards"[\s\S]*data-member-section role="tabpanel" hidden>/));
 test("old combined title is gone", () => assert.doesNotMatch(`${page}\n${referral}`, /<h2[^>]*>推薦與回饋<\/h2>/));
-test("hash destinations are canonical", () => assert.match(nav, /href=\{`#\$\{item\.id\}`\}/));
+test("Member routes and hash destinations are canonical", () => assert.match(nav, /href=\{`\/member#\$\{item\.id\}`\}/));
 test("initial hash is synchronized", () => assert.match(nav, /window\.location\.hash\.slice\(1\)/));
-test("back and forward hash changes are synchronized", () => assert.match(nav, /addEventListener\("hashchange", syncHash\)/));
+test("back and forward hash changes are synchronized", () => {
+  assert.match(nav, /addEventListener\("hashchange", syncRoute\)/);
+  assert.match(nav, /addEventListener\("popstate", syncRoute\)/);
+});
 test("only the active top-level section is shown", () => assert.match(nav, /section\.hidden = section\.id !== item\.id/));
 test("active tabs expose ARIA selection", () => assert.match(nav, /aria-selected=\{activeId === item\.id\}/));
 test("tab strip has a dedicated scroll ref", () => assert.match(nav, /tabListRef/));
@@ -51,7 +54,7 @@ test("mobile overscroll is contained to the tab strip", () => assert.match(navCs
 test("tabs keep a 44 pixel touch target", () => assert.match(navCss, /\.navigation \.tabList a \{[\s\S]*min-height: 44px/));
 test("Home remains fixed beside the scroll strip", () => assert.match(navCss, /grid-template-columns: 44px minmax\(0, 1fr\)/));
 test("mobile nav no longer forces equal tab columns", () => assert.doesNotMatch(navCss, /repeat\(6, minmax\(0, 1fr\)\)/));
-test("pending reward card points to Rewards", () => assert.match(page, /member-dashboard-card" href="#rewards"[\s\S]*待入帳回饋/));
+test("pending reward card points to the pending Rewards detail", () => assert.match(page, /href="\/member\?rewardView=pending#rewards"[\s\S]*待入帳回饋/));
 test("My Rewards quick action points to Rewards", () => assert.match(page, /<a href="#rewards"><strong>我的回饋<\/strong><\/a>/));
 test("reward activity points to Rewards", () => assert.match(page, /member-activity-row" href="#rewards"[\s\S]*會員回饋/));
 test("server-loaded referral data is passed into the client experience", () => assert.match(page, /<MemberReferralCenter initialData=\{referralExperienceData\} \/>/));
@@ -89,7 +92,7 @@ test("Rewards includes member reward summary", () => assert.match(referral, /id=
 test("Rewards includes qualification progress", () => assert.match(referral, /id="rewards"[\s\S]*MemberQualificationProgress/));
 test("reward history remains on demand", () => assert.match(referral, /rewardDialogRef[\s\S]*回饋明細/));
 test("Reward Engine fields remain the displayed source", () => ["reward.creditAmount", "reward.projectedCreditAmount", "reward.effectivePV", "reward.rewardRate", "reward.rewardPV"].forEach((field) => assert.match(referral, new RegExp(field.replace(".", "\\.")))));
-test("member UI explicitly does not recalculate historical rewards", () => assert.match(referral, /會員頁不重新計算|不會在會員頁自行重算/));
+test("member UI explains that displayed values use formal stored records", () => assert.match(referral, /回饋點數與折抵金額都以正式紀錄為準/));
 test("new referral layout wraps safely on mobile", () => assert.match(referralCss, /@media \(max-width: 700px\)[\s\S]*grid-template-columns: 1fr/));
 test("long referral URLs may wrap without page overflow", () => assert.match(referralCss, /overflow-wrap: anywhere/));
 test("page swipe is not captured by the member navigation", () => assert.doesNotMatch(navCss, /touch-action:\s*none/));

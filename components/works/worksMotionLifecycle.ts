@@ -4,6 +4,47 @@ export type WorksMotionAnimation = Pick<Animation, "cancel">;
 
 export type WorksMotionState = "normal" | "pre-reveal" | "animating" | "revealed";
 
+export type WorksMotionDocumentRoot = {
+  dataset: {
+    worksMotionCapable?: string;
+    worksMotionRuntimeReady?: string;
+  };
+};
+
+export type WorksMotionTiming = {
+  delayMs: number;
+  durationMs: number;
+  staggerMs: number;
+};
+
+export type WorksMotionTarget = "hero" | "heroMedia" | "catalogIntro" | "productGrid";
+
+/**
+ * Claims reveal ownership synchronously when the Works route mounts. This is
+ * required on App Router navigation because the persistent root layout is not
+ * rendered again after the global bootstrap has removed its capability marker.
+ */
+export function claimWorksMotionRuntime(root: WorksMotionDocumentRoot): void {
+  root.dataset.worksMotionCapable = "true";
+  root.dataset.worksMotionRuntimeReady = "true";
+}
+
+export function releaseWorksMotionRuntime(root: WorksMotionDocumentRoot): void {
+  delete root.dataset.worksMotionRuntimeReady;
+  delete root.dataset.worksMotionCapable;
+}
+
+export function resolveWorksMotionTiming(
+  setting: WorksMotionTiming,
+  target: WorksMotionTarget,
+  index: number,
+): { delay: number; duration: number } {
+  return {
+    duration: setting.durationMs,
+    delay: setting.delayMs + (target === "productGrid" ? index * setting.staggerMs : 0),
+  };
+}
+
 export function worksMotionState(node: WorksMotionElement): WorksMotionState {
   const state = node.dataset.worksMotionState;
   return state === "pre-reveal" || state === "animating" || state === "revealed" ? state : "normal";

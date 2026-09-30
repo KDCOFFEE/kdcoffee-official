@@ -40,6 +40,11 @@ import {
   type SubscriptionItem,
 } from "./membershipPolicies";
 import { projectOrderFinancialBreakdown } from "./orderFinancialProjection";
+import {
+  buildSafeRewardSourceOrderSummary,
+  resolveEffectiveRewardDisplayStatus,
+  summarizePendingRewards,
+} from "./memberRewardPresentation";
 import { createHomeDeliveryPaymentSnapshot, type HomeDeliveryPaymentMethod } from "./homeDeliveryPayment";
 import { validateDeliveryAddress, type DeliveryAddress } from "./deliveryAddress";
 import { subscriptionShippingFee, type KdShippingMethod } from "./shippingRules";
@@ -3844,6 +3849,77 @@ function safeMemberOrderNumber(value: unknown) {
 
 export async function getMemberCommerceDashboard(memberId: string, now = new Date(), filePath = getMembershipCommerceStateFile()) {
   const state = await readMembershipCommerceState(filePath);
+  const todayDate = getDateOnlyInTimeZone(now);
+  const memberReferralRewards = Object.values(state.referralRewards)
+    .filter((reward) => reward.beneficiaryMemberId === memberId);
+  const memberRetailRewards = Object.values(state.retailPromotionRewards)
+    .filter((reward) => reward.beneficiaryMemberId === memberId);
+  const dashboardOrderNumbers = [...new Set([
+    ...memberReferralRewards.map((reward) => reward.sourceOrderNumber),
+    ...memberRetailRewards.map((reward) => reward.sourceOrderNumber),
+  ].filter(Boolean))];
+  const dashboardOrderPairs = await Promise.all(
+    dashboardOrderNumbers.map(async (orderNumber) => [orderNumber, await readOrder(orderNumber)] as const),
+  );
+  const dashboardOrders = new Map(dashboardOrderPairs);
+  const dashboardCoverageByRewardId = new Map(
+    Object.values(state.referralRewardCoverages).map((coverage) => [coverage.referralRewardId, coverage]),
+  );
+  const dashboardMaturationByRewardId = new Map(
+    Object.values(state.referralRewardMaturations).map((maturation) => [maturation.referralRewardId, maturation]),
+  );
+  const referralSourceSummary = (
+    reward: ReferralReward,
+    actualCreditAmount: number | null = null,
+    availableCreditAmount: number | null = null,
+  ) => buildSafeRewardSourceOrderSummary({
+    currentMemberId: memberId,
+    rewardBeneficiaryMemberId: reward.beneficiaryMemberId,
+    sourceOrderNumber: reward.sourceOrderNumber,
+    order: dashboardOrders.get(reward.sourceOrderNumber),
+    referralLevel: reward.referralLevel,
+    calculationBasis: "pv",
+    effectivePV: reward.effectivePV,
+    rewardRate: reward.rewardRate,
+    rewardPV: reward.rewardPV,
+    projectedCreditAmount: reward.projectedCreditAmount ?? reward.calculatedCreditAmount,
+    actualCreditAmount,
+    availableCreditAmount,
+    releaseEligibleBusinessDate: reward.releaseEligibleBusinessDate ?? reward.scheduledReleaseAt?.slice(0, 10) ?? null,
+    releasedAt: reward.releasedAt,
+    rewardStatus: reward.status,
+    qualificationStatus: reward.qualificationStatus,
+    qualificationAuthority: referralRewardQualificationAuthority(reward),
+    qualificationCoverage: dashboardCoverageByRewardId.get(reward.rewardId) ?? null,
+    qualificationMaturation: dashboardMaturationByRewardId.get(reward.rewardId) ?? null,
+    successfulCompletionAt: reward.successfulPickupBusinessDate,
+    todayDate,
+  });
+  const retailSourceSummary = (
+    reward: RetailPromotionReward,
+    actualCreditAmount: number | null = null,
+    availableCreditAmount: number | null = null,
+  ) => buildSafeRewardSourceOrderSummary({
+    currentMemberId: memberId,
+    rewardBeneficiaryMemberId: reward.beneficiaryMemberId,
+    sourceOrderNumber: reward.sourceOrderNumber,
+    order: dashboardOrders.get(reward.sourceOrderNumber),
+    referralLevel: null,
+    calculationBasis: reward.calculationBasis === "pv" ? "pv" : "paid_amount",
+    effectivePV: typeof reward.calculationBaseValue === "number" ? reward.calculationBaseValue : reward.eligibleMerchandiseAmount,
+    rewardRate: reward.rewardRate,
+    rewardPV: reward.calculationBasis === "pv" && typeof reward.rewardPV === "number" ? reward.rewardPV : null,
+    projectedCreditAmount: reward.calculatedCreditAmount,
+    actualCreditAmount,
+    availableCreditAmount,
+    releaseEligibleBusinessDate: reward.releaseEligibleBusinessDate,
+    releasedAt: reward.releasedAt,
+    rewardStatus: reward.status,
+    qualificationStatus: "qualified",
+    qualificationAuthority: "legacy_order",
+    successfulCompletionAt: reward.successfulCompletionAt,
+    todayDate,
+  });
   const subscriptions = Object.values(state.subscriptions)
     .filter(
       (item) =>
@@ -3909,12 +3985,14 @@ export async function getMemberCommerceDashboard(memberId: string, now = new Dat
       const retailPromotionRewardId = item.sourceReference.startsWith("retail_promotion_reward:")
         ? item.sourceReference.slice("retail_promotion_reward:".length)
         : null;
+      const referralReward = referralRewardId ? state.referralRewards[referralRewardId] : null;
+      const retailPromotionReward = retailPromotionRewardId ? state.retailPromotionRewards[retailPromotionRewardId] : null;
       const sourceOrderNumber = safeMemberOrderNumber(item.metadata.orderId)
         ?? safeMemberOrderNumber(
-          referralRewardId
-            ? state.referralRewards[referralRewardId]?.sourceOrderNumber
-            : retailPromotionRewardId
-              ? state.retailPromotionRewards[retailPromotionRewardId]?.sourceOrderNumber
+          referralReward
+            ? referralReward.sourceOrderNumber
+            : retailPromotionReward
+              ? retailPromotionReward.sourceOrderNumber
               : null,
         );
       const sourceCategory = retailPromotionRewardId
@@ -3923,6 +4001,7 @@ export async function getMemberCommerceDashboard(memberId: string, now = new Dat
           ? "self_purchase" as const
           : "referral" as const;
 
+      const availableAmount = effectiveCreditRemaining(state, item, now);
       return {
         sourceCategory,
         sourceLabel: sourceCategory === "retail_promotion"
@@ -3932,8 +4011,13 @@ export async function getMemberCommerceDashboard(memberId: string, now = new Dat
             : "推薦回饋" as const,
         sourceOrderNumber,
         creditedAmount: item.amount,
-        availableAmount: effectiveCreditRemaining(state, item, now),
+        availableAmount,
         issuedAt: item.issuedAt,
+        sourceOrderSummary: referralReward
+          ? referralSourceSummary(referralReward, item.amount, availableAmount)
+          : retailPromotionReward
+            ? retailSourceSummary(retailPromotionReward, item.amount, availableAmount)
+            : null,
       };
     })
     .sort((left, right) => right.issuedAt.localeCompare(left.issuedAt));
@@ -3942,31 +4026,34 @@ export async function getMemberCommerceDashboard(memberId: string, now = new Dat
     .map((reward) => ({
       sourceLabel: "推廣零售" as const,
       sourceOrderNumber: safeMemberOrderNumber(reward.sourceOrderNumber),
-      rewardPV: typeof reward.rewardPV === "number" ? reward.rewardPV : 0,
+      rewardPV: reward.calculationBasis === "pv" && typeof reward.rewardPV === "number" && Number.isFinite(reward.rewardPV) ? reward.rewardPV : null,
       projectedCreditAmount: reward.calculatedCreditAmount,
       releaseEligibleBusinessDate: reward.releaseEligibleBusinessDate,
+      sourceOrderSummary: retailSourceSummary(reward),
     }))
     .sort((left, right) => left.releaseEligibleBusinessDate.localeCompare(right.releaseEligibleBusinessDate));
-  const pendingCredit = Object.values(state.referralRewards)
-    .filter(
-      (reward) =>
-        reward.beneficiaryMemberId === memberId &&
-        reward.status === "scheduled" &&
-        reward.qualificationStatus !== "expired",
-    )
-    .reduce(
-      (sum, reward) =>
-        sum + (reward.projectedCreditAmount ?? reward.calculatedCreditAmount),
-      0,
-    ) + Object.values(state.retailPromotionRewards)
-      .filter((reward) => reward.beneficiaryMemberId === memberId && reward.status === "scheduled")
-      .reduce((sum, reward) => sum + reward.calculatedCreditAmount, 0);
+  const pendingReferralRewards = memberReferralRewards.filter(
+    (reward) => reward.status === "scheduled" && reward.qualificationStatus !== "expired",
+  );
+  const pendingRetailRewards = memberRetailRewards.filter((reward) => reward.status === "scheduled");
+  const pendingRewardSummary = summarizePendingRewards([
+    ...pendingReferralRewards.map((reward) => ({
+      rewardPV: reward.rewardPV,
+      projectedCreditAmount: reward.projectedCreditAmount ?? reward.calculatedCreditAmount,
+    })),
+    ...pendingRetailRewards.map((reward) => ({
+      rewardPV: reward.calculationBasis === "pv" && typeof reward.rewardPV === "number" && Number.isFinite(reward.rewardPV) ? reward.rewardPV : null,
+      projectedCreditAmount: reward.calculatedCreditAmount,
+    })),
+  ]);
+  const pendingCredit = pendingRewardSummary.projectedCreditAmount;
   return {
     subscriptions,
     cycles: structuredClone(cycles),
     credits: structuredClone(credits),
     rewardCreditSources: structuredClone(rewardCreditSources),
     pendingRetailPromotionRewards: structuredClone(pendingRetailPromotionRewards),
+    pendingRewardSummary,
     pendingCredit,
     referrals: safeReferralMemberView(state, memberId),
   };
@@ -3981,6 +4068,8 @@ export async function getMemberRetailPromotionCenter(memberId: string, options: 
   const rewards = Object.values(state.retailPromotionRewards)
     .filter((reward) => reward.beneficiaryMemberId === memberId)
     .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+  const retailOrdersByNumber = new Map(orders.map((order) => [order.orderNumber, order]));
+  const todayDate = getDateOnlyInTimeZone(new Date());
   const active = rewards.filter((reward) => reward.status === "scheduled" || reward.status === "released");
   const maskOrderNumber = (orderNumber: string) => {
     const suffix = orderNumber.slice(-4);
@@ -4016,7 +4105,6 @@ export async function getMemberRetailPromotionCenter(memberId: string, options: 
     if (!Number.isFinite(calculationBaseValue) || !Number.isFinite(pvRewardMoneyValue) || pvRewardMoneyValue < 0) return [];
     const payout = percentageRewardPayout({ calculationBasis, calculationBaseValue, rewardRate, pvRewardMoneyValue, roundingMode: attribution.roundingMode! });
     return [{
-      rewardId: `pending:${order.orderNumber}`,
       date: order.createdAt,
       orderReference: maskOrderNumber(order.orderNumber),
       eligibleSales,
@@ -4032,22 +4120,45 @@ export async function getMemberRetailPromotionCenter(memberId: string, options: 
       ruleVersion: attribution.ruleVersionId,
     }];
   });
-  const rewardHistory = rewards.map((reward) => ({
-    rewardId: reward.rewardId,
-    date: reward.successfulCompletionAt,
-    orderReference: maskOrderNumber(reward.sourceOrderNumber),
-    eligibleSales: reward.eligibleMerchandiseAmount,
-    calculationBasis: reward.calculationBasis === "pv" ? "pv" as const : "paid_amount" as const,
-    calculationBaseValue: typeof reward.calculationBaseValue === "number" ? reward.calculationBaseValue : reward.eligibleMerchandiseAmount,
-    rewardRate: reward.rewardRate,
-    rewardPV: typeof reward.rewardPV === "number" ? reward.rewardPV : 0,
-    pvRewardMoneyValue: typeof reward.pvRewardMoneyValue === "number" ? reward.pvRewardMoneyValue : 0,
-    rewardAmount: reward.calculatedCreditAmount,
-    status: reward.status,
-    releaseEligibleBusinessDate: reward.releaseEligibleBusinessDate,
-    releasedAt: reward.releasedAt,
-    ruleVersion: reward.ruleVersion,
-  }));
+  const rewardHistory = rewards.map((reward) => {
+    const creditEntry = reward.rewardCreditEntryId ? state.creditEntries[reward.rewardCreditEntryId] : null;
+    return {
+      date: reward.successfulCompletionAt,
+      orderReference: maskOrderNumber(reward.sourceOrderNumber),
+      eligibleSales: reward.eligibleMerchandiseAmount,
+      calculationBasis: reward.calculationBasis === "pv" ? "pv" as const : "paid_amount" as const,
+      calculationBaseValue: typeof reward.calculationBaseValue === "number" ? reward.calculationBaseValue : reward.eligibleMerchandiseAmount,
+      rewardRate: reward.rewardRate,
+      rewardPV: typeof reward.rewardPV === "number" ? reward.rewardPV : 0,
+      pvRewardMoneyValue: typeof reward.pvRewardMoneyValue === "number" ? reward.pvRewardMoneyValue : 0,
+      rewardAmount: reward.calculatedCreditAmount,
+      status: reward.status,
+      releaseEligibleBusinessDate: reward.releaseEligibleBusinessDate,
+      releasedAt: reward.releasedAt,
+      ruleVersion: reward.ruleVersion,
+      sourceOrderSummary: buildSafeRewardSourceOrderSummary({
+        currentMemberId: memberId,
+        rewardBeneficiaryMemberId: reward.beneficiaryMemberId,
+        sourceOrderNumber: reward.sourceOrderNumber,
+        order: retailOrdersByNumber.get(reward.sourceOrderNumber),
+        referralLevel: null,
+        calculationBasis: reward.calculationBasis === "pv" ? "pv" : "paid_amount",
+        effectivePV: typeof reward.calculationBaseValue === "number" ? reward.calculationBaseValue : reward.eligibleMerchandiseAmount,
+        rewardRate: reward.rewardRate,
+        rewardPV: reward.calculationBasis === "pv" && typeof reward.rewardPV === "number" ? reward.rewardPV : null,
+        projectedCreditAmount: reward.calculatedCreditAmount,
+        actualCreditAmount: creditEntry?.amount ?? null,
+        availableCreditAmount: creditEntry ? effectiveCreditRemaining(state, creditEntry, new Date()) : null,
+        releaseEligibleBusinessDate: reward.releaseEligibleBusinessDate,
+        releasedAt: reward.releasedAt,
+        rewardStatus: reward.status,
+        qualificationStatus: "qualified",
+        qualificationAuthority: "legacy_order",
+        successfulCompletionAt: reward.successfulCompletionAt,
+        todayDate,
+      }),
+    };
+  });
   return {
     referralCode: referralCodeForMember(memberId),
     settings: {
@@ -4082,6 +4193,13 @@ export async function getMemberRetailPromotionCenter(memberId: string, options: 
 export async function getMemberReferralCenter(memberId: string, options: { baseUrl?: string; depth?: number; filePath?: string; rulesFilePath?: string } = {}) {
   await assertCanonicalMember(memberId);
   const [state, version, registry] = await Promise.all([readMembershipCommerceState(options.filePath), getActiveMembershipRules(new Date(), options.rulesFilePath), getIdentityRegistrySnapshot()]);
+  const todayDate = getDateOnlyInTimeZone(new Date());
+  const qualificationCoverageByRewardId = new Map(
+    Object.values(state.referralRewardCoverages).map((coverage) => [coverage.referralRewardId, coverage]),
+  );
+  const qualificationMaturationByRewardId = new Map(
+    Object.values(state.referralRewardMaturations).map((maturation) => [maturation.referralRewardId, maturation]),
+  );
   const depth = Math.max(1, Math.min(options.depth ?? version.rules.referral.referralMaxRewardDepth, version.rules.referral.referralMaxRewardDepth, 10));
   const traversedNodes: Array<{ memberId: string; memberNumber: string; level: number; parentMemberId: string; parentMemberNumber: string }> = [];
   let frontier = [memberId];
@@ -4186,7 +4304,9 @@ export async function getMemberReferralCenter(memberId: string, options: { baseU
   };
 
   const orgMemberIds = new Set([memberId, ...orgTraversedNodes.map((node) => node.memberId)]);
-  const orgSourceRewards = Object.values(state.referralRewards).filter((reward) => orgMemberIds.has(reward.sourceMemberId));
+  const orgSourceRewards = Object.values(state.referralRewards).filter(
+    (reward) => orgMemberIds.has(reward.sourceMemberId) && reward.beneficiaryMemberId === memberId,
+  );
   const orgOrderSourceMember = new Map<string, string>();
   for (const reward of orgSourceRewards) {
     if (reward.sourceOrderNumber && !orgOrderSourceMember.has(reward.sourceOrderNumber)) orgOrderSourceMember.set(reward.sourceOrderNumber, reward.sourceMemberId);
@@ -4197,45 +4317,42 @@ export async function getMemberReferralCenter(memberId: string, options: { baseU
   const currentPeriodKey = getDateOnlyInTimeZone(new Date()).slice(0, 7);
   const periodLabel = `${currentPeriodKey.replace("-", "/")} 本月`;
 
-  const safeOrgOrderItems = (order: Awaited<ReturnType<typeof readOrder>>) => Array.isArray(order?.items)
-    ? order.items.slice(0, 20).map((raw: unknown) => {
-        const orderItem = raw && typeof raw === "object" && !Array.isArray(raw) ? raw as Record<string, unknown> : {};
-        return {
-          name: String(orderItem.name || "KD Coffee 商品").slice(0, 80),
-          optionLabel: String(orderItem.optionLabel || "").slice(0, 60),
-          optionDetail: String(orderItem.optionDetail || "").slice(0, 80),
-          preparationLabel: String(orderItem.preparationLabel || "").slice(0, 60),
-          quantity: Math.max(1, Math.min(999, Number(orderItem.quantity) || 1)),
-        };
-      })
-    : [];
-
   const metricsForSourceMember = (sourceMemberId: string) => {
     const sourceOrderNumbers = [...orgOrderSourceMember.entries()].filter(([, sourceId]) => sourceId === sourceMemberId).map(([orderNumber]) => orderNumber);
-    const sourceRewardsForCurrentMember = orgSourceRewards.filter((reward) => reward.sourceMemberId === sourceMemberId && reward.beneficiaryMemberId === memberId);
+    const sourceRewardsForCurrentMember = orgSourceRewards.filter((reward) => reward.sourceMemberId === sourceMemberId);
     const recentOrders = sourceOrderNumbers
       .map((orderNumber) => {
         const sourceOrder = orgOrders.get(orderNumber);
         const createdAt = sourceOrder?.createdAt ?? null;
         if (!createdAt || Date.parse(createdAt) < recentOrderCutoff) return null;
         const reward = sourceRewardsForCurrentMember.find((item) => item.sourceOrderNumber === orderNumber) ?? null;
-        return {
-          orderNumber,
-          createdAt,
-          sourceItems: safeOrgOrderItems(sourceOrder ?? null),
-          referralLevel: reward?.referralLevel ?? null,
-          effectivePV: reward?.effectivePV ?? null,
-          rewardRate: reward?.rewardRate ?? null,
-          creditAmount: reward?.calculatedCreditAmount ?? null,
-          projectedCreditAmount: reward?.projectedCreditAmount ?? reward?.calculatedCreditAmount ?? null,
-          status: reward?.status ?? null,
-          cancellationReason: reward?.cancellationReason ?? null,
-          qualificationStatus: reward?.qualificationStatus ?? null,
-          releasedAt: reward?.releasedAt ?? null,
-        };
+        if (!reward) return null;
+        const creditEntry = reward.rewardCreditEntryId ? state.creditEntries[reward.rewardCreditEntryId] : null;
+        return buildSafeRewardSourceOrderSummary({
+          currentMemberId: memberId,
+          rewardBeneficiaryMemberId: reward.beneficiaryMemberId,
+          sourceOrderNumber: reward.sourceOrderNumber,
+          order: sourceOrder,
+          referralLevel: reward.referralLevel,
+          effectivePV: reward.effectivePV,
+          rewardRate: reward.rewardRate,
+          rewardPV: reward.rewardPV,
+          projectedCreditAmount: reward.projectedCreditAmount ?? reward.calculatedCreditAmount,
+          actualCreditAmount: creditEntry?.amount ?? null,
+          availableCreditAmount: creditEntry ? effectiveCreditRemaining(state, creditEntry, new Date()) : null,
+          releaseEligibleBusinessDate: reward.releaseEligibleBusinessDate ?? reward.scheduledReleaseAt?.slice(0, 10) ?? null,
+          releasedAt: reward.releasedAt,
+          rewardStatus: reward.status,
+          qualificationStatus: reward.qualificationStatus,
+          qualificationAuthority: referralRewardQualificationAuthority(reward),
+          qualificationCoverage: qualificationCoverageByRewardId.get(reward.rewardId) ?? null,
+          qualificationMaturation: qualificationMaturationByRewardId.get(reward.rewardId) ?? null,
+          successfulCompletionAt: reward.successfulPickupBusinessDate,
+          todayDate,
+        });
       })
       .filter((item): item is NonNullable<typeof item> => Boolean(item))
-      .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+      .sort((a, b) => Date.parse(b.createdAt ?? "") - Date.parse(a.createdAt ?? ""));
     const recentOrderCount = recentOrders.length;
     const pendingCredit = sourceRewardsForCurrentMember
       .filter((reward) => reward.status === "scheduled" && reward.qualificationStatus !== "expired")
@@ -4304,25 +4421,6 @@ export async function getMemberReferralCenter(memberId: string, options: { baseU
   const orderPairs = await Promise.all(uniqueOrderNumbers.map(async (orderNumber) => [orderNumber, await readOrder(orderNumber)] as const));
   const sourceOrders = new Map(orderPairs);
 
-  const qualificationCoverageByRewardId =
-    new Map(
-      Object.values(
-        state.referralRewardCoverages,
-      ).map((coverage) => [
-        coverage.referralRewardId,
-        coverage,
-      ]),
-    );
-
-  const qualificationMaturationByRewardId =
-    new Map(
-      Object.values(
-        state.referralRewardMaturations,
-      ).map((maturation) => [
-        maturation.referralRewardId,
-        maturation,
-      ]),
-    );
   const safeOrderItems = (order: Awaited<ReturnType<typeof readOrder>>) => Array.isArray(order?.items)
     ? order.items.slice(0, 20).map((raw: unknown) => {
         const item = raw && typeof raw === "object" && !Array.isArray(raw) ? raw as Record<string, unknown> : {};
@@ -4353,12 +4451,42 @@ export async function getMemberReferralCenter(memberId: string, options: { baseU
         item.rewardId,
       ) ?? null;
 
-    const qualificationMaturation =
-      qualificationMaturationByRewardId.get(
-        item.rewardId,
-      ) ?? null;
+    const creditEntry = item.rewardCreditEntryId ? state.creditEntries[item.rewardCreditEntryId] : null;
+    const sourceOrderSummary = buildSafeRewardSourceOrderSummary({
+      currentMemberId: memberId,
+      rewardBeneficiaryMemberId: item.beneficiaryMemberId,
+      sourceOrderNumber: item.sourceOrderNumber,
+      order: sourceOrder,
+      referralLevel: item.referralLevel,
+      calculationBasis: "pv",
+      effectivePV: item.effectivePV,
+      rewardRate: item.rewardRate,
+      rewardPV: item.rewardPV,
+      projectedCreditAmount: item.projectedCreditAmount ?? item.calculatedCreditAmount,
+      actualCreditAmount: creditEntry?.amount ?? null,
+      availableCreditAmount: creditEntry ? effectiveCreditRemaining(state, creditEntry, new Date()) : null,
+      releaseEligibleBusinessDate: item.releaseEligibleBusinessDate ?? item.scheduledReleaseAt?.slice(0, 10) ?? null,
+      releasedAt: item.releasedAt,
+      rewardStatus: item.status,
+      qualificationStatus: item.qualificationStatus,
+      qualificationAuthority: referralRewardQualificationAuthority(item),
+      qualificationCoverage,
+      qualificationMaturation: qualificationMaturationByRewardId.get(item.rewardId) ?? null,
+      successfulCompletionAt: item.successfulPickupBusinessDate,
+      todayDate,
+    });
+    const displayStatus = sourceOrderSummary?.displayStatus ?? resolveEffectiveRewardDisplayStatus({
+      status: item.status,
+      qualificationStatus: item.qualificationStatus,
+      qualificationAuthority: referralRewardQualificationAuthority(item),
+      qualificationCoverage,
+      qualificationMaturation: qualificationMaturationByRewardId.get(item.rewardId) ?? null,
+      releaseEligibleBusinessDate: item.releaseEligibleBusinessDate ?? item.scheduledReleaseAt?.slice(0, 10) ?? null,
+      releasedAt: item.releasedAt,
+      sourceCompleted: Boolean(item.successfulPickupBusinessDate),
+    }, todayDate);
 
-    return { rewardId: item.rewardId, sourceOrderNumber: item.sourceOrderNumber, sourceOrderCreatedAt: sourceOrder?.createdAt ?? null, sourceMemberNumber: registry.members[item.sourceMemberId]?.memberNumber ?? "KD-會員", sourceItems: safeOrderItems(sourceOrder ?? null), referralLevel: item.referralLevel, rewardType: item.rewardType, calculationMode: item.calculationMode, effectivePV: item.effectivePV, rewardRate: item.rewardRate, rewardPV: item.rewardPV, creditAmount: item.calculatedCreditAmount, projectedCreditAmount: item.projectedCreditAmount ?? item.calculatedCreditAmount, selfPurchaseTierSnapshot: item.selfPurchaseTierSnapshot ?? null, status: item.status, cancellationReason: item.cancellationReason ?? null, qualificationStatus: item.qualificationStatus ?? "legacy", qualificationAuthority: referralRewardQualificationAuthority(item), qualificationCoverage: qualificationCoverage ? { qualificationRoundId: qualificationCoverage.qualificationRoundId, qualificationAt: qualificationCoverage.qualificationAt, coverageStartsAt: qualificationCoverage.coverageStartsAt, coverageEndsAt: qualificationCoverage.coverageEndsAt } : null, qualificationMaturation: qualificationMaturation ? { maturesAt: qualificationMaturation.maturesAt, maturedAt: qualificationMaturation.maturedAt } : null, qualificationExpiresAt: item.qualificationExpiresAt ?? null, qualificationOrderNumber: item.qualificationOrderNumber ?? null, qualificationOrderCreatedAt: item.qualificationOrderCreatedAt ?? null, qualificationOrderFinalState: item.qualificationOrderFinalState ?? null, qualificationQualifiedAt: item.qualificationQualifiedAt ?? null, successfulPickupBusinessDate: item.successfulPickupBusinessDate ?? null, releaseEligibleBusinessDate: item.releaseEligibleBusinessDate ?? item.scheduledReleaseAt?.slice(0, 10) ?? null, releasedAt: item.releasedAt };
+    return { sourceOrderNumber: item.sourceOrderNumber, sourceOrderCreatedAt: sourceOrder?.createdAt ?? null, sourceMemberNumber: registry.members[item.sourceMemberId]?.memberNumber ?? "KD-會員", sourceItems: safeOrderItems(sourceOrder ?? null), sourceOrderSummary, displayStatus, referralLevel: item.referralLevel, rewardType: item.rewardType, calculationMode: item.calculationMode, effectivePV: item.effectivePV, rewardRate: item.rewardRate, rewardPV: item.rewardPV, creditAmount: creditEntry?.amount ?? item.calculatedCreditAmount, projectedCreditAmount: item.projectedCreditAmount ?? item.calculatedCreditAmount, selfPurchaseTierSnapshot: item.selfPurchaseTierSnapshot ?? null, status: item.status, cancellationReason: item.cancellationReason ?? null, qualificationStatus: item.qualificationStatus ?? "legacy", qualificationAuthority: referralRewardQualificationAuthority(item), qualificationCoverage: qualificationCoverage ? { coverageEndsAt: qualificationCoverage.coverageEndsAt } : null, qualificationExpiresAt: item.qualificationExpiresAt ?? null, qualificationOrderNumber: item.qualificationOrderNumber ?? null, qualificationOrderCreatedAt: item.qualificationOrderCreatedAt ?? null, qualificationOrderFinalState: item.qualificationOrderFinalState ?? null, qualificationQualifiedAt: item.qualificationQualifiedAt ?? null, successfulPickupBusinessDate: item.successfulPickupBusinessDate ?? null, releaseEligibleBusinessDate: item.releaseEligibleBusinessDate ?? item.scheduledReleaseAt?.slice(0, 10) ?? null, releasedAt: item.releasedAt };
   }) };
 }
 
