@@ -1,5 +1,7 @@
 "use client";
 
+import { MemberCopyValue } from "@/components/member/MemberCenterCopyProvider";
+
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 type Props = {
@@ -80,12 +82,12 @@ export default function MemberMobileDisclosure({
     >
       <summary>
         <span>
-          <small>{eyebrow}</small>
-          <strong>{title}</strong>
+          <small><MemberCopyValue value={eyebrow} /></small>
+          <strong><MemberCopyValue value={title} /></strong>
           <em>{summary}</em>
         </span>
 
-        <b>{open ? "收合" : actionLabel}</b>
+        <b><MemberCopyValue value={open ? "收合" : actionLabel} /></b>
       </summary>
 
       <div className="member-mobile-disclosure-body">

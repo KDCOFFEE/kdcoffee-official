@@ -1,5 +1,7 @@
 "use client";
 
+import { MemberCopyValue, MemberCopyElement } from "@/components/member/MemberCenterCopyProvider";
+
 import { FormEvent, useState } from "react";
 
 type Props = {
@@ -44,16 +46,16 @@ export default function MemberProfileForm({ initial }: Props) {
     <form className="member-account-inline-form" onSubmit={save}>
       <div className="member-account-inline-head">
         <div>
-          <p className="eyebrow dark">PROFILE</p>
-          <h3>基本資料</h3>
+          <p className="eyebrow dark"><MemberCopyValue value={"PROFILE"} /></p>
+          <h3><MemberCopyValue value={"基本資料"} /></h3>
         </div>
-        <span>可直接修改後儲存</span>
+        <span><MemberCopyValue value={"可直接修改後儲存"} /></span>
       </div>
 
       <div className="member-account-field-grid">
         <label>
-          <small>常用姓名</small>
-          <input
+          <small><MemberCopyValue value={"常用姓名"} /></small>
+          <MemberCopyElement as="input"
             value={pickupName}
             onChange={(event) => setPickupName(event.target.value)}
             maxLength={20}
@@ -63,8 +65,8 @@ export default function MemberProfileForm({ initial }: Props) {
         </label>
 
         <label>
-          <small>手機號碼</small>
-          <input
+          <small><MemberCopyValue value={"手機號碼"} /></small>
+          <MemberCopyElement as="input"
             value={phone}
             onChange={(event) => setPhone(event.target.value.replace(/\D/g, "").slice(0, 10))}
             inputMode="tel"
@@ -75,8 +77,8 @@ export default function MemberProfileForm({ initial }: Props) {
         </label>
 
         <label>
-          <small>Email <em>選填</em></small>
-          <input
+          <small>Email <em><MemberCopyValue value={"選填"} /></em></small>
+          <MemberCopyElement as="input"
             value={email}
             onChange={(event) => setEmail(event.target.value)}
             type="email"
@@ -88,10 +90,10 @@ export default function MemberProfileForm({ initial }: Props) {
 
       <div className="member-account-form-actions">
         <button className="member-save-button" type="submit" disabled={saving}>
-          {saving ? "儲存中…" : "儲存會員資料"}
+          <MemberCopyValue value={saving ? "儲存中…" : "儲存會員資料"} />
         </button>
-        {message && <p className="member-success">{message}</p>}
-        {error && <p className="form-error">{error}</p>}
+        {message && <p className="member-success"><MemberCopyValue value={message} /></p>}
+        {error && <p className="form-error"><MemberCopyValue value={error} /></p>}
       </div>
     </form>
   );

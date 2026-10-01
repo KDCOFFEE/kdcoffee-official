@@ -1,6 +1,7 @@
 "use client";
 
-/* eslint-disable @next/next/no-img-element */
+import { MemberCopyValue, MemberCopyElement } from "@/components/member/MemberCenterCopyProvider";
+
 
 import { useEffect, useRef, useState } from "react";
 
@@ -101,27 +102,27 @@ export default function KdShareDialog({ open, referralCode, onClose }: Props) {
     <dialog ref={dialogRef} className="kd-share-dialog" aria-labelledby="kd-share-dialog-title" onClose={onClose}>
       <div className="kd-share-dialog-shell">
         <header>
-          <div><p className="eyebrow dark">SHARE KD COFFEE</p><h2 id="kd-share-dialog-title">分享 KD Coffee</h2></div>
-          <button type="button" aria-label="關閉分享視窗" onClick={() => dialogRef.current?.close()}>×</button>
+          <div><p className="eyebrow dark"><MemberCopyValue value={"SHARE KD COFFEE"} /></p><h2 id="kd-share-dialog-title"><MemberCopyValue value={"分享 KD Coffee"} /></h2></div>
+          <MemberCopyElement as="button" type="button" aria-label="關閉分享視窗" onClick={() => dialogRef.current?.close()}>×</MemberCopyElement>
         </header>
         <div className="kd-share-dialog-body">
-          <p className="kd-share-dialog-intro">把你喜歡的 KD Coffee 分享給朋友。連結會保留你的分享來源，朋友仍可自由瀏覽與選購。</p>
+          <p className="kd-share-dialog-intro"><MemberCopyValue value={"把你喜歡的 KD Coffee 分享給朋友。連結會保留你的分享來源，朋友仍可自由瀏覽與選購。"} /></p>
           <label className="kd-share-copy-editor">
-            <span>分享文字</span>
+            <span><MemberCopyValue value={"分享文字"} /></span>
             <textarea value={shareText} maxLength={400} rows={6} onChange={(event) => setShareText(event.target.value)} />
           </label>
-          <div className="kd-share-url"><span>分享連結</span><strong>KD Coffee 首頁＋你的分享碼</strong></div>
+          <div className="kd-share-url"><span><MemberCopyValue value={"分享連結"} /></span><strong><MemberCopyValue value={"KD Coffee 首頁＋你的分享碼"} /></strong></div>
           <div className="kd-share-actions">
-            <button className="kd-share-primary" type="button" onClick={() => void share()}>分享出去</button>
-            <button type="button" onClick={() => void copyLink()}>複製連結</button>
-            <button type="button" aria-expanded={qrOpen} onClick={() => setQrOpen((current) => !current)}>{qrOpen ? "收起 QR Code" : "顯示 QR Code"}</button>
+            <button className="kd-share-primary" type="button" onClick={() => void share()}><MemberCopyValue value={"分享出去"} /></button>
+            <button type="button" onClick={() => void copyLink()}><MemberCopyValue value={"複製連結"} /></button>
+            <button type="button" aria-expanded={qrOpen} onClick={() => setQrOpen((current) => !current)}><MemberCopyValue value={qrOpen ? "收起 QR Code" : "顯示 QR Code"} /></button>
           </div>
-          {qrOpen ? <section className="kd-share-qr" aria-label="分享 QR Code">
-            <img width="220" height="220" alt="KD Coffee 分享 QR Code" src={qrUrl} />
-            <button type="button" onClick={() => void downloadQr()}>下載 QR Code</button>
-          </section> : null}
-          <details className="kd-share-explanation"><summary>分享如何計算？</summary><p>朋友從這個連結進入 KD Coffee 後，以訪客身分完成有效訂單，可列入你的推廣零售；若朋友完成會員註冊，推薦關係會由系統自動記錄。已登入會員購買仍屬於該會員自己的消費。</p></details>
-          <p className="kd-share-feedback" role="status" aria-live="polite">{feedback}</p>
+          {qrOpen ? <MemberCopyElement as="section" className="kd-share-qr" aria-label="分享 QR Code">
+            <MemberCopyElement as="img" width="220" height="220" alt="KD Coffee 分享 QR Code" src={qrUrl} />
+            <button type="button" onClick={() => void downloadQr()}><MemberCopyValue value={"下載 QR Code"} /></button>
+          </MemberCopyElement> : null}
+          <details className="kd-share-explanation"><summary><MemberCopyValue value={"分享如何計算？"} /></summary><p><MemberCopyValue value={"朋友從這個連結進入 KD Coffee 後，以訪客身分完成有效訂單，可列入你的推廣零售；若朋友完成會員註冊，推薦關係會由系統自動記錄。已登入會員購買仍屬於該會員自己的消費。"} /></p></details>
+          <p className="kd-share-feedback" role="status" aria-live="polite"><MemberCopyValue value={feedback} /></p>
         </div>
       </div>
     </dialog>

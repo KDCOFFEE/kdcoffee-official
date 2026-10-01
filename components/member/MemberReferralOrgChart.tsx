@@ -1,5 +1,7 @@
 "use client";
 
+import { MemberCopyValue, MemberCopyElement } from "@/components/member/MemberCenterCopyProvider";
+
 import { useEffect, useMemo, useRef, useState } from "react";
 import RewardSourceOrderSummaryCard from "./RewardSourceOrderSummaryCard";
 import type { RewardSourceOrderSummary } from "@/lib/memberRewardPresentation";
@@ -65,22 +67,19 @@ function OrgNodeCard({
       }}
     >
       <span className="member-org-avatar" aria-hidden="true">{isRoot ? "★" : "●"}</span>
-      <strong>會員 {node.memberNumber}</strong>
-      <small>直推 {node.directReferralCount} 人 · 團隊 {node.teamCount} 人</small>
+      <strong><MemberCopyValue value={"會員 "} />{node.memberNumber}</strong>
+      <small><MemberCopyValue value={"直推 "} />{node.directReferralCount}<MemberCopyValue value={" 人 · 團隊 "} />{node.teamCount}<MemberCopyValue value={" 人"} /></small>
       <span className="member-org-node-metrics">
         {hasRecentOrders ? (
-          <button type="button" className="member-org-order-trigger" onClick={() => onOpenOrders(node)}>
-            新訂單 {node.recentOrderCount} <b>查看 ›</b>
+          <button type="button" className="member-org-order-trigger" onClick={() => onOpenOrders(node)}><MemberCopyValue value={"新訂單 "} />{node.recentOrderCount} <b><MemberCopyValue value={"查看 ›"} /></b>
           </button>
-        ) : <em>新訂單 0</em>}
-        <em>待入帳 {money(node.pendingCredit)}</em>
-        <em>本週期 {money(node.currentPeriodCredit)}</em>
+        ) : <em><MemberCopyValue value={"新訂單 0"} /></em>}
+        <em><MemberCopyValue value={"待入帳 "} />{money(node.pendingCredit)}</em>
+        <em><MemberCopyValue value={"本週期 "} />{money(node.currentPeriodCredit)}</em>
       </span>
       {canOpen ? (
-        <button type="button" className="member-org-drilldown" onClick={() => onOpen(node)}>
-          查看他的組織圖 ›
-        </button>
-      ) : <b className="is-muted">目前沒有下線</b>}
+        <button type="button" className="member-org-drilldown" onClick={() => onOpen(node)}><MemberCopyValue value={"查看他的組織圖 ›"} /></button>
+      ) : <b className="is-muted"><MemberCopyValue value={"目前沒有下線"} /></b>}
     </div>
   );
 }
@@ -116,15 +115,15 @@ function Branch({
 function MemberOrgOrderViewer({ node, pointDisplayName, onClose }: { node: ReferralOrgChartNode; pointDisplayName: string; onClose: () => void }) {
   return (
     <div className="member-org-order-viewer" role="dialog" aria-modal="true" aria-labelledby="member-org-order-title">
-      <button type="button" className="member-org-order-backdrop" aria-label="關閉新訂單明細" onClick={onClose} />
+      <MemberCopyElement as="button" type="button" className="member-org-order-backdrop" aria-label="關閉新訂單明細" onClick={onClose} />
       <section className="member-org-order-panel">
         <header>
           <div>
-            <p className="eyebrow dark">NEW ORDERS</p>
-            <h3 id="member-org-order-title">會員 {node.memberNumber} 的新訂單</h3>
-            <p>近 30 日共 {node.recentOrders.length} 筆；內容直接讀取既有訂單與回饋紀錄。</p>
+            <p className="eyebrow dark"><MemberCopyValue value={"NEW ORDERS"} /></p>
+            <h3 id="member-org-order-title"><MemberCopyValue value={"會員 "} />{node.memberNumber}<MemberCopyValue value={" 的新訂單"} /></h3>
+            <p><MemberCopyValue value={"近 30 日共 "} />{node.recentOrders.length}<MemberCopyValue value={" 筆；內容直接讀取既有訂單與回饋紀錄。"} /></p>
           </div>
-          <button type="button" className="member-org-order-close" onClick={onClose} aria-label="關閉">×</button>
+          <MemberCopyElement as="button" type="button" className="member-org-order-close" onClick={onClose} aria-label="關閉">×</MemberCopyElement>
         </header>
         <div className="member-org-order-list">
           {node.recentOrders.map((order) => (
@@ -204,29 +203,29 @@ function MemberReferralOrgChartDialog({ data, onClose }: Omit<Props, "open">) {
 
   return (
     <div className="member-org-modal" role="dialog" aria-modal="true" aria-labelledby="member-org-title">
-      <button className="member-org-backdrop" type="button" aria-label="關閉推薦組織圖" onClick={onClose} />
+      <MemberCopyElement as="button" className="member-org-backdrop" type="button" aria-label="關閉推薦組織圖" onClick={onClose} />
       <div className="member-org-shell">
         <header className="member-org-header">
-          <button type="button" className="member-org-return" onClick={onClose}>← 返回推薦</button>
+          <button type="button" className="member-org-return" onClick={onClose}><MemberCopyValue value={"← 返回推薦"} /></button>
           <div>
-            <p className="eyebrow dark">REFERRAL ORGANIZATION</p>
-            <h2 id="member-org-title">推薦組織圖 <span>顯示 3 代內</span></h2>
-            <p>點擊有下線的會員，即可以他為最上層重新查看下一個三代組織。</p>
+            <p className="eyebrow dark"><MemberCopyValue value={"REFERRAL ORGANIZATION"} /></p>
+            <h2 id="member-org-title"><MemberCopyValue value={"推薦組織圖 "} /><span><MemberCopyValue value={"顯示 3 代內"} /></span></h2>
+            <p><MemberCopyValue value={"點擊有下線的會員，即可以他為最上層重新查看下一個三代組織。"} /></p>
           </div>
-          <button type="button" className="member-org-close" onClick={onClose} aria-label="關閉">×</button>
+          <MemberCopyElement as="button" type="button" className="member-org-close" onClick={onClose} aria-label="關閉">×</MemberCopyElement>
         </header>
 
-        <div id="member-org-summary" className={`member-org-kpis${summaryExpanded ? " is-expanded" : ""}`} aria-label="推薦組織圖摘要">
-          <article><small>我的推薦成員</small><strong>{data.stats.teamMembers}</strong><span>人</span></article>
-          <article><small>新訂單</small><strong>{data.stats.newOrders}</strong><span>近 30 日有效訂單</span></article>
-          <article><small>待入帳回饋</small><strong>{money(data.stats.pendingCredit)}</strong><span>依正式回饋紀錄</span></article>
-          <article><small>本週期入帳</small><strong>{money(data.stats.currentPeriodCredit)}</strong><span>{data.periodLabel}</span></article>
-        </div>
+        <MemberCopyElement as="div" id="member-org-summary" className={`member-org-kpis${summaryExpanded ? " is-expanded" : ""}`} aria-label="推薦組織圖摘要">
+          <article><small><MemberCopyValue value={"我的推薦成員"} /></small><strong>{data.stats.teamMembers}</strong><span><MemberCopyValue value={"人"} /></span></article>
+          <article><small><MemberCopyValue value={"新訂單"} /></small><strong>{data.stats.newOrders}</strong><span><MemberCopyValue value={"近 30 日有效訂單"} /></span></article>
+          <article><small><MemberCopyValue value={"待入帳回饋"} /></small><strong>{money(data.stats.pendingCredit)}</strong><span><MemberCopyValue value={"依正式回饋紀錄"} /></span></article>
+          <article><small><MemberCopyValue value={"本週期入帳"} /></small><strong>{money(data.stats.currentPeriodCredit)}</strong><span>{data.periodLabel}</span></article>
+        </MemberCopyElement>
 
         <div className="member-org-toolbar">
           <div className="member-org-current">
-            <small>目前查看</small>
-            <strong>{center.memberId === data.root.memberId ? `我的組織圖 · ${center.memberNumber}` : `會員 ${center.memberNumber}`}</strong>
+            <small><MemberCopyValue value={"目前查看"} /></small>
+            <strong><MemberCopyValue value={center.memberId === data.root.memberId ? `我的組織圖 · ${center.memberNumber}` : `會員 ${center.memberNumber}`} /></strong>
           </div>
           <button
             type="button"
@@ -235,18 +234,18 @@ function MemberReferralOrgChartDialog({ data, onClose }: Omit<Props, "open">) {
             aria-controls="member-org-summary"
             onClick={() => setSummaryExpanded((current) => !current)}
           >
-            {summaryExpanded ? "收合摘要" : "展開摘要"}
+            <MemberCopyValue value={summaryExpanded ? "收合摘要" : "展開摘要"} />
           </button>
           <div className="member-org-actions">
-            <button type="button" disabled={!history.length} onClick={() => { setHistory((current) => current.slice(0, -1)); resetView(); }}>← 返回上一層</button>
-            <button type="button" onClick={() => { setHistory([]); resetView(); }}>⌂ 回到我的組織圖</button>
+            <button type="button" disabled={!history.length} onClick={() => { setHistory((current) => current.slice(0, -1)); resetView(); }}><MemberCopyValue value={"← 返回上一層"} /></button>
+            <button type="button" onClick={() => { setHistory([]); resetView(); }}><MemberCopyValue value={"⌂ 回到我的組織圖"} /></button>
           </div>
-          <div className="member-org-zoom" aria-label="組織圖縮放">
-            <button type="button" onClick={() => updateScale(scale - 0.1)} aria-label="縮小">−</button>
+          <MemberCopyElement as="div" className="member-org-zoom" aria-label="組織圖縮放">
+            <MemberCopyElement as="button" type="button" onClick={() => updateScale(scale - 0.1)} aria-label="縮小">−</MemberCopyElement>
             <span>{Math.round(scale * 100)}%</span>
-            <button type="button" onClick={() => updateScale(scale + 0.1)} aria-label="放大">＋</button>
-            <button type="button" onClick={resetView}>適合畫面</button>
-          </div>
+            <MemberCopyElement as="button" type="button" onClick={() => updateScale(scale + 0.1)} aria-label="放大">＋</MemberCopyElement>
+            <button type="button" onClick={resetView}><MemberCopyValue value={"適合畫面"} /></button>
+          </MemberCopyElement>
         </div>
 
         <div
@@ -304,8 +303,8 @@ function MemberReferralOrgChartDialog({ data, onClose }: Omit<Props, "open">) {
         {orderNode ? <MemberOrgOrderViewer node={orderNode} pointDisplayName={data.pointDisplayName} onClose={() => setOrderNode(null)} /> : null}
 
         <footer className="member-org-footer">
-          <span>拖曳移動畫布 · 滾輪或雙指縮放</span>
-          <span>新訂單／回饋數字僅顯示既有會員與回饋資料，不另行計算。</span>
+          <span><MemberCopyValue value={"拖曳移動畫布 · 滾輪或雙指縮放"} /></span>
+          <span><MemberCopyValue value={"新訂單／回饋數字僅顯示既有會員與回饋資料，不另行計算。"} /></span>
         </footer>
       </div>
     </div>

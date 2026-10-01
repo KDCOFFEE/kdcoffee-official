@@ -59,6 +59,7 @@ export default async function AdminPage() {
       <Link className="admin-members-entry" href="/admin/member-directory"><strong>會員資料與組織圖</strong><span>Owner 專用・完整 live 會員目錄、推薦組織與權益摘要 →</span></Link>
       <Link href="/admin/member-identities"><strong>會員身份系統</strong><span>會員編號與登入方式安全狀態 →</span></Link>
       <Link href="/admin/membership"><strong>會員與定期購設定</strong><span>免運、配送、贈品、推薦與抵用金 →</span></Link>
+      <Link href="/admin/member-center/copy"><strong>會員中心顯示文字與說明</strong><span>名稱、按鈕、提示與說明文字 →</span></Link>
       <Link href="/admin/referrals"><strong>推薦制度管理</strong><span>組織、獎勵明細與成本統計 →</span></Link>
       <Link href="/admin/pv"><strong>SKU PV 管理</strong><span>搜尋、篩選與集中設定 PV →</span></Link>
       <Link href="/admin/membership/test-lab"><strong>會員制度測試實驗室</strong><span>隔離模擬推薦、PV、獎勵與時間快轉 →</span></Link>

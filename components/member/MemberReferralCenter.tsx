@@ -1,5 +1,7 @@
 "use client";
 
+import { MemberCopyValue, MemberCopyElement } from "@/components/member/MemberCenterCopyProvider";
+
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState, type ComponentProps } from "react";
 import KdShareDialog from "./KdShareDialog";
@@ -441,99 +443,99 @@ export default function MemberReferralCenter({ initialData: data }: { initialDat
   return (
     <>
       <section id="referral" className="member-ia-section" aria-labelledby="member-referral-title" data-member-section role="tabpanel" hidden>
-        <header className="member-ia-section-head"><div><p className="eyebrow dark">REFERRAL</p><h2 id="member-referral-title">推薦</h2></div><p>分享咖啡、查看推薦人與團隊，並直接開啟三代組織圖。</p></header>
+        <header className="member-ia-section-head"><div><p className="eyebrow dark"><MemberCopyValue value={"REFERRAL"} /></p><h2 id="member-referral-title"><MemberCopyValue value={"推薦"} /></h2></div><p><MemberCopyValue value={"分享咖啡、查看推薦人與團隊，並直接開啟三代組織圖。"} /></p></header>
         <section className={`member-commerce-section member-referral-center-v2 ${styles.referralExperience}`}>
           <div className={styles.referralOverview}>
             <article className={styles.shareCard}>
-              <div><p className="eyebrow dark">SHARE KD COFFEE</p><h3>分享給朋友</h3></div>
-              <p>這是會員中心唯一的分享入口。朋友透過你的專屬連結加入會員，系統會保留推薦關係；訪客完成有效購買，也可能帶來推廣零售回饋。</p>
+              <div><p className="eyebrow dark"><MemberCopyValue value={"SHARE KD COFFEE"} /></p><h3><MemberCopyValue value={"分享給朋友"} /></h3></div>
+              <p><MemberCopyValue value={"這是會員中心唯一的分享入口。朋友透過你的專屬連結加入會員，系統會保留推薦關係；訪客完成有效購買，也可能帶來推廣零售回饋。"} /></p>
               <dl className={styles.shareMeta}>
-                <div><dt>我的推薦碼</dt><dd>{data.referralCode}</dd></div>
-                <div><dt>專屬連結</dt><dd>{data.referralUrl || "KD Coffee 首頁＋你的分享碼"}</dd></div>
+                <div><dt><MemberCopyValue value={"我的推薦碼"} /></dt><dd>{data.referralCode}</dd></div>
+                <div><dt><MemberCopyValue value={"專屬連結"} /></dt><dd><MemberCopyValue value={data.referralUrl || "KD Coffee 首頁＋你的分享碼"} /></dd></div>
               </dl>
-              <button ref={shareTriggerRef} className={styles.primaryAction} type="button" onClick={() => setShareOpen(true)}>分享 KD Coffee</button>
+              <button ref={shareTriggerRef} className={styles.primaryAction} type="button" onClick={() => setShareOpen(true)}><MemberCopyValue value={"分享 KD Coffee"} /></button>
             </article>
             <article className={styles.inviterCard}>
-              <div><p className="eyebrow dark">INVITED BY</p><h3>誰邀請我</h3></div>
-              <strong>{data.referrerMemberNumber ? `會員 ${data.referrerMemberNumber}` : "無推薦人資料"}</strong>
-              <p>{data.referrerMemberNumber ? "這是你的推薦關係來源；會員聯絡資料不會在此顯示。" : "目前沒有其他會員的推薦關係紀錄。"}</p>
-              <dl><div><dt>直接推薦</dt><dd>{directMembers} 人</dd></div><div><dt>團隊人數</dt><dd>{data.nodes.length} 人</dd></div></dl>
+              <div><p className="eyebrow dark"><MemberCopyValue value={"INVITED BY"} /></p><h3><MemberCopyValue value={"誰邀請我"} /></h3></div>
+              <strong><MemberCopyValue value={data.referrerMemberNumber ? `會員 ${data.referrerMemberNumber}` : "無推薦人資料"} /></strong>
+              <p><MemberCopyValue value={data.referrerMemberNumber ? "這是你的推薦關係來源；會員聯絡資料不會在此顯示。" : "目前沒有其他會員的推薦關係紀錄。"} /></p>
+              <dl><div><dt><MemberCopyValue value={"直接推薦"} /></dt><dd>{directMembers}<MemberCopyValue value={" 人"} /></dd></div><div><dt><MemberCopyValue value={"團隊人數"} /></dt><dd>{data.nodes.length}<MemberCopyValue value={" 人"} /></dd></div></dl>
             </article>
           </div>
           <KdShareDialog open={shareOpen} referralCode={data.referralCode} onClose={() => { setShareOpen(false); window.setTimeout(() => shareTriggerRef.current?.focus(), 0); }} />
           <section className="member-referral-team-v2">
         <div className="member-referral-team-title-row">
-          <div className="member-referral-subhead"><p className="eyebrow dark">MY TEAM</p><h3>我的推薦團隊</h3><p>先看自己的第一代；也可以打開三代樹狀組織圖，點選會員後以他為中心繼續往下查看。</p></div>
-          <button ref={orgChartTriggerRef} type="button" className="member-org-open-button" onClick={() => setOrgChartOpen(true)}>查看組織圖</button>
+          <div className="member-referral-subhead"><p className="eyebrow dark"><MemberCopyValue value={"MY TEAM"} /></p><h3><MemberCopyValue value={"我的推薦團隊"} /></h3><p><MemberCopyValue value={"先看自己的第一代；也可以打開三代樹狀組織圖，點選會員後以他為中心繼續往下查看。"} /></p></div>
+          <button ref={orgChartTriggerRef} type="button" className="member-org-open-button" onClick={() => setOrgChartOpen(true)}><MemberCopyValue value={"查看組織圖"} /></button>
         </div>
         <div className="member-team-explorer-head">
           <div className="member-team-explorer-context">
-            {teamPath.length ? <button type="button" className="member-team-back member-team-back-top" onClick={() => setTeamPath(teamPath.slice(0, -1))}>← 返回上一層</button> : <span className="member-team-root-label">我的第一代</span>}
-            <div className="member-team-breadcrumb" aria-label="推薦團隊瀏覽路徑">
-              <button type="button" className={!teamPath.length ? "is-current" : ""} onClick={() => setTeamPath([])}>我的推薦團隊</button>
+            {teamPath.length ? <button type="button" className="member-team-back member-team-back-top" onClick={() => setTeamPath(teamPath.slice(0, -1))}><MemberCopyValue value={"← 返回上一層"} /></button> : <span className="member-team-root-label"><MemberCopyValue value={"我的第一代"} /></span>}
+            <MemberCopyElement as="div" className="member-team-breadcrumb" aria-label="推薦團隊瀏覽路徑">
+              <button type="button" className={!teamPath.length ? "is-current" : ""} onClick={() => setTeamPath([])}><MemberCopyValue value={"我的推薦團隊"} /></button>
               {teamPath.map((item, index) => <span key={`${item.memberNumber}:${index}`}><b>›</b><button type="button" className={index === teamPath.length - 1 ? "is-current" : ""} onClick={() => setTeamPath(teamPath.slice(0, index + 1))}>{item.memberNumber}</button></span>)}
-            </div>
-            {currentTeamParent ? <div className="member-team-current-card"><div><small>目前查看</small><strong>會員 {currentTeamParent.memberNumber}</strong><span>你的第 {currentTeamParent.level} 代會員</span></div><div><small>他的直接推薦</small><strong>{visibleNodes.length} 人</strong></div></div> : null}
+            </MemberCopyElement>
+            {currentTeamParent ? <div className="member-team-current-card"><div><small><MemberCopyValue value={"目前查看"} /></small><strong><MemberCopyValue value={"會員 "} />{currentTeamParent.memberNumber}</strong><span><MemberCopyValue value={"你的第 "} />{currentTeamParent.level}<MemberCopyValue value={" 代會員"} /></span></div><div><small><MemberCopyValue value={"他的直接推薦"} /></small><strong>{visibleNodes.length}<MemberCopyValue value={" 人"} /></strong></div></div> : null}
           </div>
-          <span className="member-team-level-count">你的第 {currentTeamLevel} 代 · {visibleNodes.length} 人</span>
+          <span className="member-team-level-count"><MemberCopyValue value={"你的第 "} />{currentTeamLevel}<MemberCopyValue value={" 代 · "} />{visibleNodes.length}<MemberCopyValue value={" 人"} /></span>
         </div>
         {visibleNodes.length ? <div className="member-referral-list-v2 member-team-explorer-list">{visibleNodes.map((node) => <button type="button" className="member-team-node" key={`${node.level}:${node.memberNumber}`} onClick={() => node.directReferralCount > 0 && setTeamPath([...teamPath, { memberNumber: node.memberNumber, level: node.level }])}>
-          <div><strong>會員 {node.memberNumber}</strong><small>你的第 {node.level} 代</small></div>
-          <div className="member-team-node-counts"><span>直推 <b>{node.directReferralCount}</b> 人</span><span>團隊 <b>{node.teamCount}</b> 人</span>{node.directReferralCount > 0 ? <em>查看下線 ›</em> : <em className="is-empty">尚無下線</em>}</div>
-        </button>)}</div> : <div className="member-commerce-empty compact"><strong>{currentTeamParent ? `會員 ${currentTeamParent.memberNumber} 目前沒有直接推薦會員` : "目前還沒有第一代推薦會員"}</strong><p>{currentTeamParent ? "可返回上一層繼續查看其他推薦會員。" : "分享給朋友後，完成會員加入就會在這裡顯示。"}</p></div>}
+          <div><strong><MemberCopyValue value={"會員 "} />{node.memberNumber}</strong><small><MemberCopyValue value={"你的第 "} />{node.level}<MemberCopyValue value={" 代"} /></small></div>
+          <div className="member-team-node-counts"><span><MemberCopyValue value={"直推 "} /><b>{node.directReferralCount}</b><MemberCopyValue value={" 人"} /></span><span><MemberCopyValue value={"團隊 "} /><b>{node.teamCount}</b><MemberCopyValue value={" 人"} /></span>{node.directReferralCount > 0 ? <em><MemberCopyValue value={"查看下線 ›"} /></em> : <em className="is-empty"><MemberCopyValue value={"尚無下線"} /></em>}</div>
+        </button>)}</div> : <div className="member-commerce-empty compact"><strong><MemberCopyValue value={currentTeamParent ? `會員 ${currentTeamParent.memberNumber} 目前沒有直接推薦會員` : "目前還沒有第一代推薦會員"} /></strong><p><MemberCopyValue value={currentTeamParent ? "可返回上一層繼續查看其他推薦會員。" : "分享給朋友後，完成會員加入就會在這裡顯示。"} /></p></div>}
           </section>
         </section>
         <MemberReferralOrgChart open={orgChartOpen} data={data.orgChart} onClose={() => { setOrgChartOpen(false); window.setTimeout(() => orgChartTriggerRef.current?.focus(), 0); }} />
       </section>
 
       <section id="rewards" className="member-ia-section" aria-labelledby="member-rewards-title" data-member-section role="tabpanel" hidden>
-        <header className="member-ia-section-head"><div><p className="eyebrow dark">REWARDS</p><h2 id="member-rewards-title">回饋</h2></div><p>推廣零售、會員回饋、資格與歷史明細各自清楚呈現。</p></header>
+        <header className="member-ia-section-head"><div><p className="eyebrow dark"><MemberCopyValue value={"REWARDS"} /></p><h2 id="member-rewards-title"><MemberCopyValue value={"回饋"} /></h2></div><p><MemberCopyValue value={"推廣零售、會員回饋、資格與歷史明細各自清楚呈現。"} /></p></header>
         <RetailPromotionCenter />
         <section className="member-commerce-section member-referral-center-v2">
-          <div className="member-section-head"><div><p className="eyebrow dark">MEMBER REWARDS</p><h2>會員回饋</h2><p>回饋點數與折抵金額都以正式紀錄為準。</p></div></div>
+          <div className="member-section-head"><div><p className="eyebrow dark"><MemberCopyValue value={"MEMBER REWARDS"} /></p><h2><MemberCopyValue value={"會員回饋"} /></h2><p><MemberCopyValue value={"回饋點數與折抵金額都以正式紀錄為準。"} /></p></div></div>
           <div className={`member-referral-primary-grid ${styles.rewardPrimary}`}>
             <article className="member-referral-primary-card">
-              <div><p className="eyebrow dark">MY REWARDS</p><h3>我的回饋</h3></div>
-              <dl><div><dt>待入帳</dt><dd>NT$ {pendingRewardCredit.toLocaleString("zh-TW")}</dd></div><div><dt>已入帳</dt><dd>NT$ {releasedRewardCredit.toLocaleString("zh-TW")}</dd></div></dl>
-              <button ref={rewardTriggerRef} type="button" onClick={() => openRewardDetails("all", rewardTriggerRef.current)}>查看回饋明細</button>
+              <div><p className="eyebrow dark"><MemberCopyValue value={"MY REWARDS"} /></p><h3><MemberCopyValue value={"我的回饋"} /></h3></div>
+              <dl><div><dt><MemberCopyValue value={"待入帳"} /></dt><dd>NT$ {pendingRewardCredit.toLocaleString("zh-TW")}</dd></div><div><dt><MemberCopyValue value={"已入帳"} /></dt><dd>NT$ {releasedRewardCredit.toLocaleString("zh-TW")}</dd></div></dl>
+              <button ref={rewardTriggerRef} type="button" onClick={() => openRewardDetails("all", rewardTriggerRef.current)}><MemberCopyValue value={"查看回饋明細"} /></button>
             </article>
           </div>
           <MemberQualificationProgress progress={data.qualificationProgress} />
           <dialog ref={rewardDialogRef} className="member-ia-dialog member-reward-dialog" aria-labelledby="member-reward-ledger-title" onClose={finishClosingRewardDetails}>
         <div className="member-ia-dialog-shell">
-          <header><div><p className="eyebrow dark">REWARD DETAILS</p><h2 id="member-reward-ledger-title">推薦與會員回饋</h2></div><button type="button" aria-label="關閉回饋明細" onClick={() => rewardDialogRef.current?.close()}>×</button></header>
+          <header><div><p className="eyebrow dark"><MemberCopyValue value={"REWARD DETAILS"} /></p><h2 id="member-reward-ledger-title"><MemberCopyValue value={"推薦與會員回饋"} /></h2></div><MemberCopyElement as="button" type="button" aria-label="關閉回饋明細" onClick={() => rewardDialogRef.current?.close()}>×</MemberCopyElement></header>
           <div className="member-ia-dialog-body">
       <section className="member-referral-reward-ledger" aria-labelledby="member-reward-ledger-title">
-        <div className="member-referral-subhead"><p className="eyebrow dark">REWARD HISTORY</p><h3>回饋總覽</h3><p>先看回饋結果，需要時再展開計算、資格與來源訂單。</p></div>
+        <div className="member-referral-subhead"><p className="eyebrow dark"><MemberCopyValue value={"REWARD HISTORY"} /></p><h3><MemberCopyValue value={"回饋總覽"} /></h3><p><MemberCopyValue value={"先看回饋結果，需要時再展開計算、資格與來源訂單。"} /></p></div>
         {rewardFilter === "released" ? (
-          <div className={`member-reward-summary-grid ${styles.rewardSummaryGrid}`} aria-label="已入帳抵用金總覽">
-            <article><small>目前可用折抵額</small><strong>{creditValue(data.availableCreditBalance)}</strong><span>直接取自正式抵用金帳本，不由回饋紀錄重算</span></article>
-            <article><small>回饋入帳來源</small><strong>{releasedRewardSourceCount} 筆</strong><span>推廣零售、推薦回饋與自己的消費</span></article>
-          </div>
+          <MemberCopyElement as="div" className={`member-reward-summary-grid ${styles.rewardSummaryGrid}`} aria-label="已入帳抵用金總覽">
+            <article><small><MemberCopyValue value={"目前可用折抵額"} /></small><strong>{creditValue(data.availableCreditBalance)}</strong><span><MemberCopyValue value={"直接取自正式抵用金帳本，不由回饋紀錄重算"} /></span></article>
+            <article><small><MemberCopyValue value={"回饋入帳來源"} /></small><strong>{releasedRewardSourceCount}<MemberCopyValue value={" 筆"} /></strong><span><MemberCopyValue value={"推廣零售、推薦回饋與自己的消費"} /></span></article>
+          </MemberCopyElement>
         ) : (
-          <div className={`member-reward-summary-grid ${styles.rewardSummaryGrid}`} aria-label="回饋點數總覽">
-            <article><small>累計回饋</small><strong>{pointValue(totalRewardPoints, displayPointName)}</strong><span>已入帳＋有效待入帳</span></article>
-            <article><small>已入帳</small><strong>{pointValue(releasedRewardPoints, displayPointName)}</strong><span>{releasedRewards.length} 筆</span></article>
-            <article><small>待入帳</small><strong>{pointValue(pendingRewardPoints, displayPointName)}</strong><span>{pendingRewardSourceCount} 筆・預估折抵 NT$ {pendingRewardCredit.toLocaleString("zh-TW")}</span></article>
-            <article><small>本月已入帳</small><strong>{pointValue(currentMonthRewardPoints, displayPointName)}</strong><span>會員／推薦回饋本月正式發放</span></article>
-          </div>
+          <MemberCopyElement as="div" className={`member-reward-summary-grid ${styles.rewardSummaryGrid}`} aria-label="回饋點數總覽">
+            <article><small><MemberCopyValue value={"累計回饋"} /></small><strong><MemberCopyValue value={pointValue(totalRewardPoints, displayPointName)} /></strong><span><MemberCopyValue value={"已入帳＋有效待入帳"} /></span></article>
+            <article><small><MemberCopyValue value={"已入帳"} /></small><strong><MemberCopyValue value={pointValue(releasedRewardPoints, displayPointName)} /></strong><span>{releasedRewards.length}<MemberCopyValue value={" 筆"} /></span></article>
+            <article><small><MemberCopyValue value={"待入帳"} /></small><strong><MemberCopyValue value={pointValue(pendingRewardPoints, displayPointName)} /></strong><span>{pendingRewardSourceCount}<MemberCopyValue value={" 筆・預估折抵 NT$ "} />{pendingRewardCredit.toLocaleString("zh-TW")}</span></article>
+            <article><small><MemberCopyValue value={"本月已入帳"} /></small><strong><MemberCopyValue value={pointValue(currentMonthRewardPoints, displayPointName)} /></strong><span><MemberCopyValue value={"會員／推薦回饋本月正式發放"} /></span></article>
+          </MemberCopyElement>
         )}
-        {data.pvDisclosure ? <details className="member-referral-policy"><summary>推薦回饋如何計算？</summary><p>{data.pvDisclosure}</p><p>加入推薦團隊不等於立即產生回饋；仍須依活動、消費與成功取貨條件判定。</p></details> : null}
+        {data.pvDisclosure ? <details className="member-referral-policy"><summary><MemberCopyValue value={"推薦回饋如何計算？"} /></summary><p>{data.pvDisclosure}</p><p><MemberCopyValue value={"加入推薦團隊不等於立即產生回饋；仍須依活動、消費與成功取貨條件判定。"} /></p></details> : null}
         <div className="member-reward-details">
-          <div className="member-reward-ledger-heading"><div><p className="eyebrow dark">REWARD DETAILS</p><h4>回饋明細</h4><p>查看推廣零售、推薦與自己消費所產生的回饋與入帳狀態。</p></div><span>共 {allRewardSourceCount} 筆</span></div>
+          <div className="member-reward-ledger-heading"><div><p className="eyebrow dark"><MemberCopyValue value={"REWARD DETAILS"} /></p><h4><MemberCopyValue value={"回饋明細"} /></h4><p><MemberCopyValue value={"查看推廣零售、推薦與自己消費所產生的回饋與入帳狀態。"} /></p></div><span><MemberCopyValue value={"共 "} />{allRewardSourceCount}<MemberCopyValue value={" 筆"} /></span></div>
         {(data.rewards.length || data.rewardCreditSources.length || data.pendingRetailPromotionRewards.length) ? <>
-          <div className={`member-reward-filters ${styles.compactFilters}`} aria-label="回饋紀錄篩選">
+          <MemberCopyElement as="div" className={`member-reward-filters ${styles.compactFilters}`} aria-label="回饋紀錄篩選">
             <div>{(["all", "pending", "released"] as const).map((filter) => {
               const count = filter === "all" ? allRewardSourceCount : filter === "released" ? releasedRewardSourceCount : pendingRewardSourceCount;
-              return <button type="button" key={filter} className={rewardFilter === filter ? "is-active" : ""} onClick={() => { setRewardFilter(filter); setRewardPage(1); setExpandedRewardKey(null); }}>{filter === "all" ? "全部" : filter === "pending" ? "待入帳" : "已入帳"} <span>{count}</span></button>;
+              return <button type="button" key={filter} className={rewardFilter === filter ? "is-active" : ""} onClick={() => { setRewardFilter(filter); setRewardPage(1); setExpandedRewardKey(null); }}><MemberCopyValue value={filter === "all" ? "全部" : filter === "pending" ? "待入帳" : "已入帳"} /> <span>{count}</span></button>;
             })}</div>
-            <select aria-label="依推薦代數篩選" value={rewardLevel} onChange={(event) => { setRewardLevel(Number(event.target.value)); setRewardPage(1); setExpandedRewardKey(null); }}>
-              <option value={0}>全部代數</option>
-              {data.summaries.map((summary) => <option key={summary.level} value={summary.level}>第 {summary.level} 代</option>)}
-            </select>
-          </div>
+            <MemberCopyElement as="select" aria-label="依推薦代數篩選" value={rewardLevel} onChange={(event) => { setRewardLevel(Number(event.target.value)); setRewardPage(1); setExpandedRewardKey(null); }}>
+              <option value={0}><MemberCopyValue value={"全部代數"} /></option>
+              {data.summaries.map((summary) => <option key={summary.level} value={summary.level}><MemberCopyValue value={"第 "} />{summary.level}<MemberCopyValue value={" 代"} /></option>)}
+            </MemberCopyElement>
+          </MemberCopyElement>
           {pagedLedgerRows.length ? (
-            <div className={styles.compactRewardList} aria-label="回饋紀錄">
+            <MemberCopyElement as="div" className={styles.compactRewardList} aria-label="回饋紀錄">
               {pagedLedgerRows.map((row) => {
                 const reward = row.reward;
                 const isDirectSelfPurchase = reward?.rewardType === "self_purchase" && reward.qualificationAuthority === "self_purchase_direct";
@@ -557,18 +559,18 @@ export default function MemberReferralCenter({ initialData: data }: { initialDat
                         : `一般會員最近 ${q.generalMember.windowDays} 天累積${qualificationMetric}達 ${qualificationThreshold(q.generalMember.threshold)}，或有效定期配送會員最近 ${q.activeSubscriptionMember.windowDays} 天累積${qualificationMetric}達 ${qualificationThreshold(q.activeSubscriptionMember.threshold)}，任一條件符合即可。`
                   : null;
                 const qualificationSummary = row.kind === "retail"
-                  ? <p>推廣零售回饋不需推薦資格；訂單完成後進入安全等待。</p>
+                  ? <p><MemberCopyValue value={"推廣零售回饋不需推薦資格；訂單完成後進入安全等待。"} /></p>
                   : !reward
-                    ? <p>本筆已完成正式入帳。</p>
+                    ? <p><MemberCopyValue value={"本筆已完成正式入帳。"} /></p>
                     : isDirectSelfPurchase
-                      ? <p>本人消費回饋不需推薦資格。</p>
+                      ? <p><MemberCopyValue value={"本人消費回饋不需推薦資格。"} /></p>
                       : hasQualificationCoverage
-                        ? <p>本筆已由有效推薦資格涵蓋 ✓</p>
+                        ? <p><MemberCopyValue value={"本筆已由有效推薦資格涵蓋 ✓"} /></p>
                         : effectiveQualificationStatus === "qualified"
-                          ? <p>本筆推薦資格已確認 ✓</p>
+                          ? <p><MemberCopyValue value={"本筆推薦資格已確認 ✓"} /></p>
                           : effectiveQualificationStatus === "expired"
-                            ? <p>本筆回饋資格期限已結束。</p>
-                            : <p>尚待取得推薦回饋資格。</p>;
+                            ? <p><MemberCopyValue value={"本筆回饋資格期限已結束。"} /></p>
+                            : <p><MemberCopyValue value={"尚待取得推薦回饋資格。"} /></p>;
                 const lifecycleStage = row.releasedAt ? 4 : effectiveQualificationStatus === "qualified" ? 3 : 2;
                 const waitingStepLabel = row.displayStatus === "待系統入帳" ? "待系統入帳" : "安全等待";
                 const lifecycleLabels = row.kind === "retail" || isDirectSelfPurchase
@@ -605,10 +607,10 @@ export default function MemberReferralCenter({ initialData: data }: { initialDat
                   />
                 );
               })}
-            </div>
-          ) : <div className="member-commerce-empty compact"><strong>沒有符合目前篩選條件的回饋紀錄</strong><p>可切換狀態或代數查看其他紀錄。</p></div>}
-          {rewardPageCount > 1 ? <nav className="member-reward-pagination" aria-label="推薦回饋分頁"><button type="button" disabled={safeRewardPage <= 1} onClick={() => setRewardPage(Math.max(1, safeRewardPage - 1))}>上一頁</button><span>第 {safeRewardPage} / {rewardPageCount} 頁</span><button type="button" disabled={safeRewardPage >= rewardPageCount} onClick={() => setRewardPage(Math.min(rewardPageCount, safeRewardPage + 1))}>下一頁</button></nav> : null}
-        </> : <div className="member-commerce-empty compact"><strong>目前還沒有推薦回饋紀錄</strong><p>推薦會員產生符合規則的有效消費後，回饋紀錄會顯示在這裡。</p></div>}
+            </MemberCopyElement>
+          ) : <div className="member-commerce-empty compact"><strong><MemberCopyValue value={"沒有符合目前篩選條件的回饋紀錄"} /></strong><p><MemberCopyValue value={"可切換狀態或代數查看其他紀錄。"} /></p></div>}
+          {rewardPageCount > 1 ? <MemberCopyElement as="nav" className="member-reward-pagination" aria-label="推薦回饋分頁"><button type="button" disabled={safeRewardPage <= 1} onClick={() => setRewardPage(Math.max(1, safeRewardPage - 1))}><MemberCopyValue value={"上一頁"} /></button><span><MemberCopyValue value={"第 "} />{safeRewardPage} / {rewardPageCount}<MemberCopyValue value={" 頁"} /></span><button type="button" disabled={safeRewardPage >= rewardPageCount} onClick={() => setRewardPage(Math.min(rewardPageCount, safeRewardPage + 1))}><MemberCopyValue value={"下一頁"} /></button></MemberCopyElement> : null}
+        </> : <div className="member-commerce-empty compact"><strong><MemberCopyValue value={"目前還沒有推薦回饋紀錄"} /></strong><p><MemberCopyValue value={"推薦會員產生符合規則的有效消費後，回饋紀錄會顯示在這裡。"} /></p></div>}
         </div>
       </section>
           </div>

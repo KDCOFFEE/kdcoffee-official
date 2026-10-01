@@ -1,5 +1,7 @@
 "use client";
 
+import { MemberCopyValue, MemberCopyElement } from "@/components/member/MemberCenterCopyProvider";
+
 import { useEffect, useRef, useState, type ComponentProps } from "react";
 
 import MemberQualificationProgress from "./MemberQualificationProgress";
@@ -34,16 +36,16 @@ export default function MemberQualificationSummary({ progress }: { progress: Pro
   return (
     <section className={`member-qualification-summary${progress.isQualifiedNow ? " is-qualified" : ""}`} aria-labelledby="qualification-summary-title">
       <div className="member-qualification-summary-main">
-        <strong id="qualification-summary-title">推薦回饋資格</strong>
-        <span className="member-qualification-summary-badge">{status}</span>
+        <strong id="qualification-summary-title"><MemberCopyValue value={"推薦回饋資格"} /></strong>
+        <span className="member-qualification-summary-badge"><MemberCopyValue value={status} /></span>
       </div>
       <div className="member-qualification-summary-meta">
-        <span>{supporting}</span>
-        <button ref={triggerRef} type="button" onClick={() => setOpen(true)}>查看詳情 <span aria-hidden="true">→</span></button>
+        <span><MemberCopyValue value={supporting} /></span>
+        <button ref={triggerRef} type="button" onClick={() => setOpen(true)}><MemberCopyValue value={"查看詳情 "} /><span aria-hidden="true">→</span></button>
       </div>
       <dialog ref={dialogRef} className="member-ia-dialog member-qualification-dialog" aria-labelledby="qualification-dialog-title" onClose={() => { setOpen(false); window.setTimeout(() => triggerRef.current?.focus(), 0); }}>
         <div className="member-ia-dialog-shell">
-          <header><div><p className="eyebrow dark">REWARD QUALIFICATION</p><h2 id="qualification-dialog-title">推薦回饋資格詳情</h2></div><button type="button" aria-label="關閉推薦回饋資格詳情" onClick={() => dialogRef.current?.close()}>×</button></header>
+          <header><div><p className="eyebrow dark"><MemberCopyValue value={"REWARD QUALIFICATION"} /></p><h2 id="qualification-dialog-title"><MemberCopyValue value={"推薦回饋資格詳情"} /></h2></div><MemberCopyElement as="button" type="button" aria-label="關閉推薦回饋資格詳情" onClick={() => dialogRef.current?.close()}>×</MemberCopyElement></header>
           <div className="member-ia-dialog-body"><MemberQualificationProgress progress={progress} /></div>
         </div>
       </dialog>

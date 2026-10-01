@@ -1,5 +1,7 @@
 "use client";
 
+import { MemberCopyValue } from "@/components/member/MemberCenterCopyProvider";
+
 import { FormEvent, useEffect, useRef, useState } from "react";
 
 type Mode = "closed" | "login" | "register" | "recovery";
@@ -108,44 +110,36 @@ export default function PhoneAuthForms({ returnTo = "/member" }: { returnTo?: st
         onClick={() => switchMode("login")}
         aria-controls="phone-auth-panel"
         aria-expanded="false"
-      >
-        使用手機號碼登入／註冊
-      </button>
+      ><MemberCopyValue value={"使用手機號碼登入／註冊"} /></button>
     );
   }
 
   return (
     <section className="phone-auth-section" id="phone-auth-panel" aria-labelledby="phone-auth-title">
       <div className="phone-auth-heading">
-        <p className="eyebrow dark">PHONE MEMBER</p>
+        <p className="eyebrow dark"><MemberCopyValue value={"PHONE MEMBER"} /></p>
         <h2 id="phone-auth-title">
-          {mode === "login" ? "手機號碼登入" : mode === "register" ? "建立手機會員" : "忘記手機會員密碼"}
+          <MemberCopyValue value={mode === "login" ? "手機號碼登入" : mode === "register" ? "建立手機會員" : "忘記手機會員密碼"} />
         </h2>
       </div>
 
       {mode === "recovery" ? (
         <div className="phone-recovery-help">
-          <p>目前可以傳訊息給 KD Coffee，由我們協助確認會員資料並重設新密碼。</p>
-          <p>人工協助的方式會持續保留；我們不會查看或提供您原本的密碼。</p>
+          <p><MemberCopyValue value={"目前可以傳訊息給 KD Coffee，由我們協助確認會員資料並重設新密碼。"} /></p>
+          <p><MemberCopyValue value={"人工協助的方式會持續保留；我們不會查看或提供您原本的密碼。"} /></p>
           <a
             ref={recoveryLinkRef}
             className="phone-support-link"
             href={PHONE_SUPPORT_URL}
             target="_blank"
             rel="noreferrer"
-          >
-            傳訊息給 KD Coffee
-          </a>
-          <button className="phone-auth-text-button" type="button" onClick={() => switchMode("login")}>
-            返回手機登入
-          </button>
+          ><MemberCopyValue value={"傳訊息給 KD Coffee"} /></a>
+          <button className="phone-auth-text-button" type="button" onClick={() => switchMode("login")}><MemberCopyValue value={"返回手機登入"} /></button>
         </div>
       ) : (
         <>
           <form className="phone-auth-form" onSubmit={submit} noValidate>
-            <label>
-              手機號碼
-              <input
+            <label><MemberCopyValue value={"手機號碼"} /><input
                 ref={phoneInputRef}
                 type="tel"
                 inputMode="tel"
@@ -156,11 +150,11 @@ export default function PhoneAuthForms({ returnTo = "/member" }: { returnTo?: st
                 aria-describedby="phone-auth-example"
                 required
               />
-              <small id="phone-auth-example">例如：0912 345 678</small>
+              <small id="phone-auth-example"><MemberCopyValue value={"例如：0912 345 678"} /></small>
             </label>
 
             <label>
-              {mode === "register" ? "設定密碼" : "密碼"}
+              <MemberCopyValue value={mode === "register" ? "設定密碼" : "密碼"} />
               <input
                 type="password"
                 autoComplete={mode === "login" ? "current-password" : "new-password"}
@@ -169,13 +163,11 @@ export default function PhoneAuthForms({ returnTo = "/member" }: { returnTo?: st
                 minLength={8}
                 required
               />
-              {mode === "register" ? <small>密碼至少 8 個字元</small> : null}
+              {mode === "register" ? <small><MemberCopyValue value={"密碼至少 8 個字元"} /></small> : null}
             </label>
 
             {mode === "register" ? (
-              <label>
-                再次輸入密碼
-                <input
+              <label><MemberCopyValue value={"再次輸入密碼"} /><input
                   type="password"
                   autoComplete="new-password"
                   value={passwordConfirmation}
@@ -186,17 +178,15 @@ export default function PhoneAuthForms({ returnTo = "/member" }: { returnTo?: st
               </label>
             ) : null}
 
-            {error ? <p className="form-error phone-auth-error" role="alert">{error}</p> : null}
+            {error ? <p className="form-error phone-auth-error" role="alert"><MemberCopyValue value={error} /></p> : null}
 
             <button className="phone-auth-submit" type="submit" disabled={submitting}>
-              {submitting ? "處理中…" : mode === "login" ? "登入" : "建立會員"}
+              <MemberCopyValue value={submitting ? "處理中…" : mode === "login" ? "登入" : "建立會員"} />
             </button>
           </form>
 
           {mode === "login" ? (
-            <button className="phone-auth-help" type="button" onClick={() => switchMode("recovery")}>
-              忘記密碼？
-            </button>
+            <button className="phone-auth-help" type="button" onClick={() => switchMode("recovery")}><MemberCopyValue value={"忘記密碼？"} /></button>
           ) : null}
 
           <button
@@ -204,11 +194,9 @@ export default function PhoneAuthForms({ returnTo = "/member" }: { returnTo?: st
             type="button"
             onClick={() => switchMode(mode === "login" ? "register" : "login")}
           >
-            {mode === "login" ? "第一次使用？建立手機會員" : "已經是手機會員？返回登入"}
+            <MemberCopyValue value={mode === "login" ? "第一次使用？建立手機會員" : "已經是手機會員？返回登入"} />
           </button>
-          <button className="phone-auth-text-button" type="button" onClick={() => switchMode("closed")}>
-            改用其他登入方式
-          </button>
+          <button className="phone-auth-text-button" type="button" onClick={() => switchMode("closed")}><MemberCopyValue value={"改用其他登入方式"} /></button>
         </>
       )}
     </section>

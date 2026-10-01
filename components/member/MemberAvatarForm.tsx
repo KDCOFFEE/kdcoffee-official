@@ -1,5 +1,6 @@
 "use client";
-/* eslint-disable @next/next/no-img-element */
+
+import { MemberCopyValue, MemberCopyElement } from "@/components/member/MemberCenterCopyProvider";
 
 import { ChangeEvent, useRef, useState } from "react";
 
@@ -35,8 +36,8 @@ export default function MemberAvatarForm({ customAvatarUrl, providerPictureUrl }
     finally { setBusy(false); }
   }
 
-  return <section className="member-avatar-editor" aria-label="會員頭像">
-    <div className="member-avatar-editor-preview">{avatarUrl ? <img src={avatarUrl} alt="目前會員頭像" /> : <span>KD</span>}</div>
-    <div className="member-avatar-editor-copy"><strong>會員頭像</strong><p>可上傳 JPG、PNG 或 WebP，檔案上限 5MB。自行上傳的照片會優先於 LINE 頭像。</p><div className="member-avatar-editor-actions"><label className="member-avatar-upload-button">{busy ? "處理中…" : hasCustomAvatar ? "更換照片" : "上傳照片"}<input ref={inputRef} type="file" accept="image/jpeg,image/png,image/webp" disabled={busy} onChange={upload} /></label>{hasCustomAvatar ? <button type="button" disabled={busy} onClick={() => void remove()}>移除自訂頭像</button> : null}</div>{message ? <small role="status">{message}</small> : null}</div>
-  </section>;
+  return <MemberCopyElement as="section" className="member-avatar-editor" aria-label="會員頭像">
+    <div className="member-avatar-editor-preview">{avatarUrl ? <MemberCopyElement as="img" src={avatarUrl} alt="目前會員頭像" /> : <span><MemberCopyValue value={"KD"} /></span>}</div>
+    <div className="member-avatar-editor-copy"><strong><MemberCopyValue value={"會員頭像"} /></strong><p><MemberCopyValue value={"可上傳 JPG、PNG 或 WebP，檔案上限 5MB。自行上傳的照片會優先於 LINE 頭像。"} /></p><div className="member-avatar-editor-actions"><label className="member-avatar-upload-button"><MemberCopyValue value={busy ? "處理中…" : hasCustomAvatar ? "更換照片" : "上傳照片"} /><input ref={inputRef} type="file" accept="image/jpeg,image/png,image/webp" disabled={busy} onChange={upload} /></label>{hasCustomAvatar ? <button type="button" disabled={busy} onClick={() => void remove()}><MemberCopyValue value={"移除自訂頭像"} /></button> : null}</div>{message ? <small role="status"><MemberCopyValue value={message} /></small> : null}</div>
+  </MemberCopyElement>;
 }

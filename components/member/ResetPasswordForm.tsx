@@ -1,5 +1,7 @@
 "use client";
 
+import { MemberCopyValue } from "@/components/member/MemberCenterCopyProvider";
+
 import Link from "next/link";
 import { FormEvent, useState } from "react";
 
@@ -44,19 +46,15 @@ export default function ResetPasswordForm({ token }: { token: string }) {
   if (success) {
     return (
       <div className="email-reset-success" role="status">
-        <strong>密碼已重新設定，請使用新密碼登入。</strong>
-        <Link className="email-auth-submit" href="/member">
-          回到會員登入
-        </Link>
+        <strong><MemberCopyValue value={"密碼已重新設定，請使用新密碼登入。"} /></strong>
+        <Link className="email-auth-submit" href="/member"><MemberCopyValue value={"回到會員登入"} /></Link>
       </div>
     );
   }
 
   return (
     <form className="email-auth-form" onSubmit={submit}>
-      <label>
-        新密碼
-        <input
+      <label><MemberCopyValue value={"新密碼"} /><input
           type="password"
           value={password}
           onChange={(event) => setPassword(event.target.value)}
@@ -66,9 +64,7 @@ export default function ResetPasswordForm({ token }: { token: string }) {
         />
       </label>
 
-      <label>
-        再次輸入新密碼
-        <input
+      <label><MemberCopyValue value={"再次輸入新密碼"} /><input
           type="password"
           value={passwordConfirmation}
           onChange={(event) => setPasswordConfirmation(event.target.value)}
@@ -78,15 +74,13 @@ export default function ResetPasswordForm({ token }: { token: string }) {
         />
       </label>
 
-      {error && <p className="form-error" role="alert">{error}</p>}
+      {error && <p className="form-error" role="alert"><MemberCopyValue value={error} /></p>}
 
       <button className="email-auth-submit" type="submit" disabled={submitting}>
-        {submitting ? "重設中…" : "重新設定密碼"}
+        <MemberCopyValue value={submitting ? "重設中…" : "重新設定密碼"} />
       </button>
 
-      <Link className="text-link" href="/member">
-        返回會員登入
-      </Link>
+      <Link className="text-link" href="/member"><MemberCopyValue value={"返回會員登入"} /></Link>
     </form>
   );
 }
