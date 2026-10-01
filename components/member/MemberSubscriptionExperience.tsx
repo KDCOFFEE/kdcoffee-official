@@ -576,7 +576,7 @@ export default function MemberSubscriptionExperience(initial: Props) {
   }
 
   return <>
-    <section className="member-commerce-section" id="subscription">
+    <section className="member-commerce-section">
       <div className="member-section-head">
         <div>
           <p className="eyebrow dark">SUBSCRIPTION</p>
