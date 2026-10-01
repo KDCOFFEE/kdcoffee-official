@@ -74,7 +74,8 @@
     "test:phase-j5d4f2": "node --experimental-strip-types --import ./scripts/member-auth-test-bootstrap.mjs scripts/test-phase-j5d4f2-member-multi-sku-ui.ts",
     "test:phase-j5d4f2h3": "node --experimental-strip-types --import ./scripts/member-auth-test-bootstrap.mjs scripts/test-phase-j5d4f2h3-subscription-roast.ts",
     "test:phase-j5d4f3": "node --experimental-strip-types --import ./scripts/member-auth-test-bootstrap.mjs scripts/test-phase-j5d4f3-subscription-dashboard.ts",
-    "test:phase-j5d7": "node --experimental-strip-types --import ./scripts/member-auth-test-bootstrap.mjs scripts/test-phase-j5d7-retail-promotion.mts"
+    "test:phase-j5d7": "node --experimental-strip-types --import ./scripts/member-auth-test-bootstrap.mjs scripts/test-phase-j5d7-retail-promotion.mts",
+    "test:phase-j5d7b": "node --experimental-strip-types scripts/test-phase-j5d7b-member-center-ia.mts"
   },
   "dependencies": {
     "cloudinary": "^2.10.0",
