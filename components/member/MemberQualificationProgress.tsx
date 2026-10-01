@@ -1,3 +1,4 @@
+import { MemberCopyValue, MemberCopyElement } from "@/components/member/MemberCenterCopyProvider";
 type QualificationEvidence = {
   eventId: string;
   orderNumber: string;
@@ -256,16 +257,12 @@ export default function MemberQualificationProgress({
     >
       <div className="member-qualification-panel-head">
         <div>
-          <small>
-            REFERRAL REWARD QUALIFICATION
-          </small>
+          <small><MemberCopyValue value={"REFERRAL REWARD QUALIFICATION"} /></small>
 
-          <h2 id="member-qualification-title">
-            推薦回饋資格
-          </h2>
+          <h2 id="member-qualification-title"><MemberCopyValue value={"推薦回饋資格"} /></h2>
 
           <p>
-            {modeSummary(progress)}
+            <MemberCopyValue value={modeSummary(progress)} />
           </p>
         </div>
 
@@ -276,35 +273,35 @@ export default function MemberQualificationProgress({
               : ""
           }`}
         >
-          {progress.isQualifiedNow
+          <MemberCopyValue value={progress.isQualifiedNow
             ? "資格有效"
-            : "累積中"}
+            : "累積中"} />
         </span>
       </div>
 
       <div className="member-qualification-highlight">
         <div>
-          <small>目前狀態</small>
+          <small><MemberCopyValue value={"目前狀態"} /></small>
 
-          <strong>{headline}</strong>
+          <strong><MemberCopyValue value={headline} /></strong>
 
-          <span>{supportingText}</span>
+          <span><MemberCopyValue value={supportingText} /></span>
         </div>
 
         <div className="member-qualification-primary-value">
-          <small>{mainMetricLabel}</small>
+          <small><MemberCopyValue value={mainMetricLabel} /></small>
 
           <strong>
-            {mainMetricValue}
+            <MemberCopyValue value={mainMetricValue} />
           </strong>
 
           <span>
-            {mainMetricTarget}
+            <MemberCopyValue value={mainMetricTarget} />
           </span>
         </div>
       </div>
 
-      <div
+      <MemberCopyElement as="div"
         className="member-qualification-progress-track"
         role="progressbar"
         aria-valuemin={0}
@@ -325,7 +322,7 @@ export default function MemberQualificationProgress({
             )}%`,
           }}
         />
-      </div>
+      </MemberCopyElement>
 
       <div className="member-qualification-progress-meta">
         <span>
@@ -333,7 +330,7 @@ export default function MemberQualificationProgress({
         </span>
 
         <span>
-          {progress.isQualifiedNow
+          <MemberCopyValue value={progress.isQualifiedNow
             ? "目前已符合資格"
             : primary.remainingToThreshold > 0
               ? `還差 ${metricValue(
@@ -341,15 +338,15 @@ export default function MemberQualificationProgress({
                   progress.qualificationBasis,
                   pointName,
                 )}`
-              : "條件已達成"}
+              : "條件已達成"} />
         </span>
       </div>
 
       <details className="member-qualification-details">
         <summary>
           <span>
-            <small>QUALIFICATION DETAILS</small>
-            <strong>查看資格計算明細</strong>
+            <small><MemberCopyValue value={"QUALIFICATION DETAILS"} /></small>
+            <strong><MemberCopyValue value={"查看資格計算明細"} /></strong>
           </span>
 
           <b>＋</b>
@@ -358,7 +355,7 @@ export default function MemberQualificationProgress({
         <div className="member-qualification-details-body">
           {progress.activeCoverage && (
             <div className="member-qualification-coverage">
-              <small>目前有效資格</small>
+              <small><MemberCopyValue value={"目前有效資格"} /></small>
 
               <strong>
                 {formatDate(
@@ -370,9 +367,7 @@ export default function MemberQualificationProgress({
                 )}
               </strong>
 
-              <span>
-                達成日期：
-                {formatDate(
+              <span><MemberCopyValue value={"達成日期："} />{formatDate(
                   progress.activeCoverage.qualifiedAt,
                 )}
               </span>
@@ -385,29 +380,22 @@ export default function MemberQualificationProgress({
               <details className="member-qualification-current-evidence">
                 <summary>
                   <span>
-                    <small>
-                      CURRENT QUALIFICATION EVIDENCE
-                    </small>
+                    <small><MemberCopyValue value={"CURRENT QUALIFICATION EVIDENCE"} /></small>
 
-                    <strong>
-                      查看本期合格消費
-                    </strong>
+                    <strong><MemberCopyValue value={"查看本期合格消費"} /></strong>
                   </span>
 
-                  <span className="member-qualification-current-evidence-summary">
-                    共{" "}
+                  <span className="member-qualification-current-evidence-summary"><MemberCopyValue value={"共"} />{" "}
                     {
                       progress.activeCoverage
                         .sourceEvidence.length
-                    }{" "}
-                    筆
-                  </span>
+                    }{" "}<MemberCopyValue value={"筆"} /></span>
                 </summary>
 
                 <div className="member-qualification-current-evidence-body">
                   <div className="member-qualification-current-evidence-intro">
                     <div>
-                      <small>本期取得資格</small>
+                      <small><MemberCopyValue value={"本期取得資格"} /></small>
 
                       <strong>
                         {formatDate(
@@ -423,24 +411,24 @@ export default function MemberQualificationProgress({
                     </div>
 
                     <div>
-                      <small>本期資格使用</small>
+                      <small><MemberCopyValue value={"本期資格使用"} /></small>
 
                       <strong>
-                        {metricValue(
+<MemberCopyValue value={metricValue(
                           progress.activeCoverage
                             .consumedAmount,
                           progress.activeCoverage
                             .qualificationBasis,
                           pointName,
-                        )}
+                        )} />
                       </strong>
                     </div>
 
                     <div>
-                      <small>達標路徑</small>
+                      <small><MemberCopyValue value={"達標路徑"} /></small>
 
                       <strong>
-                        {qualificationPathLabel}
+<MemberCopyValue value={qualificationPathLabel} />
                       </strong>
                     </div>
                   </div>
@@ -473,58 +461,50 @@ export default function MemberQualificationProgress({
                             </div>
 
                             {item.triggeredQualification && (
-                              <span className="member-qualification-trigger-badge">
-                                本筆達標
-                              </span>
+                              <span className="member-qualification-trigger-badge"><MemberCopyValue value={"本筆達標"} /></span>
                             )}
                           </div>
 
                           <div className="member-qualification-current-evidence-values">
                             <div>
-                              <small>
-                                訂單合格值
-                              </small>
+                              <small><MemberCopyValue value={"訂單合格值"} /></small>
 
                               <strong>
-                                {metricValue(
+<MemberCopyValue value={metricValue(
                                   item.eventAmount,
                                   progress
                                     .activeCoverage!
                                     .qualificationBasis,
                                   pointName,
-                                )}
+                                )} />
                               </strong>
                             </div>
 
                             <div>
-                              <small>
-                                本期採計
-                              </small>
+                              <small><MemberCopyValue value={"本期採計"} /></small>
 
                               <strong>
-                                {metricValue(
+<MemberCopyValue value={metricValue(
                                   item.allocatedAmount,
                                   progress
                                     .activeCoverage!
                                     .qualificationBasis,
                                   pointName,
-                                )}
+                                )} />
                               </strong>
                             </div>
 
                             <div>
-                              <small>
-                                累積採計
-                              </small>
+                              <small><MemberCopyValue value={"累積採計"} /></small>
 
                               <strong>
-                                {metricValue(
+<MemberCopyValue value={metricValue(
                                   item.cumulativeAllocatedAmount,
                                   progress
                                     .activeCoverage!
                                     .qualificationBasis,
                                   pointName,
-                                )}
+                                )} />
                               </strong>
                             </div>
                           </div>
@@ -533,26 +513,18 @@ export default function MemberQualificationProgress({
                     )}
                   </div>
 
-                  <p className="member-qualification-current-evidence-note">
-                    此處顯示的是實際用於取得目前推薦回饋資格的已完成訂單；同一筆已採計消費不會重複計入下一資格週期。
-                  </p>
+                  <p className="member-qualification-current-evidence-note"><MemberCopyValue value={"此處顯示的是實際用於取得目前推薦回饋資格的已完成訂單；同一筆已採計消費不會重複計入下一資格週期。"} /></p>
                 </div>
               </details>
             )}
 
           {progress.isQualifiedNow && (
             <div className="member-qualification-next-cycle">
-              <small>
-                NEXT QUALIFICATION CYCLE
-              </small>
+              <small><MemberCopyValue value={"NEXT QUALIFICATION CYCLE"} /></small>
 
-              <strong>
-                下一資格週期累積
-              </strong>
+              <strong><MemberCopyValue value={"下一資格週期累積"} /></strong>
 
-              <span>
-                你目前的推薦回饋資格仍然有效。以下顯示下一個資格週期重新累積的進度，不影響目前有效資格。
-              </span>
+              <span><MemberCopyValue value={"你目前的推薦回饋資格仍然有效。以下顯示下一個資格週期重新累積的進度，不影響目前有效資格。"} /></span>
             </div>
           )}
 
@@ -575,46 +547,44 @@ export default function MemberQualificationProgress({
                     </small>
 
                     <strong>
-                      {pathName(path.path)}
+                      <MemberCopyValue value={pathName(path.path)} />
                     </strong>
                   </div>
 
                   <b>
-                    {progress.isQualifiedNow
+                    <MemberCopyValue value={progress.isQualifiedNow
                       ? "下一輪累積"
                       : path.passed
                         ? "已達標"
                         : path.activeSubscriptionRequired &&
                             !path.activeSubscriptionSatisfied
                           ? "目前未啟用"
-                          : "累積中"}
+                          : "累積中"} />
                   </b>
                 </header>
 
                 <div className="member-qualification-path-numbers">
                   <div>
-                    <small>
-                      最近 {path.windowDays} 天累積
-                    </small>
+                    <small><MemberCopyValue value={"最近 "} />{path.windowDays}<MemberCopyValue value={" 天累積"} /></small>
 
                     <strong>
-                      {metricValue(
+<MemberCopyValue value={metricValue(
                         path.cumulativeAmount,
                         progress.qualificationBasis,
                         pointName,
-                      )}
+                      )} />
                     </strong>
                   </div>
 
                   <div>
-                    <small>資格門檻</small>
+                    <small><MemberCopyValue value={"資格門檻"} /></small>
 
                     <strong>
-                      {metricValue(
+<MemberCopyValue value={metricValue(
                         path.threshold,
                         progress.qualificationBasis,
                         pointName,
-                      )}
+                      )} />
                     </strong>
                   </div>
                 </div>
@@ -635,16 +605,14 @@ export default function MemberQualificationProgress({
 
                 {path.activeSubscriptionRequired &&
                   !path.activeSubscriptionSatisfied && (
-                    <p className="member-qualification-note">
-                      此路徑需目前具有有效的定期配送資格。
-                    </p>
+                    <p className="member-qualification-note"><MemberCopyValue value={"此路徑需目前具有有效的定期配送資格。"} /></p>
                   )}
 
                 {path.evidence.length > 0 ? (
                   <div className="member-qualification-evidence">
                     <div className="member-qualification-evidence-head">
-                      <span>完成訂單</span>
-                      <span>{metricName}</span>
+                      <span><MemberCopyValue value={"完成訂單"} /></span>
+                      <span><MemberCopyValue value={metricName} /></span>
                     </div>
 
                     {path.evidence.map((event) => (
@@ -665,22 +633,21 @@ export default function MemberQualificationProgress({
 
                         <span>
                           <strong>
-                            {metricValue(
+                            <MemberCopyValue value={metricValue(
                               event.amount,
                               progress.qualificationBasis,
                               pointName,
-                            )}
+                            )} />
                           </strong>
 
                           {event.remainingAmount !==
                             event.amount && (
-                            <small>
-                              目前可計入{" "}
-                              {metricValue(
+                            <small><MemberCopyValue value={"目前可計入"} />{" "}
+                              <MemberCopyValue value={metricValue(
                                 event.remainingAmount,
                                 progress.qualificationBasis,
                                 pointName,
-                              )}
+                              )} />
                             </small>
                           )}
                         </span>
@@ -688,17 +655,13 @@ export default function MemberQualificationProgress({
                     ))}
                   </div>
                 ) : (
-                  <p className="member-qualification-empty">
-                    目前下一資格週期尚無可重新計入的已完成訂單。
-                  </p>
+                  <p className="member-qualification-empty"><MemberCopyValue value={"目前下一資格週期尚無可重新計入的已完成訂單。"} /></p>
                 )}
               </article>
             ))}
           </div>
 
-          <p className="member-qualification-footnote">
-            資格進度依已完成訂單與目前後台規則計算；已用於取得目前資格的消費不會重複計入下一資格週期。
-          </p>
+          <p className="member-qualification-footnote"><MemberCopyValue value={"資格進度依已完成訂單與目前後台規則計算；已用於取得目前資格的消費不會重複計入下一資格週期。"} /></p>
         </div>
       </details>
     </section>

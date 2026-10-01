@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { defaultMemberCopySource } from "./member-copy-render-boundary-digest.mjs";
 
 const root = process.cwd();
-const read = (file: string) => readFile(path.join(root, file), "utf8");
+const read = async (file: string) => defaultMemberCopySource(await readFile(path.join(root, file), "utf8"), file);
 const [page, nav, navCss, referral, referralCss, retail, share, org, globals, commerce] = await Promise.all([
   read("app/member/page.tsx"),
   read("components/member/MemberSectionNav.tsx"),

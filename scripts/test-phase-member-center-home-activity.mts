@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { defaultMemberCopySource } from "./member-copy-render-boundary-digest.mjs";
 
 const root = process.cwd();
-const read = (file: string) => readFile(path.join(root, file), "utf8");
+const read = async (file: string) => defaultMemberCopySource(await readFile(path.join(root, file), "utf8"), file);
 const [page, nav, styles, globals] = await Promise.all([
   read("app/member/page.tsx"),
   read("components/member/MemberSectionNav.tsx"),
@@ -37,8 +38,8 @@ await test("existing tab labels remain unchanged", () => {
 });
 await test("hash activation remains intact", () => {
   assert.match(nav, /window\.location\.hash\.slice\(1\)/);
-  assert.match(nav, /window\.addEventListener\("hashchange", syncHash\)/);
-  assert.match(nav, /href=\{`#\$\{item\.id\}`\}/);
+  assert.match(nav, /window\.addEventListener\("hashchange", (?:syncHash|syncRoute)\)/);
+  assert.match(nav, /href=\{`(?:\/member)?#\$\{item\.id\}`\}/);
 });
 await test("active tab behavior remains intact", () => {
   assert.match(nav, /className=\{activeId === item\.id \? "is-active" : undefined\}/);
@@ -95,7 +96,7 @@ await test("desktop Recent Activity markup and canonical links remain valid", ()
 await test("Recent Activity data calculations remain canonical", () => {
   assert.match(page, /const latestOrder = orders\[0\]/);
   assert.match(page, /const nextSubscriptionCycle = commerce\.cycles[\s\S]*?\.sort\(\(left, right\) => left\.plannedDate\.localeCompare\(right\.plannedDate\)\)\[0\]/);
-  assert.match(page, /const pendingRewardPoints = referralCenter\.rewards[\s\S]*?reward\.rewardPV, 0\)/);
+  assert.match(page, /const pendingRewardPoints = commerce\.pendingRewardSummary\.rewardPoints;/);
 });
 
 await test("phase styling remains scoped to the member experience module", () => {

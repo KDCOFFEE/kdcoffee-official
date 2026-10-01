@@ -1,5 +1,7 @@
 "use client";
 
+import { MemberCopyValue } from "@/components/member/MemberCenterCopyProvider";
+
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 
@@ -98,20 +100,18 @@ export default function EmailAuthForms({
           type="button"
           onClick={() => switchMode("register")}
           aria-controls="email-auth-form"
-        >
-          使用 Email 快速註冊
-        </button>
+        ><MemberCopyValue value={"使用 Email 快速註冊"} /></button>
       )}
 
       <section className="email-auth-section" id="email-auth-form">
       <div className="email-auth-heading">
-        <p className="eyebrow dark">EMAIL MEMBER</p>
+        <p className="eyebrow dark"><MemberCopyValue value={"EMAIL MEMBER"} /></p>
         <h2>
-          {mode === "login"
+          <MemberCopyValue value={mode === "login"
             ? "Email 登入"
             : mode === "register"
               ? "建立 Email 會員"
-              : "忘記密碼"}
+              : "忘記密碼"} />
         </h2>
       </div>
 
@@ -129,9 +129,7 @@ export default function EmailAuthForms({
         </label>
 
         {mode !== "forgot" && (
-          <label>
-            密碼
-            <input
+          <label><MemberCopyValue value={"密碼"} /><input
               type="password"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
@@ -143,9 +141,7 @@ export default function EmailAuthForms({
         )}
 
         {mode === "register" && (
-          <label>
-            再次輸入密碼
-            <input
+          <label><MemberCopyValue value={"再次輸入密碼"} /><input
               type="password"
               value={passwordConfirmation}
               onChange={(event) => setPasswordConfirmation(event.target.value)}
@@ -156,17 +152,17 @@ export default function EmailAuthForms({
           </label>
         )}
 
-        {error && <p className="form-error" role="alert">{error}</p>}
-        {message && <p className="member-success" role="status">{message}</p>}
+        {error && <p className="form-error" role="alert"><MemberCopyValue value={error} /></p>}
+        {message && <p className="member-success" role="status"><MemberCopyValue value={message} /></p>}
 
         <button className="email-auth-submit" type="submit" disabled={submitting}>
-          {submitting
+          <MemberCopyValue value={submitting
             ? "處理中…"
             : mode === "login"
               ? "登入"
               : mode === "register"
                 ? "建立會員"
-                : "寄送密碼重設方式"}
+                : "寄送密碼重設方式"} />
         </button>
       </form>
 
@@ -175,9 +171,7 @@ export default function EmailAuthForms({
           className="email-auth-help"
           type="button"
           onClick={() => switchMode("forgot")}
-        >
-          忘記密碼？
-        </button>
+        ><MemberCopyValue value={"忘記密碼？"} /></button>
       )}
 
       <button
@@ -185,27 +179,25 @@ export default function EmailAuthForms({
         type="button"
         onClick={() => switchMode(mode === "login" ? "register" : "login")}
       >
-        {mode === "login"
+        <MemberCopyValue value={mode === "login"
           ? "還不是會員？使用 Email 快速註冊"
           : mode === "register"
             ? "已經是 Email 會員？Email 登入"
-            : "返回 Email 登入"}
+            : "返回 Email 登入"} />
       </button>
       </section>
 
       <section className="guest-checkout-entry">
         <div className="guest-checkout-divider" aria-hidden="true">
-          <span>或</span>
+          <span><MemberCopyValue value={"或"} /></span>
         </div>
         <button
           className="guest-checkout-button"
           type="button"
           disabled={!ready}
           onClick={() => router.push(items.length ? "/checkout" : "/works")}
-        >
-          直接使用訪客下單
-        </button>
-        <small>無需註冊會員，也可以直接購買</small>
+        ><MemberCopyValue value={"直接使用訪客下單"} /></button>
+        <small><MemberCopyValue value={"無需註冊會員，也可以直接購買"} /></small>
       </section>
     </>
   );

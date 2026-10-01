@@ -1,5 +1,7 @@
 "use client";
 
+import { MemberCopyValue, MemberCopyElement } from "@/components/member/MemberCenterCopyProvider";
+
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -56,8 +58,8 @@ export default function MemberSectionNav() {
   }, [activeId]);
 
   return (
-    <nav className={`member-center-nav ${styles.navigation}`} aria-label="會員中心導覽">
-      <div ref={tabListRef} className={styles.tabList} role="tablist" aria-label="會員中心功能">
+    <MemberCopyElement as="nav" className={`member-center-nav ${styles.navigation}`} aria-label="會員中心導覽">
+      <MemberCopyElement as="div" ref={tabListRef} className={styles.tabList} role="tablist" aria-label="會員中心功能">
         {items.map((item) => (
           <Link
             key={item.id}
@@ -69,16 +71,16 @@ export default function MemberSectionNav() {
             aria-controls={item.id}
             onClick={() => activate(item.id)}
           >
-            <span className="member-nav-desktop-label">{item.label}</span>
-            <span className="member-nav-mobile-label">{item.mobileLabel}</span>
+            <span className="member-nav-desktop-label"><MemberCopyValue value={item.label} /></span>
+            <span className="member-nav-mobile-label"><MemberCopyValue value={item.mobileLabel} /></span>
           </Link>
         ))}
-      </div>
+      </MemberCopyElement>
       <Link href="/" className={styles.homeLink}>
         <span className={styles.homeIcon} aria-hidden="true">⌂</span>
-        <span className={styles.homeLabelDesktop}>返回首頁</span>
-        <span className={styles.homeLabelMobile}>首頁</span>
+        <span className={styles.homeLabelDesktop}><MemberCopyValue value={"返回首頁"} /></span>
+        <span className={styles.homeLabelMobile}><MemberCopyValue value={"首頁"} /></span>
       </Link>
-    </nav>
+    </MemberCopyElement>
   );
 }

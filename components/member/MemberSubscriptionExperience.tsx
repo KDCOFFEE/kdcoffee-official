@@ -1,5 +1,7 @@
 "use client";
 
+import { MemberCopyValue, MemberCopyElement } from "@/components/member/MemberCenterCopyProvider";
+
 import { useState } from "react";
 import Link from "next/link";
 
@@ -160,11 +162,11 @@ function ItemPricePreview({ item, products, discountPercent }: { item: Subscript
   if (prices.regularUnit == null) return null;
   return <div className="member-subscription-item-prices">
     {prices.selections.map((selection, index) => <div className="member-subscription-component-price" key={`${selection.skuId}-${index}`}>
-      <span>{selection.productName}・{selection.label}{selection.detail ? `・${selection.detail}` : ""}</span>
-      <small>一般價 <del>{money(selection.price)}</del>　定期購價 <b>{money(subscriptionPrice(selection.price, discountPercent))}</b></small>
+      <span>{selection.productName}・<MemberCopyValue value={selection.label} />{selection.detail ? `・${selection.detail}` : ""}</span>
+      <small><MemberCopyValue value={"一般價 "} /><del>{money(selection.price)}</del><MemberCopyValue value={"　定期購價 "} /><b>{money(subscriptionPrice(selection.price, discountPercent))}</b></small>
     </div>)}
-    {item.kind === "beans" && item.packageWeight === "one-pound" && <div className="member-subscription-combined-price"><span>一磅組合</span><strong>一般價 <del>{money(prices.regularUnit)}</del>　定期購價 {money(prices.subscriptionUnit!)}</strong></div>}
-    {item.quantity > 1 && <div className="member-subscription-line-price"><span>本商品 × {item.quantity}</span><strong>一般價 <del>{money(prices.regularLine!)}</del>　定期購價 {money(prices.subscriptionLine!)}</strong></div>}
+    {item.kind === "beans" && item.packageWeight === "one-pound" && <div className="member-subscription-combined-price"><span><MemberCopyValue value={"一磅組合"} /></span><strong><MemberCopyValue value={"一般價 "} /><del>{money(prices.regularUnit)}</del><MemberCopyValue value={"　定期購價 "} />{money(prices.subscriptionUnit!)}</strong></div>}
+    {item.quantity > 1 && <div className="member-subscription-line-price"><span><MemberCopyValue value={"本商品 × "} />{item.quantity}</span><strong><MemberCopyValue value={"一般價 "} /><del>{money(prices.regularLine!)}</del><MemberCopyValue value={"　定期購價 "} />{money(prices.subscriptionLine!)}</strong></div>}
   </div>;
 }
 
@@ -579,85 +581,72 @@ export default function MemberSubscriptionExperience(initial: Props) {
     <section className="member-commerce-section">
       <div className="member-section-head">
         <div>
-          <p className="eyebrow dark">SUBSCRIPTION</p>
-          <h2>我的定期配送</h2>
+          <p className="eyebrow dark"><MemberCopyValue value={"SUBSCRIPTION"} /></p>
+          <h2><MemberCopyValue value={"我的定期配送"} /></h2>
         </div>
         {subscription && (
           <div className="member-subscription-status-wrap">
             <span className={`member-subscription-status ${subscription.status}`}>
-              {subscriptionStatusLabel(subscription.status)}
+              <MemberCopyValue value={subscriptionStatusLabel(subscription.status)} />
             </span>
 
             {subscription.status === "pending_activation" && (
-              <small>首次取貨完成後，啟動定期配送</small>
+              <small><MemberCopyValue value={"首次取貨完成後，啟動定期配送"} /></small>
             )}
 
             {subscription.status === "active" && (
-              <small>
-                下次配送日期{" "}
-                {pricingCycle?.plannedDate
+              <small><MemberCopyValue value={"下次配送日期"} />{" "}
+                <MemberCopyValue value={pricingCycle?.plannedDate
                   ? displayDate(pricingCycle.plannedDate).slice(5)
-                  : "尚未排定"}
+                  : "尚未排定"} />
               </small>
             )}
           </div>
         )}
       </div>
-      {message && <p className="member-notice" role="status">{message}</p>}
-      {!subscription ? <div className="member-commerce-empty"><strong>還沒有定期配送</strong><p>第一次購買時可勾選加入。首筆仍是原價，成功取貨後才會開始定期配送並享有優惠。</p><Link href="/works">挑選咖啡作品</Link></div> : <div className="member-subscription-grid">
-        {dashboard.subscriptions.length > 1 && <div className="member-subscription-selector"><label htmlFor="member-subscription-selector">選擇定期配送<select id="member-subscription-selector" value={subscription.subscriptionId} onChange={(event) => selectSubscription(event.target.value)}>{dashboard.subscriptions.map((item) => <option value={item.subscriptionId} key={item.subscriptionId}>{subscriptionSelectorLabel(item, initial.products)}</option>)}</select></label><small>每筆定期配送分開保存；切換後可查看各自狀態與安排。</small></div>}
+      {message && <p className="member-notice" role="status"><MemberCopyValue value={message} /></p>}
+      {!subscription ? <div className="member-commerce-empty"><strong><MemberCopyValue value={"還沒有定期配送"} /></strong><p><MemberCopyValue value={"第一次購買時可勾選加入。首筆仍是原價，成功取貨後才會開始定期配送並享有優惠。"} /></p><Link href="/works"><MemberCopyValue value={"挑選咖啡作品"} /></Link></div> : <div className="member-subscription-grid">
+        {dashboard.subscriptions.length > 1 && <div className="member-subscription-selector"><label htmlFor="member-subscription-selector"><MemberCopyValue value={"選擇定期配送"} /><select id="member-subscription-selector" value={subscription.subscriptionId} onChange={(event) => selectSubscription(event.target.value)}>{dashboard.subscriptions.map((item) => <option value={item.subscriptionId} key={item.subscriptionId}><MemberCopyValue value={subscriptionSelectorLabel(item, initial.products)} /></option>)}</select></label><small><MemberCopyValue value={"每筆定期配送分開保存；切換後可查看各自狀態與安排。"} /></small></div>}
         <article className="member-subscription-summary">
-          <div><small>配送週期</small><strong>每 {subscription.intervalDays} 天</strong></div>
-          <div><small>下次安排</small><strong>{pricingCycle?.plannedDate ?? (subscription.status === "pending_activation" ? "首筆取貨後安排" : "尚未排定")}</strong></div>
-          <div><small>配送方式</small><strong>{shippingMethod === "711_cod" ? `7-ELEVEN・${displayedStoreSelection?.storeName || "尚未選擇門市"}` : shippingMethod === "home_delivery" ? `宅配・${displayedDeliveryAddress ? `${displayedDeliveryAddress.postalCode} ${displayedDeliveryAddress.city}${displayedDeliveryAddress.district}${displayedDeliveryAddress.addressLine}` : "地址待確認"}・${displayedPaymentMethod === "cash_on_delivery" ? "貨到付款" : "ATM 轉帳"}` : "工作室自取"}</strong></div>
-          <div><small>下一次商品</small><strong>{subscriptionItemsSummary(nextItems, initial.products) || "尚未選擇"}</strong></div>
-          <div><small>修改截止</small><strong>{pricingCycle?.modificationDeadline ?? "啟動後顯示"}</strong></div>
+          <div><small><MemberCopyValue value={"配送週期"} /></small><strong><MemberCopyValue value={"每 "} />{subscription.intervalDays}<MemberCopyValue value={" 天"} /></strong></div>
+          <div><small><MemberCopyValue value={"下次安排"} /></small><strong><MemberCopyValue value={pricingCycle?.plannedDate ?? (subscription.status === "pending_activation" ? "首筆取貨後安排" : "尚未排定")} /></strong></div>
+          <div><small><MemberCopyValue value={"配送方式"} /></small><strong><MemberCopyValue value={shippingMethod === "711_cod" ? `7-ELEVEN・${displayedStoreSelection?.storeName || "尚未選擇門市"}` : shippingMethod === "home_delivery" ? `宅配・${displayedDeliveryAddress ? `${displayedDeliveryAddress.postalCode} ${displayedDeliveryAddress.city}${displayedDeliveryAddress.district}${displayedDeliveryAddress.addressLine}` : "地址待確認"}・${displayedPaymentMethod === "cash_on_delivery" ? "貨到付款" : "ATM 轉帳"}` : "工作室自取"} /></strong></div>
+          <div><small><MemberCopyValue value={"下一次商品"} /></small><strong><MemberCopyValue value={subscriptionItemsSummary(nextItems, initial.products) || "尚未選擇"} /></strong></div>
+          <div><small><MemberCopyValue value={"修改截止"} /></small><strong><MemberCopyValue value={pricingCycle?.modificationDeadline ?? "啟動後顯示"} /></strong></div>
           <div>
-  <small>{lockedPricing ? "本期應付" : "預估應付"}</small>
-  <strong>{pricingCycle ? money(displayedFinal) : "啟動後計算"}</strong>
+  <small><MemberCopyValue value={lockedPricing ? "本期應付" : "預估應付"} /></small>
+  <strong><MemberCopyValue value={pricingCycle ? money(displayedFinal) : "啟動後計算"} /></strong>
   {pricingCycle && (
     <>
-      <span>
-        一般購買 {money(regularPurchaseTotal)} → 定期購預估{" "}
+      <span><MemberCopyValue value={"一般購買 "} />{money(regularPurchaseTotal)}<MemberCopyValue value={" → 定期購預估"} />{" "}
         {money(displayedFinal)}
       </span>
 
-      <span>
-        商品優惠省 {money(subscriptionSaving)}
-        {subscriptionShippingSaving > 0
+      <span><MemberCopyValue value={"商品優惠省 "} />{money(subscriptionSaving)}
+        <MemberCopyValue value={subscriptionShippingSaving > 0
           ? ` ＋ 配送優惠省 ${money(subscriptionShippingSaving)}`
-          : ""}
-        {" "}＝ 本期共省 {money(totalSubscriptionSaving)}
+          : ""} />
+        {" "}<MemberCopyValue value={"＝ 本期共省 "} />{money(totalSubscriptionSaving)}
       </span>
       <button
         type="button"
         className="member-price-detail-button"
         onClick={() => setShowPriceDetails(true)}
-      >
-        查看金額明細
-      </button>
+      ><MemberCopyValue value={"查看金額明細"} /></button>
     </>
   )}
 </div>
         </article>
 
-        {currentArrangement && <div className="member-commerce-callout member-current-arrangement"><strong>目前配送安排</strong><p>{currentArrangement.kind === "manual_replenishment" ? "立即補貨" : "定期配送"}：{displayDate(currentArrangement.plannedDate)}</p>{currentArrangement.createdOrderId ? <p>訂單：{currentArrangement.createdOrderId}</p> : <><p>狀態：等待建立訂單</p>{currentArrangement.orderCreationDate && <p>預計建立訂單：{displayDate(currentArrangement.orderCreationDate)}</p>}</>}</div>}
+        {currentArrangement && <div className="member-commerce-callout member-current-arrangement"><strong><MemberCopyValue value={"目前配送安排"} /></strong><p><MemberCopyValue value={currentArrangement.kind === "manual_replenishment" ? "立即補貨" : "定期配送"} />：{displayDate(currentArrangement.plannedDate)}</p>{currentArrangement.createdOrderId ? <p><MemberCopyValue value={"訂單："} />{currentArrangement.createdOrderId}</p> : <><p><MemberCopyValue value={"狀態：等待建立訂單"} /></p>{currentArrangement.orderCreationDate && <p><MemberCopyValue value={"預計建立訂單："} />{displayDate(currentArrangement.orderCreationDate)}</p>}</>}</div>}
 
         {subscription.status === "pending_activation" ? (
           <div className="member-commerce-callout">
-            <strong>目前不會自動建立下一張訂單</strong>
+            <strong><MemberCopyValue value={"目前不會自動建立下一張訂單"} /></strong>
 
-            <p>
-              等首筆原價訂單成功取貨後，才會正式啟動。
-              啟動後第一次定期配送起享
-              <b> {subscriptionDiscountLabel}</b>
-              定期購優惠。
-            </p>
+            <p><MemberCopyValue value={"等首筆原價訂單成功取貨後，才會正式啟動。 啟動後第一次定期配送起享"} /><b> {subscriptionDiscountLabel}</b><MemberCopyValue value={"定期購優惠。"} /></p>
 
-            <p>
-              如果您已經不需要定期配送，可以現在取消。
-              取消不會影響目前這張首筆訂單。
-            </p>
+            <p><MemberCopyValue value={"如果您已經不需要定期配送，可以現在取消。 取消不會影響目前這張首筆訂單。"} /></p>
 
             <button
               type="button"
@@ -668,18 +657,16 @@ export default function MemberSubscriptionExperience(initial: Props) {
                   subscription.subscriptionId,
                 )
               }
-            >
-              取消這個定期配送設定
-            </button>
+            ><MemberCopyValue value={"取消這個定期配送設定"} /></button>
           </div>
         ) : subscription.status === "terminated" ? (
           <div
             className="member-subscription-termination-receipt"
             role="status"
           >
-            <strong>此定期配送已停止</strong>
+            <strong><MemberCopyValue value={"此定期配送已停止"} /></strong>
             {subscription.restartEligible && (
-              <p>想繼續配送嗎？選擇下一次配送日期後即可重新啟動。</p>
+              <p><MemberCopyValue value={"想繼續配送嗎？選擇下一次配送日期後即可重新啟動。"} /></p>
             )}
 
             {subscription.restartEligible && restartPanelSubscriptionId !== subscription.subscriptionId && (
@@ -687,17 +674,13 @@ export default function MemberSubscriptionExperience(initial: Props) {
                 type="button"
                 disabled={Boolean(busy)}
                 onClick={openRestartPanel}
-              >
-                重新啟動定期配送
-              </button>
+              ><MemberCopyValue value={"重新啟動定期配送"} /></button>
             )}
 
             {subscription.restartEligible && restartPanelSubscriptionId === subscription.subscriptionId && (
               <div className="member-action-panel">
-                <strong>重新啟動定期配送</strong>
-                <label>
-                  下一次配送日期
-                  <input
+                <strong><MemberCopyValue value={"重新啟動定期配送"} /></strong>
+                <label><MemberCopyValue value={"下一次配送日期"} /><input
                     type="date"
                     min={restartEarliestDate}
                     value={restartDate}
@@ -710,11 +693,9 @@ export default function MemberSubscriptionExperience(initial: Props) {
                       setRestartDate((current) => current >= currentMinimum ? current : currentMinimum);
                     }}
                   />
-                  <small>最早可選：{displayDate(restartEarliestDate)}</small>
+                  <small><MemberCopyValue value={"最早可選："} />{displayDate(restartEarliestDate)}</small>
                 </label>
-                <label>
-                  配送週期
-                  <select
+                <label><MemberCopyValue value={"配送週期"} /><select
                     value={restartIntervalMode === "custom" ? "custom" : restartInterval}
                     onChange={(event) => {
                       if (event.target.value === "custom") {
@@ -726,26 +707,24 @@ export default function MemberSubscriptionExperience(initial: Props) {
                       setRestartInterval(Number(event.target.value));
                     }}
                   >
-                    {initial.rules.intervalsDays.map((days) => <option key={days} value={days}>每 {days} 天</option>)}
-                    {initial.rules.customCycleEnabled && <option value="custom">自訂天數</option>}
+                    {initial.rules.intervalsDays.map((days) => <option key={days} value={days}><MemberCopyValue value={"每 "} />{days}<MemberCopyValue value={" 天"} /></option>)}
+                    {initial.rules.customCycleEnabled && <option value="custom"><MemberCopyValue value={"自訂天數"} /></option>}
                   </select>
                 </label>
                 {initial.rules.customCycleEnabled && restartIntervalMode === "custom" && (
-                  <label>
-                    自訂配送週期
-                    <input
+                  <label><MemberCopyValue value={"自訂配送週期"} /><input
                       type="number"
                       min={initial.rules.customCycleMinDays}
                       max={initial.rules.customCycleMaxDays}
                       value={restartInterval}
                       onChange={(event) => setRestartInterval(Number(event.target.value))}
                     />
-                    <small>可設定 {initial.rules.customCycleMinDays}～{initial.rules.customCycleMaxDays} 天</small>
+                    <small><MemberCopyValue value={"可設定 "} />{initial.rules.customCycleMinDays}～{initial.rules.customCycleMaxDays}<MemberCopyValue value={" 天"} /></small>
                   </label>
                 )}
                 <div className="subscription-enrollment-summary">
-                  <span>商品：{restartProductSummary}</span>
-                  <span>配送方式：{restartShippingSummary}</span>
+                  <span><MemberCopyValue value={"商品："} />{restartProductSummary}</span>
+                  <span><MemberCopyValue value={"配送方式："} />{restartShippingSummary}</span>
                 </div>
                 <div className="member-action-buttons">
                   <button
@@ -753,15 +732,13 @@ export default function MemberSubscriptionExperience(initial: Props) {
                     className="member-danger-soft"
                     disabled={Boolean(busy)}
                     onClick={() => setRestartPanelSubscriptionId("")}
-                  >
-                    返回
-                  </button>
+                  ><MemberCopyValue value={"返回"} /></button>
                   <button
                     type="button"
                     disabled={Boolean(busy) || !restartDate}
                     onClick={() => void confirmRestart()}
                   >
-                    {busy === "restart" ? "處理中…" : "確認重新啟動"}
+                    <MemberCopyValue value={busy === "restart" ? "處理中…" : "確認重新啟動"} />
                   </button>
                 </div>
               </div>
@@ -776,9 +753,7 @@ export default function MemberSubscriptionExperience(initial: Props) {
                       otherSubscription.subscriptionId,
                     )
                   }
-                >
-                  查看其他定期配送
-                </button>
+                ><MemberCopyValue value={"查看其他定期配送"} /></button>
               )}
 
               <button
@@ -790,35 +765,33 @@ export default function MemberSubscriptionExperience(initial: Props) {
                     subscription.subscriptionId,
                   )
                 }
-              >
-                刪除這筆已停止的定期配送
-              </button>
+              ><MemberCopyValue value={"刪除這筆已停止的定期配送"} /></button>
             </div>
           </div>
         ) : <div className="member-subscription-actions">
-          {currentOrderCycle && <details><summary>取消本次配送</summary><div className="member-action-panel"><p>取消本次配送與停止未來定期配送是兩件不同的事。請明確選擇要處理的範圍。</p><label>取消原因<select required value={cancellationReason} onChange={(event) => { setCancellationReason(event.target.value); if (event.target.value !== "其他") setCancellationOtherReason(""); }}><option value="" disabled>請選擇取消原因</option><option value="單純想取消">單純想取消</option><option value="行程／取貨時間不方便">行程／取貨時間不方便</option><option value="咖啡還沒喝完，暫時不需要">咖啡還沒喝完，暫時不需要</option><option value="想更換咖啡／數量／烘焙度">想更換咖啡／數量／烘焙度</option><option value="重複下單或誤操作">重複下單或誤操作</option><option value="預算考量">預算考量</option><option value="其他">其他</option></select></label>{cancellationReason === "其他" && <label>其他取消原因<textarea maxLength={197} required value={cancellationOtherReason} onChange={(event) => setCancellationOtherReason(event.target.value)} placeholder="請簡單告訴我們取消原因" /></label>}<div className="member-action-buttons"><button className="member-danger-soft" disabled={Boolean(busy) || !resolvedCancellationReason} onClick={() => void cancelCurrentDelivery("current")}>只取消本次配送</button><button className="member-danger-soft" disabled={Boolean(busy) || !resolvedCancellationReason} onClick={() => void cancelCurrentDelivery("current-and-stop")}>取消本次配送，並停止之後的定期配送</button></div>{nextCycle && <><label>保留定期配送時的下一次配送日期<input type="date" min={nextDateMinimum} value={replacementDate || nextCycle.plannedDate} onChange={(event) => setReplacementDate(event.target.value)} /></label><button disabled={Boolean(busy) || !resolvedCancellationReason} onClick={() => void cancelCurrentDelivery("current-and-reschedule")}>取消本次配送，保留定期配送並更新下次日期</button></>}<small>若此訂單已建立 7-ELEVEN 寄件資訊，送出後只是取消申請；KD Coffee 確認寄件單作廢前，訂單不會顯示為已取消，也不會回補庫存。</small></div></details>}
-          {nextCycle && <details><summary>調整下一次日期</summary><div className="member-action-panel"><p>{nextCycleHasDedicatedRoast ? `本期含專屬烘焙；距配送不足 ${DEDICATED_ROAST_STANDARD_PREPARATION_DAYS} 天時會先顯示提醒，但仍可確認送出。` : `最早可配送日為 ${earliestDate}。`} 選好日期後，請決定只套用本次，或讓之後的定期購也從新日期重新計算。{remainingChanges === null ? "" : ` 本期還可修改 ${remainingChanges} 次。`}</p><label>新的配送日期<input type="date" id="member-next-date" min={nextDateMinimum} defaultValue={nextCycle.plannedDate} /></label><div className="subscription-enrollment-summary"><span>新建立訂單日與修改截止日會在確認後依目前營運規則重新計算。</span></div><div className="member-action-buttons"><button disabled={Boolean(busy) || remainingChanges === 0} onClick={() => { const plannedDate = (document.getElementById("member-next-date") as HTMLInputElement).value; void requestDateMutation("change-date", { cycleId: nextCycle.cycleId, expectedRevision: nextCycle.revision, plannedDate, recalculateAnchor: false }); }}>只套用這一次</button><button disabled={Boolean(busy) || remainingChanges === 0} onClick={() => { const plannedDate = (document.getElementById("member-next-date") as HTMLInputElement).value; void requestDateMutation("change-date", { cycleId: nextCycle.cycleId, expectedRevision: nextCycle.revision, plannedDate, recalculateAnchor: true }); }}>之後也從新日期重新計算</button></div>{initial.rules.datePickerMode !== "calendar-only" && <div className="member-quick-delays">{initial.rules.advanceQuickOptionsDays.map((days) => <button key={`advance-${days}`} type="button" disabled={Boolean(busy) || remainingChanges === 0} onClick={() => void requestDateMutation("advance", { cycleId: nextCycle.cycleId, expectedRevision: nextCycle.revision, plannedDate: addDateOnlyDays(nextCycle.plannedDate, -days), recalculateAnchor: false })}>提前 {days} 天</button>)}{initial.rules.delayQuickOptionsDays.map((days) => <button key={`delay-${days}`} type="button" disabled={Boolean(busy) || remainingChanges === 0} onClick={() => void requestDateMutation("delay", { cycleId: nextCycle.cycleId, expectedRevision: nextCycle.revision, plannedDate: addDateOnlyDays(nextCycle.plannedDate, days), recalculateAnchor: false })}>延後 {days} 天</button>)}</div>}</div></details>}
-          {nextCycle && <details><summary>跳過這一次</summary><div className="member-action-panel"><p>只跳過 {displayDate(nextCycle.plannedDate)} 這一次。</p><button className="member-danger-soft" disabled={Boolean(busy)} onClick={() => void mutate("skip", { cycleId: nextCycle.cycleId, expectedRevision: nextCycle.revision })}>確認跳過</button></div></details>}
-          {nextCycle && <details><summary>調整下一次配送商品</summary><form className="member-action-panel member-subscription-items-editor" onSubmit={(event) => { event.preventDefault(); void saveEditorItems(); }}>
-            <p>可調整下一次配送的商品、數量與咖啡豆烘焙設定。變更只套用目前這一期，除非現有產品流程明確另有規則。</p>
-            {editorModificationLocked && <p className="member-subscription-editor-warning">本期已達修改次數上限，無法再調整商品。</p>}
+          {currentOrderCycle && <details><summary><MemberCopyValue value={"取消本次配送"} /></summary><div className="member-action-panel"><p><MemberCopyValue value={"取消本次配送與停止未來定期配送是兩件不同的事。請明確選擇要處理的範圍。"} /></p><label><MemberCopyValue value={"取消原因"} /><select required value={cancellationReason} onChange={(event) => { setCancellationReason(event.target.value); if (event.target.value !== "其他") setCancellationOtherReason(""); }}><option value="" disabled><MemberCopyValue value={"請選擇取消原因"} /></option><option value="單純想取消"><MemberCopyValue value={"單純想取消"} /></option><option value="行程／取貨時間不方便"><MemberCopyValue value={"行程／取貨時間不方便"} /></option><option value="咖啡還沒喝完，暫時不需要"><MemberCopyValue value={"咖啡還沒喝完，暫時不需要"} /></option><option value="想更換咖啡／數量／烘焙度"><MemberCopyValue value={"想更換咖啡／數量／烘焙度"} /></option><option value="重複下單或誤操作"><MemberCopyValue value={"重複下單或誤操作"} /></option><option value="預算考量"><MemberCopyValue value={"預算考量"} /></option><option value="其他"><MemberCopyValue value={"其他"} /></option></select></label>{cancellationReason === "其他" && <label><MemberCopyValue value={"其他取消原因"} /><MemberCopyElement as="textarea" maxLength={197} required value={cancellationOtherReason} onChange={(event) => setCancellationOtherReason(event.target.value)} placeholder="請簡單告訴我們取消原因" /></label>}<div className="member-action-buttons"><button className="member-danger-soft" disabled={Boolean(busy) || !resolvedCancellationReason} onClick={() => void cancelCurrentDelivery("current")}><MemberCopyValue value={"只取消本次配送"} /></button><button className="member-danger-soft" disabled={Boolean(busy) || !resolvedCancellationReason} onClick={() => void cancelCurrentDelivery("current-and-stop")}><MemberCopyValue value={"取消本次配送，並停止之後的定期配送"} /></button></div>{nextCycle && <><label><MemberCopyValue value={"保留定期配送時的下一次配送日期"} /><input type="date" min={nextDateMinimum} value={replacementDate || nextCycle.plannedDate} onChange={(event) => setReplacementDate(event.target.value)} /></label><button disabled={Boolean(busy) || !resolvedCancellationReason} onClick={() => void cancelCurrentDelivery("current-and-reschedule")}><MemberCopyValue value={"取消本次配送，保留定期配送並更新下次日期"} /></button></>}<small><MemberCopyValue value={"若此訂單已建立 7-ELEVEN 寄件資訊，送出後只是取消申請；KD Coffee 確認寄件單作廢前，訂單不會顯示為已取消，也不會回補庫存。"} /></small></div></details>}
+          {nextCycle && <details><summary><MemberCopyValue value={"調整下一次日期"} /></summary><div className="member-action-panel"><p><MemberCopyValue value={nextCycleHasDedicatedRoast ? `本期含專屬烘焙；距配送不足 ${DEDICATED_ROAST_STANDARD_PREPARATION_DAYS} 天時會先顯示提醒，但仍可確認送出。` : `最早可配送日為 ${earliestDate}。`} /><MemberCopyValue value={" 選好日期後，請決定只套用本次，或讓之後的定期購也從新日期重新計算。"} /><MemberCopyValue value={remainingChanges === null ? "" : ` 本期還可修改 ${remainingChanges} 次。`} /></p><label><MemberCopyValue value={"新的配送日期"} /><input type="date" id="member-next-date" min={nextDateMinimum} defaultValue={nextCycle.plannedDate} /></label><div className="subscription-enrollment-summary"><span><MemberCopyValue value={"新建立訂單日與修改截止日會在確認後依目前營運規則重新計算。"} /></span></div><div className="member-action-buttons"><button disabled={Boolean(busy) || remainingChanges === 0} onClick={() => { const plannedDate = (document.getElementById("member-next-date") as HTMLInputElement).value; void requestDateMutation("change-date", { cycleId: nextCycle.cycleId, expectedRevision: nextCycle.revision, plannedDate, recalculateAnchor: false }); }}><MemberCopyValue value={"只套用這一次"} /></button><button disabled={Boolean(busy) || remainingChanges === 0} onClick={() => { const plannedDate = (document.getElementById("member-next-date") as HTMLInputElement).value; void requestDateMutation("change-date", { cycleId: nextCycle.cycleId, expectedRevision: nextCycle.revision, plannedDate, recalculateAnchor: true }); }}><MemberCopyValue value={"之後也從新日期重新計算"} /></button></div>{initial.rules.datePickerMode !== "calendar-only" && <div className="member-quick-delays">{initial.rules.advanceQuickOptionsDays.map((days) => <button key={`advance-${days}`} type="button" disabled={Boolean(busy) || remainingChanges === 0} onClick={() => void requestDateMutation("advance", { cycleId: nextCycle.cycleId, expectedRevision: nextCycle.revision, plannedDate: addDateOnlyDays(nextCycle.plannedDate, -days), recalculateAnchor: false })}><MemberCopyValue value={"提前 "} />{days}<MemberCopyValue value={" 天"} /></button>)}{initial.rules.delayQuickOptionsDays.map((days) => <button key={`delay-${days}`} type="button" disabled={Boolean(busy) || remainingChanges === 0} onClick={() => void requestDateMutation("delay", { cycleId: nextCycle.cycleId, expectedRevision: nextCycle.revision, plannedDate: addDateOnlyDays(nextCycle.plannedDate, days), recalculateAnchor: false })}><MemberCopyValue value={"延後 "} />{days}<MemberCopyValue value={" 天"} /></button>)}</div>}</div></details>}
+          {nextCycle && <details><summary><MemberCopyValue value={"跳過這一次"} /></summary><div className="member-action-panel"><p><MemberCopyValue value={"只跳過 "} />{displayDate(nextCycle.plannedDate)}<MemberCopyValue value={" 這一次。"} /></p><button className="member-danger-soft" disabled={Boolean(busy)} onClick={() => void mutate("skip", { cycleId: nextCycle.cycleId, expectedRevision: nextCycle.revision })}><MemberCopyValue value={"確認跳過"} /></button></div></details>}
+          {nextCycle && <details><summary><MemberCopyValue value={"調整下一次配送商品"} /></summary><form className="member-action-panel member-subscription-items-editor" onSubmit={(event) => { event.preventDefault(); void saveEditorItems(); }}>
+            <p><MemberCopyValue value={"可調整下一次配送的商品、數量與咖啡豆烘焙設定。變更只套用目前這一期，除非現有產品流程明確另有規則。"} /></p>
+            {editorModificationLocked && <p className="member-subscription-editor-warning"><MemberCopyValue value={"本期已達修改次數上限，無法再調整商品。"} /></p>}
             <div className="member-subscription-item-list">
               {editorItems.map((item, index) => {
                 const itemError = editorErrors[index];
                 const selectedDripProduct = item.kind === "drip" ? initial.products.find((product) => product.id === item.productId) : null;
                 const availableDripSkus = selectedDripProduct?.options.filter((option) => option.kind === "drip") ?? [];
                 return <article className="member-subscription-item-card" key={item.localKey}>
-                  <header><div><small>SUBSCRIPTION ITEM</small><strong>商品 {index + 1}</strong></div>{editorItems.length > 1 && <button type="button" className="member-subscription-remove-item" disabled={Boolean(busy) || editorModificationLocked || !allowQuantityChange} title={!allowQuantityChange ? "目前規則未開放增減商品數量" : undefined} onClick={() => setEditorItems((items) => removeSubscriptionEditorItem(items, item.localKey))}>移除此商品</button>}</header>
+                  <header><div><small><MemberCopyValue value={"SUBSCRIPTION ITEM"} /></small><strong><MemberCopyValue value={"商品 "} />{index + 1}</strong></div>{editorItems.length > 1 && <MemberCopyElement as="button" type="button" className="member-subscription-remove-item" disabled={Boolean(busy) || editorModificationLocked || !allowQuantityChange} title={!allowQuantityChange ? "目前規則未開放增減商品數量" : undefined} onClick={() => setEditorItems((items) => removeSubscriptionEditorItem(items, item.localKey))}><MemberCopyValue value={"移除此商品"} /></MemberCopyElement>}</header>
                   <div className="member-subscription-item-fields">
-                    <label>商品類型<select value={item.kind} disabled={Boolean(busy) || editorModificationLocked} onChange={(event) => updateEditorItem(item.localKey, (current) => changeSubscriptionEditorItemKind(current, event.target.value === "drip" ? "drip" : "beans", initial.products, allowedProductIds))}><option value="beans" disabled={!beanChoices.length}>咖啡豆</option><option value="drip" disabled={!dripProducts.length}>耳掛咖啡</option></select></label>
+                    <label><MemberCopyValue value={"商品類型"} /><select value={item.kind} disabled={Boolean(busy) || editorModificationLocked} onChange={(event) => updateEditorItem(item.localKey, (current) => changeSubscriptionEditorItemKind(current, event.target.value === "drip" ? "drip" : "beans", initial.products, allowedProductIds))}><option value="beans" disabled={!beanChoices.length}><MemberCopyValue value={"咖啡豆"} /></option><option value="drip" disabled={!dripProducts.length}><MemberCopyValue value={"耳掛咖啡"} /></option></select></label>
                     {item.kind === "beans" ? <>
-                      <label>規格<select value={item.packageWeight} disabled={Boolean(busy) || editorModificationLocked} onChange={(event) => updateEditorItem(item.localKey, (current) => current.kind === "beans" ? changeBeanPackageWeight(current, event.target.value === "one-pound" ? "one-pound" : "half-pound") : current)}><option value="half-pound" disabled={item.originalPackageWeight === "one-pound" && !allowOneToHalfPound}>半磅</option><option value="one-pound" disabled={item.originalPackageWeight === "half-pound" && !allowHalfToOnePound}>一磅（兩個半磅組合）</option></select></label>
+                      <label><MemberCopyValue value={"規格"} /><select value={item.packageWeight} disabled={Boolean(busy) || editorModificationLocked} onChange={(event) => updateEditorItem(item.localKey, (current) => current.kind === "beans" ? changeBeanPackageWeight(current, event.target.value === "one-pound" ? "one-pound" : "half-pound") : current)}><option value="half-pound" disabled={item.originalPackageWeight === "one-pound" && !allowOneToHalfPound}><MemberCopyValue value={"半磅"} /></option><option value="one-pound" disabled={item.originalPackageWeight === "half-pound" && !allowHalfToOnePound}><MemberCopyValue value={"一磅（兩個半磅組合）"} /></option></select></label>
                       {item.components.map((component, componentIndex) => {
                         const choices = componentIndex === 1 && !allowMixedOnePound ? beanChoices.filter(({ product }) => product.id === item.components[0]?.productId) : beanChoices;
                         const value = skuChoiceValue(component.productId, component.skuId);
                         const available = choices.some(({ product, option }) => value === skuChoiceValue(product.id, option.skuId));
                         const selectedBeanProduct = initial.products.find((product) => product.id === component.productId);
-                        return <label className="member-subscription-component-field" key={`${item.localKey}:component:${componentIndex}`}>{item.packageWeight === "one-pound" ? componentIndex === 0 ? "第一款半磅咖啡" : "第二款半磅咖啡" : "半磅咖啡"}<select value={value} disabled={Boolean(busy) || editorModificationLocked} onChange={(event) => {
+                        return <label className="member-subscription-component-field" key={`${item.localKey}:component:${componentIndex}`}><MemberCopyValue value={item.packageWeight === "one-pound" ? componentIndex === 0 ? "第一款半磅咖啡" : "第二款半磅咖啡" : "半磅咖啡"} /><select value={value} disabled={Boolean(busy) || editorModificationLocked} onChange={(event) => {
                           const selected = readSkuChoice(event.target.value);
                           updateEditorItem(item.localKey, (current) => {
                             if (current.kind !== "beans") return current;
@@ -827,31 +800,31 @@ export default function MemberSubscriptionExperience(initial: Props) {
                             const selectedProduct = initial.products.find((product) => product.id === selected.productId);
                             return { ...current, roast: componentIndex === 0 ? selectedProduct?.roast || "工作室建議" : current.roast, components };
                           });
-                        }}>{!available && <option value={value} disabled>原咖啡豆 SKU 已無法供應，請重新選擇</option>}{choices.map(({ product, option }) => <option value={skuChoiceValue(product.id, option.skuId)} key={`${product.id}:${option.skuId}`}>{product.name}・{option.label}{option.detail ? `・${option.detail}` : ""}</option>)}</select><small>預設烘焙：{selectedBeanProduct?.roast || "工作室建議"}</small></label>;
+                        }}>{!available && <option value={value} disabled><MemberCopyValue value={"原咖啡豆 SKU 已無法供應，請重新選擇"} /></option>}{choices.map(({ product, option }) => <option value={skuChoiceValue(product.id, option.skuId)} key={`${product.id}:${option.skuId}`}>{product.name}・<MemberCopyValue value={option.label} />{option.detail ? `・${option.detail}` : ""}</option>)}</select><small><MemberCopyValue value={"預設烘焙："} /><MemberCopyValue value={selectedBeanProduct?.roast || "工作室建議"} /></small></label>;
                       })}
                     </> : <>
-                      <label>咖啡作品<select value={item.productId} disabled={Boolean(busy) || editorModificationLocked} onChange={(event) => {
+                      <label><MemberCopyValue value={"咖啡作品"} /><select value={item.productId} disabled={Boolean(busy) || editorModificationLocked} onChange={(event) => {
                         const product = initial.products.find((entry) => entry.id === event.target.value);
                         const option = product?.options.find((entry) => entry.kind === "drip");
                         updateEditorItem(item.localKey, (current) => current.kind === "drip" ? { ...current, productId: product?.id ?? "", skuId: option?.skuId ?? "" } : current);
-                      }}>{!dripProducts.some((product) => product.id === item.productId) && <option value={item.productId} disabled>原耳掛商品已無法供應，請重新選擇</option>}{dripProducts.map((product) => <option value={product.id} key={product.id}>{product.name}</option>)}</select></label>
-                      <label>耳掛規格<select value={item.skuId} disabled={Boolean(busy) || editorModificationLocked || !selectedDripProduct} onChange={(event) => updateEditorItem(item.localKey, (current) => current.kind === "drip" ? { ...current, skuId: event.target.value } : current)}>{!skuOption(initial.products, item.productId, item.skuId, "drip") && <option value={item.skuId} disabled>原耳掛 SKU 已無法供應，請重新選擇</option>}{availableDripSkus.map((option) => <option value={option.skuId} key={option.skuId}>{option.label}{option.detail ? `・${option.detail}` : ""}</option>)}</select></label>
+                      }}>{!dripProducts.some((product) => product.id === item.productId) && <option value={item.productId} disabled><MemberCopyValue value={"原耳掛商品已無法供應，請重新選擇"} /></option>}{dripProducts.map((product) => <option value={product.id} key={product.id}>{product.name}</option>)}</select></label>
+                      <label><MemberCopyValue value={"耳掛規格"} /><select value={item.skuId} disabled={Boolean(busy) || editorModificationLocked || !selectedDripProduct} onChange={(event) => updateEditorItem(item.localKey, (current) => current.kind === "drip" ? { ...current, skuId: event.target.value } : current)}>{!skuOption(initial.products, item.productId, item.skuId, "drip") && <option value={item.skuId} disabled><MemberCopyValue value={"原耳掛 SKU 已無法供應，請重新選擇"} /></option>}{availableDripSkus.map((option) => <option value={option.skuId} key={option.skuId}><MemberCopyValue value={option.label} />{option.detail ? `・${option.detail}` : ""}</option>)}</select></label>
                     </>}
-                    <label>數量<input type="number" min={1} max={12} value={item.quantity} disabled={Boolean(busy) || editorModificationLocked || (!allowQuantityChange && Boolean(item.persistedItemId))} onChange={(event) => updateEditorItem(item.localKey, (current) => ({ ...current, quantity: Number(event.target.value) }))} /></label>
+                    <label><MemberCopyValue value={"數量"} /><input type="number" min={1} max={12} value={item.quantity} disabled={Boolean(busy) || editorModificationLocked || (!allowQuantityChange && Boolean(item.persistedItemId))} onChange={(event) => updateEditorItem(item.localKey, (current) => ({ ...current, quantity: Number(event.target.value) }))} /></label>
                   </div>
                   <ItemPricePreview item={item} products={initial.products} discountPercent={initial.rules.discountPercent} />
                   {itemError && <p className="member-subscription-editor-warning" role="alert">{itemError}</p>}
                 </article>;
               })}
             </div>
-            {dedicatedRoastProducts.length > 0 && <section className="member-subscription-dedicated-roast"><div><strong>專屬烘焙</strong><p>同一款咖啡累積達 2 磅，可選擇專屬烘焙；不同咖啡不合併計算。</p></div>{dedicatedRoastProducts.map(({ product, halfPoundUnits, customRoast, roastLevel }) => <div className="member-subscription-dedicated-roast-option" key={product.id}><label className="member-subscription-dedicated-roast-switch"><input type="checkbox" checked={customRoast} disabled={Boolean(busy) || editorModificationLocked} onChange={(event) => setEditorItems((items) => setSubscriptionEditorDedicatedRoast(items, product.id, event.target.checked, event.target.checked ? initialDedicatedRoastLevel(product.roast) : undefined))} /><span>使用專屬烘焙｜{product.name}（{halfPoundUnits / 2} 磅）</span></label>{customRoast && <label>指定烘焙度<select value={roastLevel} disabled={Boolean(busy) || editorModificationLocked} onChange={(event) => setEditorItems((items) => setSubscriptionEditorDedicatedRoast(items, product.id, true, event.target.value))}>{ALLOWED_ROAST_LEVELS.map((level) => <option key={level} value={level}>{level}</option>)}</select></label>}</div>)}<small>專屬烘焙標準排程需要至少 {DEDICATED_ROAST_STANDARD_PREPARATION_DAYS} 天準備時間。</small></section>}
+            {dedicatedRoastProducts.length > 0 && <section className="member-subscription-dedicated-roast"><div><strong><MemberCopyValue value={"專屬烘焙"} /></strong><p><MemberCopyValue value={"同一款咖啡累積達 2 磅，可選擇專屬烘焙；不同咖啡不合併計算。"} /></p></div>{dedicatedRoastProducts.map(({ product, halfPoundUnits, customRoast, roastLevel }) => <div className="member-subscription-dedicated-roast-option" key={product.id}><label className="member-subscription-dedicated-roast-switch"><input type="checkbox" checked={customRoast} disabled={Boolean(busy) || editorModificationLocked} onChange={(event) => setEditorItems((items) => setSubscriptionEditorDedicatedRoast(items, product.id, event.target.checked, event.target.checked ? initialDedicatedRoastLevel(product.roast) : undefined))} /><span><MemberCopyValue value={"使用專屬烘焙｜"} />{product.name}（{halfPoundUnits / 2}<MemberCopyValue value={" 磅）"} /></span></label>{customRoast && <label><MemberCopyValue value={"指定烘焙度"} /><select value={roastLevel} disabled={Boolean(busy) || editorModificationLocked} onChange={(event) => setEditorItems((items) => setSubscriptionEditorDedicatedRoast(items, product.id, true, event.target.value))}>{ALLOWED_ROAST_LEVELS.map((level) => <option key={level} value={level}>{level}</option>)}</select></label>}</div>)}<small><MemberCopyValue value={"專屬烘焙標準排程需要至少 "} />{DEDICATED_ROAST_STANDARD_PREPARATION_DAYS}<MemberCopyValue value={" 天準備時間。"} /></small></section>}
             <div className="member-subscription-editor-actions"><button type="button" className="member-subscription-add-item" disabled={Boolean(busy) || editorModificationLocked || editorAtLimit || !allowQuantityChange || (!beanChoices.length && !dripProducts.length)} onClick={() => {
               const kind = beanChoices.length ? "beans" : "drip";
               setEditorItems((items) => [...items, createSubscriptionEditorItem(kind, initial.products, `new:${crypto.randomUUID()}`, allowedProductIds)]);
-            }}>＋ 新增商品</button><small>{editorItems.length} / {maxEditorItems} 項</small></div>
-            <button className="member-subscription-save-items" disabled={Boolean(busy) || editorModificationLocked || editorHasError || !editorItems.length} type="submit">儲存下一次配送商品</button>
+            }}><MemberCopyValue value={"＋ 新增商品"} /></button><small>{editorItems.length} / {maxEditorItems}<MemberCopyValue value={" 項"} /></small></div>
+            <button className="member-subscription-save-items" disabled={Boolean(busy) || editorModificationLocked || editorHasError || !editorItems.length} type="submit"><MemberCopyValue value={"儲存下一次配送商品"} /></button>
           </form></details>}
-          <details><summary>變更配送方式</summary><form className="member-action-panel" onSubmit={(event) => {
+          <details><summary><MemberCopyValue value={"變更配送方式"} /></summary><form className="member-action-panel" onSubmit={(event) => {
             event.preventDefault();
             const form = new FormData(event.currentTarget);
             let address: DeliveryAddress | null = null;
@@ -860,12 +833,12 @@ export default function MemberSubscriptionExperience(initial: Props) {
               catch (error) { setMessage(error instanceof Error ? error.message : "請填寫完整宅配地址"); return; }
             }
             void mutate("change-shipping", { subscriptionId: subscription.subscriptionId, expectedRevision: subscription.revision, shippingMethod: shippingMethodDraft, storeId: shippingMethodDraft === "711_cod" ? form.get("storeId") : null, storeName: shippingMethodDraft === "711_cod" ? form.get("storeName") : null, deliveryAddress: address, paymentMethod: shippingMethodDraft === "home_delivery" ? "cash_on_delivery" : null });
-          }}><fieldset className="member-shipping-method-options"><legend>未來定期配送方式</legend><label><input type="radio" name="shippingMethodChoice" value="studio_pickup" checked={shippingMethodDraft === "studio_pickup"} onChange={() => setShippingMethodDraft("studio_pickup")} />工作室自取</label><label><input type="radio" name="shippingMethodChoice" value="711_cod" checked={shippingMethodDraft === "711_cod"} onChange={() => setShippingMethodDraft("711_cod")} />7-ELEVEN 取貨</label><label><input type="radio" name="shippingMethodChoice" value="home_delivery" checked={shippingMethodDraft === "home_delivery"} onChange={() => setShippingMethodDraft("home_delivery")} />宅配</label></fieldset>
+          }}><fieldset className="member-shipping-method-options"><legend><MemberCopyValue value={"未來定期配送方式"} /></legend><label><input type="radio" name="shippingMethodChoice" value="studio_pickup" checked={shippingMethodDraft === "studio_pickup"} onChange={() => setShippingMethodDraft("studio_pickup")} /><MemberCopyValue value={"工作室自取"} /></label><label><input type="radio" name="shippingMethodChoice" value="711_cod" checked={shippingMethodDraft === "711_cod"} onChange={() => setShippingMethodDraft("711_cod")} /><MemberCopyValue value={"7-ELEVEN 取貨"} /></label><label><input type="radio" name="shippingMethodChoice" value="home_delivery" checked={shippingMethodDraft === "home_delivery"} onChange={() => setShippingMethodDraft("home_delivery")} /><MemberCopyValue value={"宅配"} /></label></fieldset>
           {shippingMethodDraft === "711_cod" && <StoreSelector key={`${subscription.subscriptionId}:${subscription.storeSelection?.storeId ?? "new"}`} initialStore={subscription.storeSelection ? { id: subscription.storeSelection.storeId, name: subscription.storeSelection.storeName, address: "" } : undefined} />}
           {shippingMethodDraft === "home_delivery" && <><div className="store-selector-grid">{([
             ["recipientName", "收件人姓名", 40], ["phone", "手機／聯絡電話", 20], ["postalCode", "郵遞區號", 6], ["city", "縣市", 20], ["district", "區／鄉鎮市", 30], ["addressLine", "詳細地址", 120],
-          ] as const).map(([key, label, maxLength]) => <label key={key}>{label}<input name={key} value={deliveryAddressDraft[key]} onChange={(event) => setDeliveryAddressDraft((current) => ({ ...current, [key]: event.target.value }))} maxLength={maxLength} required /></label>)}</div><div className="delivery-notice"><strong>宅配定期配送付款方式：貨到付款</strong><p>貨到付款手續費 NT$ {initial.rules.homeDeliveryCodFee.toLocaleString("zh-TW")}／次；實際金額以每期鎖定時的設定為準。</p></div></>}
-          <small>此變更只套用未來配送；已鎖定期次與已建立的訂單保留原快照。</small><button disabled={Boolean(busy)} type="submit">儲存配送方式</button></form></details>
+          ] as const).map(([key, label, maxLength]) => <label key={key}><MemberCopyValue value={label} /><input name={key} value={deliveryAddressDraft[key]} onChange={(event) => setDeliveryAddressDraft((current) => ({ ...current, [key]: event.target.value }))} maxLength={maxLength} required /></label>)}</div><div className="delivery-notice"><strong><MemberCopyValue value={"宅配定期配送付款方式：貨到付款"} /></strong><p><MemberCopyValue value={"貨到付款手續費 NT$ "} />{initial.rules.homeDeliveryCodFee.toLocaleString("zh-TW")}<MemberCopyValue value={"／次；實際金額以每期鎖定時的設定為準。"} /></p></div></>}
+          <small><MemberCopyValue value={"此變更只套用未來配送；已鎖定期次與已建立的訂單保留原快照。"} /></small><button disabled={Boolean(busy)} type="submit"><MemberCopyValue value={"儲存配送方式"} /></button></form></details>
           <details onToggle={(event) => {
             if (!event.currentTarget.open || subscription.status !== "paused") return;
             const currentMinimum = canonicalSubscriptionMinimum(
@@ -873,13 +846,13 @@ export default function MemberSubscriptionExperience(initial: Props) {
               getDateOnlyInTimeZone(new Date()),
             );
             setResumeDate((current) => current >= currentMinimum ? current : currentMinimum);
-          }}><summary>{subscription.status === "active" ? "暫停定期配送" : "恢復或停止定期配送"}</summary><div className="member-action-panel"><p>{subscription.status === "active" ? "暫停後不會安排新的定期配送，之後可再選擇下一次配送日期恢復。" : "可選擇下一次配送日期恢復，或停止這筆定期配送。"}</p>{subscription.status === "active" && <button disabled={Boolean(busy)} onClick={() => void mutate("pause", { subscriptionId: subscription.subscriptionId, expectedRevision: subscription.revision })}>暫停未來定期配送</button>}{subscription.status === "paused" && <><label>下一次配送日期<input type="date" min={resumeEarliestDate} value={resumeDate} onChange={(event) => setResumeDate(event.target.value)} onFocus={() => {
+          }}><summary><MemberCopyValue value={subscription.status === "active" ? "暫停定期配送" : "恢復或停止定期配送"} /></summary><div className="member-action-panel"><p><MemberCopyValue value={subscription.status === "active" ? "暫停後不會安排新的定期配送，之後可再選擇下一次配送日期恢復。" : "可選擇下一次配送日期恢復，或停止這筆定期配送。"} /></p>{subscription.status === "active" && <button disabled={Boolean(busy)} onClick={() => void mutate("pause", { subscriptionId: subscription.subscriptionId, expectedRevision: subscription.revision })}><MemberCopyValue value={"暫停未來定期配送"} /></button>}{subscription.status === "paused" && <><label><MemberCopyValue value={"下一次配送日期"} /><input type="date" min={resumeEarliestDate} value={resumeDate} onChange={(event) => setResumeDate(event.target.value)} onFocus={() => {
   const currentMinimum = canonicalSubscriptionMinimum(
     resumeHasDedicatedRoast,
     getDateOnlyInTimeZone(new Date()),
   );
   setResumeDate((current) => current >= currentMinimum ? current : currentMinimum);
-}} /><small>最早可選：{displayDate(resumeEarliestDate)}</small></label><label>新的配送週期<select
+}} /><small><MemberCopyValue value={"最早可選："} />{displayDate(resumeEarliestDate)}</small></label><label><MemberCopyValue value={"新的配送週期"} /><select
   value={resumeIntervalMode === "custom" ? "custom" : resumeInterval}
   onChange={(event) => {
     if (event.target.value === "custom") {
@@ -891,14 +864,12 @@ export default function MemberSubscriptionExperience(initial: Props) {
     setResumeInterval(Number(event.target.value));
   }}
 >
-{initial.rules.intervalsDays.map((days) => <option key={days} value={days}>每 {days} 天</option>)}
-{initial.rules.customCycleEnabled && <option value="custom">自訂天數</option>}
+{initial.rules.intervalsDays.map((days) => <option key={days} value={days}><MemberCopyValue value={"每 "} />{days}<MemberCopyValue value={" 天"} /></option>)}
+{initial.rules.customCycleEnabled && <option value="custom"><MemberCopyValue value={"自訂天數"} /></option>}
 </select>
 </label>
 {initial.rules.customCycleEnabled && resumeIntervalMode === "custom" && (
-  <label>
-    自訂配送週期
-    <input
+  <label><MemberCopyValue value={"自訂配送週期"} /><input
       type="number"
       min={initial.rules.customCycleMinDays}
       max={initial.rules.customCycleMaxDays}
@@ -907,13 +878,11 @@ export default function MemberSubscriptionExperience(initial: Props) {
         setResumeInterval(Number(event.target.value))
       }
     />
-    <small>
-      可設定 {initial.rules.customCycleMinDays}～{initial.rules.customCycleMaxDays} 天
-    </small>
+    <small><MemberCopyValue value={"可設定 "} />{initial.rules.customCycleMinDays}～{initial.rules.customCycleMaxDays}<MemberCopyValue value={" 天"} /></small>
   </label>
 )}
-<button disabled={Boolean(busy) || !resumeDate} onClick={() => void confirmResume()}>確認恢復</button><button className="member-danger-soft" disabled={Boolean(busy)} onClick={() => setTerminateConfirmationId(subscription.subscriptionId)}>停止這筆定期配送</button></>}</div></details>
-          {subscription.status === "active" && <button className="member-replenish-button" disabled={Boolean(busy)} onClick={() => void mutate("replenish", { subscriptionId: subscription.subscriptionId })}>立即補貨（不改下次日期）</button>}
+<button disabled={Boolean(busy) || !resumeDate} onClick={() => void confirmResume()}><MemberCopyValue value={"確認恢復"} /></button><button className="member-danger-soft" disabled={Boolean(busy)} onClick={() => setTerminateConfirmationId(subscription.subscriptionId)}><MemberCopyValue value={"停止這筆定期配送"} /></button></>}</div></details>
+          {subscription.status === "active" && <button className="member-replenish-button" disabled={Boolean(busy)} onClick={() => void mutate("replenish", { subscriptionId: subscription.subscriptionId })}><MemberCopyValue value={"立即補貨（不改下次日期）"} /></button>}
         </div>}
       </div>}
     </section>
@@ -935,21 +904,11 @@ export default function MemberSubscriptionExperience(initial: Props) {
           aria-labelledby="member-hide-terminated-title"
           onClick={(event) => event.stopPropagation()}
         >
-          <p className="eyebrow dark">SUBSCRIPTION</p>
+          <p className="eyebrow dark"><MemberCopyValue value={"SUBSCRIPTION"} /></p>
 
-          <h2 id="member-hide-terminated-title">
-            刪除這筆已停止的定期配送？
-          </h2>
+          <h2 id="member-hide-terminated-title"><MemberCopyValue value={"刪除這筆已停止的定期配送？"} /></h2>
 
-          <p>
-            刪除後，這筆已停止的定期配送會從會員中心移除。
-            <br />
-            歷史訂單、取貨紀錄與回饋資料仍會保留，不會被刪除。
-            <br />
-            刪除後將不再享有這筆定期配送的
-            <b> {subscriptionDiscountLabel}</b>
-            優惠；如果之後需要，必須重新建立定期配送。
-          </p>
+          <p><MemberCopyValue value={"刪除後，這筆已停止的定期配送會從會員中心移除。"} /><br /><MemberCopyValue value={"歷史訂單、取貨紀錄與回饋資料仍會保留，不會被刪除。"} /><br /><MemberCopyValue value={"刪除後將不再享有這筆定期配送的"} /><b> {subscriptionDiscountLabel}</b><MemberCopyValue value={"優惠；如果之後需要，必須重新建立定期配送。"} /></p>
 
           <div className="member-rush-warning-actions">
             <button
@@ -959,9 +918,7 @@ export default function MemberSubscriptionExperience(initial: Props) {
               onClick={() =>
                 setHideTerminatedConfirmationId("")
               }
-            >
-              返回
-            </button>
+            ><MemberCopyValue value={"返回"} /></button>
 
             <button
               type="button"
@@ -970,9 +927,9 @@ export default function MemberSubscriptionExperience(initial: Props) {
                 void confirmHideTerminatedSubscription()
               }
             >
-              {busy === "hide-terminated"
+              <MemberCopyValue value={busy === "hide-terminated"
                 ? "處理中…"
-                : "確認刪除"}
+                : "確認刪除"} />
             </button>
           </div>
         </div>
@@ -982,30 +939,18 @@ export default function MemberSubscriptionExperience(initial: Props) {
     {terminateConfirmationId && (
       <div className="member-price-modal-backdrop" role="presentation" onClick={() => { if (!busy) setTerminateConfirmationId(""); }}>
         <div className="member-price-modal member-terminate-confirmation-modal" role="dialog" aria-modal="true" aria-labelledby="member-terminate-confirmation-title" onClick={(event) => event.stopPropagation()}>
-          <p className="eyebrow dark">SUBSCRIPTION</p>
+          <p className="eyebrow dark"><MemberCopyValue value={"SUBSCRIPTION"} /></p>
           <h2 id="member-terminate-confirmation-title">
-            {terminationTarget?.status === "pending_activation"
+            <MemberCopyValue value={terminationTarget?.status === "pending_activation"
               ? "取消這個定期配送設定？"
-              : "確定停止定期配送嗎？"}
+              : "確定停止定期配送嗎？"} />
           </h2>
 
           {terminationTarget?.status === "pending_activation" ? (
-            <p>
-              取消後，目前這張首筆原價訂單仍會照常處理。
-              <br />
-              即使本次成功取貨，也不會再啟動定期配送。
-              <br />
-              您也不會再享有後續
-              <b> {subscriptionDiscountLabel}</b>
-              定期購優惠。
-            </p>
+            <p><MemberCopyValue value={"取消後，目前這張首筆原價訂單仍會照常處理。"} /><br /><MemberCopyValue value={"即使本次成功取貨，也不會再啟動定期配送。"} /><br /><MemberCopyValue value={"您也不會再享有後續"} /><b> {subscriptionDiscountLabel}</b><MemberCopyValue value={"定期購優惠。"} /></p>
           ) : (
-            <p>
-              停止後，之後不再安排新的定期配送。
-              {terminationTargetHasCurrentOrder && <>
-                <br />
-                這次已成立的訂單會照原安排處理。
-              </>}
+            <p><MemberCopyValue value={"停止後，之後不再安排新的定期配送。"} />{terminationTargetHasCurrentOrder && <>
+                <br /><MemberCopyValue value={"這次已成立的訂單會照原安排處理。"} /></>}
             </p>
           )}
 
@@ -1015,20 +960,18 @@ export default function MemberSubscriptionExperience(initial: Props) {
               className="member-danger-soft"
               disabled={Boolean(busy)}
               onClick={() => setTerminateConfirmationId("")}
-            >
-              先不要
-            </button>
+            ><MemberCopyValue value={"先不要"} /></button>
 
             <button
               type="button"
               disabled={Boolean(busy)}
               onClick={() => void confirmTermination()}
             >
-              {busy === "terminate"
+              <MemberCopyValue value={busy === "terminate"
                 ? "處理中…"
                 : terminationTarget?.status === "pending_activation"
                   ? "確認取消定期配送"
-                  : "確認停止定期配送"}
+                  : "確認停止定期配送"} />
             </button>
           </div>
         </div>
@@ -1038,10 +981,10 @@ export default function MemberSubscriptionExperience(initial: Props) {
     {rushConfirmation && (
       <div className="member-price-modal-backdrop" role="presentation" onClick={() => setRushConfirmation(null)}>
         <div className="member-price-modal member-rush-warning-modal" role="dialog" aria-modal="true" aria-labelledby="member-rush-warning-title" onClick={(event) => event.stopPropagation()}>
-          <p className="eyebrow dark">DEDICATED ROAST</p>
-          <h2 id="member-rush-warning-title">專屬烘焙準備時間提醒</h2>
-          <p>專屬烘焙標準排程需要至少 {DEDICATED_ROAST_STANDARD_PREPARATION_DAYS} 天準備時間。<br />您目前選擇的配送日期較近，我們仍會接受這次訂單並盡力安排，但實際配送時間可能因此延後。</p>
-          <div className="member-rush-warning-actions"><button type="button" className="member-danger-soft" onClick={() => setRushConfirmation(null)}>返回修改日期</button><button type="button" disabled={Boolean(busy)} onClick={() => void continueRushAction()}>我了解，繼續下單</button></div>
+          <p className="eyebrow dark"><MemberCopyValue value={"DEDICATED ROAST"} /></p>
+          <h2 id="member-rush-warning-title"><MemberCopyValue value={"專屬烘焙準備時間提醒"} /></h2>
+          <p><MemberCopyValue value={"專屬烘焙標準排程需要至少 "} />{DEDICATED_ROAST_STANDARD_PREPARATION_DAYS}<MemberCopyValue value={" 天準備時間。"} /><br /><MemberCopyValue value={"您目前選擇的配送日期較近，我們仍會接受這次訂單並盡力安排，但實際配送時間可能因此延後。"} /></p>
+          <div className="member-rush-warning-actions"><button type="button" className="member-danger-soft" onClick={() => setRushConfirmation(null)}><MemberCopyValue value={"返回修改日期"} /></button><button type="button" disabled={Boolean(busy)} onClick={() => void continueRushAction()}><MemberCopyValue value={"我了解，繼續下單"} /></button></div>
         </div>
       </div>
     )}
@@ -1061,51 +1004,47 @@ export default function MemberSubscriptionExperience(initial: Props) {
         >
           <div className="member-price-modal-head">
             <div>
-              <small>SUBSCRIPTION PRICE</small>
-              <h3 id="member-price-detail-title">本期金額明細</h3>
+              <small><MemberCopyValue value={"SUBSCRIPTION PRICE"} /></small>
+              <h3 id="member-price-detail-title"><MemberCopyValue value={"本期金額明細"} /></h3>
             </div>
-            <button
+            <MemberCopyElement as="button"
               type="button"
               aria-label="關閉"
               onClick={() => setShowPriceDetails(false)}
             >
               ×
-            </button>
+            </MemberCopyElement>
           </div>
 
           <div className="member-price-breakdown">
             <div>
-              <span>商品原價</span>
+              <span><MemberCopyValue value={"商品原價"} /></span>
               <strong>{money(displayedOriginal)}</strong>
             </div>
 
             {regularShipping > 0 && (
               <div>
-                <span>一般配送運費</span>
+                <span><MemberCopyValue value={"一般配送運費"} /></span>
                 <strong>{money(regularShipping)}</strong>
               </div>
             )}
 
             {regularShipping > 0 && (
               <div>
-                <span>一般購買合計</span>
+                <span><MemberCopyValue value={"一般購買合計"} /></span>
                 <strong>{money(regularPurchaseTotal)}</strong>
               </div>
             )}
 
             <div>
-              <span>
-                定期購優惠（
-                {lockedPricing?.subscriptionDiscountPercent ??
-                  initial.rules.discountPercent}
-                折）
-              </span>
+              <span><MemberCopyValue value={"定期購優惠（"} />{lockedPricing?.subscriptionDiscountPercent ??
+                  initial.rules.discountPercent}<MemberCopyValue value={"折）"} /></span>
               <strong>− {money(subscriptionSaving)}</strong>
             </div>
 
             {subscriptionShippingSaving > 0 && (
               <div>
-                <span>定期購配送優惠</span>
+                <span><MemberCopyValue value={"定期購配送優惠"} /></span>
                 <strong>
                   − {money(subscriptionShippingSaving)}
                 </strong>
@@ -1113,39 +1052,39 @@ export default function MemberSubscriptionExperience(initial: Props) {
             )}
 
             <div>
-              <span>定期購價格</span>
+              <span><MemberCopyValue value={"定期購價格"} /></span>
               <strong>{money(displayedSubscriptionPrice)}</strong>
             </div>
 
             {lockedPricing?.campaignPrice != null && (
               <div>
-                <span>活動價格</span>
+                <span><MemberCopyValue value={"活動價格"} /></span>
                 <strong>{money(lockedPricing.campaignPrice)}</strong>
               </div>
             )}
 
             <div>
-              <span>本期採用</span>
+              <span><MemberCopyValue value={"本期採用"} /></span>
               <strong>
-                {lockedPricing
+                <MemberCopyValue value={lockedPricing
                   ? lockedPricing.selectedPriceSource === "campaign"
                     ? "活動優惠價"
                     : "定期購優惠價"
-                  : "鎖定本期時自動比較較優惠價格"}
+                  : "鎖定本期時自動比較較優惠價格"} />
               </strong>
             </div>
 
             <div>
-              <span>本期配送費</span>
+              <span><MemberCopyValue value={"本期配送費"} /></span>
               <strong>
                 {money(displayedSubscriptionShipping)}
               </strong>
             </div>
-            {supportedShippingMethod === "home_delivery" && <div><span>貨到付款手續費</span><strong>{money(displayedCodServiceFee)}</strong></div>}
+            {supportedShippingMethod === "home_delivery" && <div><span><MemberCopyValue value={"貨到付款手續費"} /></span><strong>{money(displayedCodServiceFee)}</strong></div>}
 
             {lockedPricing && (
               <div>
-                <span>抵用金</span>
+                <span><MemberCopyValue value={"抵用金"} /></span>
                 <strong>
                   − {money(lockedPricing.creditReserved)}
                 </strong>
@@ -1155,9 +1094,8 @@ export default function MemberSubscriptionExperience(initial: Props) {
             {(subscriptionSaving > 0 ||
               subscriptionShippingSaving > 0) && (
               <div className="member-price-saving-total">
-                <span>本期優惠合計</span>
-                <strong>
-                  省 {money(totalSubscriptionSaving)}
+                <span><MemberCopyValue value={"本期優惠合計"} /></span>
+                <strong><MemberCopyValue value={"省 "} />{money(totalSubscriptionSaving)}
                 </strong>
               </div>
             )}
@@ -1165,29 +1103,25 @@ export default function MemberSubscriptionExperience(initial: Props) {
 
           <div className="member-price-modal-total">
             <span>
-              {lockedPricing ? "本期應付" : "目前預估應付"}
+              <MemberCopyValue value={lockedPricing ? "本期應付" : "目前預估應付"} />
             </span>
             <strong>{money(displayedFinal)}</strong>
           </div>
 
           {!lockedPricing && (
-            <p className="member-price-modal-note">
-              此期尚未鎖定。活動優惠、配送費與抵用金會在本期鎖定時依正式規則重新計算，系統會自動採用較優惠的商品價格。
-            </p>
+            <p className="member-price-modal-note"><MemberCopyValue value={"此期尚未鎖定。活動優惠、配送費與抵用金會在本期鎖定時依正式規則重新計算，系統會自動採用較優惠的商品價格。"} /></p>
           )}
 
           <button
             type="button"
             className="member-price-modal-close"
             onClick={() => setShowPriceDetails(false)}
-          >
-            我知道了
-          </button>
+          ><MemberCopyValue value={"我知道了"} /></button>
         </div>
       </div>
     )}
-    <section className="member-commerce-section" id="credit"><div className="member-section-head"><div><p className="eyebrow dark">CREDIT</p><h2>我的抵用金</h2></div><strong>{money(availableCredit)}</strong></div><div className="member-credit-summary"><div><small>現在可用</small><strong>{money(availableCredit)}</strong><span>僅顯示已正式入帳、可於結帳使用的折抵額。</span></div></div>{dashboard.credits.length ? <div className="member-credit-history">{dashboard.credits.map((entry) => <article key={entry.creditEntryId}><div><strong>{entry.direction === "deduct" ? "−" : "+"} {money(Math.abs(entry.amount))}</strong><small>{entry.sourceLabel}</small>{entry.sourceOrderNumber ? <span className="member-credit-redemption"><b>回饋來源訂單</b><Link href={`/orders/${encodeURIComponent(entry.sourceOrderNumber)}`}>訂單 {entry.sourceOrderNumber}</Link></span> : null}{entry.orderRedemptions.map((redemption) => <span className={`member-credit-redemption ${redemption.status}`} key={`${entry.creditEntryId}-${redemption.orderNumber}`}><b>{redemptionLabel(redemption.status)} {money(redemption.amount)}</b><Link href={`/orders/${encodeURIComponent(redemption.orderNumber)}`}>訂單 {redemption.orderNumber}</Link></span>)}</div><div><span>餘額 {money(entry.remainingAmount)}</span>{entry.amount > 0 ? <small>到期 {entry.expiresAt.slice(0, 10)}</small> : null}</div></article>)}</div> : <div className="member-commerce-empty compact"><strong>目前沒有抵用金紀錄</strong><p>有抵用金時，結帳會讓您自行選擇是否使用，並優先使用最快到期的額度。</p></div>}</section>
+    <section className="member-commerce-section" id="credit"><div className="member-section-head"><div><p className="eyebrow dark"><MemberCopyValue value={"CREDIT"} /></p><h2><MemberCopyValue value={"我的抵用金"} /></h2></div><strong>{money(availableCredit)}</strong></div><div className="member-credit-summary"><div><small><MemberCopyValue value={"現在可用"} /></small><strong>{money(availableCredit)}</strong><span><MemberCopyValue value={"僅顯示已正式入帳、可於結帳使用的折抵額。"} /></span></div></div>{dashboard.credits.length ? <div className="member-credit-history">{dashboard.credits.map((entry) => <article key={entry.creditEntryId}><div><strong>{entry.direction === "deduct" ? "−" : "+"} {money(Math.abs(entry.amount))}</strong><small>{entry.sourceLabel}</small>{entry.sourceOrderNumber ? <span className="member-credit-redemption"><b><MemberCopyValue value={"回饋來源訂單"} /></b><Link href={`/orders/${encodeURIComponent(entry.sourceOrderNumber)}`}><MemberCopyValue value={"訂單 "} />{entry.sourceOrderNumber}</Link></span> : null}{entry.orderRedemptions.map((redemption) => <span className={`member-credit-redemption ${redemption.status}`} key={`${entry.creditEntryId}-${redemption.orderNumber}`}><b>{redemptionLabel(redemption.status)} {money(redemption.amount)}</b><Link href={`/orders/${encodeURIComponent(redemption.orderNumber)}`}><MemberCopyValue value={"訂單 "} />{redemption.orderNumber}</Link></span>)}</div><div><span><MemberCopyValue value={"餘額 "} />{money(entry.remainingAmount)}</span>{entry.amount > 0 ? <small><MemberCopyValue value={"到期 "} />{entry.expiresAt.slice(0, 10)}</small> : null}</div></article>)}</div> : <div className="member-commerce-empty compact"><strong><MemberCopyValue value={"目前沒有抵用金紀錄"} /></strong><p><MemberCopyValue value={"有抵用金時，結帳會讓您自行選擇是否使用，並優先使用最快到期的額度。"} /></p></div>}</section>
 
-    <section className="member-commerce-section" id="referral-summary"><div className="member-section-head"><div><p className="eyebrow dark">REFERRAL</p><h2>推薦紀錄摘要</h2></div><span>{dashboard.referrals.length} 位</span></div>{dashboard.referrals.length ? <div className="member-referral-list">{dashboard.referrals.map((item) => <article key={item.memberNumberReference}><div><strong>{item.safeDisplayName || "KD Coffee 會員"}</strong><small>已加入會員</small></div><div><span>符合消費 {item.qualifiedPurchases} 次</span></div></article>)}</div> : <div className="member-commerce-empty compact"><strong>還沒有推薦紀錄</strong><p>這裡只會顯示安全的會員稱呼、是否加入與回饋進度，不會顯示對方的聯絡資料。</p></div>}</section>
+    <section className="member-commerce-section" id="referral-summary"><div className="member-section-head"><div><p className="eyebrow dark"><MemberCopyValue value={"REFERRAL"} /></p><h2><MemberCopyValue value={"推薦紀錄摘要"} /></h2></div><span>{dashboard.referrals.length}<MemberCopyValue value={" 位"} /></span></div>{dashboard.referrals.length ? <div className="member-referral-list">{dashboard.referrals.map((item) => <article key={item.memberNumberReference}><div><strong><MemberCopyValue value={item.safeDisplayName || "KD Coffee 會員"} /></strong><small><MemberCopyValue value={"已加入會員"} /></small></div><div><span><MemberCopyValue value={"符合消費 "} />{item.qualifiedPurchases}<MemberCopyValue value={" 次"} /></span></div></article>)}</div> : <div className="member-commerce-empty compact"><strong><MemberCopyValue value={"還沒有推薦紀錄"} /></strong><p><MemberCopyValue value={"這裡只會顯示安全的會員稱呼、是否加入與回饋進度，不會顯示對方的聯絡資料。"} /></p></div>}</section>
   </>;
 }

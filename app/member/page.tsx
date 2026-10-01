@@ -1,3 +1,4 @@
+import { MemberCopyValue, MemberCopyElement } from "@/components/member/MemberCenterCopyProvider";
 import Link from "next/link";
 import { promises as fs } from "fs";
 import path from "path";
@@ -307,37 +308,29 @@ export default async function MemberPage({
     return (
       <main className="member-page">
         <section className="member-login-card">
-          <p className="eyebrow dark">
-            KD COFFEE MEMBER
-          </p>
+          <p className="eyebrow dark"><MemberCopyValue value={"KD COFFEE MEMBER"} /></p>
 
-          <h1>
-            快速會員登入
-          </h1>
+          <h1><MemberCopyValue value={"快速會員登入"} /></h1>
 
-          <p>
-            可使用 LINE、手機號碼或 Email 登入。登入後可查看自己的訂單與常用資料。
-          </p>
+          <p><MemberCopyValue value={"可使用 LINE、手機號碼或 Email 登入。登入後可查看自己的訂單與常用資料。"} /></p>
 
           {params.error && (
             <p className="form-error">
-              {params.error === "account_link_required"
+              <MemberCopyValue value={params.error === "account_link_required"
                 ? "此登入方式需要完成帳號連結驗證。請先登入既有帳號，再從會員中心連結 LINE。"
-                : "LINE 登入未完成，請再試一次。"}
+                : "LINE 登入未完成，請再試一次。"} />
             </p>
           )}
 
           <a
             className="line-login-button"
             href={`/api/auth/line/login?returnTo=${encodeURIComponent(returnTo)}`}
-          >
-            使用 LINE 登入／註冊
-          </a>
+          ><MemberCopyValue value={"使用 LINE 登入／註冊"} /></a>
 
           <PhoneAuthForms returnTo={returnTo} />
 
           <div className="member-auth-divider" aria-hidden="true">
-            <span>或</span>
+            <span><MemberCopyValue value={"或"} /></span>
           </div>
 
           <EmailAuthForms returnTo={returnTo} />
@@ -345,9 +338,7 @@ export default async function MemberPage({
           <Link
             className="text-link"
             href="/"
-          >
-            返回首頁
-          </Link>
+          ><MemberCopyValue value={"返回首頁"} /></Link>
         </section>
       </main>
     );
@@ -424,13 +415,13 @@ export default async function MemberPage({
     <main className="member-page">
       <section className="member-card">
         {params.linked === "line" && (
-          <p className="member-notice success">LINE 登入方式已連結完成。</p>
+          <p className="member-notice success"><MemberCopyValue value={"LINE 登入方式已連結完成。"} /></p>
         )}
         {params.error === "account_link_required" && (
-          <p className="member-notice">此登入方式需要完成帳號連結驗證。請先登入既有帳號，再從「登入方式」連結 LINE。</p>
+          <p className="member-notice"><MemberCopyValue value={"此登入方式需要完成帳號連結驗證。請先登入既有帳號，再從「登入方式」連結 LINE。"} /></p>
         )}
         {params.error === "line_link_failed" && (
-          <p className="member-notice">LINE 連結未完成。此 LINE 可能已連結其他會員，或驗證已逾時；會員資料沒有變更。</p>
+          <p className="member-notice"><MemberCopyValue value={"LINE 連結未完成。此 LINE 可能已連結其他會員，或驗證已逾時；會員資料沒有變更。"} /></p>
         )}
         <MemberSectionNav />
 
@@ -438,17 +429,17 @@ export default async function MemberPage({
         <section className="member-welcome-hero">
           <div className="member-welcome-main">
             {(member.avatarUrl || member.pictureUrl) ? (
-              <img className="member-welcome-avatar" src={member.avatarUrl || member.pictureUrl} alt="會員頭像" />
+              <MemberCopyElement as="img" className="member-welcome-avatar" src={member.avatarUrl || member.pictureUrl} alt="會員頭像" />
             ) : (
-              <div className="member-welcome-avatar member-avatar-fallback">KD</div>
+              <div className="member-welcome-avatar member-avatar-fallback"><MemberCopyValue value={"KD"} /></div>
             )}
 
             <div className="member-profile-copy">
-              <p className="eyebrow dark">KD COFFEE MEMBER</p>
-              <h1>{memberName ? `${memberName}，歡迎回來` : "歡迎回來"}</h1>
-              <p>享受每一杯咖啡，也感謝你成為 KD Coffee 的一份子。</p>
+              <p className="eyebrow dark"><MemberCopyValue value={"KD COFFEE MEMBER"} /></p>
+              <h1><MemberCopyValue value={memberName ? `${memberName}，歡迎回來` : "歡迎回來"} /></h1>
+              <p><MemberCopyValue value={"享受每一杯咖啡，也感謝你成為 KD Coffee 的一份子。"} /></p>
               <div className="member-welcome-meta">
-                <span>會員編號 <strong>{loginMethods.memberNumber}</strong></span>
+                <span><MemberCopyValue value={"會員編號 "} /><strong>{loginMethods.memberNumber}</strong></span>
               </div>
             </div>
           </div>
@@ -460,84 +451,84 @@ export default async function MemberPage({
           </div>
         </section>
 
-        <section className="member-dashboard" aria-label="會員總覽">
+        <MemberCopyElement as="section" className="member-dashboard" aria-label="會員總覽">
           <div className="member-dashboard-grid">
             <Link
               className="member-dashboard-card"
               href="/member?rewardView=released#rewards"
               data-reward-shortcut="released"
             >
-              <small>可用折抵額</small>
-              <strong>{availableCredit.toLocaleString("zh-TW")} 元</strong>
-              <span>已正式入帳，結帳時可自行選擇使用</span>
+              <small><MemberCopyValue value={"可用折抵額"} /></small>
+              <strong>{availableCredit.toLocaleString("zh-TW")}<MemberCopyValue value={" 元"} /></strong>
+              <span><MemberCopyValue value={"已正式入帳，結帳時可自行選擇使用"} /></span>
             </Link>
             <Link
               className="member-dashboard-card"
               href="/member?rewardView=pending#rewards"
               data-reward-shortcut="pending"
             >
-              <small>待入帳回饋</small>
-              <strong>{pendingRewardPoints.toLocaleString("zh-TW")} {pointDisplayName}</strong>
-              <span>共 {pendingRewardCount} 筆・預估折抵 NT$ {pendingRewardCredit.toLocaleString("zh-TW")}{commerce.pendingRewardSummary.hasIncompletePointHistory ? "・部分歷史點數未記錄" : ""}</span>
+              <small><MemberCopyValue value={"待入帳回饋"} /></small>
+              <strong>{pendingRewardPoints.toLocaleString("zh-TW")} <MemberCopyValue value={pointDisplayName} /></strong>
+              <span><MemberCopyValue value={"共 "} />{pendingRewardCount}<MemberCopyValue value={" 筆・預估折抵 NT$ "} />{pendingRewardCredit.toLocaleString("zh-TW")}<MemberCopyValue value={commerce.pendingRewardSummary.hasIncompletePointHistory ? "・部分歷史點數未記錄" : ""} /></span>
             </Link>
             <a className="member-dashboard-card" href="#subscription">
-              <small>下一次配送</small>
-              <strong>{nextSubscriptionCycle ? formatTaipeiDate(nextSubscriptionCycle.plannedDate) : "尚未排定"}</strong>
-              <span>{primarySubscription ? `${subscriptionStatus}・${subscriptionShipping}` : "建立定期配送後會顯示於此"}</span>
+              <small><MemberCopyValue value={"下一次配送"} /></small>
+              <strong><MemberCopyValue value={nextSubscriptionCycle ? formatTaipeiDate(nextSubscriptionCycle.plannedDate) : "尚未排定"} /></strong>
+              <span><MemberCopyValue value={primarySubscription ? `${subscriptionStatus}・${subscriptionShipping}` : "建立定期配送後會顯示於此"} /></span>
             </a>
             <a className="member-dashboard-card" href="#orders">
-              <small>最近訂單</small>
-              <strong>{latestOrder ? (latestOrder.fulfillment ? fulfillmentStateLabels[latestOrder.fulfillment.currentState] : statusLabel(latestOrder.status)) : "尚無訂單"}</strong>
-              <span>{latestOrder ? latestOrder.orderNumber : "完成第一筆訂購後會顯示於此"}</span>
+              <small><MemberCopyValue value={"最近訂單"} /></small>
+              <strong><MemberCopyValue value={latestOrder ? (latestOrder.fulfillment ? fulfillmentStateLabels[latestOrder.fulfillment.currentState] : statusLabel(latestOrder.status)) : "尚無訂單"} /></strong>
+              <span><MemberCopyValue value={latestOrder ? latestOrder.orderNumber : "完成第一筆訂購後會顯示於此"} /></span>
             </a>
           </div>
 
-        </section>
+        </MemberCopyElement>
         <MemberQualificationSummary progress={referralCenter.qualificationProgress} />
-        <section className="member-quick-actions" aria-label="快速功能">
-          <header><h2>快速功能</h2></header>
+        <MemberCopyElement as="section" className="member-quick-actions" aria-label="快速功能">
+          <header><h2><MemberCopyValue value={"快速功能"} /></h2></header>
           <div className="member-quick-action-grid">
-            <a href="#rewards"><strong>我的回饋</strong></a>
-            <a href="#subscription"><strong>配送設定</strong></a>
-            <a href="#orders"><strong>我的訂單</strong></a>
-            <a href="#account"><strong>帳戶設定</strong></a>
+            <a href="#rewards"><strong><MemberCopyValue value={"我的回饋"} /></strong></a>
+            <a href="#subscription"><strong><MemberCopyValue value={"配送設定"} /></strong></a>
+            <a href="#orders"><strong><MemberCopyValue value={"我的訂單"} /></strong></a>
+            <a href="#account"><strong><MemberCopyValue value={"帳戶設定"} /></strong></a>
           </div>
-        </section>
+        </MemberCopyElement>
 
         <section className={`member-recent-activity ${memberExperienceStyles.recentActivity}`} aria-labelledby="member-recent-activity-title">
-          <header><h2 id="member-recent-activity-title">最近動態</h2></header>
+          <header><h2 id="member-recent-activity-title"><MemberCopyValue value={"最近動態"} /></h2></header>
           <div className="member-activity-list">
             {latestOrder ? (
               <a className="member-activity-row" href="#orders">
                 <span className="member-activity-copy">
-                  <small>最近訂單</small>
-                  <strong>{latestOrder.fulfillment ? fulfillmentStateLabels[latestOrder.fulfillment.currentState] : statusLabel(latestOrder.status)}</strong>
+                  <small><MemberCopyValue value={"最近訂單"} /></small>
+                  <strong><MemberCopyValue value={latestOrder.fulfillment ? fulfillmentStateLabels[latestOrder.fulfillment.currentState] : statusLabel(latestOrder.status)} /></strong>
                   <span>{latestOrder.orderNumber}</span>
                 </span>
-                <span className="member-activity-action"><span>查看訂單</span><b aria-hidden="true">→</b></span>
+                <span className="member-activity-action"><span><MemberCopyValue value={"查看訂單"} /></span><b aria-hidden="true">→</b></span>
               </a>
             ) : null}
             {nextSubscriptionCycle ? (
               <a className="member-activity-row" href="#subscription">
                 <span className="member-activity-copy">
-                  <small>定期配送</small>
-                  <strong>下一次配送</strong>
-                  <span>{formatTaipeiDate(nextSubscriptionCycle.plannedDate)} · {subscriptionShipping}</span>
+                  <small><MemberCopyValue value={"定期配送"} /></small>
+                  <strong><MemberCopyValue value={"下一次配送"} /></strong>
+                  <span>{formatTaipeiDate(nextSubscriptionCycle.plannedDate)} · <MemberCopyValue value={subscriptionShipping} /></span>
                 </span>
-                <span className="member-activity-action"><span>配送設定</span><b aria-hidden="true">→</b></span>
+                <span className="member-activity-action"><span><MemberCopyValue value={"配送設定"} /></span><b aria-hidden="true">→</b></span>
               </a>
             ) : null}
             {pendingRewardPoints > 0 ? (
               <a className="member-activity-row" href="#rewards">
                 <span className="member-activity-copy">
-                  <small>會員回饋</small>
-                  <strong>回饋待入帳</strong>
-                  <span>{pendingRewardPoints.toLocaleString("zh-TW")} {pointDisplayName}</span>
+                  <small><MemberCopyValue value={"會員回饋"} /></small>
+                  <strong><MemberCopyValue value={"回饋待入帳"} /></strong>
+                  <span>{pendingRewardPoints.toLocaleString("zh-TW")} <MemberCopyValue value={pointDisplayName} /></span>
                 </span>
-                <span className="member-activity-action"><span>查看回饋</span><b aria-hidden="true">→</b></span>
+                <span className="member-activity-action"><span><MemberCopyValue value={"查看回饋"} /></span><b aria-hidden="true">→</b></span>
               </a>
             ) : null}
-            {!latestOrder && !nextSubscriptionCycle && pendingRewardPoints <= 0 ? <p>目前沒有需要處理的新動態。</p> : null}
+            {!latestOrder && !nextSubscriptionCycle && pendingRewardPoints <= 0 ? <p><MemberCopyValue value={"目前沒有需要處理的新動態。"} /></p> : null}
           </div>
         </section>
         </div>
@@ -548,23 +539,23 @@ export default async function MemberPage({
           eyebrow="ACCOUNT"
           title="帳戶資料"
           actionLabel="編輯"
-          summary={<span className="member-ia-summary"><span className="member-ia-account-identity"><b>{memberName || loginMethods.memberNumber}</b></span><span>{member.email || "Email 尚未設定"}</span><span>{member.phone || "電話尚未設定"}</span><span>{loginMethods.emailLinked ? "Email 已連結" : "Email 未連結"}・{loginMethods.lineLinked ? "LINE 已連結" : "LINE 未連結"}</span></span>}
+          summary={<span className="member-ia-summary"><span className="member-ia-account-identity"><b>{memberName || loginMethods.memberNumber}</b></span><span><MemberCopyValue value={member.email || "Email 尚未設定"} /></span><span><MemberCopyValue value={member.phone || "電話尚未設定"} /></span><span><MemberCopyValue value={loginMethods.emailLinked ? "Email 已連結" : "Email 未連結"} />・<MemberCopyValue value={loginMethods.lineLinked ? "LINE 已連結" : "LINE 未連結"} /></span></span>}
         >
           <div className="member-account-inline-layout">
             <div className="member-account-static-grid">
               <div>
-                <small>會員編號</small>
+                <small><MemberCopyValue value={"會員編號"} /></small>
                 <strong>{loginMethods.memberNumber}</strong>
-                <span>固定會員識別，不可變更。</span>
+                <span><MemberCopyValue value={"固定會員識別，不可變更。"} /></span>
               </div>
               <div>
-                <small>會員建立日期</small>
+                <small><MemberCopyValue value={"會員建立日期"} /></small>
                 <strong>{formatTaipeiDate(member.createdAt)}</strong>
-                <span>最近登入：{formatTaipeiDateTime(member.lastLoginAt)}</span>
+                <span><MemberCopyValue value={"最近登入："} />{formatTaipeiDateTime(member.lastLoginAt)}</span>
               </div>
               <div>
-                <small>常用門市</small>
-                <strong>{member.favoriteStore?.name || "尚未設定"}</strong>
+                <small><MemberCopyValue value={"常用門市"} /></small>
+                <strong><MemberCopyValue value={member.favoriteStore?.name || "尚未設定"} /></strong>
                 {member.favoriteStore?.address && <span>{member.favoriteStore.address}</span>}
               </div>
             </div>
@@ -579,41 +570,35 @@ export default async function MemberPage({
 
             <MemberAvatarForm customAvatarUrl={member.avatarUrl} providerPictureUrl={member.pictureUrl} />
             <section className="member-login-methods" id="login-methods">
-              <div className="member-section-head"><div><p className="eyebrow dark">會員帳號</p><h2>登入方式</h2></div></div>
-              <div className="member-login-method-row"><div><strong>電子郵件</strong><span>{loginMethods.emailLinked ? "已連結" : "尚未連結"}</span></div><b className={loginMethods.emailLinked ? "is-linked" : ""}>{loginMethods.emailLinked ? "✓ 可使用" : "信箱驗證功能準備中"}</b></div>
-              <div className="member-login-method-row"><div><strong>LINE</strong><span>{loginMethods.lineLinked ? "已連結" : "尚未連結"}</span></div>{loginMethods.lineLinked ? <b className="is-linked">✓ 可使用</b> : <form action="/api/auth/line/link" method="post"><button type="submit">連結 LINE</button></form>}</div>
-              <p className="member-login-method-note">登入方式只用來確認是您本人；訂單與會員紀錄都會保留在同一個會員帳號。</p>
+              <div className="member-section-head"><div><p className="eyebrow dark"><MemberCopyValue value={"會員帳號"} /></p><h2><MemberCopyValue value={"登入方式"} /></h2></div></div>
+              <div className="member-login-method-row"><div><strong><MemberCopyValue value={"電子郵件"} /></strong><span><MemberCopyValue value={loginMethods.emailLinked ? "已連結" : "尚未連結"} /></span></div><b className={loginMethods.emailLinked ? "is-linked" : ""}><MemberCopyValue value={loginMethods.emailLinked ? "✓ 可使用" : "信箱驗證功能準備中"} /></b></div>
+              <div className="member-login-method-row"><div><strong><MemberCopyValue value={"LINE"} /></strong><span><MemberCopyValue value={loginMethods.lineLinked ? "已連結" : "尚未連結"} /></span></div>{loginMethods.lineLinked ? <b className="is-linked"><MemberCopyValue value={"✓ 可使用"} /></b> : <form action="/api/auth/line/link" method="post"><button type="submit"><MemberCopyValue value={"連結 LINE"} /></button></form>}</div>
+              <p className="member-login-method-note"><MemberCopyValue value={"登入方式只用來確認是您本人；訂單與會員紀錄都會保留在同一個會員帳號。"} /></p>
             </section>
-            <form action="/api/auth/logout" method="post"><button className="logout-button">登出會員</button></form>
+            <form action="/api/auth/logout" method="post"><button className="logout-button"><MemberCopyValue value={"登出會員"} /></button></form>
           </div>
         </MemberMobileDisclosure>
         </section>
 
         <div className="member-dashboard-content">
         <section id="subscription" data-member-section role="tabpanel" hidden>
-        <MemberMobileDisclosure eyebrow="SUBSCRIPTION" title="定期配送" actionLabel="管理配送" summary={<span className="member-ia-summary"><span>{primarySubscription ? `每 ${primarySubscription.intervalDays} 天` : "尚未建立方案"}</span><span>{subscriptionStatus}</span><span>{nextSubscriptionCycle ? `下一次 ${formatTaipeiDate(nextSubscriptionCycle.plannedDate)}` : "下一次尚未排定"}</span><span>{subscriptionShipping}</span></span>}>
+        <MemberMobileDisclosure eyebrow="SUBSCRIPTION" title="定期配送" actionLabel="管理配送" summary={<span className="member-ia-summary"><span><MemberCopyValue value={primarySubscription ? `每 ${primarySubscription.intervalDays} 天` : "尚未建立方案"} /></span><span><MemberCopyValue value={subscriptionStatus} /></span><span><MemberCopyValue value={nextSubscriptionCycle ? `下一次 ${formatTaipeiDate(nextSubscriptionCycle.plannedDate)}` : "下一次尚未排定"} /></span><span><MemberCopyValue value={subscriptionShipping} /></span></span>}>
           <MemberSubscriptionExperience {...commerce} products={subscriptionProducts} rules={{ intervalsDays: rulesVersion.rules.subscription.intervalOptions.filter((item) => item.enabled).map((item) => item.days), customCycleEnabled: rulesVersion.rules.subscription.customCycleEnabled, customCycleMinDays: rulesVersion.rules.subscription.customCycleMinDays, customCycleMaxDays: rulesVersion.rules.subscription.customCycleMaxDays, delayQuickOptionsDays: rulesVersion.rules.subscription.delayQuickOptionsDays, advanceQuickOptionsDays: rulesVersion.rules.subscription.advanceQuickOptionsDays, preparationLeadDays: rulesVersion.rules.subscription.preparationLeadDays, customRoastPreparationLeadDays: rulesVersion.rules.subscription.customRoastPreparationLeadDays, discountPercent: rulesVersion.rules.subscription.discountPercent, sevenElevenShippingFee: rulesVersion.rules.shipping.sevenElevenShippingFee, homeDeliveryShippingFee: rulesVersion.rules.shipping.homeDeliveryShippingFee, homeDeliveryCodFee: rulesVersion.rules.shipping.homeDeliveryCodFee, subscriptionShippingDiscount: rulesVersion.rules.shipping.subscriptionShippingDiscount, datePickerMode: rulesVersion.rules.subscription.datePickerMode, maxModificationsPerCycle: rulesVersion.rules.subscription.maxModificationsPerCycle, allowOtherSubscriptionProducts: rulesVersion.rules.subscription.allowOtherSubscriptionProducts, allowHalfToOnePound: rulesVersion.rules.subscription.allowHalfToOnePound, allowOneToHalfPound: rulesVersion.rules.subscription.allowOneToHalfPound, allowMixedOnePound: rulesVersion.rules.subscription.allowMixedOnePound, allowQuantityChange: rulesVersion.rules.subscription.allowQuantityChange, maxItems: MEMBER_SUBSCRIPTION_MAX_ITEMS }} />
         </MemberMobileDisclosure>
         </section>
         <MemberReferralCenter initialData={referralExperienceData} />
 
         <section id="orders" data-member-section role="tabpanel" hidden>
-        <MemberMobileDisclosure eyebrow="ORDERS" title="我的訂單" actionLabel="查看" summary={<span className="member-ia-summary"><span>{latestOrder ? (latestOrder.fulfillment ? fulfillmentStateLabels[latestOrder.fulfillment.currentState] : statusLabel(latestOrder.status)) : "尚無訂單"}</span><span>{latestOrder ? latestOrder.orderNumber : "完成第一筆訂購後會顯示於此"}</span><span>{latestOrder ? `NT$ ${(latestOrder.total ?? latestOrder.subtotal ?? 0).toLocaleString("zh-TW")}` : ""}</span></span>}>
+        <MemberMobileDisclosure eyebrow="ORDERS" title="我的訂單" actionLabel="查看" summary={<span className="member-ia-summary"><span><MemberCopyValue value={latestOrder ? (latestOrder.fulfillment ? fulfillmentStateLabels[latestOrder.fulfillment.currentState] : statusLabel(latestOrder.status)) : "尚無訂單"} /></span><span><MemberCopyValue value={latestOrder ? latestOrder.orderNumber : "完成第一筆訂購後會顯示於此"} /></span><span>{latestOrder ? `NT$ ${(latestOrder.total ?? latestOrder.subtotal ?? 0).toLocaleString("zh-TW")}` : ""}</span></span>}>
         <section className="member-orders">
           <div className="member-section-head">
             <div>
-              <p className="eyebrow dark">
-                ORDER HISTORY
-              </p>
+              <p className="eyebrow dark"><MemberCopyValue value={"ORDER HISTORY"} /></p>
 
-              <h2>
-                最近訂單
-              </h2>
+              <h2><MemberCopyValue value={"最近訂單"} /></h2>
             </div>
 
-            <span>
-              顯示最近 {Math.min(orders.length, 3)} 筆・共 {orders.length} 筆
-            </span>
+            <span><MemberCopyValue value={"顯示最近 "} />{Math.min(orders.length, 3)}<MemberCopyValue value={" 筆・共 "} />{orders.length}<MemberCopyValue value={" 筆"} /></span>
           </div>
 
           {orders.length ? (
@@ -642,9 +627,7 @@ export default async function MemberPage({
 
                     {order.store
                       ?.name && (
-                      <small>
-                        取貨門市：
-                        {
+                      <small><MemberCopyValue value={"取貨門市："} />{
                           order
                             .store
                             .name
@@ -654,17 +637,17 @@ export default async function MemberPage({
 
                     {order.fulfillment ? (
                       <div className="member-fulfillment-summary">
-                        <strong>{fulfillmentStateLabels[order.fulfillment.currentState]}</strong>
-                        {order.fulfillment.pickupDeadline ? <span>取貨期限：{formatTaipeiDate(order.fulfillment.pickupDeadline)}</span> : null}
+                        <strong><MemberCopyValue value={fulfillmentStateLabels[order.fulfillment.currentState]} /></strong>
+                        {order.fulfillment.pickupDeadline ? <span><MemberCopyValue value={"取貨期限："} />{formatTaipeiDate(order.fulfillment.pickupDeadline)}</span> : null}
                       </div>
                     ) : null}
                   </div>
 
                   <div className="member-order-meta">
                     <span className="order-status-chip">
-                      {order.fulfillment
+                      <MemberCopyValue value={order.fulfillment
                         ? fulfillmentStateLabels[order.fulfillment.currentState]
-                        : statusLabel(order.status)}
+                        : statusLabel(order.status)} />
                     </span>
 
                     <b>
@@ -687,36 +670,28 @@ export default async function MemberPage({
                           : "line-status pending"
                       }
                     >
-                      {order
+                      <MemberCopyValue value={order
                         .lineNotification
                         ?.sent
                         ? "LINE 已通知工作室"
-                        : "訂單已保存"}
+                        : "訂單已保存"} />
                     </small>
 
                     <Link
                       className="member-order-detail-link"
                       href={`/orders/${encodeURIComponent(order.orderNumber)}`}
-                    >
-                      查看／管理此訂單
-                    </Link>
+                    ><MemberCopyValue value={"查看／管理此訂單"} /></Link>
                   </div>
                 </article>
               ),
             )
           ) : (
             <div className="member-empty-orders">
-              <strong>
-                目前還沒有會員訂單
-              </strong>
+              <strong><MemberCopyValue value={"目前還沒有會員訂單"} /></strong>
 
-              <p>
-                完成第一筆訂購後，訂單紀錄會顯示在這裡。
-              </p>
+              <p><MemberCopyValue value={"完成第一筆訂購後，訂單紀錄會顯示在這裡。"} /></p>
 
-              <Link href="/works">
-                開始選購咖啡
-              </Link>
+              <Link href="/works"><MemberCopyValue value={"開始選購咖啡"} /></Link>
             </div>
           )}
         </section>

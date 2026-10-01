@@ -1,5 +1,7 @@
 "use client";
 
+import { MemberCopyValue } from "@/components/member/MemberCenterCopyProvider";
+
 import Link from "next/link";
 
 import {
@@ -77,54 +79,54 @@ export default function RewardSourceOrderSummaryCard({
     <div className={`member-org-order-card${variant === "source-only" ? " member-org-order-card-source-only" : ""}`}>
       {variant === "full" ? <div className="member-org-order-card-top">
         <time>{formatTaipeiDateTime(summary.createdAt)}</time>
-        <div className={styles.sourceRewardStatus}><span>{statusText}</span>{timingText ? <small>{timingText}</small> : null}</div>
+        <div className={styles.sourceRewardStatus}><span><MemberCopyValue value={statusText} /></span>{timingText ? <small><MemberCopyValue value={timingText} /></small> : null}</div>
       </div> : null}
       {variant === "full" ? <div className="member-org-order-card-title">
         <div>
-          <small>REWARD SOURCE ORDER</small>
+          <small><MemberCopyValue value={"REWARD SOURCE ORDER"} /></small>
           <strong>{rewardTitle}</strong>
         </div>
         <em>{summary.orderNumber}</em>
-      </div> : <p><strong>{summary.sourceCategoryLabel}</strong>・{summary.orderNumber}</p>}
+      </div> : <p><strong><MemberCopyValue value={summary.sourceCategoryLabel} /></strong>・{summary.orderNumber}</p>}
       <div className="member-org-order-source">
         <span>
-          <small>訂單類型</small>
-          <strong>{summary.sourceCategoryLabel}</strong>
+          <small><MemberCopyValue value={"訂單類型"} /></small>
+          <strong><MemberCopyValue value={summary.sourceCategoryLabel} /></strong>
         </span>
         <span>
-          <small>訂單狀態</small>
-          <strong>{summary.fulfillmentStatus}</strong>
+          <small><MemberCopyValue value={"訂單狀態"} /></small>
+          <strong><MemberCopyValue value={summary.fulfillmentStatus} /></strong>
         </span>
         <span>
-          <small>完成取貨</small>
+          <small><MemberCopyValue value={"完成取貨"} /></small>
           <strong>{formatTaipeiDateTime(summary.completedAt)}</strong>
         </span>
-        {sourceMemberNumber ? <span><small>來源會員</small><strong>{sourceMemberNumber}</strong></span> : null}
+        {sourceMemberNumber ? <span><small><MemberCopyValue value={"來源會員"} /></small><strong>{sourceMemberNumber}</strong></span> : null}
         <span className="member-org-order-items">
-          <small>購買內容</small>
+          <small><MemberCopyValue value={"購買內容"} /></small>
           <strong>{itemText}</strong>
         </span>
       </div>
       {variant === "full" ? <div className="member-org-order-calc">
-        <span><small>{basisLabel}</small><strong>{basisValue}</strong></span>
-        <span><small>回饋比例</small><strong>{formatRewardRatePercent(summary.rewardRate)}</strong></span>
-        <span><small>本筆回饋</small><strong>{summary.rewardPV == null ? "歷史資料未記錄" : `${points(summary.rewardPV)} ${pointDisplayName}`}</strong></span>
-        <span><small>{summary.rewardStatus === "released" ? "實際入帳" : "預估折抵價值"}</small><strong>{money(creditAmount)}</strong></span>
+        <span><small><MemberCopyValue value={basisLabel} /></small><strong><MemberCopyValue value={basisValue} /></strong></span>
+        <span><small><MemberCopyValue value={"回饋比例"} /></small><strong>{formatRewardRatePercent(summary.rewardRate)}</strong></span>
+        <span><small><MemberCopyValue value={"本筆回饋"} /></small><strong><MemberCopyValue value={summary.rewardPV == null ? "歷史資料未記錄" : `${points(summary.rewardPV)} ${pointDisplayName}`} /></strong></span>
+        <span><small><MemberCopyValue value={summary.rewardStatus === "released" ? "實際入帳" : "預估折抵價值"} /></small><strong>{money(creditAmount)}</strong></span>
       </div> : null}
       {variant === "full" && ["released", "reversed", "cancelled"].includes(summary.waitingExplanation.state) ? <div className="member-org-order-source">
         <span>
-          <small>{timingLabel}</small>
-          <strong>{timingValue}</strong>
+          <small><MemberCopyValue value={timingLabel} /></small>
+          <strong><MemberCopyValue value={timingValue} /></strong>
         </span>
         {summary.rewardStatus === "released" && summary.availableCreditAmount != null ? (
-          <span><small>目前可用</small><strong>{money(summary.availableCreditAmount)}</strong></span>
+          <span><small><MemberCopyValue value={"目前可用"} /></small><strong>{money(summary.availableCreditAmount)}</strong></span>
         ) : null}
       </div> : null}
       {variant === "full" ? <div className={styles.sourceWaitingDisclosure}><RewardWaitingDisclosure explanation={summary.waitingExplanation} /></div> : null}
       {summary.canViewFullOrder ? (
         <p className="member-reward-consumption">
-          <b>完整訂單</b>
-          <span><Link href={`/orders/${encodeURIComponent(summary.orderNumber)}`}>查看完整訂單 →</Link></span>
+          <b><MemberCopyValue value={"完整訂單"} /></b>
+          <span><Link href={`/orders/${encodeURIComponent(summary.orderNumber)}`}><MemberCopyValue value={"查看完整訂單 →"} /></Link></span>
         </p>
       ) : null}
     </div>
