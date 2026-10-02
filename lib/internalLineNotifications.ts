@@ -15,8 +15,11 @@ export async function sendInternalLineNotification(
     fetcher?: typeof fetch;
   } = {},
 ): Promise<InternalLineNotificationResult> {
-  const token = process.env.LINE_CHANNEL_ACCESS_TOKEN;
-  const to = process.env.LINE_ORDER_RECIPIENT_ID;
+  // LEGACY compatibility only: remove these fallbacks after Railway migration.
+  const token = process.env.LINE_INTERNAL_CHANNEL_ACCESS_TOKEN?.trim()
+    || process.env.LINE_CHANNEL_ACCESS_TOKEN?.trim();
+  const to = process.env.LINE_INTERNAL_RECIPIENT_ID?.trim()
+    || process.env.LINE_ORDER_RECIPIENT_ID?.trim();
   if (!token || !to) {
     return { sent: false, reason: "LINE environment variables are not configured" };
   }
@@ -41,9 +44,9 @@ export async function sendInternalLineNotification(
         };
       }
       const responseText = await response.text();
-      lastError = `LINE ${response.status}: ${responseText.slice(0, 300)}`;
+      lastError = `LINE ${response.status}: ${responseText.replaceAll(token, "[REDACTED]").slice(0, 300)}`;
     } catch (error) {
-      lastError = error instanceof Error ? error.message : "LINE notification failed";
+      lastError = error instanceof Error ? error.message.replaceAll(token, "[REDACTED]") : "LINE notification failed";
     }
 
     if (attempt < attempts && retryDelayMs > 0) {

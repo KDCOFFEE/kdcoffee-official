@@ -35,7 +35,9 @@ export async function sendCustomerLineNotification(input: {
   fetcher?: typeof fetch;
   publicImageFetcher?: typeof fetch;
 }): Promise<CustomerNotificationResult> {
-  const token = process.env.LINE_CHANNEL_ACCESS_TOKEN?.trim();
+  // LEGACY compatibility only: remove this fallback after Railway migration.
+  const token = process.env.LINE_CUSTOMER_CHANNEL_ACCESS_TOKEN?.trim()
+    || process.env.LINE_CHANNEL_ACCESS_TOKEN?.trim();
   if (!token) return { status: "not_configured", error: "LINE 通知服務尚未設定" };
   const messages: Record<string, string>[] = [{ type: "text", text: input.template.text }];
   let imageIssue: string | undefined;
@@ -83,7 +85,7 @@ export async function sendCustomerLineNotification(input: {
     console.error("Customer LINE notification rejected", {
       status: response.status,
       messageTypes: diagnostics.messageTypes,
-      body: errorBody.slice(0, 500),
+      body: errorBody.replaceAll(token, "[REDACTED]").slice(0, 500),
     });
   } catch {
     console.error("Customer LINE notification request failed");
