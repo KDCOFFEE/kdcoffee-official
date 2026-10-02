@@ -31,6 +31,7 @@
     "test:phase-j1f5d": "node --experimental-strip-types --import ./scripts/member-auth-test-bootstrap.mjs scripts/test-phase-j1f5d-works-hero-media-final-state.ts",
     "test:phase-j1f5e": "node --experimental-strip-types --import ./scripts/member-auth-test-bootstrap.mjs scripts/test-phase-j1f5e-works-motion-lifecycle.ts",
     "test:line": "node --env-file=.env.local scripts/test-line-notification.mjs",
+    "test:line-messaging-split": "node --experimental-strip-types --import ./scripts/line-messaging-test-bootstrap.mjs scripts/test-line-messaging-split.mts",
     "test:member-identity": "node --experimental-strip-types scripts/test-member-identity.ts",
     "test:member-auth": "node --experimental-strip-types --import ./scripts/member-auth-test-bootstrap.mjs scripts/test-member-auth.ts",
     "test:membership-commerce": "node --experimental-strip-types --import ./scripts/member-auth-test-bootstrap.mjs scripts/test-membership-commerce.ts",
