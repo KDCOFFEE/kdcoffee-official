@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { getOrdersDir, getWebsiteDataFile } from "@/lib/storagePaths";
 import { makeOrderNumber } from "@/lib/orders";
 import {
@@ -21,6 +21,7 @@ import { getCurrentMember, updateMemberProfile } from "@/lib/memberAuth";
 import { updateStoredOrderSafely } from "@/lib/adminOrders";
 import { createGuestOrderAccess } from "@/lib/orderConversation";
 import { sendInternalLineNotification } from "@/lib/internalLineNotifications";
+import { deliverOrderConfirmationEmail } from "@/lib/orderConfirmationEmail";
 import { createSubscription, getCheckoutCreditQuote, registerReferralQualificationOrder, reserveCredit, settleCreditReservation } from "@/lib/membershipCommerce";
 import { getActiveMembershipRules } from "@/lib/membershipBusinessRules";
 import {
@@ -306,6 +307,16 @@ export async function POST(request: Request) {
       console.error(`Order ${orderNumber} saved but notification result update failed:`, error);
     }
     if (!lineResult.sent) console.error(`Order ${orderNumber} saved but LINE notification failed:`, lineResult.reason);
+
+    // Only newly committed normal orders enter this hook; replay/pending/inquiries do not.
+    // Email runs after the successful response, isolated from checkout and internal LINE.
+    if (orderMode !== "corporate_gift") {
+      try {
+        after(async () => { await deliverOrderConfirmationEmail(orderNumber); });
+      } catch {
+        console.error("Order confirmation email scheduling failed", { orderNumber });
+      }
+    }
 
     return NextResponse.json({ orderNumber, orderMode, paymentMethod: orderMode === "home_delivery" ? core.order.payment : undefined, saved: true, orderAccessToken: guestAccess?.token, lineNotification: lineResult, credit: { requestedAmount: requestedCredit, appliedAmount: appliedCredit, reservationId: creditReservationId }, warning: warnings.length ? warnings.join(" ") : undefined });
   } catch (error) {

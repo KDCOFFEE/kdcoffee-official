@@ -107,6 +107,8 @@ export async function sendCustomerOrderEmail(input: {
   orderNumber: string;
   template: CustomerNotificationTemplate;
   subject?: string;
+  html?: string;
+  idempotencyKey?: string;
   photo?: CustomerNotificationPhoto;
   fetcher?: typeof fetch;
 }): Promise<CustomerNotificationResult> {
@@ -119,13 +121,16 @@ export async function sendCustomerOrderEmail(input: {
   try {
     const response = await (input.fetcher ?? fetch)("https://api.resend.com/emails", {
       method: "POST",
-      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      headers: {
+        Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json",
+        ...(input.idempotencyKey ? { "Idempotency-Key": input.idempotencyKey } : {}),
+      },
       body: JSON.stringify({
         from,
         to: [input.recipientEmail],
         subject: input.subject || `KD Coffee 訂單進度｜${input.orderNumber}`,
         text: input.template.text,
-        html: `<div style="font-family:Arial,'Noto Sans TC',sans-serif;line-height:1.75;color:#2b211b;max-width:600px;margin:auto;padding:24px"><h1 style="font-size:24px">KD Coffee</h1><p>${safeText}</p>${safePhotoUrl ? `<p><img src="${safePhotoUrl}" alt="訂單準備照片" style="max-width:100%;height:auto;border-radius:10px"></p>` : ""}</div>`,
+        html: input.html ?? `<div style="font-family:Arial,'Noto Sans TC',sans-serif;line-height:1.75;color:#2b211b;max-width:600px;margin:auto;padding:24px"><h1 style="font-size:24px">KD Coffee</h1><p>${safeText}</p>${safePhotoUrl ? `<p><img src="${safePhotoUrl}" alt="訂單準備照片" style="max-width:100%;height:auto;border-radius:10px"></p>` : ""}</div>`,
       }),
       signal: AbortSignal.timeout(10_000),
     });

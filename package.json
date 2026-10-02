@@ -3,6 +3,7 @@
   "version": "15.5.0",
   "private": true,
   "scripts": {
+    "test:order-confirmation-email": "node --experimental-strip-types --import ./scripts/order-confirmation-email-test-bootstrap.mjs scripts/test-order-confirmation-email.mts",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
