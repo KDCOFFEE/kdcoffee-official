@@ -45,6 +45,7 @@ export default async function AdminPage() {
       <form action="/api/admin/logout" method="post"><button className="logout-button">登出後台</button></form>
     </header>
     <section className="admin-quick-links">
+      <Link href="/admin/line-auto-reply"><strong>LINE 自動回覆</strong><span>豆單、關鍵字、說明文字與回覆測試 →</span></Link>
       <Link className="admin-logo-entry" href="/admin/logo"><strong>上傳與管理 Logo</strong><span>Header、Footer、方形標誌與分享圖 →</span></Link>
       <Link href="/admin/homepage"><strong>首頁內容與照片</strong><span>Hero、多活動、推薦作品圖片 →</span></Link>
       <Link href="/admin/pages"><strong>網站頁面管理</strong><span>建立、預覽與發布活動／專題頁 →</span></Link>

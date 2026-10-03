@@ -1,0 +1,28 @@
+.root { max-width:1100px; margin:24px auto; color:#302a25; }
+.status { display:flex; flex-wrap:wrap; gap:12px 24px; padding:18px; background:#eee8df; border-radius:12px; }
+.editor { border:0; padding:0; min-width:0; }
+.editor section { margin:24px 0; padding:24px; border:1px solid #ddd2c4; border-radius:16px; background:#fffdf9; }
+.editor h2 { margin:0 0 16px; font-size:1.4rem; }
+.editor p { color:#655c53; line-height:1.7; }
+.grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; }
+.field { display:flex; flex-direction:column; gap:7px; margin:12px 0; min-width:0; font-weight:500; }
+.root input:not([type=checkbox]),.root select,.root textarea { padding:11px; border:1px solid #b9afa3; border-radius:8px; background:white; width:100%; min-width:0; box-sizing:border-box; font:inherit; color:inherit; }
+.root textarea { resize:vertical; line-height:1.5; }
+.toggle { display:flex; align-items:center; gap:10px; margin:12px 0; min-height:36px; }
+.toggle input { width:20px; height:20px; accent-color:#6a4b30; }
+.fieldRow { padding:12px; background:#f4f0e9; border-radius:10px; }
+.card { padding:18px; margin:16px 0; border:1px solid #ddd2c4; border-radius:12px; }
+.card h3,.card h4 { margin-top:0; }
+.actions { display:flex; flex-wrap:wrap; gap:10px; align-items:end; margin:14px 0; }
+.root button { padding:11px 18px; border-radius:8px; border:1px solid #9d8a76; background:#f6eee3; font:inherit; min-height:44px; cursor:pointer; color:#302a25; }
+.root button:disabled { opacity:.5; cursor:default; }
+.root :is(button,input,textarea,select,summary):focus-visible { outline:3px solid #806343; outline-offset:3px; }
+.save { position:sticky; bottom:12px; display:flex; flex-wrap:wrap; gap:12px; background:#fffdf9; padding:16px; border:1px solid #c6bba9; border-radius:12px; box-shadow:0 5px 20px #302a2520; }
+.save button:first-child { background:#614a37; color:#fff; }
+.preview { padding:20px; margin-top:20px; background:#f1ede6; border-radius:12px; }
+.preview pre { white-space:pre-wrap; overflow-wrap:anywhere; font:inherit; line-height:1.7; background:white; padding:16px; }
+.preview dl { display:grid; grid-template-columns:130px minmax(0,1fr); gap:8px; }
+.preview dd { margin:0; overflow-wrap:anywhere; }
+.error { padding:14px; color:#8b2323; background:#fff0ed; border-radius:8px; }
+.root small { display:block; overflow-wrap:anywhere; color:#70675d; line-height:1.6; }
+@media(max-width:700px) { .grid { grid-template-columns:1fr; } .editor section { padding:16px; } .preview dl { grid-template-columns:1fr; } .root { margin-top:16px; } .save { bottom:0; } }

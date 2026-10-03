@@ -449,3 +449,11 @@ export function getOrderNotificationUploadsDir() {
     ? joinPersistentRoot(root, "uploads", "order-notifications")
     : path.join(process.cwd(), "public", "uploads", "order-notifications");
 }
+
+/** LINE presentation settings and bounded event claims; never product or member truth. */
+export function getLineAutoReplyDir() {
+  const root = getPersistentDataRoot();
+  return root
+    ? joinPersistentRoot(root, "line-auto-reply")
+    : path.join(process.cwd(), "data", "line-auto-reply");
+}
