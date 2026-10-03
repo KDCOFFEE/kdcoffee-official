@@ -33,19 +33,45 @@ function safeOrigin(value: string | undefined) {
   }
 }
 
+const PRODUCTION_CANONICAL_ORIGIN =
+  "https://www.kdcoffee1962.com";
+
 function resolveBaseUrl(request: NextRequest) {
-  const cookieOrigin = safeOrigin(request.cookies.get("line_oauth_base")?.value);
-  if (cookieOrigin) return cookieOrigin;
-
-  const forwardedHost = request.headers.get("x-forwarded-host")?.split(",")[0]?.trim();
-  const forwardedProto =
-    request.headers.get("x-forwarded-proto")?.split(",")[0]?.trim() || "https";
-
-  if (forwardedHost) {
-    return `${forwardedProto}://${forwardedHost}`.replace(/\/$/, "");
+  if (process.env.NODE_ENV === "production") {
+    return PRODUCTION_CANONICAL_ORIGIN;
   }
 
-  return (env("NEXT_PUBLIC_SITE_URL") || request.nextUrl.origin).replace(/\/$/, "");
+  const cookieOrigin = safeOrigin(
+    request.cookies.get("line_oauth_base")?.value,
+  );
+
+  if (cookieOrigin) {
+    return cookieOrigin;
+  }
+
+  const forwardedHost = request.headers
+    .get("x-forwarded-host")
+    ?.split(",")[0]
+    ?.trim();
+
+  const forwardedProto =
+    request.headers
+      .get("x-forwarded-proto")
+      ?.split(",")[0]
+      ?.trim() ||
+    "https";
+
+  if (forwardedHost) {
+    return `${forwardedProto}://${forwardedHost}`.replace(
+      /\/$/,
+      "",
+    );
+  }
+
+  return (
+    safeOrigin(env("NEXT_PUBLIC_SITE_URL")) ||
+    request.nextUrl.origin.replace(/\/$/, "")
+  );
 }
 
 function clearOAuthCookies(response: NextResponse) {

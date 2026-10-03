@@ -23,8 +23,17 @@ function safeOrigin(value: string | null) {
   }
 }
 
+const PRODUCTION_CANONICAL_ORIGIN =
+  "https://www.kdcoffee1962.com";
+
 function resolveBaseUrl(request: Request, requestUrl: URL) {
-  const explicitOrigin = safeOrigin(requestUrl.searchParams.get("origin"));
+  if (process.env.NODE_ENV === "production") {
+    return PRODUCTION_CANONICAL_ORIGIN;
+  }
+
+  const explicitOrigin = safeOrigin(
+    requestUrl.searchParams.get("origin"),
+  );
 
   if (explicitOrigin) {
     return explicitOrigin;
@@ -36,16 +45,22 @@ function resolveBaseUrl(request: Request, requestUrl: URL) {
     ?.trim();
 
   const forwardedProto =
-    request.headers.get("x-forwarded-proto")?.split(",")[0]?.trim() ||
+    request.headers
+      .get("x-forwarded-proto")
+      ?.split(",")[0]
+      ?.trim() ||
     "https";
 
   if (forwardedHost) {
-    return `${forwardedProto}://${forwardedHost}`.replace(/\/$/, "");
+    return `${forwardedProto}://${forwardedHost}`.replace(
+      /\/$/,
+      "",
+    );
   }
 
-  const configured = process.env.NEXT_PUBLIC_SITE_URL
-    ?.trim()
-    .replace(/\/$/, "");
+  const configured = safeOrigin(
+    process.env.NEXT_PUBLIC_SITE_URL ?? null,
+  );
 
   if (configured) {
     return configured;
