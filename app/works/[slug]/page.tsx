@@ -89,7 +89,7 @@ function RelatedProductsSection({ products, eyebrow, title, description, cardCta
       </div>
       <div className="revenue-related-grid" data-section-reveal>
         {products.map((item) => {
-          const listAsset = resolveListAsset(item);
+          const listAsset = resolveListAsset(item, { allowProductVisual: false });
           const price = item.purchase?.length ? Math.min(...item.purchase.map((option) => option.price)) : null;
           return (
             <Link key={item.slug} href={`/works/${item.slug}`} className="revenue-related-card">
@@ -168,7 +168,7 @@ export default async function WorkPage({ params }: { params: Promise<{ slug: str
     ...(product.pageLayout || {}),
   };
   const heroAsset = resolveHeroAsset(product);
-  const presentationHeroAsset = heroAsset || (isGiottoPrototype ? resolveListAsset(product) : null);
+  const presentationHeroAsset = heroAsset || (isGiottoPrototype ? resolveListAsset(product, { allowProductVisual: false }) : null);
   const productAsset = resolveProductAsset(product);
   const heroMedia = getProductMediaAsset(product, "hero");
   const heroVideo = heroMedia?.type === "video" ? heroMedia : undefined;

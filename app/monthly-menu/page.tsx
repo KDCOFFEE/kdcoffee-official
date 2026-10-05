@@ -78,7 +78,7 @@ export default async function MonthlyMenuPage() {
     number: String(index + 1).padStart(2, "0"),
     tag: product.tag?.trim() || undefined,
     availability: isSoldOut(product) ? "暫時售完" : undefined,
-    imageSrc: resolveListAsset(product)?.path,
+    imageSrc: resolveListAsset(product, { allowProductVisual: false })?.path,
     name: product.name,
     artist: product.artist,
     flavors: product.flavors?.filter(Boolean).slice(0, 4) || [],
@@ -128,7 +128,7 @@ export default async function MonthlyMenuPage() {
 
               <div className={styles.tableRows}>
                 {products.map((product, index) => {
-                  const listAsset = resolveListAsset(product);
+                  const listAsset = resolveListAsset(product, { allowProductVisual: false });
                   const flavors = product.flavors?.filter(Boolean).slice(0, 4) || [];
                   const purchases = getDisplayPurchases(product);
                   const soldOut = isSoldOut(product);

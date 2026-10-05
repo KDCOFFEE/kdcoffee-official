@@ -117,10 +117,12 @@ function firstAsset(candidates: Array<ProductVisualSource | null>) {
   return null;
 }
 
-export function resolveListAsset(product: unknown) {
+export function resolveListAsset(product: unknown, { allowProductVisual = true }: { allowProductVisual?: boolean } = {}) {
   const layout = getLayout(product);
+  const selectedKey = cleanString(layout.listAsset);
   return firstAsset([
-    getAsset(product, cleanString(layout.listAsset)),
+    // Opt out in layouts whose existing clipping does not preserve the 4:5 master.
+    getAsset(product, selectedKey === "productVisual" && !allowProductVisual ? "artworkCover" : selectedKey),
     getAsset(product, "artworkCover"),
     getAsset(product, "mainVisual"),
     getLegacyAsset(product, "cover"),

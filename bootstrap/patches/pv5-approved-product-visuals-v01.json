@@ -1,0 +1,467 @@
+{
+  "schemaVersion": 1,
+  "patchId": "pv5-approved-product-visuals-v01",
+  "approvedFromCommit": "5026097097ac8ad935be7a4e722050e790edb9a1",
+  "requiredExistingProducts": [
+    {
+      "id": "P00001",
+      "slug": "giotto-awakening"
+    },
+    {
+      "id": "P00002",
+      "slug": "davinci-feast"
+    },
+    {
+      "id": "P00003",
+      "slug": "monet-floral"
+    },
+    {
+      "id": "P00004",
+      "slug": "turner-sunset"
+    },
+    {
+      "id": "P00005",
+      "slug": "vandyck-knight"
+    },
+    {
+      "id": "P00006",
+      "slug": "degas-melody"
+    },
+    {
+      "id": "P00007",
+      "slug": "raphael-kiss"
+    },
+    {
+      "id": "P00008",
+      "slug": "vangogh-enchantment"
+    },
+    {
+      "id": "P00009",
+      "slug": "rembrandt-miracle"
+    },
+    {
+      "id": "P00010",
+      "slug": "daumier-craft"
+    },
+    {
+      "id": "P00011",
+      "slug": "michelangelo-color"
+    },
+    {
+      "id": "P00012",
+      "slug": "manet-honey"
+    },
+    {
+      "id": "P00013",
+      "slug": "picasso-classic"
+    },
+    {
+      "id": "P00014",
+      "slug": "vermeer-light"
+    },
+    {
+      "id": "P00015",
+      "slug": "renoir-garden"
+    },
+    {
+      "id": "P00016",
+      "slug": "seurat-dance"
+    },
+    {
+      "id": "P00017",
+      "slug": "millet-harvest"
+    },
+    {
+      "id": "P00018",
+      "slug": "eakins-reflection"
+    },
+    {
+      "id": "P00019",
+      "slug": "geisha-estate"
+    },
+    {
+      "id": "P00020",
+      "slug": "japanese-geisha"
+    },
+    {
+      "id": "P00021",
+      "slug": "cezanne-balance"
+    },
+    {
+      "id": "P00022",
+      "slug": "klimt-golden"
+    },
+    {
+      "id": "P00023",
+      "slug": "matisse-rhythm"
+    }
+  ],
+  "products": [
+    {
+      "id": "P00001",
+      "slug": "giotto-awakening",
+      "name": "喬托・初醒",
+      "asset": {
+        "path": "/uploads/artworks/giotto-awakening/kdcoffee-giotto-awakening-product-visual-v01.webp",
+        "fileName": "kdcoffee-giotto-awakening-product-visual-v01.webp",
+        "alt": "KD Coffee 喬托・初醒 核准商品視覺",
+        "title": "喬托・初醒｜KD Coffee Product Visual",
+        "status": "uploaded",
+        "version": 1
+      },
+      "sha256": "18c84ecbb1d192c664c24c973fd8dde830ee5608366c627078eca522f419c73c",
+      "before": {
+        "listAsset": "artworkCover",
+        "productAsset": "productPhoto"
+      }
+    },
+    {
+      "id": "P00002",
+      "slug": "davinci-feast",
+      "name": "達文西盛宴",
+      "asset": {
+        "path": "/uploads/artworks/davinci-feast/kdcoffee-davinci-feast-product-visual-v01.webp",
+        "fileName": "kdcoffee-davinci-feast-product-visual-v01.webp",
+        "alt": "KD Coffee 達文西盛宴 核准商品視覺",
+        "title": "達文西盛宴｜KD Coffee Product Visual",
+        "status": "uploaded",
+        "version": 1
+      },
+      "sha256": "25bf104203f0cf1bf50f7742e3ca1a1b701210ea5f43756d941d0f287f5c7357",
+      "before": {
+        "listAsset": "artworkCover",
+        "productAsset": "productPhoto"
+      }
+    },
+    {
+      "id": "P00003",
+      "slug": "monet-floral",
+      "name": "莫內花語",
+      "asset": {
+        "path": "/uploads/artworks/monet-floral/kdcoffee-monet-floral-product-visual-v01.webp",
+        "fileName": "kdcoffee-monet-floral-product-visual-v01.webp",
+        "alt": "KD Coffee 莫內花語 核准商品視覺",
+        "title": "莫內花語｜KD Coffee Product Visual",
+        "status": "uploaded",
+        "version": 1
+      },
+      "sha256": "e03424252767a4a5ac0b9ab1d63c6d9da6d1ee1a1d79eea430e6ee526368b715",
+      "before": {
+        "listAsset": "artworkCover",
+        "productAsset": "productPhoto"
+      }
+    },
+    {
+      "id": "P00005",
+      "slug": "vandyck-knight",
+      "name": "范戴克・騎士",
+      "asset": {
+        "path": "/uploads/artworks/vandyck-knight/kdcoffee-vandyck-knight-product-visual-v01.webp",
+        "fileName": "kdcoffee-vandyck-knight-product-visual-v01.webp",
+        "alt": "KD Coffee 范戴克・騎士 核准商品視覺",
+        "title": "范戴克・騎士｜KD Coffee Product Visual",
+        "status": "uploaded",
+        "version": 1
+      },
+      "sha256": "7297762dbbf4708ef4375a320a877fac143917bba0c104e233c2af2bc4b9c76a",
+      "before": {
+        "listAsset": "artworkCover",
+        "productAsset": "productPhoto"
+      }
+    },
+    {
+      "id": "P00009",
+      "slug": "rembrandt-miracle",
+      "name": "林布蘭・奇蹟",
+      "asset": {
+        "path": "/uploads/artworks/rembrandt-miracle/kdcoffee-rembrandt-miracle-product-visual-v01.webp",
+        "fileName": "kdcoffee-rembrandt-miracle-product-visual-v01.webp",
+        "alt": "KD Coffee 林布蘭・奇蹟 核准商品視覺",
+        "title": "林布蘭・奇蹟｜KD Coffee Product Visual",
+        "status": "uploaded",
+        "version": 1
+      },
+      "sha256": "e4f9d9f604f6317f1649d44b267909551487d52fce9440f230a0e51eec363d40",
+      "before": {
+        "listAsset": "artworkCover",
+        "productAsset": "productPhoto"
+      }
+    },
+    {
+      "id": "P00007",
+      "slug": "raphael-kiss",
+      "name": "拉斐爾之吻",
+      "asset": {
+        "path": "/uploads/artworks/raphael-kiss/kdcoffee-raphael-kiss-product-visual-v01.webp",
+        "fileName": "kdcoffee-raphael-kiss-product-visual-v01.webp",
+        "alt": "KD Coffee 拉斐爾之吻 核准商品視覺",
+        "title": "拉斐爾之吻｜KD Coffee Product Visual",
+        "status": "uploaded",
+        "version": 1
+      },
+      "sha256": "0adb9045568fc57e3369272c96e341f740a56a33ce433caad803a78cf6fedd73",
+      "before": {
+        "listAsset": "artworkCover",
+        "productAsset": "productPhoto"
+      }
+    },
+    {
+      "id": "P00024",
+      "slug": "eyck-soft-shadow",
+      "name": "艾克・柔影",
+      "asset": {
+        "path": "/uploads/artworks/eyck-soft-shadow/kdcoffee-eyck-soft-shadow-product-visual-v01.webp",
+        "fileName": "kdcoffee-eyck-soft-shadow-product-visual-v01.webp",
+        "alt": "KD Coffee 艾克・柔影 核准商品視覺",
+        "title": "艾克・柔影｜KD Coffee Product Visual",
+        "status": "uploaded",
+        "version": 1
+      },
+      "sha256": "c1d976a8f52d82c44c0520b02ba5ffb6bda1f49d20ed557d8d033dc2295df5f3",
+      "before": {
+        "listAsset": "productPhoto",
+        "productAsset": "productPhoto"
+      },
+      "draft": {
+        "id": "P00024",
+        "slug": "eyck-soft-shadow",
+        "schemaVersion": "12.0",
+        "name": "艾克・柔影",
+        "nameEn": "Eyck Soft Shadow",
+        "artist": "JAN VAN EYCK",
+        "subtitle": "蘋果・葡萄酒・黃檸檬・柑橘",
+        "shortCopy": "蘋果與葡萄酒風味，交織黃檸檬與柑橘。",
+        "mood": "以安靜畫室的柔和光影，呼應蘋果、葡萄酒與明亮柑橘的風味。留白、材質與細緻陰影，構成柔影的作品意象。",
+        "origin": "哥斯大黎加",
+        "process": "水洗",
+        "roast": "淺焙",
+        "flavors": [
+          "蘋果",
+          "葡萄酒",
+          "黃檸檬",
+          "柑橘"
+        ],
+        "visualTone": "soft-shadow",
+        "tag": "",
+        "featured": false,
+        "active": false,
+        "status": "coming_soon",
+        "inMonthlyMenu": false,
+        "showOnHomepage": false,
+        "showWhenSoldOut": true,
+        "purchasable": false,
+        "stock": 0,
+        "sort": 24,
+        "purchase": [],
+        "skus": [],
+        "assets": {
+          "productPhoto": {
+            "path": "/uploads/artworks/eyck-soft-shadow/kdcoffee-eyck-soft-shadow-product-photo-v01.webp",
+            "fileName": "kdcoffee-eyck-soft-shadow-product-photo-v01.webp",
+            "alt": "KD Coffee 艾克・柔影 真實包裝與情境合成",
+            "title": "艾克・柔影｜KD Coffee 商品視覺",
+            "caption": "柔和自然光與安靜畫室材質；留白讓真實黃綠色包裝成為第一主角。",
+            "status": "uploaded",
+            "version": 1,
+            "updatedAt": "2026-10-05T04:50:44.704Z"
+          },
+          "label": {
+            "path": "/uploads/artworks/eyck-soft-shadow/kdcoffee-eyck-soft-shadow-package-label-v01.png",
+            "fileName": "kdcoffee-eyck-soft-shadow-package-label-v01.png",
+            "alt": "艾克・柔影 Owner 提供的真實包裝標籤",
+            "title": "艾克・柔影｜真實包裝",
+            "caption": "真實包裝原片，保留印刷資訊及當批焙度。",
+            "status": "uploaded",
+            "version": 1,
+            "updatedAt": "2026-10-05T04:50:44.704Z"
+          }
+        },
+        "pageLayout": {
+          "heroAsset": "productPhoto",
+          "productAsset": "productPhoto",
+          "listAsset": "productPhoto",
+          "galleryAssets": [
+            "label"
+          ],
+          "showGallery": true,
+          "showRelatedWorks": false
+        },
+        "displayFields": {
+          "origin": true,
+          "process": true,
+          "roast": true,
+          "variety": false,
+          "altitude": false,
+          "flavors": true,
+          "shortCopy": true,
+          "mood": true
+        },
+        "productPageContent": {
+          "coffee-profile": {
+            "description": "包裝標示：哥斯大黎加・水洗・淺焙。包裝建議豆水比 1:13；印刷焙度為此批包裝資訊，尚未開放販售或自選烘焙。"
+          }
+        },
+        "history": [
+          {
+            "id": "H-1791175609776-24",
+            "version": 1,
+            "summary": "依 Owner 授權建立未開賣作品；無售價、無販售 SKU，Commerce 尚未啟用。",
+            "createdAt": "2026-10-05T04:46:49.776Z"
+          }
+        ],
+        "publish": {
+          "website": false,
+          "facebook": false,
+          "google": false,
+          "line": false
+        }
+      }
+    },
+    {
+      "id": "P00025",
+      "slug": "la-tour-dawn",
+      "name": "拉圖爾・曙光",
+      "asset": {
+        "path": "/uploads/artworks/la-tour-dawn/kdcoffee-la-tour-dawn-product-visual-v01.webp",
+        "fileName": "kdcoffee-la-tour-dawn-product-visual-v01.webp",
+        "alt": "KD Coffee 拉圖爾・曙光 核准商品視覺",
+        "title": "拉圖爾・曙光｜KD Coffee Product Visual",
+        "status": "uploaded",
+        "version": 1
+      },
+      "sha256": "1a0fc08f6343cd0e4b73433f324ba8b2ca8f13b59d9bfc782c7d93e141cd729e",
+      "before": {
+        "listAsset": "productPhoto",
+        "productAsset": "productPhoto"
+      },
+      "draft": {
+        "id": "P00025",
+        "slug": "la-tour-dawn",
+        "schemaVersion": "12.0",
+        "name": "拉圖爾・曙光",
+        "nameEn": "La Tour Dawn",
+        "artist": "GEORGES DE LA TOUR",
+        "subtitle": "蜜桃・蜂蜜・香氣豐富・甘甜渾厚",
+        "shortCopy": "蜜桃與蜂蜜風味，香氣豐富，甘甜渾厚。",
+        "mood": "以光從暗處緩緩浮現的曙光意象，呼應蜜桃、蜂蜜與甘甜渾厚的咖啡風味。溫暖而克制的光線，留下平靜的品飲空間。",
+        "origin": "衣索比亞",
+        "process": "日曬",
+        "roast": "中淺焙",
+        "flavors": [
+          "蜜桃",
+          "蜂蜜",
+          "香氣豐富",
+          "甘甜渾厚"
+        ],
+        "visualTone": "dawn",
+        "tag": "",
+        "featured": false,
+        "active": false,
+        "status": "coming_soon",
+        "inMonthlyMenu": false,
+        "showOnHomepage": false,
+        "showWhenSoldOut": true,
+        "purchasable": false,
+        "stock": 0,
+        "sort": 25,
+        "purchase": [],
+        "skus": [],
+        "assets": {
+          "productPhoto": {
+            "path": "/uploads/artworks/la-tour-dawn/kdcoffee-la-tour-dawn-product-photo-v01.webp",
+            "fileName": "kdcoffee-la-tour-dawn-product-photo-v01.webp",
+            "alt": "KD Coffee 拉圖爾・曙光 真實包裝與情境合成",
+            "title": "拉圖爾・曙光｜KD Coffee 商品視覺",
+            "caption": "第一道光從暖灰陰影浮現；克制石材與光影襯托真實淺藍包裝。",
+            "status": "uploaded",
+            "version": 1,
+            "updatedAt": "2026-10-05T04:50:57.020Z"
+          },
+          "label": {
+            "path": "/uploads/artworks/la-tour-dawn/kdcoffee-la-tour-dawn-package-label-v01.png",
+            "fileName": "kdcoffee-la-tour-dawn-package-label-v01.png",
+            "alt": "拉圖爾・曙光 Owner 提供的真實包裝標籤",
+            "title": "拉圖爾・曙光｜真實包裝",
+            "caption": "真實包裝原片，保留印刷資訊及當批焙度。",
+            "status": "uploaded",
+            "version": 1,
+            "updatedAt": "2026-10-05T04:50:57.020Z"
+          }
+        },
+        "pageLayout": {
+          "heroAsset": "productPhoto",
+          "productAsset": "productPhoto",
+          "listAsset": "productPhoto",
+          "galleryAssets": [
+            "label"
+          ],
+          "showGallery": true,
+          "showRelatedWorks": false
+        },
+        "displayFields": {
+          "origin": true,
+          "process": true,
+          "roast": true,
+          "variety": false,
+          "altitude": false,
+          "flavors": true,
+          "shortCopy": true,
+          "mood": true
+        },
+        "productPageContent": {
+          "coffee-profile": {
+            "description": "包裝標示：衣索比亞・日曬・中淺焙。包裝建議豆水比 1:14；印刷焙度為此批包裝資訊，尚未開放販售或自選烘焙。"
+          }
+        },
+        "history": [
+          {
+            "id": "H-1791175609778-25",
+            "version": 1,
+            "summary": "依 Owner 授權建立未開賣作品；無售價、無販售 SKU，Commerce 尚未啟用。",
+            "createdAt": "2026-10-05T04:46:49.778Z"
+          }
+        ],
+        "publish": {
+          "website": false,
+          "facebook": false,
+          "google": false,
+          "line": false
+        }
+      }
+    }
+  ],
+  "supportAssets": [
+    {
+      "publicPath": "/uploads/artworks/eyck-soft-shadow/kdcoffee-eyck-soft-shadow-product-photo-v01.webp",
+      "sha256": "f474ac4cb0cd7f4c86f525125b799ded3ee596555a9e8e98b0fe7a14f8861b5e"
+    },
+    {
+      "publicPath": "/uploads/artworks/eyck-soft-shadow/kdcoffee-eyck-soft-shadow-package-label-v01.png",
+      "sha256": "d3ce15f5956604ee628fbe7d3aec9de835c0ba2bdd05825d3e2181f53403cf26"
+    },
+    {
+      "publicPath": "/uploads/artworks/la-tour-dawn/kdcoffee-la-tour-dawn-product-photo-v01.webp",
+      "sha256": "6437796e129a98123fa4f822161255f75015e87d0aa73c69346022fa417aa357"
+    },
+    {
+      "publicPath": "/uploads/artworks/la-tour-dawn/kdcoffee-la-tour-dawn-package-label-v01.png",
+      "sha256": "c12689fe686e04997859e54bde22380f101f70cf34dcf62b8808e94913f58ea6"
+    }
+  ],
+  "visualRoles": {
+    "approved": [
+      "works-listing",
+      "home004",
+      "admin-works-card",
+      "admin-full-image-preview"
+    ],
+    "deferred": [
+      "product-stage",
+      "related-products",
+      "monthly-menu",
+      "page-builder-products",
+      "admin-asset-thumbnail"
+    ],
+    "reason": "Existing height/overflow clipping fails complete 4:5 package QA; retain legacy sources without CSS changes."
+  }
+}
