@@ -2895,6 +2895,194 @@
         "nameEn": "",
         "id": "P00023",
         "sku": "KD0023"
+      },
+      {
+        "id": "P00024",
+        "slug": "eyck-soft-shadow",
+        "schemaVersion": "12.0",
+        "name": "艾克・柔影",
+        "nameEn": "Eyck Soft Shadow",
+        "artist": "JAN VAN EYCK",
+        "subtitle": "蘋果・葡萄酒・黃檸檬・柑橘",
+        "shortCopy": "蘋果與葡萄酒風味，交織黃檸檬與柑橘。",
+        "mood": "以安靜畫室的柔和光影，呼應蘋果、葡萄酒與明亮柑橘的風味。留白、材質與細緻陰影，構成柔影的作品意象。",
+        "origin": "哥斯大黎加",
+        "process": "水洗",
+        "roast": "淺焙",
+        "flavors": [
+          "蘋果",
+          "葡萄酒",
+          "黃檸檬",
+          "柑橘"
+        ],
+        "visualTone": "soft-shadow",
+        "tag": "",
+        "featured": false,
+        "active": false,
+        "status": "coming_soon",
+        "inMonthlyMenu": false,
+        "showOnHomepage": false,
+        "showWhenSoldOut": true,
+        "purchasable": false,
+        "stock": 0,
+        "sort": 24,
+        "purchase": [],
+        "skus": [],
+        "assets": {
+          "productPhoto": {
+            "path": "/uploads/artworks/eyck-soft-shadow/kdcoffee-eyck-soft-shadow-product-photo-v01.webp",
+            "fileName": "kdcoffee-eyck-soft-shadow-product-photo-v01.webp",
+            "alt": "KD Coffee 艾克・柔影 真實包裝與情境合成",
+            "title": "艾克・柔影｜KD Coffee 商品視覺",
+            "caption": "柔和自然光與安靜畫室材質；留白讓真實黃綠色包裝成為第一主角。",
+            "status": "uploaded",
+            "version": 1,
+            "updatedAt": "2026-10-05T04:50:44.704Z"
+          },
+          "label": {
+            "path": "/uploads/artworks/eyck-soft-shadow/kdcoffee-eyck-soft-shadow-package-label-v01.png",
+            "fileName": "kdcoffee-eyck-soft-shadow-package-label-v01.png",
+            "alt": "艾克・柔影 Owner 提供的真實包裝標籤",
+            "title": "艾克・柔影｜真實包裝",
+            "caption": "真實包裝原片，保留印刷資訊及當批焙度。",
+            "status": "uploaded",
+            "version": 1,
+            "updatedAt": "2026-10-05T04:50:44.704Z"
+          }
+        },
+        "pageLayout": {
+          "heroAsset": "productPhoto",
+          "productAsset": "productPhoto",
+          "listAsset": "productPhoto",
+          "galleryAssets": [
+            "label"
+          ],
+          "showGallery": true,
+          "showRelatedWorks": false
+        },
+        "displayFields": {
+          "origin": true,
+          "process": true,
+          "roast": true,
+          "variety": false,
+          "altitude": false,
+          "flavors": true,
+          "shortCopy": true,
+          "mood": true
+        },
+        "productPageContent": {
+          "coffee-profile": {
+            "description": "包裝標示：哥斯大黎加・水洗・淺焙。包裝建議豆水比 1:13；印刷焙度為此批包裝資訊，尚未開放販售或自選烘焙。"
+          }
+        },
+        "history": [
+          {
+            "id": "H-1791175609776-24",
+            "version": 1,
+            "summary": "依 Owner 授權建立未開賣作品；無售價、無販售 SKU，Commerce 尚未啟用。",
+            "createdAt": "2026-10-05T04:46:49.776Z"
+          }
+        ],
+        "publish": {
+          "website": false,
+          "facebook": false,
+          "google": false,
+          "line": false
+        }
+      },
+      {
+        "id": "P00025",
+        "slug": "la-tour-dawn",
+        "schemaVersion": "12.0",
+        "name": "拉圖爾・曙光",
+        "nameEn": "La Tour Dawn",
+        "artist": "GEORGES DE LA TOUR",
+        "subtitle": "蜜桃・蜂蜜・香氣豐富・甘甜渾厚",
+        "shortCopy": "蜜桃與蜂蜜風味，香氣豐富，甘甜渾厚。",
+        "mood": "以光從暗處緩緩浮現的曙光意象，呼應蜜桃、蜂蜜與甘甜渾厚的咖啡風味。溫暖而克制的光線，留下平靜的品飲空間。",
+        "origin": "衣索比亞",
+        "process": "日曬",
+        "roast": "中淺焙",
+        "flavors": [
+          "蜜桃",
+          "蜂蜜",
+          "香氣豐富",
+          "甘甜渾厚"
+        ],
+        "visualTone": "dawn",
+        "tag": "",
+        "featured": false,
+        "active": false,
+        "status": "coming_soon",
+        "inMonthlyMenu": false,
+        "showOnHomepage": false,
+        "showWhenSoldOut": true,
+        "purchasable": false,
+        "stock": 0,
+        "sort": 25,
+        "purchase": [],
+        "skus": [],
+        "assets": {
+          "productPhoto": {
+            "path": "/uploads/artworks/la-tour-dawn/kdcoffee-la-tour-dawn-product-photo-v01.webp",
+            "fileName": "kdcoffee-la-tour-dawn-product-photo-v01.webp",
+            "alt": "KD Coffee 拉圖爾・曙光 真實包裝與情境合成",
+            "title": "拉圖爾・曙光｜KD Coffee 商品視覺",
+            "caption": "第一道光從暖灰陰影浮現；克制石材與光影襯托真實淺藍包裝。",
+            "status": "uploaded",
+            "version": 1,
+            "updatedAt": "2026-10-05T04:50:57.020Z"
+          },
+          "label": {
+            "path": "/uploads/artworks/la-tour-dawn/kdcoffee-la-tour-dawn-package-label-v01.png",
+            "fileName": "kdcoffee-la-tour-dawn-package-label-v01.png",
+            "alt": "拉圖爾・曙光 Owner 提供的真實包裝標籤",
+            "title": "拉圖爾・曙光｜真實包裝",
+            "caption": "真實包裝原片，保留印刷資訊及當批焙度。",
+            "status": "uploaded",
+            "version": 1,
+            "updatedAt": "2026-10-05T04:50:57.020Z"
+          }
+        },
+        "pageLayout": {
+          "heroAsset": "productPhoto",
+          "productAsset": "productPhoto",
+          "listAsset": "productPhoto",
+          "galleryAssets": [
+            "label"
+          ],
+          "showGallery": true,
+          "showRelatedWorks": false
+        },
+        "displayFields": {
+          "origin": true,
+          "process": true,
+          "roast": true,
+          "variety": false,
+          "altitude": false,
+          "flavors": true,
+          "shortCopy": true,
+          "mood": true
+        },
+        "productPageContent": {
+          "coffee-profile": {
+            "description": "包裝標示：衣索比亞・日曬・中淺焙。包裝建議豆水比 1:14；印刷焙度為此批包裝資訊，尚未開放販售或自選烘焙。"
+          }
+        },
+        "history": [
+          {
+            "id": "H-1791175609778-25",
+            "version": 1,
+            "summary": "依 Owner 授權建立未開賣作品；無售價、無販售 SKU，Commerce 尚未啟用。",
+            "createdAt": "2026-10-05T04:46:49.778Z"
+          }
+        ],
+        "publish": {
+          "website": false,
+          "facebook": false,
+          "google": false,
+          "line": false
+        }
       }
     ],
     "monthKey": "2026-08"

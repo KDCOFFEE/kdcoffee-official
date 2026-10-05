@@ -1,0 +1,1122 @@
+{
+  "version": 1,
+  "phase": "PV.4",
+  "approvedAt": "2026-10-05",
+  "approvalSource": "Owner explicit APPROVED message in this chat; not an inferred QA approval",
+  "ownerApproval": "OWNER APPROVED",
+  "gitBranch": "j5d7b-reward-cron-notification-isolation",
+  "gitHead": "435b87828fb2e1dda7c5acb1770a7dd5c5058715",
+  "sharpVersions": {
+    "aom": "3.13.1",
+    "archive": "3.8.2",
+    "cairo": "1.18.4",
+    "cgif": "0.5.0",
+    "exif": "0.6.25",
+    "expat": "2.7.3",
+    "ffi": "3.5.2",
+    "fontconfig": "2.17.1",
+    "freetype": "2.14.1",
+    "fribidi": "1.0.16",
+    "glib": "2.86.1",
+    "harfbuzz": "12.1.0",
+    "heif": "1.20.2",
+    "highway": "1.3.0",
+    "imagequant": "2.4.1",
+    "lcms": "2.17",
+    "mozjpeg": "0826579",
+    "pango": "1.57.0",
+    "pixman": "0.46.4",
+    "png": "1.6.50",
+    "proxy-libintl": "0.5",
+    "rsvg": "2.61.2",
+    "spng": "0.7.4",
+    "tiff": "4.7.1",
+    "vips": "8.17.3",
+    "webp": "1.6.0",
+    "xml2": "2.15.1",
+    "zlib-ng": "2.2.5",
+    "sharp": "0.34.5"
+  },
+  "products": [
+    {
+      "name": "喬托・初醒",
+      "slug": "giotto-awakening",
+      "canonicalId": "P00001",
+      "artist": "GIOTTO",
+      "ownerOriginalFile": "20260930_184457-Photoroom (4).png",
+      "paths": {
+        "source": "giotto-awakening/source-package/source-package-v02.png",
+        "background": "giotto-awakening/background/background-v01.png",
+        "originalCutout": "giotto-awakening/package-cutout/package-cutout-v02.png",
+        "layer": "pv3a_scale/giotto-awakening/scaled-package-layer.png",
+        "mask": "pv3a_scale/giotto-awakening/scaled-package-alpha.png",
+        "shadow": "pv3a_scale/giotto-awakening/grounding-shadow.png",
+        "png": "pv3a_scale/giotto-awakening/final-composite-pv3a.png",
+        "webp": "pv3a_scale/giotto-awakening/final-composite-pv3a.webp"
+      },
+      "sha256": {
+        "source": "b0841246f5a5c39df48f7f8fe31d20840c695e8fa56f9a7b1f3ae80457494594",
+        "background": "58430b4330e9fe2f0542c7d39952d7241df97382a613516f560d1c54c5d406df",
+        "originalCutout": "12fb4aa5c2f8744d60404ac93f6eca1fa1ccd847bfcb8651f8978a3e0afe6df1",
+        "layer": "8c1345cdd65982af4829cad3c6a569d251ddb2ff311839d1ec5f6d94ac5a11f3",
+        "mask": "6d193b6e5ca47ecb6d603505edb519f23b6d8eaabee6c7b6568192d0db786662",
+        "shadow": "8e1941eea1c491f26d93cba935489d6eaa57141c5671eeb63e4711be2f18e607",
+        "png": "37ae9bfa17e9fff106f196ae03d00e78c07785d48f01722a4d75bb783bc798d8",
+        "webp": "18c84ecbb1d192c664c24c973fd8dde830ee5608366c627078eca522f419c73c"
+      },
+      "canvas": {
+        "width": 1600,
+        "height": 2000
+      },
+      "target": {
+        "keep": true,
+        "base": 1710,
+        "center": 800,
+        "light": "left"
+      },
+      "originalBody": {
+        "left": 4,
+        "top": 3,
+        "width": 789,
+        "height": 1182,
+        "right": 792,
+        "bottom": 1184,
+        "threshold": 192,
+        "componentPixels": 897180,
+        "minRow": 8,
+        "minCol": 12
+      },
+      "sensitivity128": {
+        "left": 3,
+        "top": 2,
+        "width": 791,
+        "height": 1184,
+        "right": 793,
+        "bottom": 1185,
+        "threshold": 128,
+        "componentPixels": 900300,
+        "minRow": 8,
+        "minCol": 12
+      },
+      "body": {
+        "left": 4,
+        "top": 3,
+        "width": 789,
+        "height": 1182,
+        "right": 792,
+        "bottom": 1184,
+        "threshold": 192,
+        "componentPixels": 897180,
+        "minRow": 8,
+        "minCol": 12
+      },
+      "placement": {
+        "left": 402,
+        "top": 525,
+        "bodyBottom": 1710,
+        "bodyCenter": 800.5,
+        "layerWidth": 797,
+        "layerHeight": 1189
+      },
+      "heightPct": 59.099999999999994,
+      "bottomPct": 85.5,
+      "centerPct": 50.03125000000001,
+      "scalePct": 0,
+      "originalBodyHeightPercent": 59.099999999999994,
+      "fidelity": {
+        "sourceHashUnchanged": true,
+        "cutoutHashUnchanged": true,
+        "backgroundHashUnchanged": true,
+        "wholeLayerExpectedRgbaExact": true,
+        "opaqueScaledLayerPixels": 884352,
+        "partialScaledLayerPixels": 28246,
+        "opaqueCompositeMismatch": 0,
+        "alphaBlendMismatch": 0,
+        "pngWebpPixelExact": true,
+        "singleWholePackageTransform": true,
+        "labelSeparateResampling": false,
+        "aspectRoundingErrorPercent": 0
+      },
+      "shadow": {
+        "rebuilt": true,
+        "supportPoints": 774,
+        "contactSigma": 2.853103448275862,
+        "ambientSigma": 13.246551724137932,
+        "castSigma": 21.398275862068967,
+        "light": "left"
+      },
+      "balance": {
+        "scores": [
+          8,
+          9,
+          8,
+          8,
+          9,
+          9,
+          8
+        ],
+        "finding": "白袋呈柔灰，封口與兩側清楚；左側石材亮區在產品外，不吃掉袋身。低飽和背景與冷白包裝形成可辨識的色溫差。",
+        "action": "保留 PV.3A；不調曝光、邊緣或陰影。",
+        "adjustments": {
+          "brightnessPercent": 0,
+          "contrastPercent": 0,
+          "saturationPercent": 0,
+          "vignette": false,
+          "localExposure": false,
+          "edgeSeparation": false,
+          "shadowChange": false
+        }
+      },
+      "ownerApproval": "OWNER APPROVED",
+      "pv3a": "PASS",
+      "pv3b": "PASS",
+      "packageFidelity": "PASS",
+      "commercialReadiness": "PASS (visual only)"
+    },
+    {
+      "name": "達文西盛宴",
+      "slug": "davinci-feast",
+      "canonicalId": "P00002",
+      "artist": "LEONARDO DA VINCI",
+      "ownerOriginalFile": "20260930_181350-Photoroom.png",
+      "paths": {
+        "source": "davinci-feast/source-package/source-package-v01.png",
+        "background": "davinci-feast/background/background-v01.png",
+        "originalCutout": "davinci-feast/package-cutout/package-cutout-v01.png",
+        "layer": "pv3a_scale/davinci-feast/scaled-package-layer.png",
+        "mask": "pv3a_scale/davinci-feast/scaled-package-alpha.png",
+        "shadow": "pv3a_scale/davinci-feast/grounding-shadow.png",
+        "png": "pv3a_scale/davinci-feast/final-composite-pv3a.png",
+        "webp": "pv3a_scale/davinci-feast/final-composite-pv3a.webp"
+      },
+      "sha256": {
+        "source": "60220ea6006c3d71e6ec07f8e8f6265f9b717ec5e16c0640249a587b2fe71344",
+        "background": "7d7c8207f7842f04a34b61401193dd9e2faf67e3dfdf56268161ddc2ca1a4c11",
+        "originalCutout": "87af545ab3a4b4ab71b645fad38f52c93da19b809a5f3c54b349cc350473b145",
+        "layer": "0e97d43f363562bdb3c7771f3fcc7d568d1cfac6ad201292afcdc2507b0692f5",
+        "mask": "1909b3a550c39aaceb08a67a2fd689cfa4cfc491beaa3e32ec8b8aac391da433",
+        "shadow": "5491bd8f7b46cd083a3ba34129e8b1288d2ea86f8ae039686e7d6948b1be0c8a",
+        "png": "77a865f7ea9e2e1f974014ead026eaca89aaef9d2c9e7f858c89f62b0bfae7b6",
+        "webp": "25bf104203f0cf1bf50f7742e3ca1a1b701210ea5f43756d941d0f287f5c7357"
+      },
+      "canvas": {
+        "width": 1600,
+        "height": 2000
+      },
+      "target": {
+        "height": 1160,
+        "base": 1690,
+        "center": 800,
+        "light": "right"
+      },
+      "originalBody": {
+        "left": 4,
+        "top": 4,
+        "width": 683,
+        "height": 1016,
+        "right": 686,
+        "bottom": 1019,
+        "threshold": 192,
+        "componentPixels": 676680,
+        "minRow": 7,
+        "minCol": 11
+      },
+      "sensitivity128": {
+        "left": 3,
+        "top": 3,
+        "width": 685,
+        "height": 1018,
+        "right": 687,
+        "bottom": 1020,
+        "threshold": 128,
+        "componentPixels": 679243,
+        "minRow": 7,
+        "minCol": 11
+      },
+      "body": {
+        "left": 5,
+        "top": 5,
+        "width": 780,
+        "height": 1160,
+        "right": 784,
+        "bottom": 1164,
+        "threshold": 192,
+        "componentPixels": 882337,
+        "minRow": 8,
+        "minCol": 12
+      },
+      "placement": {
+        "left": 405,
+        "top": 525,
+        "bodyBottom": 1690,
+        "bodyCenter": 800,
+        "layerWidth": 789,
+        "layerHeight": 1168
+      },
+      "heightPct": 57.99999999999999,
+      "bottomPct": 84.5,
+      "centerPct": 50,
+      "scalePct": 14.18234442836468,
+      "originalBodyHeightPercent": 50.8,
+      "fidelity": {
+        "sourceHashUnchanged": true,
+        "cutoutHashUnchanged": true,
+        "backgroundHashUnchanged": true,
+        "wholeLayerExpectedRgbaExact": true,
+        "opaqueScaledLayerPixels": 869807,
+        "partialScaledLayerPixels": 28962,
+        "opaqueCompositeMismatch": 0,
+        "alphaBlendMismatch": 0,
+        "pngWebpPixelExact": true,
+        "singleWholePackageTransform": true,
+        "labelSeparateResampling": false,
+        "aspectRoundingErrorPercent": 0.007310231350254881
+      },
+      "shadow": {
+        "rebuilt": true,
+        "supportPoints": 749,
+        "contactSigma": 2.8,
+        "ambientSigma": 13,
+        "castSigma": 21,
+        "light": "right"
+      },
+      "balance": {
+        "scores": [
+          9,
+          8,
+          9,
+          9,
+          9,
+          9,
+          9
+        ],
+        "finding": "深藍袋與暖石牆明確分離，右側亮窗不穿越袋身輪廓；底部也沒有融入台面。窗框與左側紙材屬次要元素。",
+        "action": "保留 PV.3A；不需提亮深藍包裝周圍。",
+        "adjustments": {
+          "brightnessPercent": 0,
+          "contrastPercent": 0,
+          "saturationPercent": 0,
+          "vignette": false,
+          "localExposure": false,
+          "edgeSeparation": false,
+          "shadowChange": false
+        }
+      },
+      "ownerApproval": "OWNER APPROVED",
+      "pv3a": "PASS",
+      "pv3b": "PASS",
+      "packageFidelity": "PASS",
+      "commercialReadiness": "PASS (visual only)"
+    },
+    {
+      "name": "莫內花語",
+      "slug": "monet-floral",
+      "canonicalId": "P00003",
+      "artist": "CLAUDE MONET",
+      "ownerOriginalFile": "20260930_181420-Photoroom.png",
+      "paths": {
+        "source": "monet-floral/source-package/source-package-v01.png",
+        "background": "monet-floral/background/background-v01.png",
+        "originalCutout": "monet-floral/package-cutout/package-cutout-v01.png",
+        "layer": "pv3a_scale/monet-floral/scaled-package-layer.png",
+        "mask": "pv3a_scale/monet-floral/scaled-package-alpha.png",
+        "shadow": "pv3a_scale/monet-floral/grounding-shadow.png",
+        "png": "pv3a_scale/monet-floral/final-composite-pv3a.png",
+        "webp": "pv3a_scale/monet-floral/final-composite-pv3a.webp"
+      },
+      "sha256": {
+        "source": "35cb64d522a9add2b90a21bab1bf250ea2751a74967cc17852f1b83bee235f9a",
+        "background": "d1f75dfe18cbfedfbf3930170b44192af63c8ce1a5ed435adf670fb428bd6016",
+        "originalCutout": "0116fa98792c8812a8fed11d3bb74979321e56e02799ebae9558e6d3bc90cb00",
+        "layer": "789d891644c6d3db97e2d132f200a8b9c90c6b95a3ccdc07c9ec21c21178994b",
+        "mask": "a954f462f29eaacfecbbe96f5541037053ee84aa90db334ea292d26c48ec606e",
+        "shadow": "908e5779063baae0c676c29bb0522514b8dc6e0c4dae92fc61f9cd30f8f5fa3c",
+        "png": "c8bab53ad9f0022c21204c37353c4e45da85fc9f6eb10f1a377f64d060537f12",
+        "webp": "e03424252767a4a5ac0b9ab1d63c6d9da6d1ee1a1d79eea430e6ee526368b715"
+      },
+      "canvas": {
+        "width": 1600,
+        "height": 2000
+      },
+      "target": {
+        "height": 1170,
+        "base": 1710,
+        "center": 800,
+        "light": "left"
+      },
+      "originalBody": {
+        "left": 4,
+        "top": 4,
+        "width": 850,
+        "height": 1262,
+        "right": 853,
+        "bottom": 1265,
+        "threshold": 192,
+        "componentPixels": 1019407,
+        "minRow": 9,
+        "minCol": 13
+      },
+      "sensitivity128": {
+        "left": 3,
+        "top": 3,
+        "width": 852,
+        "height": 1264,
+        "right": 854,
+        "bottom": 1266,
+        "threshold": 128,
+        "componentPixels": 1023134,
+        "minRow": 9,
+        "minCol": 13
+      },
+      "body": {
+        "left": 4,
+        "top": 3,
+        "width": 787,
+        "height": 1170,
+        "right": 790,
+        "bottom": 1172,
+        "threshold": 192,
+        "componentPixels": 875057,
+        "minRow": 8,
+        "minCol": 12
+      },
+      "placement": {
+        "left": 403,
+        "top": 537,
+        "bodyBottom": 1710,
+        "bodyCenter": 800.5,
+        "layerWidth": 795,
+        "layerHeight": 1177
+      },
+      "heightPct": 58.5,
+      "bottomPct": 85.5,
+      "centerPct": 50.03125000000001,
+      "scalePct": -7.342657342657343,
+      "originalBodyHeightPercent": 63.1,
+      "fidelity": {
+        "sourceHashUnchanged": true,
+        "cutoutHashUnchanged": true,
+        "backgroundHashUnchanged": true,
+        "wholeLayerExpectedRgbaExact": true,
+        "opaqueScaledLayerPixels": 860555,
+        "partialScaledLayerPixels": 30159,
+        "opaqueCompositeMismatch": 0,
+        "alphaBlendMismatch": 0,
+        "pngWebpPixelExact": true,
+        "singleWholePackageTransform": true,
+        "labelSeparateResampling": false,
+        "aspectRoundingErrorPercent": 0.021388976359226763
+      },
+      "shadow": {
+        "rebuilt": true,
+        "supportPoints": 739,
+        "contactSigma": 2.8241379310344823,
+        "ambientSigma": 13.11206896551724,
+        "castSigma": 21.18103448275862,
+        "light": "left"
+      },
+      "balance": {
+        "scores": [
+          8,
+          7,
+          8,
+          8,
+          9,
+          8,
+          8
+        ],
+        "finding": "背景枝葉與散景較其他款活躍，但中央背景柔焦、金色實袋與白標籤仍是焦點。金屬反光未使外輪廓消失；庭園意象維持暖色與自然材質的系列語言。",
+        "action": "保留 PV.3A；不需為統一而降低自然光或重改庭園。",
+        "adjustments": {
+          "brightnessPercent": 0,
+          "contrastPercent": 0,
+          "saturationPercent": 0,
+          "vignette": false,
+          "localExposure": false,
+          "edgeSeparation": false,
+          "shadowChange": false
+        }
+      },
+      "ownerApproval": "OWNER APPROVED",
+      "pv3a": "PASS",
+      "pv3b": "PASS",
+      "packageFidelity": "PASS",
+      "commercialReadiness": "PASS (visual only)"
+    },
+    {
+      "name": "范戴克・騎士",
+      "slug": "vandyck-knight",
+      "canonicalId": "P00005",
+      "artist": "ANTHONY VAN DYCK",
+      "ownerOriginalFile": "20260930_181249-Photoroom.png",
+      "paths": {
+        "source": "vandyck-knight/source-package/source-package-v01.png",
+        "background": "vandyck-knight/background/background-v01.png",
+        "originalCutout": "vandyck-knight/package-cutout/package-cutout-v01.png",
+        "layer": "pv3a_scale/vandyck-knight/scaled-package-layer.png",
+        "mask": "pv3a_scale/vandyck-knight/scaled-package-alpha.png",
+        "shadow": "pv3a_scale/vandyck-knight/grounding-shadow.png",
+        "png": "pv3a_scale/vandyck-knight/final-composite-pv3a.png",
+        "webp": "pv3a_scale/vandyck-knight/final-composite-pv3a.webp"
+      },
+      "sha256": {
+        "source": "3246a46504bde5beb2c1acb8116b4fb7e0d2371575b43a133e1a87c6a6e2c46d",
+        "background": "13cf6b8c7d5d64d9a212e96d68070129882d9c3824cba1199ed64c1ca4f91318",
+        "originalCutout": "f0e03333a0ca762b23676ae207d1f17be11fcae68c6ab787a0397cc4ead9a223",
+        "layer": "d971805a79ee371f3a89583388a1a60d99a2cd71f53443cea19e286392a5e315",
+        "mask": "b0184a736ffe64f1f201d6d87ef172c0bb2d0c947b10bfa7a988e586f6bf7c2d",
+        "shadow": "166008b39f917dd52e47dc20d537c3095fdf1cf4f67117f5f947d7ae588f2bf8",
+        "png": "24077ed664e2bfe881dddfe785007fdcc5cbf41871c6db683ab0ecc4e017e5da",
+        "webp": "7297762dbbf4708ef4375a320a877fac143917bba0c104e233c2af2bc4b9c76a"
+      },
+      "canvas": {
+        "width": 1600,
+        "height": 2000
+      },
+      "target": {
+        "keep": true,
+        "base": 1710,
+        "center": 800,
+        "light": "left"
+      },
+      "originalBody": {
+        "left": 4,
+        "top": 3,
+        "width": 788,
+        "height": 1179,
+        "right": 791,
+        "bottom": 1181,
+        "threshold": 192,
+        "componentPixels": 887964,
+        "minRow": 8,
+        "minCol": 12
+      },
+      "sensitivity128": {
+        "left": 3,
+        "top": 2,
+        "width": 790,
+        "height": 1181,
+        "right": 792,
+        "bottom": 1182,
+        "threshold": 128,
+        "componentPixels": 891104,
+        "minRow": 8,
+        "minCol": 12
+      },
+      "body": {
+        "left": 4,
+        "top": 3,
+        "width": 788,
+        "height": 1179,
+        "right": 791,
+        "bottom": 1181,
+        "threshold": 192,
+        "componentPixels": 887964,
+        "minRow": 8,
+        "minCol": 12
+      },
+      "placement": {
+        "left": 402,
+        "top": 528,
+        "bodyBottom": 1710,
+        "bodyCenter": 800,
+        "layerWidth": 796,
+        "layerHeight": 1185
+      },
+      "heightPct": 58.95,
+      "bottomPct": 85.5,
+      "centerPct": 50,
+      "scalePct": 0,
+      "originalBodyHeightPercent": 58.95,
+      "fidelity": {
+        "sourceHashUnchanged": true,
+        "cutoutHashUnchanged": true,
+        "backgroundHashUnchanged": true,
+        "wholeLayerExpectedRgbaExact": true,
+        "opaqueScaledLayerPixels": 874332,
+        "partialScaledLayerPixels": 29542,
+        "opaqueCompositeMismatch": 0,
+        "alphaBlendMismatch": 0,
+        "pngWebpPixelExact": true,
+        "singleWholePackageTransform": true,
+        "labelSeparateResampling": false,
+        "aspectRoundingErrorPercent": 0
+      },
+      "shadow": {
+        "rebuilt": true,
+        "supportPoints": 751,
+        "contactSigma": 2.8458620689655167,
+        "ambientSigma": 13.212931034482757,
+        "castSigma": 21.34396551724138,
+        "light": "left"
+      },
+      "balance": {
+        "scores": [
+          8,
+          9,
+          8,
+          8,
+          9,
+          8,
+          8
+        ],
+        "finding": "深綠袋與灰褐牆有可辨色差，右緣與封口仍可見；左側布料暗區在外緣。較深調性有林布蘭呼應，不像另一品牌。",
+        "action": "保留 PV.3A；背景與袋身無需要修正的輪廓吞沒。",
+        "adjustments": {
+          "brightnessPercent": 0,
+          "contrastPercent": 0,
+          "saturationPercent": 0,
+          "vignette": false,
+          "localExposure": false,
+          "edgeSeparation": false,
+          "shadowChange": false
+        }
+      },
+      "ownerApproval": "OWNER APPROVED",
+      "pv3a": "PASS",
+      "pv3b": "PASS",
+      "packageFidelity": "PASS",
+      "commercialReadiness": "PASS (visual only)"
+    },
+    {
+      "name": "林布蘭・奇蹟",
+      "slug": "rembrandt-miracle",
+      "canonicalId": "P00009",
+      "artist": "REMBRANDT",
+      "ownerOriginalFile": "20260930_181318-Photoroom.png",
+      "paths": {
+        "source": "rembrandt-miracle/source-package/source-package-v01.png",
+        "background": "rembrandt-miracle/background/background-v01.png",
+        "originalCutout": "rembrandt-miracle/package-cutout/package-cutout-v01.png",
+        "layer": "pv3a_scale/rembrandt-miracle/scaled-package-layer.png",
+        "mask": "pv3a_scale/rembrandt-miracle/scaled-package-alpha.png",
+        "shadow": "pv3a_scale/rembrandt-miracle/grounding-shadow.png",
+        "png": "pv3a_scale/rembrandt-miracle/final-composite-pv3a.png",
+        "webp": "pv3a_scale/rembrandt-miracle/final-composite-pv3a.webp"
+      },
+      "sha256": {
+        "source": "b59771b363eafe08cbc6b463cb11f8ce6a7a1581200826bcda9c34c75281da98",
+        "background": "fd819883490b91cd829f596659c5d165e67c61f1b4b9ac5763985f493c674e1a",
+        "originalCutout": "b71adeb530d887782c544e569d08bae0bd21c37e6d85e2778fe9fecae6318578",
+        "layer": "05aaf8e9f4ceea77de4bcad1dd07b1228816185f8883dd8f2181f94cb29236ec",
+        "mask": "2317d0f6f9894f3bf564c60095ef69e513140f9bc94bc7b3e23a2f47876edd1c",
+        "shadow": "b63340b8e0b827265e4c43896807e74c97e744f90874a89f710b6e858a317381",
+        "png": "c9a1553242200e48bc02e0c53dfd9155efd257b57fb2a41921dd6f0feaf485e5",
+        "webp": "e4f9d9f604f6317f1649d44b267909551487d52fce9440f230a0e51eec363d40"
+      },
+      "canvas": {
+        "width": 1600,
+        "height": 2000
+      },
+      "target": {
+        "height": 1170,
+        "base": 1710,
+        "center": 800,
+        "light": "left"
+      },
+      "originalBody": {
+        "left": 4,
+        "top": 4,
+        "width": 703,
+        "height": 1041,
+        "right": 706,
+        "bottom": 1044,
+        "threshold": 192,
+        "componentPixels": 706155,
+        "minRow": 7,
+        "minCol": 11
+      },
+      "sensitivity128": {
+        "left": 3,
+        "top": 3,
+        "width": 705,
+        "height": 1043,
+        "right": 707,
+        "bottom": 1045,
+        "threshold": 128,
+        "componentPixels": 709360,
+        "minRow": 7,
+        "minCol": 11
+      },
+      "body": {
+        "left": 5,
+        "top": 5,
+        "width": 790,
+        "height": 1170,
+        "right": 794,
+        "bottom": 1174,
+        "threshold": 192,
+        "componentPixels": 891672,
+        "minRow": 8,
+        "minCol": 12
+      },
+      "placement": {
+        "left": 400,
+        "top": 535,
+        "bodyBottom": 1710,
+        "bodyCenter": 800,
+        "layerWidth": 799,
+        "layerHeight": 1179
+      },
+      "heightPct": 58.5,
+      "bottomPct": 85.5,
+      "centerPct": 50,
+      "scalePct": 12.376933895921226,
+      "originalBodyHeightPercent": 52.05,
+      "fidelity": {
+        "sourceHashUnchanged": true,
+        "cutoutHashUnchanged": true,
+        "backgroundHashUnchanged": true,
+        "wholeLayerExpectedRgbaExact": true,
+        "opaqueScaledLayerPixels": 875014,
+        "partialScaledLayerPixels": 35505,
+        "opaqueCompositeMismatch": 0,
+        "alphaBlendMismatch": 0,
+        "pngWebpPixelExact": true,
+        "singleWholePackageTransform": true,
+        "labelSeparateResampling": false,
+        "aspectRoundingErrorPercent": 0.014076626953885008
+      },
+      "shadow": {
+        "rebuilt": true,
+        "supportPoints": 761,
+        "contactSigma": 2.8241379310344823,
+        "ambientSigma": 13.11206896551724,
+        "castSigma": 21.18103448275862,
+        "light": "left"
+      },
+      "balance": {
+        "scores": [
+          9,
+          8,
+          7,
+          9,
+          8,
+          8,
+          8
+        ],
+        "finding": "銀袋與深咖啡背景分離最強。銀色高光來自真實包裝，仍有紋理與完整袋緣；暖光牆面明暗較強，但沒有壓過白標籤，與范戴克形成克制的深調組。",
+        "action": "保留 PV.3A；不改銀袋高光，也不為降低戲劇性而改原光線。",
+        "adjustments": {
+          "brightnessPercent": 0,
+          "contrastPercent": 0,
+          "saturationPercent": 0,
+          "vignette": false,
+          "localExposure": false,
+          "edgeSeparation": false,
+          "shadowChange": false
+        }
+      },
+      "ownerApproval": "OWNER APPROVED",
+      "pv3a": "PASS",
+      "pv3b": "PASS",
+      "packageFidelity": "PASS",
+      "commercialReadiness": "PASS (visual only)"
+    },
+    {
+      "name": "拉斐爾之吻",
+      "slug": "raphael-kiss",
+      "canonicalId": "P00007",
+      "artist": "RAPHAEL",
+      "ownerOriginalFile": "20260930_181336-Photoroom.png",
+      "paths": {
+        "source": "raphael-kiss/source-package/source-package-v01.png",
+        "background": "raphael-kiss/background/background-v01.png",
+        "originalCutout": "raphael-kiss/package-cutout/package-cutout-v01.png",
+        "layer": "pv3a_scale/raphael-kiss/scaled-package-layer.png",
+        "mask": "pv3a_scale/raphael-kiss/scaled-package-alpha.png",
+        "shadow": "pv3a_scale/raphael-kiss/grounding-shadow.png",
+        "png": "pv3a_scale/raphael-kiss/final-composite-pv3a.png",
+        "webp": "pv3a_scale/raphael-kiss/final-composite-pv3a.webp"
+      },
+      "sha256": {
+        "source": "5e4592655deab7a8e53dca1205f260d47fd0a26364c5cc6581ef8ce98855d974",
+        "background": "4c3db3b1976943b2c68ff265450c7c4c2ead44f5ac42501e7a87b99344ace097",
+        "originalCutout": "fb1d953d79201e1fae005d3b6c30525aa821e3e2b6e42ea2dc2a274058d3aab0",
+        "layer": "b2a2489ff74cecde18898ae6e2eb14c179ac1fab8079a7996a41d865c7cbc1d0",
+        "mask": "fbac0bf94b985fa704521570ad7e42ac4814f8d226f50c341ea7ff4c28e9e034",
+        "shadow": "85ed5304bea029f001cfe81c8cabb2d37e4c2cfa1c469a341b11d304a69ef107",
+        "png": "7f97f2683d4ecb8ab49ff9b1c097b21f6c0a540f862745b02a508db7ec1fd073",
+        "webp": "0adb9045568fc57e3369272c96e341f740a56a33ce433caad803a78cf6fedd73"
+      },
+      "canvas": {
+        "width": 1600,
+        "height": 2000
+      },
+      "target": {
+        "height": 1160,
+        "base": 1710,
+        "center": 800,
+        "light": "left"
+      },
+      "originalBody": {
+        "left": 3,
+        "top": 2,
+        "width": 699,
+        "height": 1010,
+        "right": 701,
+        "bottom": 1011,
+        "threshold": 192,
+        "componentPixels": 683912,
+        "minRow": 7,
+        "minCol": 11
+      },
+      "sensitivity128": {
+        "left": 2,
+        "top": 2,
+        "width": 701,
+        "height": 1011,
+        "right": 702,
+        "bottom": 1012,
+        "threshold": 128,
+        "componentPixels": 686511,
+        "minRow": 8,
+        "minCol": 11
+      },
+      "body": {
+        "left": 4,
+        "top": 3,
+        "width": 803,
+        "height": 1160,
+        "right": 806,
+        "bottom": 1162,
+        "threshold": 192,
+        "componentPixels": 902439,
+        "minRow": 9,
+        "minCol": 12
+      },
+      "placement": {
+        "left": 395,
+        "top": 547,
+        "bodyBottom": 1710,
+        "bodyCenter": 800.5,
+        "layerWidth": 811,
+        "layerHeight": 1166
+      },
+      "heightPct": 57.99999999999999,
+      "bottomPct": 85.5,
+      "centerPct": 50.03125000000001,
+      "scalePct": 14.872521246458925,
+      "originalBodyHeightPercent": 50.5,
+      "fidelity": {
+        "sourceHashUnchanged": true,
+        "cutoutHashUnchanged": true,
+        "backgroundHashUnchanged": true,
+        "wholeLayerExpectedRgbaExact": true,
+        "opaqueScaledLayerPixels": 888918,
+        "partialScaledLayerPixels": 30274,
+        "opaqueCompositeMismatch": 0,
+        "alphaBlendMismatch": 0,
+        "pngWebpPixelExact": true,
+        "singleWholePackageTransform": true,
+        "labelSeparateResampling": false,
+        "aspectRoundingErrorPercent": 0.003765810329503516
+      },
+      "shadow": {
+        "rebuilt": true,
+        "supportPoints": 763,
+        "contactSigma": 2.8,
+        "ambientSigma": 13,
+        "castSigma": 21,
+        "light": "left"
+      },
+      "balance": {
+        "scores": [
+          9,
+          9,
+          9,
+          9,
+          9,
+          9,
+          9
+        ],
+        "finding": "真實紅袋與象牙背景明確分離，紅色的視覺重量較強但留白足够。背景高光柔和、沒有搶焦；拱形與石台延續喬托／達文西語言。",
+        "action": "保留 PV.3A；不降低真實包裝紅色。",
+        "adjustments": {
+          "brightnessPercent": 0,
+          "contrastPercent": 0,
+          "saturationPercent": 0,
+          "vignette": false,
+          "localExposure": false,
+          "edgeSeparation": false,
+          "shadowChange": false
+        }
+      },
+      "ownerApproval": "OWNER APPROVED",
+      "pv3a": "PASS",
+      "pv3b": "PASS",
+      "packageFidelity": "PASS",
+      "commercialReadiness": "PASS (visual only)"
+    },
+    {
+      "name": "艾克・柔影",
+      "slug": "eyck-soft-shadow",
+      "canonicalId": "P00024",
+      "artist": "JAN VAN EYCK",
+      "ownerOriginalFile": "20260930_181343-Photoroom.png",
+      "paths": {
+        "source": "eyck-soft-shadow/source-package/source-package-v01.png",
+        "background": "eyck-soft-shadow/background/background-v01.png",
+        "originalCutout": "eyck-soft-shadow/package-cutout/package-cutout-v01.png",
+        "layer": "pv3a_scale/eyck-soft-shadow/scaled-package-layer.png",
+        "mask": "pv3a_scale/eyck-soft-shadow/scaled-package-alpha.png",
+        "shadow": "pv3a_scale/eyck-soft-shadow/grounding-shadow.png",
+        "png": "pv3a_scale/eyck-soft-shadow/final-composite-pv3a.png",
+        "webp": "pv3a_scale/eyck-soft-shadow/final-composite-pv3a.webp"
+      },
+      "sha256": {
+        "source": "d3ce15f5956604ee628fbe7d3aec9de835c0ba2bdd05825d3e2181f53403cf26",
+        "background": "5bf944c784962959df969e6cd870adfe408565160c01ca45bea215c1db98c048",
+        "originalCutout": "e64dc16d816f00e3d65275ce72dbb5d8ce6946b9307d79ec8edf8bb10caa3498",
+        "layer": "78bad73d10d07089aa08a0955ca4b652c9e55b54ccc035cd404edfaa32c64335",
+        "mask": "78ede6eb81a8f2427e15c7a329566ac5f199e093bde6ccaad28faed9a0727d6a",
+        "shadow": "b63d2e4c0a591f27b1acf53b5e34b5d1071c32f4afcc1f193e25e5fd33e21b92",
+        "png": "e5b851ace8edd01ae224ba91fb4fda455744ce64869b6072b5329832cd759959",
+        "webp": "c1d976a8f52d82c44c0520b02ba5ffb6bda1f49d20ed557d8d033dc2295df5f3"
+      },
+      "canvas": {
+        "width": 1600,
+        "height": 2000
+      },
+      "target": {
+        "height": 1160,
+        "base": 1710,
+        "center": 800,
+        "light": "left"
+      },
+      "originalBody": {
+        "left": 3,
+        "top": 3,
+        "width": 662,
+        "height": 987,
+        "right": 664,
+        "bottom": 989,
+        "threshold": 192,
+        "componentPixels": 634659,
+        "minRow": 7,
+        "minCol": 10
+      },
+      "sensitivity128": {
+        "left": 2,
+        "top": 3,
+        "width": 663,
+        "height": 987,
+        "right": 664,
+        "bottom": 989,
+        "threshold": 128,
+        "componentPixels": 637134,
+        "minRow": 7,
+        "minCol": 10
+      },
+      "body": {
+        "left": 4,
+        "top": 5,
+        "width": 778,
+        "height": 1159,
+        "right": 781,
+        "bottom": 1163,
+        "threshold": 192,
+        "componentPixels": 876355,
+        "minRow": 8,
+        "minCol": 12
+      },
+      "placement": {
+        "left": 407,
+        "top": 546,
+        "bodyBottom": 1710,
+        "bodyCenter": 800,
+        "layerWidth": 785,
+        "layerHeight": 1167
+      },
+      "heightPct": 57.95,
+      "bottomPct": 85.5,
+      "centerPct": 50,
+      "scalePct": 17.51497005988023,
+      "originalBodyHeightPercent": 49.35,
+      "fidelity": {
+        "sourceHashUnchanged": true,
+        "cutoutHashUnchanged": true,
+        "backgroundHashUnchanged": true,
+        "wholeLayerExpectedRgbaExact": true,
+        "opaqueScaledLayerPixels": 864106,
+        "partialScaledLayerPixels": 29164,
+        "opaqueCompositeMismatch": 0,
+        "alphaBlendMismatch": 0,
+        "pngWebpPixelExact": true,
+        "singleWholePackageTransform": true,
+        "labelSeparateResampling": false,
+        "aspectRoundingErrorPercent": 0.006542185551783319
+      },
+      "shadow": {
+        "rebuilt": true,
+        "supportPoints": 760,
+        "contactSigma": 2.797586206896552,
+        "ambientSigma": 12.988793103448277,
+        "castSigma": 20.981896551724137,
+        "light": "left"
+      },
+      "balance": {
+        "scores": [
+          9,
+          8,
+          9,
+          9,
+          8,
+          8,
+          9
+        ],
+        "finding": "黃綠袋較鮮明但源自真實包裝；象牙牆與木桌保持溫暖克制。植物、空白畫布位於左側，不與商品競爭；輪廓与落地清楚。",
+        "action": "保留 PV.3A；不改包裝色或背景飽和度。",
+        "adjustments": {
+          "brightnessPercent": 0,
+          "contrastPercent": 0,
+          "saturationPercent": 0,
+          "vignette": false,
+          "localExposure": false,
+          "edgeSeparation": false,
+          "shadowChange": false
+        }
+      },
+      "ownerApproval": "OWNER APPROVED",
+      "pv3a": "PASS",
+      "pv3b": "PASS",
+      "packageFidelity": "PASS",
+      "commercialReadiness": "PASS (visual only)"
+    },
+    {
+      "name": "拉圖爾・曙光",
+      "slug": "la-tour-dawn",
+      "canonicalId": "P00025",
+      "artist": "GEORGES DE LA TOUR",
+      "ownerOriginalFile": "20260930_181427-Photoroom.png",
+      "paths": {
+        "source": "la-tour-dawn/source-package/source-package-v01.png",
+        "background": "la-tour-dawn/background/background-v01.png",
+        "originalCutout": "la-tour-dawn/package-cutout/package-cutout-v01.png",
+        "layer": "pv3a_scale/la-tour-dawn/scaled-package-layer.png",
+        "mask": "pv3a_scale/la-tour-dawn/scaled-package-alpha.png",
+        "shadow": "pv3a_scale/la-tour-dawn/grounding-shadow.png",
+        "png": "pv3a_scale/la-tour-dawn/final-composite-pv3a.png",
+        "webp": "pv3a_scale/la-tour-dawn/final-composite-pv3a.webp"
+      },
+      "sha256": {
+        "source": "c12689fe686e04997859e54bde22380f101f70cf34dcf62b8808e94913f58ea6",
+        "background": "f9340ef5b3961b622e03854df97c837fe3775f11a7cc5b65d1537c31b130a738",
+        "originalCutout": "ed70660f43aaa7e6ab6adc214bccffeb2b3fbeab8788605dcccf6369a4b8a288",
+        "layer": "7d27b7758d30f98146a2a9febd589f78790604d0fae656b9ce5293f9964ae508",
+        "mask": "170cc4bda2e35ca8621a8aa96109dafcedf9f11bbe29c0ceeb89e9a77c720851",
+        "shadow": "6cb9aaa8a63fcdcd883b5594f268596c8594e161265b2cb0e86bdd63a95b07a3",
+        "png": "081001c2ff0029bc5e6986b66f793278521a927170cefe594ab43f50369a14fe",
+        "webp": "1a0fc08f6343cd0e4b73433f324ba8b2ca8f13b59d9bfc782c7d93e141cd729e"
+      },
+      "canvas": {
+        "width": 1600,
+        "height": 2000
+      },
+      "target": {
+        "keep": true,
+        "base": 1710,
+        "center": 800,
+        "light": "left"
+      },
+      "originalBody": {
+        "left": 4,
+        "top": 3,
+        "width": 741,
+        "height": 1124,
+        "right": 744,
+        "bottom": 1126,
+        "threshold": 192,
+        "componentPixels": 799505,
+        "minRow": 8,
+        "minCol": 12
+      },
+      "sensitivity128": {
+        "left": 3,
+        "top": 2,
+        "width": 743,
+        "height": 1126,
+        "right": 745,
+        "bottom": 1127,
+        "threshold": 128,
+        "componentPixels": 802586,
+        "minRow": 8,
+        "minCol": 12
+      },
+      "body": {
+        "left": 4,
+        "top": 3,
+        "width": 741,
+        "height": 1124,
+        "right": 744,
+        "bottom": 1126,
+        "threshold": 192,
+        "componentPixels": 799505,
+        "minRow": 8,
+        "minCol": 12
+      },
+      "placement": {
+        "left": 426,
+        "top": 583,
+        "bodyBottom": 1710,
+        "bodyCenter": 800.5,
+        "layerWidth": 749,
+        "layerHeight": 1130
+      },
+      "heightPct": 56.2,
+      "bottomPct": 85.5,
+      "centerPct": 50.03125000000001,
+      "scalePct": 0,
+      "originalBodyHeightPercent": 56.2,
+      "fidelity": {
+        "sourceHashUnchanged": true,
+        "cutoutHashUnchanged": true,
+        "backgroundHashUnchanged": true,
+        "wholeLayerExpectedRgbaExact": true,
+        "opaqueScaledLayerPixels": 786311,
+        "partialScaledLayerPixels": 28328,
+        "opaqueCompositeMismatch": 0,
+        "alphaBlendMismatch": 0,
+        "pngWebpPixelExact": true,
+        "singleWholePackageTransform": true,
+        "labelSeparateResampling": false,
+        "aspectRoundingErrorPercent": 0
+      },
+      "shadow": {
+        "rebuilt": true,
+        "supportPoints": 672,
+        "contactSigma": 2.713103448275862,
+        "ambientSigma": 12.596551724137932,
+        "castSigma": 20.348275862068967,
+        "light": "left"
+      },
+      "balance": {
+        "scores": [
+          8,
+          9,
+          8,
+          8,
+          9,
+          9,
+          8
+        ],
+        "finding": "淺藍袋雖為系列較小的 56.20%，冷暖色差、白標籤與灰褐右側背景讓重量足夠。左側亮區沒有吃掉袋緣；產品仍是第一焦點。",
+        "action": "保留 PV.3A；不需再改尺寸或加人工邊光。",
+        "adjustments": {
+          "brightnessPercent": 0,
+          "contrastPercent": 0,
+          "saturationPercent": 0,
+          "vignette": false,
+          "localExposure": false,
+          "edgeSeparation": false,
+          "shadowChange": false
+        }
+      },
+      "ownerApproval": "OWNER APPROVED",
+      "pv3a": "PASS",
+      "pv3b": "PASS",
+      "packageFidelity": "PASS",
+      "commercialReadiness": "PASS (visual only)"
+    }
+  ]
+}
