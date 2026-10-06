@@ -53,3 +53,8 @@ export function useMemberCopy() {
   const overrides = useContext(CopyContext);
   return (value: string) => resolveMemberDisplayValue(overrides, value);
 }
+
+export function useMemberCopyKey() {
+  const overrides = useContext(CopyContext);
+  return (key: string, values: MemberCopyValues = {}) => resolveMemberCopy(overrides, key, values);
+}

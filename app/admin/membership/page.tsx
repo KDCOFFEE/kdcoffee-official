@@ -1,3 +1,5 @@
+import { readMemberCenterCopy } from "@/lib/memberCenterCopyStore";
+import { creditDisplayName } from "@/lib/memberCenterCopy";
 import { promises as fs } from "fs";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -27,6 +29,6 @@ export default async function AdminMembershipPage() {
 
   return <main className="admin-page membership-rules-page">
     <nav className="admin-breadcrumb"><Link href="/admin">← 返回營運中心</Link><span>會員／商業設定</span></nav>
-    <MembershipRulesManager initialRevision={store.revision} initialVersion={active.rulesVersion} initialRules={active.rules} products={products} />
+    <MembershipRulesManager creditName={creditDisplayName((await readMemberCenterCopy()).overrides)} initialRevision={store.revision} initialVersion={active.rulesVersion} initialRules={active.rules} products={products} />
   </main>;
 }

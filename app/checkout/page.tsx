@@ -1,5 +1,9 @@
 "use client";
 
+import CreditHelpDialog, { CreditHelpButton } from "@/components/member/CreditHelpDialog";
+import CreditPreferenceFields from "@/components/member/CreditPreferenceFields";
+import { MemberCopyText } from "@/components/member/MemberCenterCopyProvider";
+import type { SubscriptionCreditPreference } from "@/lib/subscriptionCreditPreference";
 import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -56,6 +60,7 @@ export default function CheckoutPage() {
   const [operationalRules, setOperationalRules] = useState<{ pickup: { earliestStandardDate: string; earliestCustomRoastDate: string; blockedDates: string[] }; shipping: { subscriptionFreeShipping: boolean; subscriptionShippingFee: number; sevenElevenShippingFee: number; homeDeliveryShippingFee: number; homeDeliveryCodFee: number; subscriptionShippingDiscount: number }; payment: { atmTransfer: { configured: boolean; bankName: string; bankCode: string; branchName: string; accountName: string; accountNumber: string; instructions: string; bankbookImageUrl: string | null; showBankbookImageAtCheckout: boolean } }; openingYearFreeShipping: { enabled: boolean; startDate: string; endDate: string; shippingMethods: string[] }; money: { roundingMode: string }; subscription: { discountPercent: number; intervalsDays: number[]; customCycleEnabled: boolean; customCycleMinDays: number; customCycleMaxDays: number; earliestDate: string }; credit: { uiMode: "amount-and-maximum" | "use-or-not" | "automatic-maximum" | "custom-amount"; showAmountInput: boolean; showMaximumButton: boolean; automaticallyUseMaximum: boolean; allowZeroTotal: boolean; appliesToShipping: boolean } } | null>(null);
   const [creditQuote, setCreditQuote] = useState<{ availableBalance: number; maximumUsable: number; minimumPayable: number } | null>(null);
   const [requestedCredit, setRequestedCredit] = useState(0);
+  const [creditPreference, setCreditPreference] = useState<SubscriptionCreditPreference>({ mode: "off" });
   const [useCredit, setUseCredit] = useState(false);
   const [subscriptionBlockedDialogOpen, setSubscriptionBlockedDialogOpen] = useState(false);
   const today = getDateOnlyInTimeZone(new Date());
@@ -214,7 +219,7 @@ export default function CheckoutPage() {
         deliveryAddress: mode === "home_delivery" ? validateDeliveryAddress(deliveryAddress) : null,
         paymentMethod: mode === "home_delivery" ? paymentMethod : null,
         corporateGift: null,
-        subscriptionIntent: member && joinSubscription ? { consent: true, intervalDays: subscriptionInterval } : null,
+        subscriptionIntent: member && joinSubscription ? { consent: true, creditPreference, intervalDays: subscriptionInterval } : null,
         requestedCredit: member ? requestedCredit : 0,
         items: items.map(({ slug, optionId, optionLabel, unitPrice, preparationLabel, customRoast, roastLevel, roastNote, quantity }) => ({ slug, optionId, optionLabel, quotedUnitPrice: unitPrice, preparationLabel, customRoast, roastLevel, roastNote, quantity })),
       }) });
@@ -332,10 +337,12 @@ export default function CheckoutPage() {
             ) : <p className="field-help form-error">ATM 轉帳資訊尚未完整設定，請改用貨到付款或聯繫 KD Coffee 客服。</p>
           ) : <p className="field-help">貨到付款手續費 NT$ {codServiceFee.toLocaleString("zh-TW")}</p>}
         </section>}
-          {member && creditQuote && creditQuote.availableBalance > 0 && <section className="form-card"><div className="form-card-head"><span>04</span><h2>會員抵用金</h2></div><div className="delivery-notice"><strong>目前可用 NT$ {creditQuote.availableBalance.toLocaleString("zh-TW")}</strong><p>本次最多可折 NT$ {creditQuote.maximumUsable.toLocaleString("zh-TW")}；系統會優先使用較早到期的額度。</p></div>{operationalRules?.credit.uiMode === "use-or-not" ? <label className="terms-check"><input type="checkbox" checked={useCredit} onChange={(event) => { setUseCredit(event.target.checked); setRequestedCredit(event.target.checked ? creditQuote.maximumUsable : 0); }} />使用本次可折抵的最高金額</label> : operationalRules?.credit.uiMode === "automatic-maximum" ? <p className="member-notice">已自動套用最大折抵 NT$ {creditQuote.maximumUsable.toLocaleString("zh-TW")}</p> : <div className="subscription-enrollment-fields"><label>本次折抵金額<input type="number" min={0} max={creditQuote.maximumUsable} value={requestedCredit} onChange={(event) => setRequestedCredit(Math.min(creditQuote.maximumUsable, Math.max(0, Number(event.target.value) || 0)))} /></label>{operationalRules?.credit.showMaximumButton && <button type="button" onClick={() => setRequestedCredit(creditQuote.maximumUsable)}>最大折抵</button>}</div>}<div className="subscription-enrollment-summary"><span>折抵後預計應付 NT$ {Math.max(0, subtotal + shipping + codServiceFee - requestedCredit).toLocaleString("zh-TW")}</span></div></section>}
+          <CreditHelpDialog /><CreditHelpButton />
+          {member && creditQuote && creditQuote.availableBalance > 0 && <section className="form-card"><div className="form-card-head"><span>04</span><h2><MemberCopyText copyKey="credit.checkout.title" /></h2></div><div className="delivery-notice"><strong><MemberCopyText copyKey="credit.checkout.available" values={{ amount: `NT$ ${creditQuote.availableBalance.toLocaleString("zh-TW")}` }} /></strong><p><MemberCopyText copyKey="credit.checkout.limit" values={{ amount: `NT$ ${creditQuote.maximumUsable.toLocaleString("zh-TW")}` }} /></p></div>{operationalRules?.credit.uiMode === "use-or-not" ? <label className="terms-check"><input type="checkbox" checked={useCredit} onChange={(event) => { setUseCredit(event.target.checked); setRequestedCredit(event.target.checked ? creditQuote.maximumUsable : 0); }} /><MemberCopyText copyKey="credit.checkout.maximum" /></label> : operationalRules?.credit.uiMode === "automatic-maximum" ? <p className="member-notice"><MemberCopyText copyKey="credit.checkout.automatic" values={{ amount: `NT$ ${creditQuote.maximumUsable.toLocaleString("zh-TW")}` }} /></p> : <div className="subscription-enrollment-fields"><label><MemberCopyText copyKey="credit.checkout.amount" /><input type="number" min={0} max={creditQuote.maximumUsable} value={requestedCredit} onChange={(event) => setRequestedCredit(Math.min(creditQuote.maximumUsable, Math.max(0, Number(event.target.value) || 0)))} /></label>{operationalRules?.credit.showMaximumButton && <button type="button" onClick={() => setRequestedCredit(creditQuote.maximumUsable)}><MemberCopyText copyKey="credit.checkout.maximumButton" /></button>}</div>}<div className="subscription-enrollment-summary"><span>折抵後預計應付 NT$ {Math.max(0, subtotal + shipping + codServiceFee - requestedCredit).toLocaleString("zh-TW")}</span></div></section>}
           <section className="form-card"><div className="form-card-head"><span>04</span><h2>備註</h2></div><label>其他說明 <small>選填</small><textarea name="note" maxLength={300} rows={4} placeholder="有需要我們特別注意的事項，請寫在這裡" /></label></section>
           {member && joinSubscription && operationalRules?.subscription.customCycleEnabled && <button type="button" className="text-link" onClick={() => { setSubscriptionIntervalMode("custom"); setSubscriptionInterval(operationalRules.subscription.customCycleMinDays); }}>改用自訂配送週期</button>}
           {member && <section className="form-card subscription-enrollment-card">
+            {joinSubscription && <CreditPreferenceFields value={creditPreference} onChange={setCreditPreference} disabled={submitting} />}
             <div className="form-card-head">
               <span>05</span>
               <h2>從這次開始定期配送</h2>
@@ -648,7 +655,7 @@ export default function CheckoutPage() {
                 </b>
               </div>
             );
-          })}<div className="summary-line"><span>商品小計</span><b>NT$ {subtotal.toLocaleString("zh-TW")}</b></div><div className="summary-line"><span>{mode === "studio_pickup" ? "工作室自取" : mode === "home_delivery" ? "宅配運費" : "7-ELEVEN 運費"}</span><b>{shipping ? `NT$ ${shipping}` : "免運"}</b></div>{mode === "home_delivery" && <div className="summary-line"><span>貨到付款手續費</span><b>NT$ {codServiceFee.toLocaleString("zh-TW")}</b></div>}{requestedCredit > 0 && <div className="summary-line"><span>會員抵用金</span><b>- NT$ {requestedCredit.toLocaleString("zh-TW")}</b></div>}<div className="summary-total"><span>{mode === "711_cod" ? "取貨付款總額" : "訂單總額"}</span><strong>NT$ {Math.max(0, subtotal + shipping + codServiceFee - requestedCredit).toLocaleString("zh-TW")}</strong></div><button type="submit" disabled={submitting||!ready||!items.length}>{submitting?"資料傳送中…":"確認並傳送訂單"}</button><p>系統會先保存訂單，再傳送至 KD Coffee 的 LINE 訂單群組。</p></aside>
+          })}<div className="summary-line"><span>商品小計</span><b>NT$ {subtotal.toLocaleString("zh-TW")}</b></div><div className="summary-line"><span>{mode === "studio_pickup" ? "工作室自取" : mode === "home_delivery" ? "宅配運費" : "7-ELEVEN 運費"}</span><b>{shipping ? `NT$ ${shipping}` : "免運"}</b></div>{mode === "home_delivery" && <div className="summary-line"><span>貨到付款手續費</span><b>NT$ {codServiceFee.toLocaleString("zh-TW")}</b></div>}{requestedCredit > 0 && <div className="summary-line"><span><MemberCopyText copyKey="credit.checkout.title" /></span><b>- NT$ {requestedCredit.toLocaleString("zh-TW")}</b></div>}<div className="summary-total"><span>{mode === "711_cod" ? "取貨付款總額" : "訂單總額"}</span><strong>NT$ {Math.max(0, subtotal + shipping + codServiceFee - requestedCredit).toLocaleString("zh-TW")}</strong></div><button type="submit" disabled={submitting||!ready||!items.length}>{submitting?"資料傳送中…":"確認並傳送訂單"}</button><p>系統會先保存訂單，再傳送至 KD Coffee 的 LINE 訂單群組。</p></aside>
       </form>
     </section>
   </main>;

@@ -1,6 +1,6 @@
 "use client";
 
-import { MemberCopyValue, MemberCopyElement } from "@/components/member/MemberCenterCopyProvider";
+import { MemberCopyValue, MemberCopyText, useMemberCopyKey, MemberCopyElement } from "@/components/member/MemberCenterCopyProvider";
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState, type ComponentProps } from "react";
@@ -154,6 +154,7 @@ const pointValue = (value: number, label: string) => `${value.toLocaleString("zh
 const creditValue = (value: number) => `${value.toLocaleString("zh-TW")} 元`;
 
 export default function MemberReferralCenter({ initialData: data }: { initialData: MemberReferralCenterData }) {
+  const copy = useMemberCopyKey();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [teamPath, setTeamPath] = useState<Array<{ memberNumber: string; level: number }>>([]);
@@ -508,15 +509,15 @@ export default function MemberReferralCenter({ initialData: data }: { initialDat
       <section className="member-referral-reward-ledger" aria-labelledby="member-reward-ledger-title">
         <div className="member-referral-subhead"><p className="eyebrow dark"><MemberCopyValue value={"REWARD HISTORY"} /></p><h3><MemberCopyValue value={"回饋總覽"} /></h3><p><MemberCopyValue value={"先看回饋結果，需要時再展開計算、資格與來源訂單。"} /></p></div>
         {rewardFilter === "released" ? (
-          <MemberCopyElement as="div" className={`member-reward-summary-grid ${styles.rewardSummaryGrid}`} aria-label="已入帳抵用金總覽">
-            <article><small><MemberCopyValue value={"目前可用折抵額"} /></small><strong>{creditValue(data.availableCreditBalance)}</strong><span><MemberCopyValue value={"直接取自正式抵用金帳本，不由回饋紀錄重算"} /></span></article>
+          <MemberCopyElement as="div" className={`member-reward-summary-grid ${styles.rewardSummaryGrid}`} aria-label={copy("member.referral.tooltip.be6e512f4b")}>
+            <article><small><MemberCopyText copyKey="member.referral.label.5b29dc001e" /></small><strong>{creditValue(data.availableCreditBalance)}</strong><span><MemberCopyText copyKey="member.referral.reward.0f78857ceb" /></span></article>
             <article><small><MemberCopyValue value={"回饋入帳來源"} /></small><strong>{releasedRewardSourceCount}<MemberCopyValue value={" 筆"} /></strong><span><MemberCopyValue value={"推廣零售、推薦回饋與自己的消費"} /></span></article>
           </MemberCopyElement>
         ) : (
           <MemberCopyElement as="div" className={`member-reward-summary-grid ${styles.rewardSummaryGrid}`} aria-label="回饋點數總覽">
             <article><small><MemberCopyValue value={"累計回饋"} /></small><strong><MemberCopyValue value={pointValue(totalRewardPoints, displayPointName)} /></strong><span><MemberCopyValue value={"已入帳＋有效待入帳"} /></span></article>
             <article><small><MemberCopyValue value={"已入帳"} /></small><strong><MemberCopyValue value={pointValue(releasedRewardPoints, displayPointName)} /></strong><span>{releasedRewards.length}<MemberCopyValue value={" 筆"} /></span></article>
-            <article><small><MemberCopyValue value={"待入帳"} /></small><strong><MemberCopyValue value={pointValue(pendingRewardPoints, displayPointName)} /></strong><span>{pendingRewardSourceCount}<MemberCopyValue value={" 筆・預估折抵 NT$ "} />{pendingRewardCredit.toLocaleString("zh-TW")}</span></article>
+            <article><small><MemberCopyValue value={"待入帳"} /></small><strong><MemberCopyValue value={pointValue(pendingRewardPoints, displayPointName)} /></strong><span>{pendingRewardSourceCount}{" "}<MemberCopyText copyKey="member.dashboard.label.693d81614f" />{" "}{pendingRewardCredit.toLocaleString("zh-TW")}</span></article>
             <article><small><MemberCopyValue value={"本月已入帳"} /></small><strong><MemberCopyValue value={pointValue(currentMonthRewardPoints, displayPointName)} /></strong><span><MemberCopyValue value={"會員／推薦回饋本月正式發放"} /></span></article>
           </MemberCopyElement>
         )}

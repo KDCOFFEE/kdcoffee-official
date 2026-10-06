@@ -1,4 +1,5 @@
-import { MemberCopyValue, MemberCopyElement } from "@/components/member/MemberCenterCopyProvider";
+import CreditHelpDialog from "@/components/member/CreditHelpDialog";
+import { MemberCopyValue, MemberCopyText, MemberCopyElement } from "@/components/member/MemberCenterCopyProvider";
 import Link from "next/link";
 import { promises as fs } from "fs";
 import path from "path";
@@ -424,6 +425,7 @@ export default async function MemberPage({
           <p className="member-notice"><MemberCopyValue value={"LINE 連結未完成。此 LINE 可能已連結其他會員，或驗證已逾時；會員資料沒有變更。"} /></p>
         )}
         <MemberSectionNav />
+        <CreditHelpDialog />
 
         <div id="member-overview" className="member-overview-panel" data-member-section role="tabpanel">
         <section className="member-welcome-hero">
@@ -458,7 +460,7 @@ export default async function MemberPage({
               href="/member?rewardView=released#rewards"
               data-reward-shortcut="released"
             >
-              <small><MemberCopyValue value={"可用折抵額"} /></small>
+              <small><MemberCopyText copyKey="member.dashboard.label.3dd941956d" /></small>
               <strong>{availableCredit.toLocaleString("zh-TW")}<MemberCopyValue value={" 元"} /></strong>
               <span><MemberCopyValue value={"已正式入帳，結帳時可自行選擇使用"} /></span>
             </Link>
@@ -469,7 +471,7 @@ export default async function MemberPage({
             >
               <small><MemberCopyValue value={"待入帳回饋"} /></small>
               <strong>{pendingRewardPoints.toLocaleString("zh-TW")} <MemberCopyValue value={pointDisplayName} /></strong>
-              <span><MemberCopyValue value={"共 "} />{pendingRewardCount}<MemberCopyValue value={" 筆・預估折抵 NT$ "} />{pendingRewardCredit.toLocaleString("zh-TW")}<MemberCopyValue value={commerce.pendingRewardSummary.hasIncompletePointHistory ? "・部分歷史點數未記錄" : ""} /></span>
+              <span><MemberCopyValue value={"共 "} />{pendingRewardCount}{" "}<MemberCopyText copyKey="member.dashboard.label.693d81614f" />{" "}{pendingRewardCredit.toLocaleString("zh-TW")}<MemberCopyValue value={commerce.pendingRewardSummary.hasIncompletePointHistory ? "・部分歷史點數未記錄" : ""} /></span>
             </Link>
             <a className="member-dashboard-card" href="#subscription">
               <small><MemberCopyValue value={"下一次配送"} /></small>

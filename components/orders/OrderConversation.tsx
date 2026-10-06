@@ -1,5 +1,6 @@
 "use client";
 
+import { MemberCopyText, useMemberCopyKey } from "@/components/member/MemberCenterCopyProvider";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
@@ -65,14 +66,14 @@ const MEMBER_CANCELLATION_REASONS = [
   "其他",
 ] as const;
 
-function cancellationPresentation(status: string, orderMode: string) {
+function cancellationPresentation(status: string, orderMode: string, creditCancellationNote: string) {
   if (
     DIRECT_MEMBER_CANCELLATION_STATUSES.has(status) ||
     (status === "ready_for_pickup" && orderMode === "studio_pickup")
   ) {
     return {
       canSubmit: true,
-      note: "目前可提出自助取消。確認後系統會依既有安全流程處理訂單、庫存與已保留的會員抵用金。",
+      note: creditCancellationNote,
     };
   }
   if (status === "shipment_created") {
@@ -125,6 +126,7 @@ function mergeMessage(messages: OrderMessage[], message: OrderMessage) {
 }
 
 export default function OrderConversation({ orderNumber }: { orderNumber: string }) {
+  const copy = useMemberCopyKey();
   const router = useRouter();
   const [order, setOrder] = useState<CustomerOrderSummary>();
   const [access, setAccess] = useState<"member" | "guest">();
@@ -354,7 +356,7 @@ export default function OrderConversation({ orderNumber }: { orderNumber: string
         <span>商品小計</span><b>{money(order.financialBreakdown.subtotal)}</b>
         <span>{order.modeLabel.startsWith("7-ELEVEN") ? "7-ELEVEN 運費" : "運費"}</span><b>{order.financialBreakdown.shipping ? money(order.financialBreakdown.shipping) : "免運"}</b>
         {order.orderMode === "home_delivery" && <><span>貨到付款手續費</span><b>{money(order.financialBreakdown.codServiceFee)}</b></>}
-        {order.financialBreakdown.creditApplied !== null ? <><span>會員抵用金</span><b className="credit-deduction">−{money(order.financialBreakdown.creditApplied)}</b></> : null}
+        {order.financialBreakdown.creditApplied !== null ? <><span><MemberCopyText copyKey="credit.checkout.title" /></span><b className="credit-deduction">−{money(order.financialBreakdown.creditApplied)}</b></> : null}
         {order.financialBreakdown.totalBeforeCredit !== null ? <><span>折抵前總額</span><b>{money(order.financialBreakdown.totalBeforeCredit)}</b></> : null}
         <strong>訂單總計</strong><strong>{money(order.financialBreakdown.total)}</strong>
       </div>
@@ -657,7 +659,7 @@ export default function OrderConversation({ orderNumber }: { orderNumber: string
           ) : null}
         </section>
       ) : null}
-      {order.creditReservation?.status === "released" ? <p className="customer-credit-returned" role="status">訂單取消，{money(order.creditReservation.amount)} 抵用金已返還。</p> : null}
+      {order.creditReservation?.status === "released" ? <p className="customer-credit-returned" role="status"><MemberCopyText copyKey="credit.order.returned" values={{ amount: money(order.creditReservation.amount) }} /></p> : null}
 
       <OrderTimeline entries={timeline} audience="customer" />
 
@@ -668,9 +670,9 @@ export default function OrderConversation({ orderNumber }: { orderNumber: string
             <h2>取消訂單</h2>
           </div>
 
-          <p>{cancellationPresentation(order.status, order.orderMode).note}</p>
+          <p>{cancellationPresentation(order.status, order.orderMode, copy("credit.order.cancel")).note}</p>
 
-          {cancellationPresentation(order.status, order.orderMode).canSubmit ? (
+          {cancellationPresentation(order.status, order.orderMode, copy("credit.order.cancel")).canSubmit ? (
             <form className="order-cancellation-form" onSubmit={cancelOrder}>
               <label htmlFor="order-cancellation-reason">取消原因</label>
               <select

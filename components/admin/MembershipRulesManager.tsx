@@ -9,6 +9,7 @@ import {
 import { AdminRuleHelpButton, AdminRuleHelpProvider } from "./AdminRuleHelp";
 
 type Props = {
+  creditName?: string;
   initialRevision: number;
   initialVersion: number;
   initialRules: MembershipBusinessRules;
@@ -23,8 +24,8 @@ function RuleFieldTitle({ label, ruleKey }: { label: string; ruleKey?: string })
   return <span className="rule-field-title"><span>{label}</span>{ruleKey ? <AdminRuleHelpButton ruleKey={ruleKey} /> : null}</span>;
 }
 
-function NumberField({ label, value, unit, min = 0, max = 999, onChange, helpKey }: { label: string; value: number; unit: string; min?: number; max?: number; onChange: (value: number) => void; helpKey?: string }) {
-  return <label className="membership-number-field"><RuleFieldTitle label={label} ruleKey={helpKey || fieldHelpKeys[label]} /><span><input type="number" step="any" min={min} max={max} value={value} onChange={(event) => onChange(Number(event.target.value))} /><b>{unit}</b></span></label>;
+function NumberField({ label, value, unit, min = 0, max = 999, onChange, helpKey, step = "any", disabled = false }: { label: string; value: number; unit: string; step?: number | "any"; disabled?: boolean; min?: number; max?: number; onChange: (value: number) => void; helpKey?: string }) {
+  return <label className="membership-number-field"><RuleFieldTitle label={label} ruleKey={helpKey || fieldHelpKeys[label]} /><span><input type="number" disabled={disabled} step={step} min={min} max={max} value={value} onChange={(event) => onChange(Number(event.target.value))} /><b>{unit}</b></span></label>;
 }
 
 function Choice({ label, value, onChange, children, helpKey }: { label: string; value: string; onChange: (value: string) => void; children: React.ReactNode; helpKey?: string }) {
@@ -35,7 +36,7 @@ function TextField({ label, value, onChange, placeholder, helpKey }: { label: st
   return <label className="membership-text-field"><RuleFieldTitle label={label} ruleKey={helpKey || fieldHelpKeys[label]} /><input type="text" value={value} maxLength={24} placeholder={placeholder} onChange={(event) => onChange(event.target.value)} /><small>前台與會員中心共用此名稱；內部 PV 欄位維持不變。</small></label>;
 }
 
-export default function MembershipRulesManager({ initialRevision, initialVersion, initialRules, products }: Props) {
+export default function MembershipRulesManager({ initialRevision, initialVersion, initialRules, products, creditName = "抵用金" }: Props) {
   const [rules, setRules] = useState(() => structuredClone(initialRules));
   const [savedRules, setSavedRules] = useState(() => structuredClone(initialRules));
   const [revision, setRevision] = useState(initialRevision);
@@ -847,11 +848,13 @@ export default function MembershipRulesManager({ initialRevision, initialVersion
     </section>
 
     <section className="membership-rule-card">
-      <header><span>06</span><div><h2>抵用金</h2><p>會員自行選擇是否使用，系統會先使用最快到期的抵用金。</p></div></header>
-      <div className="membership-fields two"><NumberField label="有效期限" value={rules.credit.expiryCalendarMonths} min={1} max={120} unit="個月" onChange={(value) => change((draft) => { draft.credit.expiryCalendarMonths = value; })} /><NumberField label="到期前提醒" value={rules.credit.expiryReminderDays} min={0} max={365} unit="天" onChange={(value) => change((draft) => { draft.credit.expiryReminderDays = value; })} /><Choice label="每筆最高折抵" value={rules.credit.redemption.mode} onChange={(value) => change((draft) => { draft.credit.redemption = value === "maximum-fixed" ? { mode: "maximum-fixed", amount: 0 } : value === "minimum-payable" ? { mode: "minimum-payable", amount: 0 } : value === "maximum-percentage" ? { mode: "maximum-percentage", percent: 0 } : { mode: "unlimited" }; })}><option value="unlimited">不限制</option><option value="maximum-fixed">最高固定金額</option><option value="minimum-payable">保留最低應付金額</option><option value="maximum-percentage">最高商品金額比例</option></Choice>
+      <header><span>06</span><div><h2>{creditName}</h2><p>會員自行選擇是否使用，系統會先使用最快到期的{creditName}。</p></div></header>
+      <label className="membership-checks"><input type="checkbox" checked={rules.credit.maximumOrderPercentEnabled === true} onChange={(event) => change((draft) => { draft.credit.maximumOrderPercentEnabled = event.target.checked; })} />啟用單筆訂單最高抵用比例 <AdminRuleHelpButton ruleKey="credit.maximumOrderPercent" /></label>
+      <p className="field-help">新設定比例預設 70%；舊規則未儲存啟用開關時保持停用。停用後仍遵守原本最低應付、運費與其他限制。</p>
+      <div className="membership-fields two"><NumberField disabled={rules.credit.maximumOrderPercentEnabled !== true} step={1} helpKey="credit.maximumOrderPercent" label="單筆訂單最高抵用比例" value={rules.credit.maximumOrderPercent ?? 70} min={0} max={100} unit="%" onChange={(value) => change((draft) => { draft.credit.maximumOrderPercent = value; })} /><NumberField label="有效期限" value={rules.credit.expiryCalendarMonths} min={1} max={120} unit="個月" onChange={(value) => change((draft) => { draft.credit.expiryCalendarMonths = value; })} /><NumberField label="到期前提醒" value={rules.credit.expiryReminderDays} min={0} max={365} unit="天" onChange={(value) => change((draft) => { draft.credit.expiryReminderDays = value; })} /><Choice label="每筆最高折抵" value={rules.credit.redemption.mode} onChange={(value) => change((draft) => { draft.credit.redemption = value === "maximum-fixed" ? { mode: "maximum-fixed", amount: 0 } : value === "minimum-payable" ? { mode: "minimum-payable", amount: 0 } : value === "maximum-percentage" ? { mode: "maximum-percentage", percent: 0 } : { mode: "unlimited" }; })}><option value="unlimited">不限制</option><option value="maximum-fixed">最高固定金額</option><option value="minimum-payable">保留最低應付金額</option><option value="maximum-percentage">最高商品金額比例</option></Choice>
         {rules.credit.redemption.mode === "maximum-fixed" && <NumberField label="最高折抵" value={rules.credit.redemption.amount} max={100000000} unit="元" onChange={(value) => change((draft) => { draft.credit.redemption = { mode: "maximum-fixed", amount: value }; })} />}{rules.credit.redemption.mode === "minimum-payable" && <NumberField label="每筆至少應付" value={rules.credit.redemption.amount} max={100000000} unit="元" onChange={(value) => change((draft) => { draft.credit.redemption = { mode: "minimum-payable", amount: value }; })} />}{rules.credit.redemption.mode === "maximum-percentage" && <NumberField label="最高折抵商品金額" value={rules.credit.redemption.percent} max={100} unit="%" onChange={(value) => change((draft) => { draft.credit.redemption = { mode: "maximum-percentage", percent: value }; })} />}
-        <Choice label="抵用金是否可折運費" value={rules.credit.appliesToShipping} onChange={(value) => change((draft) => { draft.credit.appliesToShipping = value as MembershipBusinessRules["credit"]["appliesToShipping"]; })}><option value={OWNER_DECISION_REQUIRED}>尚待 Owner 決定</option><option value="no">只折商品</option><option value="yes">商品與運費都可折</option></Choice>
-        <Choice label="會員使用抵用金方式" value={rules.credit.uiMode} onChange={(value) => change((draft) => { draft.credit.uiMode = value as MembershipBusinessRules["credit"]["uiMode"]; })}><option value="amount-and-maximum">輸入金額＋最大折抵</option><option value="use-or-not">只選使用／不使用</option><option value="automatic-maximum">使用時自動最大折抵</option><option value="custom-amount">只允許指定金額</option></Choice>
+        <Choice helpKey="credit.appliesToShipping" label={`${creditName}是否可折運費`} value={rules.credit.appliesToShipping} onChange={(value) => change((draft) => { draft.credit.appliesToShipping = value as MembershipBusinessRules["credit"]["appliesToShipping"]; })}><option value={OWNER_DECISION_REQUIRED}>尚待 Owner 決定</option><option value="no">只折商品</option><option value="yes">商品與運費都可折</option></Choice>
+        <Choice helpKey="credit.uiMode" label={`會員使用${creditName}方式`} value={rules.credit.uiMode} onChange={(value) => change((draft) => { draft.credit.uiMode = value as MembershipBusinessRules["credit"]["uiMode"]; })}><option value="amount-and-maximum">輸入金額＋最大折抵</option><option value="use-or-not">只選使用／不使用</option><option value="automatic-maximum">使用時自動最大折抵</option><option value="custom-amount">只允許指定金額</option></Choice>
         <label className="membership-switch"><input type="checkbox" checked={rules.credit.allowZeroTotal} onChange={(event) => change((draft) => { draft.credit.allowZeroTotal = event.target.checked; })} /><span><b>允許抵成零元訂單</b><small>關閉時至少保留 NT$1 應付金額</small></span><AdminRuleHelpButton ruleKey="credit.allowZeroTotal" /></label>
       </div>
     </section>

@@ -94,11 +94,11 @@ try {
   await saveRules((rules) => { rules.credit.redemption = { mode: "maximum-percentage", percent: 25 }; });
   check("最高折抵比例由 server 計算", (await commerce.getCheckoutCreditQuote({ memberId: memberA, merchandiseSubtotal: 200, shipping: 0, now, stateFilePath, rulesFilePath })).maximumUsable === 50);
   await saveRules((rules) => { rules.credit.redemption = { mode: "unlimited" }; rules.credit.appliesToShipping = "no"; });
-  check("不可折運費時最高額只包含商品", (await commerce.getCheckoutCreditQuote({ memberId: memberA, merchandiseSubtotal: 20, shipping: 60, now, stateFilePath, rulesFilePath })).maximumUsable === 20);
-  await saveRules((rules) => { rules.credit.appliesToShipping = "yes"; rules.credit.allowZeroTotal = true; });
-  check("允許零元時可折抵全部應付額", (await commerce.getCheckoutCreditQuote({ memberId: memberA, merchandiseSubtotal: 20, shipping: 10, now, stateFilePath, rulesFilePath })).maximumUsable === 30);
+  check("不可折運費時仍套用商品獨立70%上限", (await commerce.getCheckoutCreditQuote({ memberId: memberA, merchandiseSubtotal: 20, shipping: 60, now, stateFilePath, rulesFilePath })).maximumUsable === 14);
+  await saveRules((rules) => { rules.credit.appliesToShipping = "yes"; rules.credit.allowZeroTotal = true; rules.credit.maximumOrderPercent = 100; });
+  check("允許零元時可折抵全部應付額", (await commerce.getCheckoutCreditQuote({ memberId: memberA, merchandiseSubtotal: 20, shipping: 0, now, stateFilePath, rulesFilePath })).maximumUsable === 20);
   await saveRules((rules) => { rules.credit.allowZeroTotal = false; });
-  check("禁止零元時保留一元應付", (await commerce.getCheckoutCreditQuote({ memberId: memberA, merchandiseSubtotal: 20, shipping: 10, now, stateFilePath, rulesFilePath })).maximumUsable === 29);
+  check("禁止零元時保留一元應付", (await commerce.getCheckoutCreditQuote({ memberId: memberA, merchandiseSubtotal: 20, shipping: 0, now, stateFilePath, rulesFilePath })).maximumUsable === 19);
   const insufficient = await Promise.allSettled([commerce.reserveCredit({ memberId: memberA, orderId: "credit-insufficient", requestedAmount: 9999, merchandiseSubtotal: 10000, shipping: 0, idempotencyKey: "reserve-insufficient", now, stateFilePath, rulesFilePath })]);
   check("餘額不足時拒絕超額保留", insufficient[0].status === "rejected");
   const memberBReservation = await Promise.allSettled([commerce.reserveCredit({ memberId: memberB, orderId: "credit-other-member", requestedAmount: 50, merchandiseSubtotal: 100, shipping: 0, idempotencyKey: "reserve-other", now, stateFilePath, rulesFilePath })]);

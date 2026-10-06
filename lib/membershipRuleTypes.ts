@@ -169,6 +169,10 @@ export type MembershipBusinessRules = {
   };
   retailPromotion: RetailPromotionRules;
   credit: {
+    /** Legacy rules remain disabled until explicitly saved as enabled. */
+    maximumOrderPercentEnabled?: boolean;
+    /** Independent cap on discounted merchandise, rounded down. New default is 70. */
+    maximumOrderPercent?: number;
     expiryCalendarMonths: number;
     expiryReminderDays: number;
     expiryMonthEndPolicy: "clamp-to-last-day";

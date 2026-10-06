@@ -1,6 +1,6 @@
 "use client";
 
-import { MemberCopyValue, MemberCopyElement } from "@/components/member/MemberCenterCopyProvider";
+import { MemberCopyValue, MemberCopyText, MemberCopyElement } from "@/components/member/MemberCenterCopyProvider";
 
 import type { ReactNode } from "react";
 
@@ -135,7 +135,7 @@ export default function RewardLedgerCompactCard({
             <div><dt><MemberCopyValue value={basisLabel} /></dt><dd><MemberCopyValue value={basisValue} /></dd></div>
             <div><dt><MemberCopyValue value={"回饋比例"} /></dt><dd><MemberCopyValue value={rewardRate == null ? "歷史資料未記錄" : formatRewardRatePercent(rewardRate)} /></dd></div>
             <div><dt><MemberCopyValue value={"本筆回饋"} /></dt><dd><MemberCopyValue value={rewardPV == null ? "歷史資料未記錄" : `${number(rewardPV)} ${pointDisplayName}`} /></dd></div>
-            <div><dt><MemberCopyValue value={reversed ? "已沖回折抵" : credited ? "實際入帳" : "預估折抵"} /></dt><dd>{money(creditAmount)}</dd></div>
+            <div><dt>{credited && !reversed ? <MemberCopyValue value={"實際入帳"} /> : <MemberCopyText copyKey={reversed ? "member.rewards.label.26e649895b" : "member.rewards.label.de7f9bd9d5"} />}</dt><dd>{money(creditAmount)}</dd></div>
           </dl>
         </section>
 

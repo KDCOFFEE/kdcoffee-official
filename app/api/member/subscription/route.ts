@@ -1,3 +1,5 @@
+import { validateSubscriptionCreditPreference, SubscriptionCreditPreferenceError } from "@/lib/subscriptionCreditPreference";
+import { creditSystemMessage } from "@/lib/creditDisplayCopy";
 import { NextResponse } from "next/server";
 
 import { getCurrentMember } from "@/lib/memberAuth";
@@ -36,7 +38,7 @@ export async function GET() {
     const [dashboard, version] = await Promise.all([getMemberCommerceDashboard(member.id), getActiveMembershipRules()]);
     return NextResponse.json({ ...dashboard, rules: { intervalsDays: version.rules.subscription.intervalOptions.filter((item) => item.enabled).map((item) => item.days), customCycleEnabled: version.rules.subscription.customCycleEnabled, customCycleMinDays: version.rules.subscription.customCycleMinDays, customCycleMaxDays: version.rules.subscription.customCycleMaxDays, delayQuickOptionsDays: version.rules.subscription.delayQuickOptionsDays, advanceQuickOptionsDays: version.rules.subscription.advanceQuickOptionsDays, preparationLeadDays: version.rules.subscription.preparationLeadDays, customRoastPreparationLeadDays: version.rules.subscription.customRoastPreparationLeadDays, datePickerMode: version.rules.subscription.datePickerMode, maxModificationsPerCycle: version.rules.subscription.maxModificationsPerCycle } });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "讀取失敗" }, { status: 401 });
+    return NextResponse.json({ error: await creditSystemMessage(error instanceof Error ? error.message : "讀取失敗") }, { status: 401 });
   }
 }
 
@@ -143,6 +145,8 @@ export async function PATCH(request: Request) {
 
         actionResult.plannedDate = subscription.anchorDate;
       }
+    } else if (action === "change-credit") {
+      await updateSubscriptionPreferences({ memberId: member.id, subscriptionId: String(body.subscriptionId), expectedRevision: Number(body.expectedRevision), creditPreference: validateSubscriptionCreditPreference(body.creditPreference), idempotencyKey });
     } else if (action === "replenish") {
       const dashboard = await getMemberCommerceDashboard(member.id);
       const subscription = dashboard.subscriptions.find((item) => item.subscriptionId === String(body.subscriptionId));
@@ -212,7 +216,7 @@ export async function PATCH(request: Request) {
     const dashboard = await getMemberCommerceDashboard(member.id);
     return NextResponse.json({ ok: true, ...dashboard, actionResult });
   } catch (error) {
-    const status = error instanceof MembershipRevisionConflictError ? 409 : error instanceof MembershipCommerceError ? 400 : 500;
-    return NextResponse.json({ error: error instanceof Error ? error.message : "操作失敗" }, { status });
+    const status = error instanceof MembershipRevisionConflictError ? 409 : error instanceof MembershipCommerceError || error instanceof SubscriptionCreditPreferenceError ? 400 : 500;
+    return NextResponse.json({ error: await creditSystemMessage(error instanceof Error ? error.message : "操作失敗") }, { status });
   }
 }

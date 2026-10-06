@@ -169,7 +169,7 @@ try {
   check("32. Expired credit is unavailable", expired.amount === 40 && await commerce.getAvailableCredit(memberC, new Date("2026-02-01T00:00:00Z")) < 460);
   const cappedRules = structuredClone((await rulesModule.getActiveMembershipRules()).rules);
   cappedRules.credit.redemption = { mode: "minimum-payable", amount: 200 };
-  check("33. Maximum redemption policy preserves minimum payable", policyModule.maximumCreditRedemption({ merchandiseSubtotal: 1000, shipping: 60, rules: cappedRules }) === 800);
+  check("33. Independent 70% cap combines with minimum payable", policyModule.maximumCreditRedemption({ merchandiseSubtotal: 1000, shipping: 60, rules: cappedRules }) === 700);
 
   const concurrencySub = await activeSubscription(memberB, "concurrency");
   const concurrentCycles = await Promise.all([

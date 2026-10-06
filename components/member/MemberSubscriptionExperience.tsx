@@ -1,13 +1,17 @@
 "use client";
+import { CreditHelpButton } from "./CreditHelpDialog";
+import SubscriptionCreditEditor from "./SubscriptionCreditEditor";
+import type { SubscriptionCreditPreference } from "@/lib/subscriptionCreditPreference";
 
-import { MemberCopyValue, MemberCopyElement } from "@/components/member/MemberCenterCopyProvider";
 
-import { useState } from "react";
+import { MemberCopyValue, MemberCopyText, useMemberCopyKey, MemberCopyElement } from "@/components/member/MemberCenterCopyProvider";
+
+import { useEffect, useState } from "react";
 import Link from "next/link";
 
 import StoreSelector from "@/components/commerce/StoreSelector";
 import { addDateOnlyDays, ALLOWED_ROAST_LEVELS, getDateOnlyInTimeZone } from "@/lib/checkoutRules";
-import { resolveDateAvailability } from "@/lib/membershipPolicies";
+import { resolveCreditMemberPolicy, resolveDateAvailability } from "@/lib/membershipPolicies";
 import type { MembershipBusinessRules } from "@/lib/membershipRuleTypes";
 import { regularShippingFee, subscriptionShippingFee } from "@/lib/shippingRules";
 import type { PricedSubscriptionItem } from "@/lib/subscriptionItemTypes";
@@ -47,6 +51,7 @@ import { validateDeliveryAddress, type DeliveryAddress } from "@/lib/deliveryAdd
 import type { HomeDeliveryPaymentMethod } from "@/lib/homeDeliveryPayment";
 
 type Subscription = {
+  creditPreference?: SubscriptionCreditPreference;
   subscriptionId: string;
   status: "pending_activation" | "active" | "paused" | "terminated";
   intervalDays: number;
@@ -83,7 +88,7 @@ type SubscriptionCycle = {
     finalAmount: number;
   } | null;
   shippingSnapshot: { method: string; storeSelection: { storeId: string; storeName: string } | null; deliveryAddress?: DeliveryAddress | null; paymentMethod?: HomeDeliveryPaymentMethod | null; codServiceFee?: number } | null;
-  rulesSnapshot: { rules: Pick<MembershipBusinessRules, "shipping"> } | null;
+  rulesSnapshot: { rules: Pick<MembershipBusinessRules, "shipping"> & Partial<Pick<MembershipBusinessRules, "credit">> } | null;
   createdOrderId: string | null;
   revision: number;
   modificationCount?: number;
@@ -98,6 +103,7 @@ type MemberCreditHistoryEntry = {
   status: "available" | "reserved" | "consumed" | "expired";
   direction: "grant" | "deduct";
   sourceLabel: string;
+  sourceCopyKey?: string;
   sourceOrderNumber: string | null;
   orderRedemptions: Array<{ orderNumber: string; amount: number; status: "reserved" | "consumed" | "released" }>;
 };
@@ -118,7 +124,7 @@ type PendingRushConfirmation =
 type Props = Dashboard & { products: MemberSubscriptionProduct[]; rules: { intervalsDays: number[]; customCycleEnabled: boolean; customCycleMinDays: number; customCycleMaxDays: number; delayQuickOptionsDays: number[]; advanceQuickOptionsDays: number[]; preparationLeadDays: number; customRoastPreparationLeadDays: number; discountPercent: number; sevenElevenShippingFee: number; homeDeliveryShippingFee: number; homeDeliveryCodFee: number; subscriptionShippingDiscount: number; datePickerMode: "quick-and-calendar" | "calendar-only" | "suggestion-and-calendar"; maxModificationsPerCycle: number | null; allowOtherSubscriptionProducts?: boolean; allowHalfToOnePound?: boolean; allowOneToHalfPound?: boolean; allowMixedOnePound?: boolean; allowQuantityChange?: boolean; maxItems?: number } };
 
 const money = (value: number) => `NT$ ${value.toLocaleString("zh-TW")}`;
-const redemptionLabel = (status: MemberCreditHistoryEntry["orderRedemptions"][number]["status"]) => status === "released" ? "訂單取消，抵用金已返還" : status === "reserved" ? "本筆已保留折抵" : "本筆已使用";
+const redemptionKey = (status: MemberCreditHistoryEntry["orderRedemptions"][number]["status"]) => status === "released" ? "member.subscription.button.b40d17356f" : status === "reserved" ? "member.subscription.label.6408880e24" : "member.subscription.label.e3e713f72e";
 const displayDate = (value?: string) => value ? value.replaceAll("-", "/") : "尚未排定";
 
 function actionSuccessMessage(action: string, plannedDate?: string, skippedDate?: string) {
@@ -175,6 +181,7 @@ export default function MemberSubscriptionExperience(initial: Props) {
   const initialEditorSubscription = initial.subscriptions.find((item) => item.subscriptionId === initialSubscriptionId) ?? initial.subscriptions[0];
   const initialEditorCycle = initialEditorSubscription ? initial.cycles.find((item) => item.subscriptionId === initialEditorSubscription.subscriptionId && ["scheduled", "modifiable"].includes(item.status)) : undefined;
   const initialEditorSource = initialEditorCycle?.itemsDraft ?? initialEditorSubscription?.defaultItems ?? [];
+  const copy = useMemberCopyKey();
   const [dashboard, setDashboard] = useState<Dashboard>(initial);
   const [selectedSubscriptionId, setSelectedSubscriptionId] = useState(initialSubscriptionId);
   const [busy, setBusy] = useState("");
@@ -236,7 +243,7 @@ export default function MemberSubscriptionExperience(initial: Props) {
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "操作未完成");
       setDashboard({ subscriptions: result.subscriptions, cycles: result.cycles, credits: result.credits, pendingCredit: result.pendingCredit, referrals: result.referrals });
-      setMessage(actionSuccessMessage(action, result.actionResult?.plannedDate, result.actionResult?.skippedDate));
+      setMessage(action === "change-credit" ? copy("credit.subscription.saved") : actionSuccessMessage(action, result.actionResult?.plannedDate, result.actionResult?.skippedDate));
       return result;
     } catch (error) {
       const detail = error instanceof Error ? error.message : "操作未完成，請再試一次。";
@@ -317,8 +324,26 @@ export default function MemberSubscriptionExperience(initial: Props) {
     0,
     regularShipping - displayedSubscriptionShipping,
   );
+  const [creditPreview, setCreditPreview] = useState<number | null>(null);
+  const preferenceMode = subscription?.creditPreference?.mode ?? "off";
+  const fixedCreditAmount = subscription?.creditPreference?.mode === "fixed" ? subscription.creditPreference.amount : 0;
+  useEffect(() => {
+    let active = true;
+    const refresh = () => {
+      if (lockedPricing || preferenceMode === "off") { setCreditPreview(0); return; }
+      setCreditPreview(null);
+      fetch(`/api/member/credit/quote?subtotal=${displayedSubscriptionPrice}&shipping=${displayedSubscriptionShipping}`, { cache: "no-store" }).then((response) => response.ok ? response.json() : Promise.reject()).then((quote) => {
+        if (active) setCreditPreview(preferenceMode === "maximum" ? quote.maximumUsable : Math.min(fixedCreditAmount, quote.maximumUsable));
+      }).catch(() => { if (active) setCreditPreview(null); });
+    };
+    refresh();
+    window.addEventListener("focus", refresh);
+    window.addEventListener("kd-credit-help-open", refresh);
+    return () => { active = false; window.removeEventListener("focus", refresh); window.removeEventListener("kd-credit-help-open", refresh); };
+  }, [lockedPricing, preferenceMode, fixedCreditAmount, displayedSubscriptionPrice, displayedSubscriptionShipping]);
+  const displayedCredit = lockedPricing?.creditReserved ?? creditPreview ?? 0;
   const displayedFinal = lockedPricing?.finalAmount ??
-    displayedSubscriptionPrice + displayedSubscriptionShipping + displayedCodServiceFee;
+    displayedSubscriptionPrice + displayedSubscriptionShipping + displayedCodServiceFee - displayedCredit;
 
   const regularPurchaseTotal =
     displayedOriginal + regularShipping + displayedCodServiceFee;
@@ -583,6 +608,7 @@ export default function MemberSubscriptionExperience(initial: Props) {
         <div>
           <p className="eyebrow dark"><MemberCopyValue value={"SUBSCRIPTION"} /></p>
           <h2><MemberCopyValue value={"我的定期配送"} /></h2>
+          <CreditHelpButton lockedPolicy={pricingCycle?.rulesSnapshot?.rules.credit ? resolveCreditMemberPolicy({ credit: pricingCycle.rulesSnapshot.rules.credit }) : undefined} />
         </div>
         {subscription && (
           <div className="member-subscription-status-wrap">
@@ -882,6 +908,7 @@ export default function MemberSubscriptionExperience(initial: Props) {
   </label>
 )}
 <button disabled={Boolean(busy) || !resumeDate} onClick={() => void confirmResume()}><MemberCopyValue value={"確認恢復"} /></button><button className="member-danger-soft" disabled={Boolean(busy)} onClick={() => setTerminateConfirmationId(subscription.subscriptionId)}><MemberCopyValue value={"停止這筆定期配送"} /></button></>}</div></details>
+          {["pending_activation", "active", "paused"].includes(subscription.status) && <SubscriptionCreditEditor key={`${subscription.subscriptionId}:${subscription.revision}`} initial={subscription.creditPreference} disabled={Boolean(busy)} onSave={(creditPreference) => mutate("change-credit", { subscriptionId: subscription.subscriptionId, expectedRevision: subscription.revision, creditPreference })} />}
           {subscription.status === "active" && <button className="member-replenish-button" disabled={Boolean(busy)} onClick={() => void mutate("replenish", { subscriptionId: subscription.subscriptionId })}><MemberCopyValue value={"立即補貨（不改下次日期）"} /></button>}
         </div>}
       </div>}
@@ -1082,11 +1109,11 @@ export default function MemberSubscriptionExperience(initial: Props) {
             </div>
             {supportedShippingMethod === "home_delivery" && <div><span><MemberCopyValue value={"貨到付款手續費"} /></span><strong>{money(displayedCodServiceFee)}</strong></div>}
 
-            {lockedPricing && (
+            {(lockedPricing || preferenceMode !== "off") && (
               <div>
-                <span><MemberCopyValue value={"抵用金"} /></span>
+                <span><MemberCopyText copyKey="member.rewards.storeCredit.title" /></span>
                 <strong>
-                  − {money(lockedPricing.creditReserved)}
+                  {creditPreview === null && !lockedPricing ? <MemberCopyText copyKey="credit.help.loading" /> : <>− {money(displayedCredit)}</>}
                 </strong>
               </div>
             )}
@@ -1108,8 +1135,9 @@ export default function MemberSubscriptionExperience(initial: Props) {
             <strong>{money(displayedFinal)}</strong>
           </div>
 
+          {lockedPricing && !pricingCycle?.createdOrderId && <p className="member-price-modal-note"><MemberCopyText copyKey="credit.subscription.lockedHint" /></p>}
           {!lockedPricing && (
-            <p className="member-price-modal-note"><MemberCopyValue value={"此期尚未鎖定。活動優惠、配送費與抵用金會在本期鎖定時依正式規則重新計算，系統會自動採用較優惠的商品價格。"} /></p>
+            <p className="member-price-modal-note"><MemberCopyText copyKey="member.subscription.description.e63e884dab" /></p>
           )}
 
           <button
@@ -1120,7 +1148,7 @@ export default function MemberSubscriptionExperience(initial: Props) {
         </div>
       </div>
     )}
-    <section className="member-commerce-section" id="credit"><div className="member-section-head"><div><p className="eyebrow dark"><MemberCopyValue value={"CREDIT"} /></p><h2><MemberCopyValue value={"我的抵用金"} /></h2></div><strong>{money(availableCredit)}</strong></div><div className="member-credit-summary"><div><small><MemberCopyValue value={"現在可用"} /></small><strong>{money(availableCredit)}</strong><span><MemberCopyValue value={"僅顯示已正式入帳、可於結帳使用的折抵額。"} /></span></div></div>{dashboard.credits.length ? <div className="member-credit-history">{dashboard.credits.map((entry) => <article key={entry.creditEntryId}><div><strong>{entry.direction === "deduct" ? "−" : "+"} {money(Math.abs(entry.amount))}</strong><small>{entry.sourceLabel}</small>{entry.sourceOrderNumber ? <span className="member-credit-redemption"><b><MemberCopyValue value={"回饋來源訂單"} /></b><Link href={`/orders/${encodeURIComponent(entry.sourceOrderNumber)}`}><MemberCopyValue value={"訂單 "} />{entry.sourceOrderNumber}</Link></span> : null}{entry.orderRedemptions.map((redemption) => <span className={`member-credit-redemption ${redemption.status}`} key={`${entry.creditEntryId}-${redemption.orderNumber}`}><b>{redemptionLabel(redemption.status)} {money(redemption.amount)}</b><Link href={`/orders/${encodeURIComponent(redemption.orderNumber)}`}><MemberCopyValue value={"訂單 "} />{redemption.orderNumber}</Link></span>)}</div><div><span><MemberCopyValue value={"餘額 "} />{money(entry.remainingAmount)}</span>{entry.amount > 0 ? <small><MemberCopyValue value={"到期 "} />{entry.expiresAt.slice(0, 10)}</small> : null}</div></article>)}</div> : <div className="member-commerce-empty compact"><strong><MemberCopyValue value={"目前沒有抵用金紀錄"} /></strong><p><MemberCopyValue value={"有抵用金時，結帳會讓您自行選擇是否使用，並優先使用最快到期的額度。"} /></p></div>}</section>
+    <section className="member-commerce-section" id="credit"><div className="member-section-head"><div><p className="eyebrow dark"><MemberCopyValue value={"CREDIT"} /></p><h2><MemberCopyText copyKey="member.subscription.label.a519a98b2f" /></h2></div><strong>{money(availableCredit)}</strong></div><div className="member-credit-summary"><div><small><MemberCopyValue value={"現在可用"} /></small><strong>{money(availableCredit)}</strong><span><MemberCopyValue value={"僅顯示已正式入帳、可於結帳使用的折抵額。"} /></span></div></div>{dashboard.credits.length ? <div className="member-credit-history">{dashboard.credits.map((entry) => <article key={entry.creditEntryId}><div><strong>{entry.direction === "deduct" ? "−" : "+"} {money(Math.abs(entry.amount))}</strong><small>{entry.sourceCopyKey ? <MemberCopyText copyKey={entry.sourceCopyKey} /> : entry.sourceLabel}</small>{entry.sourceOrderNumber ? <span className="member-credit-redemption"><b><MemberCopyValue value={"回饋來源訂單"} /></b><Link href={`/orders/${encodeURIComponent(entry.sourceOrderNumber)}`}><MemberCopyValue value={"訂單 "} />{entry.sourceOrderNumber}</Link></span> : null}{entry.orderRedemptions.map((redemption) => <span className={`member-credit-redemption ${redemption.status}`} key={`${entry.creditEntryId}-${redemption.orderNumber}`}><b><MemberCopyText copyKey={redemptionKey(redemption.status)} /> {money(redemption.amount)}</b><Link href={`/orders/${encodeURIComponent(redemption.orderNumber)}`}><MemberCopyValue value={"訂單 "} />{redemption.orderNumber}</Link></span>)}</div><div><span><MemberCopyValue value={"餘額 "} />{money(entry.remainingAmount)}</span>{entry.amount > 0 ? <small><MemberCopyValue value={"到期 "} />{entry.expiresAt.slice(0, 10)}</small> : null}</div></article>)}</div> : <div className="member-commerce-empty compact"><strong><MemberCopyText copyKey="member.subscription.emptyState.193dab97b4" /></strong><p><MemberCopyText copyKey="member.subscription.description.4b6e30e9c5" /></p></div>}</section>
 
     <section className="member-commerce-section" id="referral-summary"><div className="member-section-head"><div><p className="eyebrow dark"><MemberCopyValue value={"REFERRAL"} /></p><h2><MemberCopyValue value={"推薦紀錄摘要"} /></h2></div><span>{dashboard.referrals.length}<MemberCopyValue value={" 位"} /></span></div>{dashboard.referrals.length ? <div className="member-referral-list">{dashboard.referrals.map((item) => <article key={item.memberNumberReference}><div><strong><MemberCopyValue value={item.safeDisplayName || "KD Coffee 會員"} /></strong><small><MemberCopyValue value={"已加入會員"} /></small></div><div><span><MemberCopyValue value={"符合消費 "} />{item.qualifiedPurchases}<MemberCopyValue value={" 次"} /></span></div></article>)}</div> : <div className="member-commerce-empty compact"><strong><MemberCopyValue value={"還沒有推薦紀錄"} /></strong><p><MemberCopyValue value={"這裡只會顯示安全的會員稱呼、是否加入與回饋進度，不會顯示對方的聯絡資料。"} /></p></div>}</section>
   </>;

@@ -241,6 +241,7 @@ export const adminRuleHelpDefinitions: AdminRuleHelpDefinition[] = [
   define({ ruleKey: "gift.halfPoundQuantity", title: "半磅贈品數量", summary: "半磅訂閱達里程碑時加入的贈品包數。", runtimeBehavior: "寫入期次 gift snapshot，後續規則修改不回寫已鎖定期次。", evaluationTiming: "期次 gift snapshot 建立時。" }),
   define({ ruleKey: "gift.onePoundQuantity", title: "一磅贈品數量", summary: "一磅訂閱達里程碑時加入的贈品包數。", runtimeBehavior: "寫入期次 gift snapshot，後續規則修改不回寫已鎖定期次。", evaluationTiming: "期次 gift snapshot 建立時。" }),
   define({ ruleKey: "gift.pool", title: "贈品候選與替代順序", summary: "設定可用贈品及缺貨時的優先替代順序。", runtimeBehavior: "期次鎖定贈品時按啟用與 priority 尋找第一個可用項目。", evaluationTiming: "gift snapshot 建立時。" }),
+  define({ ruleKey: "credit.maximumOrderPercent", title: "單筆訂單最高抵用比例", summary: "啟用後獨立限制優惠後商品金額的抵用比例，預設 70%；舊規則缺少啟用開關時保持停用。", runtimeBehavior: "向下取整，與既有固定上限、最低應付、運費範圍及零元限制取較小值。比例基礎不含運費與貨到付款費。", evaluationTiming: "結帳報價與實際保留時；配送使用本期鎖定政策。" }),
   define({ ruleKey: "credit.expiryCalendarMonths", title: "抵用金有效期限", summary: "抵用金發放後可使用的台北曆月數。", runtimeBehavior: "由發放日期加曆月並處理月底，保存 expiresAt。", evaluationTiming: "抵用金 ledger entry 建立時。", historicalImpact: "舊 entry 保留原 expiresAt。" }),
   define({ ruleKey: "credit.expiryReminderDays", title: "抵用金到期提醒", summary: "抵用金到期前幾天建立提醒事件。", runtimeBehavior: "通知排程依 entry 到期日判斷。", evaluationTiming: notificationTiming }),
   define({ ruleKey: "credit.redemption", title: "每筆最高折抵", summary: "限制單筆訂單可用抵用金的方式與額度。", runtimeBehavior: "伺服器按固定上限、最低應付、百分比或不限模式計算 maximum。", evaluationTiming: "結帳預覽及建立 credit reservation 時。" }),

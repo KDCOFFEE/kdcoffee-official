@@ -1,3 +1,4 @@
+import { creditSystemMessage } from "@/lib/creditDisplayCopy";
 import { NextResponse } from "next/server";
 
 import { getCurrentMember } from "@/lib/memberAuth";
@@ -63,7 +64,7 @@ export async function PATCH(
               ? 400
               : 500;
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "取消申請處理失敗" },
+      { error: await creditSystemMessage(error instanceof Error ? error.message : "取消申請處理失敗") },
       { status },
     );
   }

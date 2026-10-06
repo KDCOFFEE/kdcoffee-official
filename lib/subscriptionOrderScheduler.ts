@@ -1,3 +1,4 @@
+import { applyOrderCredit } from "./orderCredit";
 import { createHash } from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
@@ -6,8 +7,9 @@ import type { WebsiteData } from "../data/websiteData";
 import { withFileLock } from "./jsonFileStore";
 import { getDateOnlyInTimeZone } from "./checkoutRules";
 import { runInventoryOrderTransaction } from "./orderInventoryTransaction";
+import { withOrderFileUpdateLock } from "./orderFiles";
 import type { RequestedItem } from "./orderPricing";
-import { createOrderFromCycle, enqueueScheduledMembershipNotifications, lockSubscriptionCycle, readMembershipCommerceState, registerReferralQualificationOrder, type SubscriptionCycle } from "./membershipCommerce";
+import { createOrderFromCycle, enqueueScheduledMembershipNotifications, lockSubscriptionCycle, readMembershipCommerceState, recordCycleFulfillment, registerReferralQualificationOrder, type SubscriptionCycle } from "./membershipCommerce";
 import { readMember } from "./memberAuth";
 import { getOrdersDir, getWebsiteDataFile } from "./storagePaths";
 import { subscriptionDedicatedRoastOperationalSummary, subscriptionItemsToRequestedItems, subscriptionOrderDisplayItems } from "./subscriptionSkuModel";
@@ -171,7 +173,20 @@ export async function runSubscriptionOrderScheduler(options: { today?: string; n
           }
         }
 
-        await createOrderFromCycle({ cycleId: cycle.cycleId, orderId: order.orderNumber, idempotencyKey: `scheduler-order:${cycle.cycleId}`, now: options.now, stateFilePath: options.stateFilePath, rulesFilePath: options.rulesFilePath });
+        await applyOrderCredit({ memberId: latestSubscription.memberId, orderNumber: order.orderNumber, preference: cycle.creditPreferenceSnapshot ?? { mode: "off" }, rulesVersionSnapshot: cycle.rulesSnapshot ?? undefined, orderDir, stateFilePath: options.stateFilePath, rulesFilePath: options.rulesFilePath, now: options.now });
+        // Read and link under the same order lock used by canonical cancellation.
+        const cancelled = await withOrderFileUpdateLock(orderDir, order.orderNumber, async (latestOrder) => {
+          const credit = latestOrder.credit as { reservationId?: string; appliedAmount?: number } | undefined;
+          const terminalStatus = latestOrder.status === "cancelled" || latestOrder.status === "completed" ? latestOrder.status : undefined;
+          const linked = await createOrderFromCycle({ creditSnapshot: { reservationId: credit?.reservationId, appliedAmount: credit?.appliedAmount ?? 0, total: Number(latestOrder.total), terminalStatus }, cycleId: cycle.cycleId, orderId: order.orderNumber, idempotencyKey: `scheduler-order:${cycle.cycleId}`, now: options.now, stateFilePath: options.stateFilePath, rulesFilePath: options.rulesFilePath });
+          if (terminalStatus === "completed" && linked.status !== "completed") await recordCycleFulfillment({ cycleId: cycle.cycleId, orderId: order.orderNumber, idempotencyKey: `scheduler-recovered-completion:${cycle.cycleId}`, now: options.now, stateFilePath: options.stateFilePath, rulesFilePath: options.rulesFilePath });
+          return terminalStatus === "cancelled";
+        });
+        if (cancelled) {
+          summary.skipped += 1;
+          summary.items.push({ cycleId: cycle.cycleId, result: "skipped", orderNumber: order.orderNumber, message: "既有訂單已取消，本期已同步取消" });
+          continue;
+        }
         await registerReferralQualificationOrder({ memberId: latestSubscription.memberId, orderId: order.orderNumber, orderCreatedAt: order.createdAt, orderType: "subscription", idempotencyKey: `subscription-cycle:${cycle.cycleId}`, now: options.now, stateFilePath: options.stateFilePath, rulesFilePath: options.rulesFilePath });
         summary.created += existing ? 0 : 1;
         summary.skipped += existing ? 1 : 0;

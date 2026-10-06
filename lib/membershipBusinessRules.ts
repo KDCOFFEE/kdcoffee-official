@@ -153,6 +153,8 @@ export const DEFAULT_MEMBERSHIP_RULES: MembershipBusinessRules = {
     attributionWindowDays: 30,
   },
   credit: {
+    maximumOrderPercentEnabled: true,
+    maximumOrderPercent: 70,
     expiryCalendarMonths: 3,
     expiryReminderDays: 7,
     expiryMonthEndPolicy: "clamp-to-last-day",
@@ -298,7 +300,7 @@ export function normalizeMembershipBusinessRules(value: unknown, options: Member
       ...DEFAULT_MEMBERSHIP_RULES.retailPromotion,
       ...nested("retailPromotion"),
     },
-    credit: { ...DEFAULT_MEMBERSHIP_RULES.credit, ...nested("credit") },
+    credit: { ...DEFAULT_MEMBERSHIP_RULES.credit, ...nested("credit"), maximumOrderPercentEnabled: nested("credit").maximumOrderPercentEnabled === undefined ? false : nested("credit").maximumOrderPercentEnabled },
     campaign: { ...DEFAULT_MEMBERSHIP_RULES.campaign, ...nested("campaign") },
     notification: { ...DEFAULT_MEMBERSHIP_RULES.notification, ...notification, events } as MembershipBusinessRules["notification"],
     fulfillment: { ...DEFAULT_MEMBERSHIP_RULES.fulfillment, ...nested("fulfillment") },
@@ -628,6 +630,8 @@ export function validateMembershipBusinessRules(value: unknown, options: Members
   integer(rules.retailPromotion.attributionWindowDays, 1, 365, "分享來源有效期間");
 
   if (!object(rules.credit) || !object(rules.credit.redemption)) throw new MembershipRulesValidationError("抵用金設定不完整");
+  if (typeof rules.credit.maximumOrderPercentEnabled !== "boolean") throw new MembershipRulesValidationError("比例上限開關不正確");
+  percent(rules.credit.maximumOrderPercent === undefined ? 70 : rules.credit.maximumOrderPercent, "單筆訂單最高抵用比例");
   integer(rules.credit.expiryCalendarMonths, 1, 120, "抵用金期限");
   integer(rules.credit.expiryReminderDays, 0, 365, "抵用金到期提醒");
   if (rules.credit.expiryMonthEndPolicy !== "clamp-to-last-day") throw new MembershipRulesValidationError("抵用金月底到期規則不正確");

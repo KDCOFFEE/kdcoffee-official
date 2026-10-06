@@ -145,10 +145,13 @@ export function maximumCreditRedemption(input: { merchandiseSubtotal: number; sh
   if (policy.mode === "maximum-fixed") maximum = Math.min(eligible, policy.amount);
   if (policy.mode === "minimum-payable") maximum = Math.max(0, eligible - policy.amount);
   if (policy.mode === "maximum-percentage") maximum = applyPercentage(merchandise, policy.percent, input.rules.money.roundingMode);
+  // Independent cap: discounts first, no shipping/COD in the percentage basis.
+  maximum = Math.min(maximum, eligible);
+  if (input.rules.credit.maximumOrderPercentEnabled === true) maximum = Math.min(maximum, applyPercentage(merchandise, input.rules.credit.maximumOrderPercent ?? 70, "round-down"));
   return input.rules.credit.allowZeroTotal ? maximum : Math.min(maximum, Math.max(0, merchandise + shipping - 1));
 }
 
-export function resolveCreditMemberPolicy(rules: MembershipBusinessRules) {
+export function resolveCreditMemberPolicy(rules: Pick<MembershipBusinessRules, "credit">) {
   return {
     uiMode: rules.credit.uiMode,
     showAmountInput: ["amount-and-maximum", "custom-amount"].includes(rules.credit.uiMode),
@@ -156,6 +159,9 @@ export function resolveCreditMemberPolicy(rules: MembershipBusinessRules) {
     automaticallyUseMaximum: rules.credit.uiMode === "automatic-maximum",
     allowZeroTotal: rules.credit.allowZeroTotal,
     appliesToShipping: rules.credit.appliesToShipping === "yes",
+    maximumOrderPercent: rules.credit.maximumOrderPercent ?? 70,
+    maximumOrderPercentEnabled: rules.credit.maximumOrderPercentEnabled === true,
+    redemption: rules.credit.redemption,
   };
 }
 

@@ -87,7 +87,7 @@ try {
   const admin = renderToStaticMarkup(createElement(MemberCenterCopyManager, { initialRevision: 0, initialOverrides: {} }));
   check("Admin grouped editor renders", () => { assert.ok(admin.includes("會員中心顯示文字與說明")); assert.ok(admin.includes("預設文字：")); assert.ok(admin.includes("恢復預設")); assert.ok(admin.includes("定期配送")); });
   const baselines = JSON.parse(await fs.readFile(path.join(process.cwd(), "scripts/fixtures/member-copy-render-boundary-baseline.json"), "utf8"));
-  for (const [file, digest] of Object.entries(baselines)) check(`unchanged original syntax ${file}`, () => assert.equal(memberCopyRenderBoundaryDigest(requireSource(file), file), digest));
+  for (const [file, digest] of Object.entries(baselines)) check(`presentation regression baseline ${file}`, () => assert.equal(memberCopyRenderBoundaryDigest(requireSource(file), file), digest));
   console.log(`MEMBER COPY PASS: ${checks} checks; isolated storage only.`);
 } finally {
   mock.timers.reset();

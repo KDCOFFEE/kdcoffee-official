@@ -1,3 +1,5 @@
+import { creditSystemMessage } from "@/lib/creditDisplayCopy";
+import { settleCreditReservationForOrder } from "@/lib/membershipCommerce";
 import { NextResponse } from "next/server";
 
 import { isAdminAuthenticated } from "@/lib/adminAuth";
@@ -88,6 +90,7 @@ export async function PATCH(
       },
     );
 
+    if (result.order.status === "completed") await settleCreditReservationForOrder({ orderId: orderNumber, action: "consume", idempotencyKey: `admin-order-completed:${orderNumber}`, reason: "訂單成功取貨" });
     return NextResponse.json({ ok: true, order: result.order });
   } catch (error) {
     const statusCode = error instanceof OrderFileNotFoundError
@@ -98,7 +101,7 @@ export async function PATCH(
           ? error.status
           : 500;
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "訂單狀態更新失敗" },
+      { error: await creditSystemMessage(error instanceof Error ? error.message : "訂單狀態更新失敗") },
       { status: statusCode },
     );
   }

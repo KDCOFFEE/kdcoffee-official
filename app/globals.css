@@ -8083,3 +8083,8 @@ button.member-lifecycle-action:disabled,
   object-fit: contain;
   object-position: center;
 }
+
+/* Shared credit usage dialog, native modal focus and Escape behavior. */
+.credit-help-dialog{width:min(640px,calc(100vw - 32px));max-height:85vh;overflow:auto;border:1px solid #d7cbbc;border-radius:16px;padding:24px;color:#30281e;background:#fffaf4}.credit-help-dialog::backdrop{background:rgba(25,20,15,.55)}.credit-help-dialog h2{margin:0 0 16px}.credit-help-dialog p{line-height:1.8;white-space:pre-line}.credit-help-dialog button{min-height:44px;padding:8px 16px}
+.credit-preference-fields,.credit-preference-fields>label{min-width:0}.credit-preference-fields>label select,.credit-preference-fields>label input{width:100%;min-width:0;max-width:100%}.credit-help-trigger{min-height:44px;padding:8px 0;background:transparent;border:0;text-align:left;text-decoration:underline;cursor:pointer}
+@media(max-width:700px){.credit-preference-fields{grid-template-columns:minmax(0,1fr)}}

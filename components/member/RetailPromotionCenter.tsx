@@ -1,6 +1,6 @@
 "use client";
 
-import { MemberCopyValue, MemberCopyElement } from "@/components/member/MemberCenterCopyProvider";
+import { MemberCopyValue, MemberCopyText, MemberCopyElement } from "@/components/member/MemberCenterCopyProvider";
 
 import { useEffect, useRef, useState } from "react";
 import RewardSourceOrderSummaryCard from "./RewardSourceOrderSummaryCard";
@@ -108,7 +108,7 @@ export default function RetailPromotionCenter() {
                     <div><dt><MemberCopyValue value={"計算基礎"} /></dt><dd><MemberCopyValue value={data.settings.calculationBasis === "pv" ? `${data.settings.pointDisplayName}（PV）` : "實付商品金額"} /></dd></div>
                     <div><dt><MemberCopyValue value={"分享有效期間"} /></dt><dd>{data.settings.attributionWindowDays}<MemberCopyValue value={" 天"} /></dd></div>
                   </dl>
-                  <p><MemberCopyValue value={data.settings.calculationBasis === "pv" ? `依訪客訂單的有效 ${data.settings.pointDisplayName}（PV）× 獎金比例計算，再依每 1 ${data.settings.pointDisplayName} = NT$ ${amount(data.settings.pvRewardMoneyValue)} 換算抵用金。` : "依訪客訂單的有效商品實付金額 × 獎金比例計算；運費不列入計算。"} /></p>
+                  <p>{data.settings.calculationBasis === "pv" ? <MemberCopyText copyKey="member.rewards.description.a2e8013bd2" values={{ pointName: data.settings.pointDisplayName, pointName2: data.settings.pointDisplayName, creditAmount: amount(data.settings.pvRewardMoneyValue) }} /> : <MemberCopyValue value={"依訪客訂單的有效商品實付金額 × 獎金比例計算；運費不列入計算。"} />}</p>
                 </MemberCopyElement>
 
                 <MemberCopyElement as="section" className="retail-promotion-detail-kpis" aria-label="推廣零售完整數據">

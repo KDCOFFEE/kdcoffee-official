@@ -7,6 +7,17 @@ const definitions = new Map(MEMBER_CENTER_COPY_CATALOG.map((entry) => [entry.key
 const defaultsByText = new Map(MEMBER_CENTER_COPY_CATALOG.map((entry) => [entry.defaultText, entry]));
 const TOKEN = /\{([A-Za-z][A-Za-z0-9]*)\}/g;
 export const MEMBER_COPY_MAX_LENGTH = 4000;
+export const CREDIT_NAME_KEY = "member.rewards.storeCredit.title";
+
+export function creditDisplayName(overrides: MemberCopyOverrides = {}) {
+  const value = overrides[CREDIT_NAME_KEY];
+  return value && !memberCopyValidationError(CREDIT_NAME_KEY, value) ? value : "抵用金";
+}
+
+/** Adding a presentation token must not invalidate a previously saved sentence. */
+export function memberCopyUsesIndependentCreditName(key: string, value: string) {
+  return Boolean(definitions.get(key)?.tokens.creditName) && !value.includes("{creditName}");
+}
 
 export function memberCopyValidationError(key: string, value: unknown): string | null {
   const entry = definitions.get(key);
@@ -17,7 +28,7 @@ export function memberCopyValidationError(key: string, value: unknown): string |
   const tokens = [...value.matchAll(TOKEN)].map((match) => match[1]);
   if (/[{}]/u.test(value.replace(TOKEN, ""))) return "只能使用此欄位列出的動態變數。";
   if (tokens.some((name) => !Object.hasOwn(entry.tokens, name))) return "含有不允許的動態變數。";
-  if (Object.keys(entry.tokens).some((name) => !tokens.includes(name))) return "請保留此欄位所有動態變數，以顯示原系統資料。";
+  if (Object.keys(entry.tokens).some((name) => name !== "creditName" && !tokens.includes(name))) return "請保留此欄位所有動態變數，以顯示原系統資料。";
   return null;
 }
 
@@ -32,8 +43,9 @@ export function resolveMemberCopy(overrides: MemberCopyOverrides, key: string, v
   if (!definition) return safeFallback;
   const candidate = overrides[key];
   const text = candidate && !memberCopyValidationError(key, candidate) ? candidate : DEFAULT_MEMBER_CENTER_COPY[key];
-  if (Object.keys(definition.tokens).some((name) => values[name] == null)) return safeFallback;
-  return text.replace(TOKEN, (_, name: string) => String(values[name]));
+  const injected = { ...values, creditName: creditDisplayName(overrides) };
+  if ([...text.matchAll(TOKEN)].some((match) => injected[match[1] as keyof typeof injected] == null)) return safeFallback;
+  return text.replace(TOKEN, (_, name: string) => String(injected[name as keyof typeof injected]));
 }
 
 const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");

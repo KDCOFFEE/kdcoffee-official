@@ -1,6 +1,6 @@
 "use client";
 
-import { MemberCopyValue } from "@/components/member/MemberCenterCopyProvider";
+import { MemberCopyValue, MemberCopyText } from "@/components/member/MemberCenterCopyProvider";
 
 import Link from "next/link";
 
@@ -111,7 +111,7 @@ export default function RewardSourceOrderSummaryCard({
         <span><small><MemberCopyValue value={basisLabel} /></small><strong><MemberCopyValue value={basisValue} /></strong></span>
         <span><small><MemberCopyValue value={"回饋比例"} /></small><strong>{formatRewardRatePercent(summary.rewardRate)}</strong></span>
         <span><small><MemberCopyValue value={"本筆回饋"} /></small><strong><MemberCopyValue value={summary.rewardPV == null ? "歷史資料未記錄" : `${points(summary.rewardPV)} ${pointDisplayName}`} /></strong></span>
-        <span><small><MemberCopyValue value={summary.rewardStatus === "released" ? "實際入帳" : "預估折抵價值"} /></small><strong>{money(creditAmount)}</strong></span>
+        <span><small>{summary.rewardStatus === "released" ? <MemberCopyValue value={"實際入帳"} /> : <MemberCopyText copyKey="member.rewards.label.ccf442cc5e" />}</small><strong>{money(creditAmount)}</strong></span>
       </div> : null}
       {variant === "full" && ["released", "reversed", "cancelled"].includes(summary.waitingExplanation.state) ? <div className="member-org-order-source">
         <span>

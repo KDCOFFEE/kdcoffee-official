@@ -1,3 +1,6 @@
+import { applyOrderCredit } from "@/lib/orderCredit";
+import { readCreditDisplayCopy, creditSystemMessage } from "@/lib/creditDisplayCopy";
+import { validateSubscriptionCreditPreference } from "@/lib/subscriptionCreditPreference";
 import { NextResponse } from "next/server";
 import { getOrdersDir, getWebsiteDataFile } from "@/lib/storagePaths";
 import { makeOrderNumber } from "@/lib/orders";
@@ -21,7 +24,7 @@ import { getCurrentMember, updateMemberProfile } from "@/lib/memberAuth";
 import { updateStoredOrderSafely } from "@/lib/adminOrders";
 import { createGuestOrderAccess } from "@/lib/orderConversation";
 import { sendInternalLineNotification } from "@/lib/internalLineNotifications";
-import { createSubscription, getCheckoutCreditQuote, registerReferralQualificationOrder, reserveCredit, settleCreditReservation } from "@/lib/membershipCommerce";
+import { createSubscription, registerReferralQualificationOrder } from "@/lib/membershipCommerce";
 import { getActiveMembershipRules } from "@/lib/membershipBusinessRules";
 import {
   getDateOnlyInTimeZone,
@@ -43,32 +46,20 @@ const orderDir = () => getOrdersDir();
 const websiteFile = () => getWebsiteDataFile();
 
 async function applyCheckoutCredit(input: { memberId: string; orderNumber: string; order: Record<string, unknown>; requestedCredit: number; idempotencyKey: string }) {
-  const storedCredit = input.order.credit && typeof input.order.credit === "object" ? input.order.credit as Record<string, unknown> : null;
-  if (typeof storedCredit?.reservationId === "string") return { appliedAmount: Number(storedCredit.appliedAmount || 0), reservationId: storedCredit.reservationId, total: Number(input.order.total || 0) };
-  const merchandiseSubtotal = Number(input.order.subtotal || 0);
-  const shippingAmount = Number(input.order.shipping || 0);
-  const quote = await getCheckoutCreditQuote({ memberId: input.memberId, merchandiseSubtotal, shipping: shippingAmount });
-  const approvedCredit = Math.min(input.requestedCredit, quote.maximumUsable);
-  if (approvedCredit <= 0) return { appliedAmount: 0, warning: "本次沒有可使用的抵用金，訂單仍以原應付金額成立。", total: Number(input.order.total || 0) };
-  const reservation = await reserveCredit({ memberId: input.memberId, orderId: input.orderNumber, requestedAmount: approvedCredit, merchandiseSubtotal, shipping: shippingAmount, idempotencyKey: `checkout:${input.idempotencyKey}` });
-  if (reservation.status !== "reserved") return { appliedAmount: 0, warning: "抵用金保留已結束，訂單仍以原應付金額成立。", total: Number(input.order.total || 0) };
-  try {
-    const updated = await updateStoredOrderSafely(input.orderNumber, (latestOrder) => {
-      const latestCredit = latestOrder.credit && typeof latestOrder.credit === "object" ? latestOrder.credit as Record<string, unknown> : null;
-      if (latestCredit?.reservationId === reservation.reservationId) return latestOrder;
-      const totalBeforeCredit = Number(latestOrder.totalBeforeCredit ?? latestOrder.total ?? latestOrder.subtotal ?? 0);
-      return {
-        ...latestOrder,
-        credit: { reservationId: reservation.reservationId, requestedAmount: input.requestedCredit, appliedAmount: reservation.amount, status: "reserved", rulesVersion: quote.rulesVersion },
-        totalBeforeCredit,
-        total: Math.max(0, totalBeforeCredit - reservation.amount),
-      };
-    });
-    return { appliedAmount: reservation.amount, reservationId: reservation.reservationId, total: Number(updated.total || 0) };
-  } catch (error) {
-    await settleCreditReservation({ reservationId: reservation.reservationId, action: "release", idempotencyKey: `checkout-write-failed:${input.idempotencyKey}`, reason: "訂單折抵結果寫入失敗" });
-    throw error;
-  }
+  const updated = await applyOrderCredit({ memberId: input.memberId, orderNumber: input.orderNumber, requestedAmount: input.requestedCredit });
+  const credit = updated.credit as { appliedAmount?: number; reservationId?: string } | undefined;
+  return { appliedAmount: credit?.appliedAmount ?? 0, reservationId: credit?.reservationId, total: Number(updated.total), warning: credit?.appliedAmount ? undefined : (await readCreditDisplayCopy())("credit.system.message21") };
+}
+
+async function ensureCheckoutSubscription(memberId: string, order: Record<string, unknown>, idempotencyKey: string) {
+  const intent = order.subscriptionIntent as { consent?: boolean; intervalDays?: number; creditPreference?: unknown } | null;
+  const inventory = order.inventoryTransaction as { state?: string } | undefined;
+  if (!intent?.consent || inventory?.state !== "inventory_committed" || ["cancelled", "inventory_pending", "inventory_failed"].includes(String(order.status))) return;
+  const storedItems = Array.isArray(order.items) ? order.items as Array<Record<string, unknown>> : [];
+  const defaultItems = subscriptionItemsFromStoredOrderItems(storedItems, await getLiveWebsiteData());
+  const storedStore = order.store as { id?: string; name?: string } | undefined;
+  const provisionalPendingActivationAnchorDate = getDateOnlyInTimeZone(new Date(String(order.createdAt)));
+  await createSubscription({ memberId, startedFromOrderId: String(order.orderNumber), anchorDate: provisionalPendingActivationAnchorDate, intervalDays: Number(intent.intervalDays), creditPreference: validateSubscriptionCreditPreference(intent.creditPreference), shippingMethod: String(order.orderMode), storeSelection: storedStore ? { storeId: String(storedStore.id || ""), storeName: String(storedStore.name || "") } : null, deliveryAddress: order.orderMode === "home_delivery" ? validateDeliveryAddress(order.deliveryAddress) : null, paymentMethod: order.orderMode === "home_delivery" ? order.payment as ActiveHomeDeliveryPaymentMethod : null, defaultItems, idempotencyKey: `checkout:${idempotencyKey}` });
 }
 
 export async function POST(request: Request) {
@@ -94,9 +85,9 @@ export async function POST(request: Request) {
       : null;
     const { deliveryAddress, paymentMethod } = validateOrderDeliverySelection({ orderMode, store: body.store, studioPickup: body.studioPickup, deliveryAddress: body.deliveryAddress, paymentMethod: body.paymentMethod });
     const requestedCredit = Number(body.requestedCredit ?? 0);
-    if (!Number.isSafeInteger(requestedCredit) || requestedCredit < 0) throw new Error("抵用金金額不正確");
-    if (requestedCredit > 0 && !member) throw new Error("請先登入會員才能使用抵用金");
-    const subscriptionIntent = member && body.subscriptionIntent?.consent === true ? { consent: true, intervalDays: Number(body.subscriptionIntent.intervalDays) } : null;
+    if (!Number.isSafeInteger(requestedCredit) || requestedCredit < 0) throw new Error((await readCreditDisplayCopy())("credit.system.message23"));
+    if (requestedCredit > 0 && !member) throw new Error((await readCreditDisplayCopy())("credit.system.message24"));
+    const subscriptionIntent = member && body.subscriptionIntent?.consent === true ? { consent: true, intervalDays: Number(body.subscriptionIntent.intervalDays), ...(body.subscriptionIntent.creditPreference === undefined ? {} : { creditPreference: validateSubscriptionCreditPreference(body.subscriptionIntent.creditPreference) }) } : null;
     if (subscriptionIntent && orderMode === "home_delivery" && paymentMethod !== "cash_on_delivery") {
       throw new Error("ATM 轉帳僅提供單次宅配訂單；宅配定期配送僅支援貨到付款。");
     }
@@ -213,7 +204,7 @@ export async function POST(request: Request) {
           replayCredit = { requestedAmount: requestedCredit, appliedAmount: recovered.appliedAmount, reservationId: recovered.reservationId };
           if (recovered.warning) replayWarning = [replayWarning, recovered.warning].filter(Boolean).join(" ");
         } catch {
-          replayWarning = [replayWarning, "訂單已成立，但抵用金暫時無法套用。"].filter(Boolean).join(" ");
+          replayWarning = [replayWarning, (await readCreditDisplayCopy())("credit.system.message25")].filter(Boolean).join(" ");
         }
       }
       if (replayAsSameMember && member && core.order.orderMode !== "corporate_gift") {
@@ -222,6 +213,10 @@ export async function POST(request: Request) {
         } catch {
           replayWarning = [replayWarning, "訂單已成立，但推薦獎勵資格狀態暫時無法同步。"].filter(Boolean).join(" ");
         }
+      }
+      if (replayAsSameMember && member && core.order.subscriptionIntent) {
+        try { await ensureCheckoutSubscription(member.id, core.order, idempotencyKey); }
+        catch { replayWarning = [replayWarning, "訂單已成立；定期配送申請已保存在訂單中，工作室將協助完成確認。"].filter(Boolean).join(" "); }
       }
       return NextResponse.json({
         orderNumber: core.order.orderNumber,
@@ -265,7 +260,7 @@ export async function POST(request: Request) {
       appliedCredit = creditResult.appliedAmount;
       creditReservationId = creditResult.reservationId;
       if (creditResult.warning) warnings.push(creditResult.warning);
-      if (creditResult.appliedAmount > 0) lineText += `\n\n會員抵用金：-NT$ ${creditResult.appliedAmount.toLocaleString("zh-TW")}\n折抵後應付：NT$ ${creditResult.total.toLocaleString("zh-TW")}`;
+      if (creditResult.appliedAmount > 0) lineText += "\n\n" + (await readCreditDisplayCopy())("credit.notice.order", { amount: `NT$ ${creditResult.appliedAmount.toLocaleString("zh-TW")}`, total: `NT$ ${creditResult.total.toLocaleString("zh-TW")}` });
     }
     if (member) {
       try {
@@ -276,11 +271,7 @@ export async function POST(request: Request) {
       }
       if (subscriptionIntent) {
         try {
-          const storedItems = Array.isArray(core.order.items) ? core.order.items as Array<Record<string, unknown>> : [];
-          const defaultItems = subscriptionItemsFromStoredOrderItems(storedItems, await getLiveWebsiteData());
-          const storedStore = core.order.store as { id?: string; name?: string } | undefined;
-          const provisionalPendingActivationAnchorDate = getDateOnlyInTimeZone(new Date(String(core.order.createdAt)));
-          await createSubscription({ memberId: member.id, startedFromOrderId: orderNumber, anchorDate: provisionalPendingActivationAnchorDate, intervalDays: subscriptionIntent.intervalDays, shippingMethod: String(core.order.orderMode), storeSelection: storedStore ? { storeId: String(storedStore.id || ""), storeName: String(storedStore.name || "") } : null, deliveryAddress: core.order.orderMode === "home_delivery" ? validateDeliveryAddress(core.order.deliveryAddress) : null, paymentMethod: core.order.orderMode === "home_delivery" ? core.order.payment as ActiveHomeDeliveryPaymentMethod : null, defaultItems, idempotencyKey: `checkout:${idempotencyKey}` });
+          await ensureCheckoutSubscription(member.id, core.order, idempotencyKey);
         } catch (error) {
           warnings.push("訂單已成立；定期配送申請已保存在訂單中，工作室將協助完成確認。");
           console.error(`Order ${orderNumber} saved but subscription enrollment failed:`, error);
@@ -311,7 +302,7 @@ export async function POST(request: Request) {
   } catch (error) {
     const serverError = error instanceof OrderFileCreationError || error instanceof OrderFileNotFoundError || error instanceof OrderFileValidationError || error instanceof InventoryTransactionError || error instanceof FileLockTimeoutError || error instanceof OrderIdempotencyError;
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "訂單送出失敗" },
+      { error: await creditSystemMessage(error instanceof Error ? error.message : "訂單送出失敗") },
       { status: error instanceof OrderPriceConflictError ? 409 : serverError ? 500 : 400 },
     );
   }

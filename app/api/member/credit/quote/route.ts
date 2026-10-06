@@ -1,3 +1,4 @@
+import { creditSystemMessage, readCreditDisplayCopy } from "@/lib/creditDisplayCopy";
 import { NextResponse } from "next/server";
 
 import { getCurrentMember } from "@/lib/memberAuth";
@@ -15,6 +16,6 @@ export async function GET(request: Request) {
     if (!Number.isSafeInteger(merchandiseSubtotal) || merchandiseSubtotal < 0 || !Number.isSafeInteger(shipping) || shipping < 0) throw new MembershipCommerceError("結帳金額不正確");
     return NextResponse.json(await getCheckoutCreditQuote({ memberId: member.id, merchandiseSubtotal, shipping }));
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "無法計算抵用金" }, { status: error instanceof MembershipCommerceError ? 400 : 500 });
+    return NextResponse.json({ error: error instanceof Error ? await creditSystemMessage(error.message) : (await readCreditDisplayCopy())("credit.system.message26") }, { status: error instanceof MembershipCommerceError ? 400 : 500 });
   }
 }

@@ -1,3 +1,4 @@
+import { readCreditDisplayCopy } from "./creditDisplayCopy";
 import { isValidEmail, readMember } from "./memberAuth";
 import { sendCustomerLineNotification, sendCustomerOrderEmail } from "./customerNotificationDelivery";
 import { claimNextMembershipNotification, completeMembershipNotificationDelivery, type NotificationEvent } from "./membershipCommerce";
@@ -16,18 +17,19 @@ const eventLabels: Record<NotificationEvent["eventType"], string> = {
   subscription_terminated: "定期配送已停止",
   cycle_skipped: "本次定期配送已跳過",
   referral_conversion: "推薦回饋已更新",
-  credit_issued: "會員抵用金已入帳",
-  credit_expiring: "會員抵用金即將到期",
+  credit_issued: "credit.notice.issued",
+  credit_expiring: "credit.notice.expiring",
 };
 
-function template(notice: NotificationEvent) {
-  const title = eventLabels[notice.eventType];
+export async function createMembershipNotificationTemplate(notice: NotificationEvent) {
+  const copy = await readCreditDisplayCopy();
+  const title = notice.eventType === "credit_issued" || notice.eventType === "credit_expiring" ? copy(eventLabels[notice.eventType]) : eventLabels[notice.eventType];
   const amount = typeof notice.safeData.amount === "number" && Number.isSafeInteger(notice.safeData.amount) && notice.safeData.amount > 0 ? notice.safeData.amount : null;
   const referralPayout = notice.eventType === "credit_issued" && notice.safeData.referralPayout === true;
   const detail = referralPayout && amount !== null
     ? `您的推薦回饋 NT$${amount.toLocaleString("zh-TW")} 已成功入帳。`
     : amount !== null
-      ? `會員抵用金 NT$${amount.toLocaleString("zh-TW")} 已成功入帳。`
+      ? copy(notice.eventType === "credit_expiring" ? "credit.notice.expiringAmount" : "credit.notice.amount", { amount: `NT$${amount.toLocaleString("zh-TW")}` })
       : "請登入會員中心查看最新安排與可操作項目。";
   return { eventType: notice.eventType, subject: `KD Coffee｜${title}`, text: `KD Coffee｜${title}\n\n${detail}` };
 }
@@ -39,7 +41,7 @@ export async function deliverNextMembershipNotification(options: { stateFilePath
   if (notice.channels.includes("member_center") && !delivered.includes("member_center")) delivered.push("member_center");
   const errors: string[] = [];
   const member = notice.memberId ? await readMember(notice.memberId) : null;
-  const message = template(notice);
+  const message = await createMembershipNotificationTemplate(notice);
 
   let lineSucceeded = delivered.includes("line");
   if (notice.channels.includes("line") && !lineSucceeded) {

@@ -1,3 +1,4 @@
+import { validateSubscriptionCreditPreference, type SubscriptionCreditPreference } from "./subscriptionCreditPreference";
 import { createHash, randomBytes } from "crypto";
 import { promises as fs } from "fs";
 import path from "path";
@@ -68,6 +69,7 @@ export type CycleKind = "scheduled" | "manual_replenishment";
 export type SubscriptionDefaultItem = SubscriptionItem & { unitPrice: number };
 
 export type Subscription = {
+  creditPreference?: SubscriptionCreditPreference;
   subscriptionId: string;
   memberId: string;
   status: SubscriptionStatus;
@@ -103,6 +105,7 @@ export type PricingSnapshot = {
 };
 
 export type SubscriptionCycle = {
+  creditPreferenceSnapshot?: SubscriptionCreditPreference;
   cycleId: string;
   subscriptionId: string;
   sequence: number;
@@ -439,6 +442,8 @@ export type CreditEntry = {
   memberId: string;
   sourceType: "referral" | "member_reward" | "manual" | "promotion" | "compensation";
   sourceReference: string;
+  /** Historical custom display labels are preserved, never inferred or renamed. */
+  sourceLabel?: string;
   amount: number;
   remainingAmount: number;
   issuedAt: string;
@@ -451,6 +456,7 @@ export type CreditEntry = {
 };
 
 export type CreditReservation = {
+  rulesVersion?: number;
   reservationId: string;
   memberId: string;
   orderId: string;
@@ -470,7 +476,8 @@ export type MemberCreditHistoryEntry = {
   expiresAt: string;
   status: CreditEntry["status"];
   direction: "grant" | "deduct";
-  sourceLabel: "推薦回饋" | "會員續購回饋" | "推廣零售獎金" | "KD Coffee 贈送" | "會員抵用金" | "抵用金調整";
+  sourceCopyKey?: string;
+  sourceLabel: string;
   sourceOrderNumber: string | null;
   orderRedemptions: Array<{
     orderNumber: string;
@@ -664,6 +671,8 @@ export function validateMembershipCommerceState(value: unknown): MembershipComme
     if (!Array.isArray(round.consumptionAccounting.allocations) || !Number.isSafeInteger(round.consumptionAccounting.availableAmountBefore) || !Number.isSafeInteger(round.consumptionAccounting.consumedAmount) || !Number.isSafeInteger(round.consumptionAccounting.remainingAmountAfter)) throw new MembershipCommerceError("推薦資格輪次消費配置不正確");
     for (const allocation of round.consumptionAccounting.allocations) if (!allocation || typeof allocation.validConsumptionEventId !== "string" || !Number.isSafeInteger(allocation.amount) || allocation.amount < 0) throw new MembershipCommerceError("推薦資格輪次配置項目不正確");
   }
+  for (const subscription of Object.values(value.subscriptions as Record<string, Subscription>)) validateSubscriptionCreditPreference(subscription.creditPreference);
+  for (const cycle of Object.values(value.cycles as Record<string, SubscriptionCycle>)) validateSubscriptionCreditPreference(cycle.creditPreferenceSnapshot);
   const coveredRewardIds = new Set<string>();
   for (const coverage of Object.values(value.referralRewardCoverages as Record<string, ReferralRewardCoverage>)) {
     if (!coverage || typeof coverage.coverageId !== "string" || typeof coverage.memberId !== "string" || typeof coverage.qualificationRoundId !== "string" || typeof coverage.referralRewardId !== "string" || !Number.isFinite(Date.parse(coverage.qualificationAt)) || !Number.isFinite(Date.parse(coverage.rewardGeneratedAt)) || !Number.isFinite(Date.parse(coverage.coverageStartsAt)) || !Number.isFinite(Date.parse(coverage.coverageEndsAt)) || !Number.isSafeInteger(coverage.lookbackDays) || coverage.lookbackDays < 0 || !Number.isSafeInteger(coverage.forwardDays) || coverage.forwardDays < 0 || !Number.isSafeInteger(coverage.rulesVersion) || coverage.inclusionReason !== "reward-generated-within-snapshotted-coverage-window" || typeof coverage.createdAt !== "string" || typeof coverage.sourceReference !== "string" || typeof coverage.idempotencyKey !== "string") throw new MembershipCommerceError("推薦獎勵資格涵蓋紀錄格式不正確");
@@ -871,12 +880,13 @@ function subscriptionDeliveryPreference(input: { shippingMethod: string; storeSe
   throw new MembershipCommerceError("不支援的取貨方式");
 }
 
-export async function createSubscription(input: { memberId: string; startedFromOrderId: string; anchorDate: string; intervalDays: number; shippingMethod: string; storeSelection?: Subscription["storeSelection"]; deliveryAddress?: DeliveryAddress | null; paymentMethod?: HomeDeliveryPaymentMethod | null; defaultItems: SubscriptionDefaultItem[]; idempotencyKey: string; now?: Date; stateFilePath?: string; rulesFilePath?: string }) {
+export async function createSubscription(input: { memberId: string; startedFromOrderId: string; anchorDate: string; intervalDays: number; shippingMethod: string; storeSelection?: Subscription["storeSelection"]; deliveryAddress?: DeliveryAddress | null; paymentMethod?: HomeDeliveryPaymentMethod | null; creditPreference?: SubscriptionCreditPreference; defaultItems: SubscriptionDefaultItem[]; idempotencyKey: string; now?: Date; stateFilePath?: string; rulesFilePath?: string }) {
   await assertCanonicalMember(input.memberId);
   const version = await getActiveMembershipRules(input.now, input.rulesFilePath);
   if (!resolveSubscriptionInterval(input.intervalDays, version.rules).allowed) throw new MembershipCommerceError("此配送週期目前未開放");
   const items = cloneItems(input.defaultItems);
   const delivery = subscriptionDeliveryPreference(input);
+  const creditPreference = validateSubscriptionCreditPreference(input.creditPreference);
   const key = `subscription:create:${input.idempotencyKey}`;
   return transaction((state, now) => {
     const existingId = remembered(state, key);
@@ -884,7 +894,7 @@ export async function createSubscription(input: { memberId: string; startedFromO
     if (Object.values(state.subscriptions).some((subscription) => subscription.startedFromOrderId === input.startedFromOrderId)) throw new MembershipCommerceError("此首筆訂單已建立定期購");
     const subscriptionId = id("sub");
     const timestamp = nowIso(now);
-    const subscription: Subscription = { subscriptionId, memberId: input.memberId, status: "pending_activation", startedFromOrderId: input.startedFromOrderId, anchorDate: input.anchorDate, intervalDays: input.intervalDays, shippingMethod: input.shippingMethod, ...delivery, defaultItems: items, rulesVersion: version.rulesVersion, statusReason: "等待首筆原價訂單成功取貨", createdAt: timestamp, updatedAt: timestamp, revision: 0 };
+    const subscription: Subscription = { creditPreference, subscriptionId, memberId: input.memberId, status: "pending_activation", startedFromOrderId: input.startedFromOrderId, anchorDate: input.anchorDate, intervalDays: input.intervalDays, shippingMethod: input.shippingMethod, ...delivery, defaultItems: items, rulesVersion: version.rulesVersion, statusReason: "等待首筆原價訂單成功取貨", createdAt: timestamp, updatedAt: timestamp, revision: 0 };
     state.subscriptions[subscriptionId] = subscription;
     remember(state, key, subscriptionId, now);
     audit(state, { actor: "member", action: "subscription-created", entityType: "subscription", entityId: subscriptionId, before: {}, after: { status: subscription.status }, reason: "首筆原價訂單建立定期購", sourceEvent: input.startedFromOrderId }, now);
@@ -1226,6 +1236,7 @@ export async function lockSubscriptionCycle(input: { cycleId: string; idempotenc
     const progress = giftProgress(state, subscription.subscriptionId);
     const fulfillmentNumber = progress + 1;
     const giftEligible = giftEligibleAt(fulfillmentNumber, version.rules);
+    cycle.creditPreferenceSnapshot = validateSubscriptionCreditPreference(subscription.creditPreference);
     cycle.status = "locked";
     cycle.itemsSnapshot = items;
     cycle.rulesSnapshot = structuredClone(version);
@@ -1240,7 +1251,7 @@ export async function lockSubscriptionCycle(input: { cycleId: string; idempotenc
   }, { now: input.now, filePath: input.stateFilePath });
 }
 
-export async function createOrderFromCycle(input: { cycleId: string; orderId: string; idempotencyKey: string; now?: Date; stateFilePath?: string; rulesFilePath?: string }) {
+export async function createOrderFromCycle(input: { cycleId: string; orderId: string; creditSnapshot?: { reservationId?: string; appliedAmount: number; total: number; terminalStatus?: "cancelled" | "completed" }; idempotencyKey: string; now?: Date; stateFilePath?: string; rulesFilePath?: string }) {
   const version = await getActiveMembershipRules(input.now, input.rulesFilePath);
   const key = `cycle:order:${input.idempotencyKey}`;
   return transaction((state, now) => {
@@ -1249,12 +1260,20 @@ export async function createOrderFromCycle(input: { cycleId: string; orderId: st
     if (remembered(state, key)) return cycle;
     if (cycle.status !== "locked" || !cycle.pricingSnapshot) throw new MembershipCommerceError("本期尚未完成鎖定");
     if (Object.values(state.cycles).some((other) => other.createdOrderId === input.orderId)) throw new MembershipCommerceError("訂單已連結其他配送期次");
-    cycle.status = "order_created";
+    if (input.creditSnapshot) {
+      const reservation = input.creditSnapshot.reservationId ? state.creditReservations[input.creditSnapshot.reservationId] : null;
+      // A scheduler replay can encounter an order settled before its cycle link was saved.
+      const allowedStatuses = input.creditSnapshot.terminalStatus === "cancelled" ? ["reserved", "released"] : input.creditSnapshot.terminalStatus === "completed" ? ["reserved", "consumed"] : ["reserved"];
+      if (input.creditSnapshot.appliedAmount > 0 && (!reservation || reservation.orderId !== input.orderId || reservation.amount !== input.creditSnapshot.appliedAmount || !allowedStatuses.includes(reservation.status))) throw new MembershipCommerceError("本期保留狀態不一致");
+      cycle.pricingSnapshot.creditReserved = input.creditSnapshot.appliedAmount;
+      cycle.pricingSnapshot.finalAmount = input.creditSnapshot.total;
+    }
+    cycle.status = input.creditSnapshot?.terminalStatus === "cancelled" ? "cancelled" : "order_created";
     cycle.createdOrderId = input.orderId;
     touch(cycle, now);
     remember(state, key, cycle.cycleId, now);
-    const source = event(state, "order_created", { cycleSequence: cycle.sequence }, now, { subscriptionId: cycle.subscriptionId, orderId: input.orderId });
-    notify(state, version.rules, "order_created", source.eventId, now, { memberId: state.subscriptions[cycle.subscriptionId].memberId });
+    const source = event(state, cycle.status === "cancelled" ? "cycle_cancelled" : "order_created", { cycleSequence: cycle.sequence }, now, { subscriptionId: cycle.subscriptionId, orderId: input.orderId });
+    if (cycle.status !== "cancelled") notify(state, version.rules, "order_created", source.eventId, now, { memberId: state.subscriptions[cycle.subscriptionId].memberId });
     return cycle;
   }, { now: input.now, filePath: input.stateFilePath });
 }
@@ -1458,7 +1477,7 @@ export async function memberSkipCycle(input: { memberId: string; cycleId: string
   }, { now: input.now, filePath: input.stateFilePath });
 }
 
-export async function updateSubscriptionPreferences(input: { memberId: string; subscriptionId: string; expectedRevision: number; idempotencyKey: string; shippingMethod?: string; storeSelection?: Subscription["storeSelection"]; deliveryAddress?: DeliveryAddress | null; paymentMethod?: HomeDeliveryPaymentMethod | null; defaultItems?: SubscriptionDefaultItem[]; now?: Date; stateFilePath?: string }) {
+export async function updateSubscriptionPreferences(input: { memberId: string; subscriptionId: string; expectedRevision: number; idempotencyKey: string; shippingMethod?: string; storeSelection?: Subscription["storeSelection"]; deliveryAddress?: DeliveryAddress | null; paymentMethod?: HomeDeliveryPaymentMethod | null; creditPreference?: SubscriptionCreditPreference; defaultItems?: SubscriptionDefaultItem[]; now?: Date; stateFilePath?: string }) {
   const items = input.defaultItems ? cloneItems(input.defaultItems) : null;
   const key = `subscription:preferences:${input.idempotencyKey}`;
   return transaction((state, now) => {
@@ -1467,7 +1486,7 @@ export async function updateSubscriptionPreferences(input: { memberId: string; s
     if (remembered(state, key)) return subscription;
     assertMemberOwns(subscription, input.memberId);
     assertRevision(subscription, input.expectedRevision);
-    if (!["active", "paused"].includes(subscription.status)) throw new MembershipCommerceError("目前無法修改定期購內容");
+    if (!["active", "paused"].includes(subscription.status) && !(subscription.status === "pending_activation" && input.creditPreference !== undefined && input.shippingMethod === undefined && input.storeSelection === undefined && input.deliveryAddress === undefined && input.paymentMethod === undefined && input.defaultItems === undefined)) throw new MembershipCommerceError("目前無法修改定期購內容");
     const beforeShippingMethod = subscription.shippingMethod;
     const beforeStore = subscription.storeSelection?.storeId ?? "none";
     if (input.shippingMethod !== undefined || input.storeSelection !== undefined || input.deliveryAddress !== undefined || input.paymentMethod !== undefined) {
@@ -1483,6 +1502,7 @@ export async function updateSubscriptionPreferences(input: { memberId: string; s
       subscription.deliveryAddress = delivery.deliveryAddress;
       subscription.paymentMethod = delivery.paymentMethod;
     }
+    if (input.creditPreference !== undefined) subscription.creditPreference = validateSubscriptionCreditPreference(input.creditPreference);
     if (items) subscription.defaultItems = items;
     touch(subscription, now);
     remember(state, key, subscription.subscriptionId, now);
@@ -3815,7 +3835,7 @@ export async function getAvailableCredit(memberId: string, now = new Date(), fil
 
 export async function getSafeOrderCreditReservation(input: { orderId: string; memberId: string; filePath?: string }): Promise<SafeOrderCreditReservation | null> {
   const state = await readMembershipCommerceState(input.filePath);
-  const reservation = Object.values(state.creditReservations).find((item) => item.orderId === input.orderId && item.memberId === input.memberId);
+  const reservation = Object.values(state.creditReservations).filter((item) => item.orderId === input.orderId && item.memberId === input.memberId).sort(compareCreditReservations)[0];
   return reservation ? { orderNumber: reservation.orderId, amount: reservation.amount, status: reservation.status } : null;
 }
 
@@ -3830,24 +3850,28 @@ export async function getCheckoutCreditQuote(input: { memberId: string; merchand
   return { availableBalance, maximumUsable, payableWithoutCredit: input.merchandiseSubtotal + input.shipping, minimumPayable: input.merchandiseSubtotal + input.shipping - maximumUsable, uiMode: version.rules.credit.uiMode, rulesVersion: version.rulesVersion };
 }
 
-export async function reserveCredit(input: { memberId: string; orderId: string; requestedAmount: number; merchandiseSubtotal: number; shipping: number; idempotencyKey: string; now?: Date; stateFilePath?: string; rulesFilePath?: string }) {
+export async function reserveCredit(input: { memberId: string; orderId: string; requestedAmount: number; merchandiseSubtotal: number; shipping: number; idempotencyKey: string; rulesVersionSnapshot?: RulesVersion; clampToAvailable?: boolean; recoverForOrder?: boolean; now?: Date; stateFilePath?: string; rulesFilePath?: string }) {
   await assertCanonicalMember(input.memberId);
-  const version = await getActiveMembershipRules(input.now, input.rulesFilePath);
+  const version = input.rulesVersionSnapshot ?? await getActiveMembershipRules(input.now, input.rulesFilePath);
   const maximum = maximumCreditRedemption({ merchandiseSubtotal: input.merchandiseSubtotal, shipping: input.shipping, rules: version.rules });
   const requested = Math.min(assertIntegerMoney(input.requestedAmount, "要求折抵金額"), maximum);
   const key = `credit:reserve:${input.idempotencyKey}`;
   return transaction((state, now) => {
     const existingId = remembered(state, key);
-    if (existingId) return state.creditReservations[existingId];
+    if (existingId && !(input.recoverForOrder && state.creditReservations[existingId]?.status === "released")) return state.creditReservations[existingId];
     const duplicateOrder = Object.values(state.creditReservations).find((reservation) => reservation.orderId === input.orderId && reservation.status === "reserved");
-    if (duplicateOrder) throw new MembershipCommerceError("此訂單已有抵用金保留");
+    if (duplicateOrder) {
+      if (input.recoverForOrder && duplicateOrder.memberId === input.memberId) return duplicateOrder;
+      throw new MembershipCommerceError("此訂單已有抵用金保留");
+    }
     const entries = Object.values(state.creditEntries).filter((entry) => {
       refreshExpiry(entry, now);
       return entry.memberId === input.memberId && entry.status === "available" && entry.remainingAmount > 0;
     }).sort((a, b) => a.expiresAt.localeCompare(b.expiresAt) || a.issuedAt.localeCompare(b.issuedAt) || a.creditEntryId.localeCompare(b.creditEntryId));
     const available = entries.reduce((sum, entry) => sum + effectiveCreditRemaining(state, entry, now), 0);
-    if (requested > available) throw new MembershipCommerceError("可用抵用金不足");
-    let remaining = requested;
+    if (requested > available && !input.clampToAvailable) throw new MembershipCommerceError("可用抵用金不足");
+    const approved = input.clampToAvailable ? Math.min(requested, available) : requested;
+    let remaining = approved;
     const allocations: CreditReservation["allocations"] = [];
     for (const entry of entries) {
       if (!remaining) break;
@@ -3860,10 +3884,10 @@ export async function reserveCredit(input: { memberId: string; orderId: string; 
     }
     const reservationId = id("reserve");
     const timestamp = nowIso(now);
-    const reservation: CreditReservation = { reservationId, memberId: input.memberId, orderId: input.orderId, requestedAmount: input.requestedAmount, amount: requested, allocations, status: "reserved", createdAt: timestamp, updatedAt: timestamp };
+    const reservation: CreditReservation = { rulesVersion: version.rulesVersion, reservationId, memberId: input.memberId, orderId: input.orderId, requestedAmount: input.requestedAmount, amount: approved, allocations, status: "reserved", createdAt: timestamp, updatedAt: timestamp };
     state.creditReservations[reservationId] = reservation;
     remember(state, key, reservationId, now);
-    audit(state, { actor: "member", action: "credit-reserved", entityType: "credit-reservation", entityId: reservationId, before: {}, after: { amount: requested }, reason: "會員選擇使用抵用金", sourceEvent: input.orderId }, now);
+    audit(state, { actor: "member", action: "credit-reserved", entityType: "credit-reservation", entityId: reservationId, before: {}, after: { amount: approved }, reason: "會員選擇使用抵用金", sourceEvent: input.orderId }, now);
     return reservation;
   }, { now: input.now, filePath: input.stateFilePath });
 }
@@ -3893,9 +3917,14 @@ export async function settleCreditReservation(input: { reservationId: string; ac
   }, { now: input.now, filePath: input.stateFilePath });
 }
 
+function compareCreditReservations(a: CreditReservation, b: CreditReservation) {
+  const priority = { reserved: 0, consumed: 1, released: 2 };
+  return priority[a.status] - priority[b.status] || b.createdAt.localeCompare(a.createdAt);
+}
+
 export async function settleCreditReservationForOrder(input: { orderId: string; action: "consume" | "release"; idempotencyKey: string; reason: string; now?: Date; stateFilePath?: string }) {
   const state = await readMembershipCommerceState(input.stateFilePath);
-  const reservation = Object.values(state.creditReservations).find((item) => item.orderId === input.orderId);
+  const reservation = Object.values(state.creditReservations).filter((item) => item.orderId === input.orderId).sort(compareCreditReservations)[0];
   if (!reservation) return null;
   return settleCreditReservation({ reservationId: reservation.reservationId, action: input.action, idempotencyKey: input.idempotencyKey, reason: input.reason, now: input.now, stateFilePath: input.stateFilePath });
 }
@@ -4055,7 +4084,8 @@ export async function getMemberCommerceDashboard(memberId: string, now = new Dat
     const remainingAmount = effectiveCreditRemaining(state, item, now);
     const status = Date.parse(item.expiresAt) <= now.getTime() && item.amount > 0 ? "expired" as const : remainingAmount === 0 && item.status === "available" ? "consumed" as const : item.status;
     const direction = item.amount < 0 ? "deduct" as const : "grant" as const;
-    const sourceLabel = item.sourceType === "member_reward"
+    const customSourceLabel = typeof item.sourceLabel === "string" ? item.sourceLabel : undefined;
+    const sourceLabel = customSourceLabel ?? (item.sourceType === "member_reward"
       ? "會員續購回饋" as const
       : item.sourceType === "referral"
         ? "推薦回饋" as const
@@ -4065,7 +4095,7 @@ export async function getMemberCommerceDashboard(memberId: string, now = new Dat
         ? "KD Coffee 贈送" as const
         : direction === "deduct"
           ? "抵用金調整" as const
-          : "會員抵用金" as const;
+          : "會員抵用金" as const);
     const referralRewardId = item.sourceReference.startsWith("referral_reward:")
       ? item.sourceReference.slice("referral_reward:".length)
       : null;
@@ -4085,7 +4115,7 @@ export async function getMemberCommerceDashboard(memberId: string, now = new Dat
       .flatMap((reservation) => reservation.allocations
         .filter((allocation) => allocation.creditEntryId === item.creditEntryId && allocation.amount > 0)
         .map((allocation) => ({ orderNumber: reservation.orderId, amount: allocation.amount, status: reservation.status })));
-    return { creditEntryId: item.creditEntryId, amount: item.amount, remainingAmount, issuedAt: item.issuedAt, expiresAt: item.expiresAt, status, direction, sourceLabel, sourceOrderNumber, orderRedemptions };
+    return { creditEntryId: item.creditEntryId, amount: item.amount, remainingAmount, issuedAt: item.issuedAt, expiresAt: item.expiresAt, status, direction, sourceLabel, sourceCopyKey: customSourceLabel !== undefined ? undefined : sourceLabel === "抵用金調整" ? "credit.source.adjustment" : sourceLabel === "會員抵用金" ? "credit.source.default" : undefined, sourceOrderNumber, orderRedemptions };
   });
   const rewardCreditSources = Object.values(state.creditEntries)
     .filter((item) =>

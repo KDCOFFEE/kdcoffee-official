@@ -71,15 +71,15 @@ try {
 
   rule.credit.appliesToShipping = "no";
   const caseA = payment.quoteHomeDeliveryPayable({ merchandiseSubtotal: 1000, shipping: 100, availableCredit: 200, requestedCredit: 200, method: "cash_on_delivery", rules: rule });
-  check("credit case A leaves shipping and COD fee payable", caseA.maximumCredit === 1000 && caseA.creditApplied === 200 && caseA.total === 930 && caseA.codServiceFee === 30);
+  check("credit case A leaves shipping and COD fee payable", caseA.maximumCredit === 700 && caseA.creditApplied === 200 && caseA.total === 930 && caseA.codServiceFee === 30);
   rule.credit.appliesToShipping = "yes";
   const caseB = payment.quoteHomeDeliveryPayable({ merchandiseSubtotal: 1000, shipping: 100, availableCredit: 200, requestedCredit: 200, method: "cash_on_delivery", rules: rule });
-  check("credit case B includes shipping but excludes COD fee", caseB.maximumCredit === 1100 && caseB.creditApplied === 200 && caseB.total === 930 && caseB.codServiceFee === 30);
+  check("credit case B includes shipping but excludes COD fee", caseB.maximumCredit === 700 && caseB.creditApplied === 200 && caseB.total === 930 && caseB.codServiceFee === 30);
   const caseC = payment.quoteHomeDeliveryPayable({ merchandiseSubtotal: 1000, shipping: 100, availableCredit: 5000, requestedCredit: 5000, method: "cash_on_delivery", rules: rule });
-  check("excess credit cannot reduce COD fee", caseC.creditApplied === 1100 && caseC.total === 30);
+  check("excess credit cannot reduce COD fee", caseC.creditApplied === 700 && caseC.total === 430);
   rule.credit.appliesToShipping = "no";
   const caseCNoShipping = payment.quoteHomeDeliveryPayable({ merchandiseSubtotal: 1000, shipping: 100, availableCredit: 5000, requestedCredit: 5000, method: "cash_on_delivery", rules: rule });
-  check("excess credit with no shipping eligibility leaves shipping and COD fee", caseCNoShipping.creditApplied === 1000 && caseCNoShipping.total === 130);
+  check("excess credit with no shipping eligibility leaves shipping and COD fee", caseCNoShipping.creditApplied === 700 && caseCNoShipping.total === 430);
   const snap = payment.createHomeDeliveryPaymentSnapshot("cash_on_delivery", rule);
   rule.shipping.homeDeliveryCodFee = 50;
   rule.shipping.subscriptionShippingDiscount = 100;

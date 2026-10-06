@@ -1,3 +1,4 @@
+import { CREDIT_COPY_CATALOG } from "./creditCopyCatalog";
 // Presentation keys only. Never use these identifiers as business program keys.
 export type MemberCopyDefinition = {
   key: string;
@@ -287,8 +288,8 @@ export const MEMBER_CENTER_COPY_CATALOG: readonly MemberCopyDefinition[] = [
     "key": "member.dashboard.label.3dd941956d",
     "group": "dashboard",
     "purpose": "可用折抵額",
-    "defaultText": "可用折抵額",
-    "tokens": {},
+    "defaultText": "可用{creditName}",
+    "tokens": {"creditName": "共用顯示名稱；取自抵用金統一顯示名稱設定"},
     "multiline": false
   },
   {
@@ -327,8 +328,8 @@ export const MEMBER_CENTER_COPY_CATALOG: readonly MemberCopyDefinition[] = [
     "key": "member.dashboard.label.693d81614f",
     "group": "dashboard",
     "purpose": "筆・預估折抵 NT$",
-    "defaultText": "筆・預估折抵 NT$",
-    "tokens": {},
+    "defaultText": "筆・預估{creditName} NT$",
+    "tokens": {"creditName": "共用顯示名稱；取自抵用金統一顯示名稱設定"},
     "multiline": false
   },
   {
@@ -2436,24 +2437,24 @@ export const MEMBER_CENTER_COPY_CATALOG: readonly MemberCopyDefinition[] = [
     "key": "member.referral.tooltip.be6e512f4b",
     "group": "referral",
     "purpose": "已入帳抵用金總覽",
-    "defaultText": "已入帳抵用金總覽",
-    "tokens": {},
+    "defaultText": "已入帳{creditName}總覽",
+    "tokens": {"creditName": "共用顯示名稱；取自抵用金統一顯示名稱設定"},
     "multiline": false
   },
   {
     "key": "member.referral.label.5b29dc001e",
     "group": "referral",
     "purpose": "目前可用折抵額",
-    "defaultText": "目前可用折抵額",
-    "tokens": {},
+    "defaultText": "可用{creditName}",
+    "tokens": {"creditName": "共用顯示名稱；取自抵用金統一顯示名稱設定"},
     "multiline": false
   },
   {
     "key": "member.referral.reward.0f78857ceb",
     "group": "referral",
     "purpose": "直接取自正式抵用金帳本，不由回饋紀錄重算",
-    "defaultText": "直接取自正式抵用金帳本，不由回饋紀錄重算",
-    "tokens": {},
+    "defaultText": "直接取自正式{creditName}帳本，不由回饋紀錄重算",
+    "tokens": {"creditName": "共用顯示名稱；取自抵用金統一顯示名稱設定"},
     "multiline": false
   },
   {
@@ -3327,8 +3328,8 @@ export const MEMBER_CENTER_COPY_CATALOG: readonly MemberCopyDefinition[] = [
     "key": "member.subscription.button.b40d17356f",
     "group": "subscription",
     "purpose": "訂單取消，抵用金已返還",
-    "defaultText": "訂單取消，抵用金已返還",
-    "tokens": {},
+    "defaultText": "訂單取消，{creditName}已返還",
+    "tokens": {"creditName": "共用顯示名稱；取自抵用金統一顯示名稱設定"},
     "multiline": false
   },
   {
@@ -5145,8 +5146,8 @@ export const MEMBER_CENTER_COPY_CATALOG: readonly MemberCopyDefinition[] = [
   },
   {
     "key": "member.rewards.storeCredit.title",
-    "group": "subscription",
-    "purpose": "抵用金",
+    "group": "storeCredit",
+    "purpose": "抵用金統一顯示名稱（供會員、結帳、訂單及相關提示使用）",
     "defaultText": "抵用金",
     "tokens": {},
     "multiline": false
@@ -5179,8 +5180,8 @@ export const MEMBER_CENTER_COPY_CATALOG: readonly MemberCopyDefinition[] = [
     "key": "member.subscription.description.e63e884dab",
     "group": "subscription",
     "purpose": "此期尚未鎖定。活動優惠、配送費與抵用金會在本期鎖定時依正式規則重新計算，系統會自動採用較優惠的商品價格。",
-    "defaultText": "此期尚未鎖定。活動優惠、配送費與抵用金會在本期鎖定時依正式規則重新計算，系統會自動採用較優惠的商品價格。",
-    "tokens": {},
+    "defaultText": "此期尚未鎖定。活動優惠與配送費會在本期鎖定時依正式規則重新計算；{creditName}會在建單時依本期使用方式與可用餘額確認，系統會自動採用較優惠的商品價格。",
+    "tokens": {"creditName": "共用顯示名稱；取自抵用金統一顯示名稱設定"},
     "multiline": false
   },
   {
@@ -5203,8 +5204,8 @@ export const MEMBER_CENTER_COPY_CATALOG: readonly MemberCopyDefinition[] = [
     "key": "member.subscription.label.a519a98b2f",
     "group": "subscription",
     "purpose": "我的抵用金",
-    "defaultText": "我的抵用金",
-    "tokens": {},
+    "defaultText": "我的{creditName}",
+    "tokens": {"creditName": "共用顯示名稱；取自抵用金統一顯示名稱設定"},
     "multiline": false
   },
   {
@@ -5251,16 +5252,16 @@ export const MEMBER_CENTER_COPY_CATALOG: readonly MemberCopyDefinition[] = [
     "key": "member.subscription.emptyState.193dab97b4",
     "group": "subscription",
     "purpose": "目前沒有抵用金紀錄",
-    "defaultText": "目前沒有抵用金紀錄",
-    "tokens": {},
+    "defaultText": "目前沒有{creditName}紀錄",
+    "tokens": {"creditName": "共用顯示名稱；取自抵用金統一顯示名稱設定"},
     "multiline": false
   },
   {
     "key": "member.subscription.description.4b6e30e9c5",
     "group": "subscription",
     "purpose": "有抵用金時，結帳會讓您自行選擇是否使用，並優先使用最快到期的額度。",
-    "defaultText": "有抵用金時，結帳會讓您自行選擇是否使用，並優先使用最快到期的額度。",
-    "tokens": {},
+    "defaultText": "有{creditName}時，結帳會讓您自行選擇是否使用，並優先使用最快到期的額度。",
+    "tokens": {"creditName": "共用顯示名稱；取自抵用金統一顯示名稱設定"},
     "multiline": false
   },
   {
@@ -5683,8 +5684,8 @@ export const MEMBER_CENTER_COPY_CATALOG: readonly MemberCopyDefinition[] = [
     "key": "member.rewards.description.a2e8013bd2",
     "group": "rewards",
     "purpose": "依訪客訂單的有效 …（PV）× 獎金比例計算，再依每 1 … = NT$ … 換算抵用金。",
-    "defaultText": "依訪客訂單的有效 {pointName}（PV）× 獎金比例計算，再依每 1 {pointName2} = NT$ {creditAmount} 換算抵用金。",
-    "tokens": {
+    "defaultText": "依訪客訂單的有效 {pointName}（PV）× 獎金比例計算，再依每 1 {pointName2} = NT$ {creditAmount} 換算{creditName}。",
+    "tokens": {"creditName": "共用顯示名稱；取自抵用金統一顯示名稱設定",
       "pointName": "原點數顯示名稱",
       "pointName2": "原畫面提供的顯示值；不能在文案中修改計算",
       "creditAmount": "原金額顯示值"
@@ -6018,8 +6019,8 @@ export const MEMBER_CENTER_COPY_CATALOG: readonly MemberCopyDefinition[] = [
     "key": "member.rewards.label.de7f9bd9d5",
     "group": "rewards",
     "purpose": "預估折抵",
-    "defaultText": "預估折抵",
-    "tokens": {},
+    "defaultText": "預估{creditName}",
+    "tokens": {"creditName": "共用顯示名稱；取自抵用金統一顯示名稱設定"},
     "multiline": false
   },
   {
@@ -6170,8 +6171,8 @@ export const MEMBER_CENTER_COPY_CATALOG: readonly MemberCopyDefinition[] = [
     "key": "member.rewards.label.ccf442cc5e",
     "group": "rewards",
     "purpose": "預估折抵價值",
-    "defaultText": "預估折抵價值",
-    "tokens": {},
+    "defaultText": "預估{creditName}價值",
+    "tokens": {"creditName": "共用顯示名稱；取自抵用金統一顯示名稱設定"},
     "multiline": false
   },
   {
@@ -6536,6 +6537,7 @@ export const MEMBER_CENTER_COPY_CATALOG: readonly MemberCopyDefinition[] = [
   { key: "member.orders.fulfillment.suspectedUncollected.label", group: "orders", purpose: "訂單摘要／疑似逾期未取狀態", defaultText: "疑似逾期未取", tokens: {}, multiline: false },
   { key: "member.orders.fulfillment.uncollected.label", group: "orders", purpose: "訂單摘要／未取貨狀態", defaultText: "未取貨", tokens: {}, multiline: false },
   { key: "member.orders.fulfillment.review.label", group: "orders", purpose: "訂單摘要／人工確認狀態", defaultText: "需要人工確認", tokens: {}, multiline: false },
+  ...CREDIT_COPY_CATALOG,
 ];
 
 export const DEFAULT_MEMBER_CENTER_COPY: Readonly<Record<string, string>> = Object.fromEntries(MEMBER_CENTER_COPY_CATALOG.map((entry) => [entry.key, entry.defaultText]));
