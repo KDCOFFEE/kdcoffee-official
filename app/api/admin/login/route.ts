@@ -5,18 +5,12 @@ import {
   isAdminPasswordConfigured,
   verifyAdminPassword,
 } from "@/lib/adminAuth";
-
-function getSiteUrl(request: Request) {
-  return (
-    process.env.NEXT_PUBLIC_SITE_URL?.trim().replace(/\/$/, "") ||
-    new URL(request.url).origin
-  );
-}
+import { resolvePublicSiteOrigin } from "@/lib/publicSiteOrigin";
 
 export async function POST(request: Request) {
   const form = await request.formData();
   const password = String(form.get("password") || "");
-  const siteUrl = getSiteUrl(request);
+  const siteUrl = resolvePublicSiteOrigin(request);
 
   if (!isAdminPasswordConfigured()) {
     return NextResponse.redirect(
