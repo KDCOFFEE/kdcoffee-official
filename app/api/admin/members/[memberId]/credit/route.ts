@@ -2,13 +2,26 @@ import { NextResponse } from "next/server";
 
 import { isAdminAuthenticated } from "@/lib/adminAuth";
 import { adjustMemberCreditByAdmin, MembershipCommerceError } from "@/lib/membershipCommerce";
+import { resolvePublicSiteOrigin } from "@/lib/publicSiteOrigin";
 
 export const dynamic = "force-dynamic";
 
 function isSameOrigin(request: Request) {
   const origin = request.headers.get("origin");
   const site = request.headers.get("sec-fetch-site");
-  return (!origin || origin === new URL(request.url).origin) && (!site || site === "same-origin");
+  if (origin) {
+    try {
+      const source = new URL(origin);
+      if (
+        (source.protocol !== "http:" && source.protocol !== "https:") ||
+        source.username || source.password || source.pathname !== "/" || source.search || source.hash ||
+        source.origin !== resolvePublicSiteOrigin(request)
+      ) return false;
+    } catch {
+      return false;
+    }
+  }
+  return !site || site === "same-origin";
 }
 
 export async function POST(request: Request, context: { params: Promise<{ memberId: string }> }) {
