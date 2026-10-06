@@ -13,6 +13,7 @@ export async function sendInternalLineNotification(
     timeoutMs?: number;
     retryDelayMs?: number;
     fetcher?: typeof fetch;
+    retryKey?: string;
   } = {},
 ): Promise<InternalLineNotificationResult> {
   // LEGACY compatibility only: remove these fallbacks after Railway migration.
@@ -33,11 +34,11 @@ export async function sendInternalLineNotification(
     try {
       const response = await (options.fetcher ?? fetch)("https://api.line.me/v2/bot/message/push", {
         method: "POST",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", ...(options.retryKey ? { "X-Line-Retry-Key": options.retryKey } : {}) },
         body: JSON.stringify({ to, messages: [{ type: "text", text }] }),
         signal: AbortSignal.timeout(timeoutMs),
       });
-      if (response.ok) {
+      if (response.ok || (response.status === 409 && options.retryKey && response.headers.get("x-line-accepted-request-id"))) {
         return {
           sent: true,
           requestId: response.headers.get("x-line-request-id") || undefined,

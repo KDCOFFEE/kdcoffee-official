@@ -3,6 +3,8 @@ import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
+// These regressions must never send to a real internal group.
+for (const key of ["LINE_INTERNAL_CHANNEL_ACCESS_TOKEN", "LINE_CHANNEL_ACCESS_TOKEN", "LINE_INTERNAL_RECIPIENT_ID", "LINE_ORDER_RECIPIENT_ID"]) delete process.env[key];
 const testRoot = await mkdtemp(path.join(os.tmpdir(), "kd-fulfillment-i2a-"));
 process.env.KD_DATA_DIR = testRoot;
 process.env.AUTH_SESSION_SECRET = "isolated-fulfillment-test-secret-2026";
@@ -58,7 +60,7 @@ try {
   check("F","缺少有效外部訂單編號時拒絕",!parser.parseSevenElevenEmail({...mail("completed",cm,"msg-f"),text:"買家已完成取貨",subject:"賣貨便：買家完成取貨訂單通知"}).recognized);
 
   const unknown = await fulfillment.processSevenElevenEmail(mail("completed","CMUNKNOWN001","msg-g"));
-  check("G","未知外部訂單送人工確認",unknown.review===true&&!unknown.mutated);
+  check("G","未知外部訂單建立獨立追蹤，不建立官網訂單",unknown.review===false&&unknown.mutated&&(await fulfillment.readFulfillmentStore()).logisticsTracking?.["CMUNKNOWN001"]?.currentState==="completed");
 
   const referrer = await member("referrer@example.test");
   const referred = await member("referred@example.test");

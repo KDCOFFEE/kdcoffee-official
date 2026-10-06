@@ -5,6 +5,8 @@ import path from "node:path";
 
 registerHooks({
   resolve(specifier, context, nextResolve) {
+    // Standalone test runtime only; Next enforces this boundary in production.
+    if (specifier === "server-only") return { url: "data:text/javascript,export{}", shortCircuit: true };
     if (specifier === "next/headers") return nextResolve("next/headers.js", context);
     if (specifier.startsWith("@/")) {
       const base = path.resolve(process.cwd(), specifier.slice(2));

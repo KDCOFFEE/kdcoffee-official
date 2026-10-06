@@ -1,10 +1,13 @@
 "use client";
 
+import { useRouter } from "next/navigation";
+
 import { FormEvent, useEffect, useState } from "react";
 
 import type { LogisticsSettings } from "@/lib/fulfillmentTypes";
 
 export default function LogisticsSettingsForm({ initial }: { initial: LogisticsSettings }) {
+  const router = useRouter();
   const [settings, setSettings] = useState(initial);
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
@@ -13,7 +16,10 @@ export default function LogisticsSettingsForm({ initial }: { initial: LogisticsS
   useEffect(() => { fetch("/api/admin/fulfillment/gmail-sync", { cache: "no-store" }).then((response) => response.ok ? response.json() : null).then((result) => setGmailReady(Boolean(result?.ready))).catch(() => undefined); }, []);
   async function syncGmail() {
     setSyncing(true); setMessage("");
-    try { const response = await fetch("/api/admin/fulfillment/gmail-sync", { method: "POST" }); const result = await response.json(); if (!response.ok) throw new Error(result.error || "Gmail 同步失敗"); setMessage(`已掃描 ${result.scanned ?? 0} 封信，更新 ${result.processed ?? 0} 筆，${result.reviewed ?? 0} 筆待人工確認。`); }
+    try { const response = await fetch("/api/admin/fulfillment/gmail-sync", { method: "POST" }); const result = await response.json(); if (!response.ok) throw new Error(result.error || "Gmail 同步失敗"); setMessage(`已掃描 ${result.scanned ?? 0} 封信，更新 ${result.processed ?? 0} 筆，${result.reviewed ?? 0} 筆待人工確認。`);
+      const refreshed = await fetch("/api/admin/fulfillment/settings", { cache: "no-store" });
+      if (refreshed.ok) setSettings((await refreshed.json()).settings);
+      router.refresh(); }
     catch (error) { setMessage(error instanceof Error ? error.message : "Gmail 同步失敗"); }
     finally { setSyncing(false); }
   }
@@ -38,7 +44,10 @@ export default function LogisticsSettingsForm({ initial }: { initial: LogisticsS
     <fieldset><legend>追蹤通知類型</legend><div className="fulfillment-check-grid">
       {([['orderCreated','訂單成立'],['shipped','已交寄'],['arrived','已到店'],['completed','成功取貨']] as const).map(([key,label])=><label key={key}><input type="checkbox" checked={tracked[key]} onChange={(event)=>setSettings({...settings,trackedEvents:{...tracked,[key]:event.target.checked}})} />{label}</label>)}
     </div></fieldset>
+    <fieldset><legend>內部 LINE 群組通知</legend><p>沿用工作室新訂單通知群組。未勾選的狀態仍可追蹤，但不發送群組通知；不補發先前停用的通知。</p><div className="fulfillment-check-grid">
+      {([['orderCreated','訂單成立'],['shipped','已交寄'],['arrived','已到店'],['completed','已取貨']] as const).map(([key,label])=><label key={key}><input type="checkbox" checked={(settings.internalLineEvents ?? {orderCreated:true,shipped:true,arrived:true,completed:true})[key]} onChange={(event)=>setSettings({...settings,internalLineEvents:{...(settings.internalLineEvents ?? {orderCreated:true,shipped:true,arrived:true,completed:true}),[key]:event.target.checked}})} />{label}</label>)}
+    </div></fieldset>
     <div className="gmail-connection-box"><span>Gmail 連線狀態</span><strong>{settings.gmailConnection.status === "connected" ? "已連接" : settings.gmailConnection.status === "error" ? "連線異常" : "未連接"}</strong><p>{gmailReady ? "只會掃描核准寄件者、設定日期範圍與選用 Label；未知格式一律進人工確認。" : "尚未設定正式 Gmail OAuth；系統不會假裝連線成功，也不會讀取真實信箱。"}</p><button type="button" disabled={!gmailReady || syncing || !settings.automaticTrackingEnabled} onClick={syncGmail}>{syncing ? "同步中…" : gmailReady ? "立即安全同步" : "連接 Gmail（待 OAuth 設定）"}</button></div>
-    <div className="fulfillment-form-actions"><button type="submit" disabled={saving}>{saving ? "儲存中…" : "儲存物流設定"}</button>{message ? <span role="status">{message}</span> : null}</div>
+    <div className="fulfillment-form-actions"><button type="submit" disabled={saving}>{saving ? "儲存中…" : "儲存物流設定"}</button>{message ? <span role="status">{message} <a href="#logistics-tracking">查看物流追蹤</a> · <a href="#logistics-review">查看人工確認</a></span> : null}</div>
   </form>;
 }

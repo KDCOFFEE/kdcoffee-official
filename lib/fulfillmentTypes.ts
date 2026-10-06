@@ -72,10 +72,23 @@ export type FulfillmentReviewItem = {
   resolvedAt?: string;
 };
 
+export type LogisticsTrackingRecord = {
+  externalOrderId: string;
+  externalShipmentId?: string;
+  currentState: FulfillmentEmailEventType;
+  updatedAt: string;
+  events: Array<{
+    state: FulfillmentEmailEventType;
+    occurredAt: string;
+    notification: { status: "pending" | "sent" | "failed" | "disabled"; retryKey: string; attemptedAt?: string; text?: string; recipientHash?: string; reason?: string };
+  }>;
+};
+
 export type FulfillmentStore = {
   schemaVersion: 1;
   revision: number;
   records: Record<string, FulfillmentRecord>;
+  logisticsTracking?: Record<string, LogisticsTrackingRecord>;
   reviews: FulfillmentReviewItem[];
   processedFingerprints: Record<string, { eventId?: string; reviewId?: string; orderId?: string }>;
   consequenceStatus: Record<string, "pending" | "completed" | "failed">;
@@ -96,6 +109,7 @@ export type LogisticsSettings = {
     arrived: boolean;
     completed: boolean;
   };
+  internalLineEvents?: LogisticsSettings["trackedEvents"];
   gmailConnection: {
     status: "not_connected" | "connected" | "error";
     lastSyncedAt: string | null;

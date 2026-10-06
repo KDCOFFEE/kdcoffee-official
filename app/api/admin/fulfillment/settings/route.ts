@@ -20,6 +20,12 @@ export async function PATCH(request: Request) {
       automaticTrackingEnabled: body.automaticTrackingEnabled === true,
       pickupDeadlineDays: Number(body.pickupDeadlineDays),
       expiryPolicy: body.expiryPolicy,
+      internalLineEvents: body.internalLineEvents ? {
+        orderCreated: body.internalLineEvents.orderCreated === true,
+        shipped: body.internalLineEvents.shipped === true,
+        arrived: body.internalLineEvents.arrived === true,
+        completed: body.internalLineEvents.completed === true,
+      } : undefined,
       trackedEvents: {
         orderCreated: body.trackedEvents?.orderCreated === true,
         shipped: body.trackedEvents?.shipped === true,

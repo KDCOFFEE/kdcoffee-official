@@ -1,3 +1,4 @@
+import { trackLogisticsEmail } from "./logisticsTracking";
 import { createHash, randomUUID } from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
@@ -64,6 +65,7 @@ export function defaultLogisticsSettings(now = new Date()): LogisticsSettings {
     pickupDeadlineDays: 7,
     expiryPolicy: "manual_review",
     trackedEvents: { orderCreated: true, shipped: true, arrived: true, completed: true },
+    internalLineEvents: { orderCreated: true, shipped: true, arrived: true, completed: true },
     gmailConnection: { status: "not_connected", lastSyncedAt: null, recentProcessedCount: 0, reviewCount: 0 },
     updatedAt: nowIso(now),
   };
@@ -99,7 +101,7 @@ export async function readLogisticsSettings(filePath = getFulfillmentSettingsFil
   }
 }
 
-export async function saveLogisticsSettings(input: { expectedRevision: number; notificationEmail: string; automaticTrackingEnabled: boolean; pickupDeadlineDays: number; expiryPolicy: LogisticsSettings["expiryPolicy"]; trackedEvents: LogisticsSettings["trackedEvents"]; filePath?: string; now?: Date }) {
+export async function saveLogisticsSettings(input: { expectedRevision: number; notificationEmail: string; automaticTrackingEnabled: boolean; pickupDeadlineDays: number; expiryPolicy: LogisticsSettings["expiryPolicy"]; trackedEvents: LogisticsSettings["trackedEvents"]; internalLineEvents?: LogisticsSettings["trackedEvents"]; filePath?: string; now?: Date }) {
   const filePath = input.filePath ?? getFulfillmentSettingsFile();
   await fs.mkdir(path.dirname(filePath), { recursive: true });
   return withFileLock(filePath, async () => {
@@ -117,6 +119,7 @@ export async function saveLogisticsSettings(input: { expectedRevision: number; n
       pickupDeadlineDays: input.pickupDeadlineDays,
       expiryPolicy: "manual_review",
       trackedEvents: { ...input.trackedEvents },
+      internalLineEvents: input.internalLineEvents ? { ...input.internalLineEvents } : current.internalLineEvents,
       updatedAt: nowIso(input.now),
     };
     await atomicWriteJson(filePath, updated);
@@ -408,12 +411,21 @@ export async function processSevenElevenEmail(evidence: FulfillmentEmailEvidence
   const filePath = options.filePath ?? getFulfillmentStateFile();
   const now = options.now ?? new Date();
   await fs.mkdir(path.dirname(filePath), { recursive: true });
+  const tracking = await trackLogisticsEmail(parsed, { filePath, settings, now });
   const lookup = await withFileLock(filePath, async () => {
     const store = await readFulfillmentStore(filePath);
     const replay = store.processedFingerprints[parsed.sourceFingerprint];
-    if (replay?.reviewId) return { reviewId: replay.reviewId, orderId: undefined };
+    if (replay?.reviewId) {
+      const item = store.reviews.find((item) => item.reviewId === replay.reviewId);
+      if (item?.reason !== "unknown_order") return { reviewId: replay.reviewId, orderId: undefined };
+      item.status = "resolved";
+      item.resolvedAt = nowIso(now);
+      delete store.processedFingerprints[parsed.sourceFingerprint];
+      await persistStore(filePath, store, now);
+    }
     if (replay?.orderId) return { orderId: replay.orderId, reviewId: undefined };
     const matches = Object.values(store.records).filter((record) => record.externalOrderId === parsed.externalOrderId);
+    if (matches.length === 0) return { orderId: undefined, reviewId: undefined };
     if (matches.length !== 1) {
       const reviewId = review(store, parsed, matches.length ? "ambiguous_mapping" : "unknown_order", matches.length ? "物流編號對應多張訂單，請人工確認" : "找不到此外部物流編號對應的 KD Coffee 訂單", now);
       await persistStore(filePath, store, now);
@@ -422,7 +434,8 @@ export async function processSevenElevenEmail(evidence: FulfillmentEmailEvidence
     return { orderId: matches[0].orderId, reviewId: undefined };
   }, { timeoutMs: 15_000 });
   if (lookup.reviewId) return { parsed, mutated: false, review: true, reviewId: lookup.reviewId };
-  const order = await readOrder(lookup.orderId!);
+  if (!lookup.orderId) return { parsed, mutated: tracking.changed, review: false, external: true };
+  const order = await readOrder(lookup.orderId);
   if (!order) return { parsed, mutated: false, review: true };
   if (order.orderMode !== "711_cod") return { parsed, mutated: false, review: false };
   const result = await appendCanonicalEvent({ order, state: parsed.eventType, source: "seven_eleven_email", sourceFingerprint: parsed.sourceFingerprint, sourceReference: evidence.messageId?.slice(0, 300), externalOrderId: parsed.externalOrderId, externalShipmentId: parsed.externalShipmentId, occurredAt: parsed.eventTimestamp, filePath, settings, now });
