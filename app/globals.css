@@ -8067,3 +8067,19 @@ button.member-lifecycle-action:disabled,
   .empty-cart-checkout-shell h2 { font-size: 22px; }
   .empty-cart-checkout-action { min-height: 56px; }
 }
+
+.revenue-product-page .revenue-image-stage.product-visual-hero-stage {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: none;
+  aspect-ratio: 4 / 5;
+  padding: 0;
+}
+.revenue-product-page .product-visual-hero-stage > .product-visual-hero-image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center;
+}

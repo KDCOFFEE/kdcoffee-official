@@ -170,9 +170,10 @@ export default async function WorkPage({ params }: { params: Promise<{ slug: str
   const heroAsset = resolveHeroAsset(product);
   const presentationHeroAsset = heroAsset || (isGiottoPrototype ? resolveListAsset(product, { allowProductVisual: false }) : null);
   const productAsset = resolveProductAsset(product);
-  const heroMedia = getProductMediaAsset(product, "hero");
+  const isProductVisualHero = layout.heroAsset === "productVisual";
+  const heroMedia = getProductMediaAsset(product, layout.heroAsset);
   const heroVideo = heroMedia?.type === "video" ? heroMedia : undefined;
-  const legacyHeroPath = resolveProductAssetPath(product, "hero");
+  const legacyHeroPath = resolveProductAssetPath(product, layout.heroAsset);
   const staticProductFallback = resolveStaticProductImage(product);
   const heroPath = presentationHeroAsset?.path || "";
   const productPath = productAsset?.path || "";
@@ -252,11 +253,13 @@ export default async function WorkPage({ params }: { params: Promise<{ slug: str
       <ProductSectionReveals key={product.slug} calibrated={isGiottoPrototype}>
       <ProductPageEntrance>
       <div id="top-purchase" aria-hidden="true" />
-      <section {...getProductAnimationAttributes(sectionAnimation("product-hero"))} className={`revenue-hero ${heroVideo || heroPath ? "has-wide-hero" : ""}`} id="product-hero">
+      <section {...getProductAnimationAttributes(sectionAnimation("product-hero"))} className={`revenue-hero ${isProductVisualHero ? "has-product-visual-hero" : heroVideo || heroPath ? "has-wide-hero" : ""}`} id="product-hero">
         <div className="revenue-media">
           <div className="product-hero-sticky">
-            <div className={`revenue-image-stage ${heroVideo || heroPath ? "wide-hero-stage" : "product-stage"} page-entrance-hero`}>
-              {heroVideo ? (
+            <div className={`revenue-image-stage ${isProductVisualHero ? "product-visual-hero-stage" : heroVideo || heroPath ? "wide-hero-stage" : "product-stage"} page-entrance-hero`}>
+              {isProductVisualHero ? (
+                <img className="product-visual-hero-image" src={heroPath} alt={presentationHeroAsset?.alt || `${product.name} 商品主視覺`} width={1600} height={2000} />
+              ) : heroVideo ? (
               <>
                 <KdMedia
                   media={heroVideo}
@@ -291,7 +294,7 @@ export default async function WorkPage({ params }: { params: Promise<{ slug: str
             ) : (
               <ProductBagFallback product={product} />
             )}
-              {isGiottoPrototype ? <div className="giotto-hero-light-veil" aria-hidden="true" /> : null}
+              {isGiottoPrototype && !isProductVisualHero ? <div className="giotto-hero-light-veil" aria-hidden="true" /> : null}
             </div>
           </div>
           {!isGiottoPrototype ? <div className="revenue-media-caption"><span>{heroVideo || heroPath ? "商品情境主視覺" : "實際商品包裝"}</span><b>實際出貨內容以所選規格為準</b></div> : null}
