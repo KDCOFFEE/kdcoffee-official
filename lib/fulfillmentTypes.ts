@@ -1,3 +1,5 @@
+import type { SevenElevenEmailSummary } from "./sevenElevenEmailSummary";
+
 export const fulfillmentStates = [
   "order_created",
   "preparing",
@@ -73,6 +75,7 @@ export type FulfillmentReviewItem = {
 };
 
 export type LogisticsTrackingRecord = {
+  summary?: SevenElevenEmailSummary;
   externalOrderId: string;
   externalShipmentId?: string;
   currentState: FulfillmentEmailEventType;

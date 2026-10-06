@@ -2,16 +2,16 @@ import { getActiveMembershipRules } from "./membershipBusinessRules";
 import { processSevenElevenEmail, readLogisticsSettings, updateGmailConnectionStatus } from "./fulfillment";
 
 type GmailPart = { mimeType?: string; body?: { data?: string }; parts?: GmailPart[] };
-type GmailMessage = { id: string; internalDate?: string; payload?: { headers?: Array<{ name: string; value: string }>; body?: { data?: string }; parts?: GmailPart[] } };
+type GmailMessage = { id: string; internalDate?: string; payload?: { mimeType?: string; headers?: Array<{ name: string; value: string }>; body?: { data?: string }; parts?: GmailPart[] } };
 
 function decodeBase64Url(value = "") {
   return Buffer.from(value.replaceAll("-", "+").replaceAll("_", "/"), "base64").toString("utf8");
 }
 
-function textParts(part?: GmailPart): string[] {
+function textParts(part?: GmailPart, mimeType = "text/plain"): string[] {
   if (!part) return [];
-  const own = part.mimeType === "text/plain" && part.body?.data ? [decodeBase64Url(part.body.data)] : [];
-  return [...own, ...(part.parts ?? []).flatMap(textParts)];
+  const own = part.mimeType === mimeType && part.body?.data ? [decodeBase64Url(part.body.data)] : [];
+  return [...own, ...(part.parts ?? []).flatMap(child => textParts(child, mimeType))];
 }
 
 function header(message: GmailMessage, name: string) {
@@ -57,8 +57,11 @@ export async function syncSevenElevenGmail(options: { fetcher?: typeof fetch; ma
       const response = await fetcher(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${encodeURIComponent(item.id)}?format=full`, { headers, signal: AbortSignal.timeout(15_000) });
       if (!response.ok) continue;
       const message = await response.json() as GmailMessage;
-      const body = textParts({ mimeType: message.payload?.parts ? "multipart/mixed" : "text/plain", body: message.payload?.body, parts: message.payload?.parts }).join("\n");
-      const result = await processSevenElevenEmail({ from: header(message, "From"), subject: header(message, "Subject"), text: body, messageId: header(message, "Message-ID") || message.id, receivedAt: message.internalDate ? new Date(Number(message.internalDate)).toISOString() : undefined });
+      const root = { mimeType: message.payload?.mimeType || (message.payload?.parts ? "multipart/mixed" : "text/plain"), body: message.payload?.body, parts: message.payload?.parts };
+      const plain = textParts(root).join("\n");
+      const html = textParts(root, "text/html").join("\n");
+      const body = plain || html;
+      const result = await processSevenElevenEmail({ from: header(message, "From"), subject: header(message, "Subject"), text: body, html: html || undefined, messageId: header(message, "Message-ID") || message.id, receivedAt: message.internalDate ? new Date(Number(message.internalDate)).toISOString() : undefined });
       if (result.mutated) processed += 1;
       if (result.review) reviewed += 1;
     }

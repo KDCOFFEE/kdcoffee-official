@@ -2,7 +2,9 @@ import { promises as fs } from "node:fs";
 import { createHash, randomUUID } from "node:crypto";
 import { atomicWriteJson, withFileLock } from "./jsonFileStore";
 import { sendInternalLineNotification } from "./internalLineNotifications";
-import { fulfillmentStateLabels, type FulfillmentStore, type LogisticsSettings, type FulfillmentEmailEventType } from "./fulfillmentTypes";
+import { validSevenElevenShipmentId } from "./sevenElevenEmailSummary";
+import { logisticsNotificationText } from "./logisticsNotificationText";
+import { type LogisticsTrackingRecord, type FulfillmentStore, type LogisticsSettings, type FulfillmentEmailEventType } from "./fulfillmentTypes";
 import type { ParsedFulfillmentEvidence } from "./sevenElevenEmailParser";
 
 const ranks: Record<FulfillmentEmailEventType, number> = { order_created: 0, shipped: 1, arrived_at_pickup_store: 2, completed: 3 };
@@ -27,26 +29,33 @@ export async function trackLogisticsEmail(parsed: ParsedFulfillmentEvidence, opt
     if (store.schemaVersion !== 1 || !store.records || !Array.isArray(store.reviews)) throw new Error("物流追蹤資料無法安全讀取");
     store.logisticsTracking ??= {};
     const existing = store.logisticsTracking[externalOrderId];
-    const record = existing ?? { externalOrderId, currentState: state, updatedAt: parsed.eventTimestamp, events: [] };
+    const record: LogisticsTrackingRecord = existing ?? { externalOrderId, currentState: state, updatedAt: parsed.eventTimestamp, events: [] };
     store.logisticsTracking[externalOrderId] = record;
+    const beforeDetails = JSON.stringify([record.summary, record.externalShipmentId]);
+    record.summary = { ...record.summary, ...parsed.summary };
+    if (record.externalShipmentId && !validSevenElevenShipmentId(record.externalShipmentId)) delete record.externalShipmentId;
+    if (validSevenElevenShipmentId(parsed.externalShipmentId)) record.externalShipmentId = parsed.externalShipmentId;
+    const detailsChanged = beforeDetails !== JSON.stringify([record.summary, record.externalShipmentId]);
+    const persist = async () => {
+      store.revision += 1;
+      store.updatedAt = options.now.toISOString();
+      await atomicWriteJson(options.filePath, store);
+    };
     let event = record.events.find((item) => item.state === state);
-    if (event && (event.notification.status === "sent" || event.notification.status === "disabled")) return { changed: false };
+    if (event && (event.notification.status === "sent" || event.notification.status === "disabled")) {
+      if (detailsChanged) await persist();
+      return { changed: false };
+    }
     const changed = !event && (!existing || ranks[state] > ranks[record.currentState]);
-    if (!event && !changed) return { changed: false };
+    if (!event && !changed) { if (detailsChanged) await persist(); return { changed: false }; }
     if (!event) {
       const enabled = (options.settings.internalLineEvents ?? { orderCreated: true, shipped: true, arrived: true, completed: true })[keys[state]];
       event = { state, occurredAt: parsed.eventTimestamp, notification: { status: enabled ? "pending" : "disabled", retryKey: randomUUID() } };
       record.events.push(event);
       record.currentState = state;
       record.updatedAt = parsed.eventTimestamp;
-      record.externalShipmentId = parsed.externalShipmentId || record.externalShipmentId;
     }
     // Persist the retry key before sending, so a crash cannot create a new send key.
-    const persist = async () => {
-      store.revision += 1;
-      store.updatedAt = options.now.toISOString();
-      await atomicWriteJson(options.filePath, store);
-    };
     await persist();
     if (event.notification.status === "pending" || event.notification.status === "failed") {
       const enabled = (options.settings.internalLineEvents ?? { orderCreated: true, shipped: true, arrived: true, completed: true })[keys[state]];
@@ -67,13 +76,8 @@ export async function trackLogisticsEmail(parsed: ParsedFulfillmentEvidence, opt
         return { changed };
       }
       event.notification.recipientHash ??= recipientHash;
-      event.notification.text ??= [
-        "KD Coffee｜7-ELEVEN 物流通知",
-        `狀態：${fulfillmentStateLabels[state]}`,
-        `賣貨便訂單：${externalOrderId}`,
-        ...(record.externalShipmentId ? [`交貨便單號：${record.externalShipmentId}`] : []),
-        `通知時間：${new Date(event.occurredAt).toLocaleString("zh-TW", { timeZone: "Asia/Taipei" })}`,
-      ].join("\n");
+      const matches = Object.values(store.records).filter(item => item.externalOrderId === externalOrderId);
+      event.notification.text ??= logisticsNotificationText(record, state, event.occurredAt, matches.length === 1 ? matches[0].orderId : undefined);
       event.notification.attemptedAt ??= options.now.toISOString();
       await persist();
       try {

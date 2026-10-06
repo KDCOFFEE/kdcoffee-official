@@ -1,3 +1,4 @@
+import { extractSevenElevenShipmentId, parseSevenElevenEmailSummary, type SevenElevenEmailSummary } from "./sevenElevenEmailSummary";
 import { createHash } from "node:crypto";
 
 import type { FulfillmentEmailEventType } from "./fulfillmentTypes";
@@ -6,6 +7,7 @@ export type FulfillmentEmailEvidence = {
   from: string;
   subject: string;
   text: string;
+  html?: string;
   messageId?: string;
   receivedAt?: string;
 };
@@ -16,6 +18,7 @@ export type ParsedFulfillmentEvidence = {
   eventType?: FulfillmentEmailEventType;
   externalOrderId?: string;
   externalShipmentId?: string;
+  summary?: SevenElevenEmailSummary;
   eventTimestamp: string;
   sourceFingerprint: string;
   reason?: "wrong_sender" | "unrecognized_subject" | "missing_order_reference" | "body_mismatch";
@@ -23,7 +26,6 @@ export type ParsedFulfillmentEvidence = {
 
 const TRUSTED_SENDER = "no-reply@sp88.com";
 const EXTERNAL_ORDER_PATTERN = /\bCM[A-Z0-9]{8,20}\b/i;
-const EXTERNAL_SHIPMENT_PATTERN = /\bE[A-Z0-9]{7,20}\b/i;
 
 function clean(value: unknown, max: number) {
   return String(value ?? "").replace(/\s+/g, " ").trim().slice(0, max);
@@ -72,6 +74,7 @@ export function parseSevenElevenEmail(evidence: FulfillmentEmailEvidence): Parse
     recognized: true,
     eventType,
     externalOrderId,
-    externalShipmentId: body.match(EXTERNAL_SHIPMENT_PATTERN)?.[0]?.toUpperCase(),
+    externalShipmentId: extractSevenElevenShipmentId(evidence.html || evidence.text),
+    summary: parseSevenElevenEmailSummary(evidence.html || evidence.text),
   };
 }

@@ -1,3 +1,4 @@
+import { validSevenElevenShipmentId } from "./sevenElevenEmailSummary";
 import { trackLogisticsEmail } from "./logisticsTracking";
 import { createHash, randomUUID } from "node:crypto";
 import { promises as fs } from "node:fs";
@@ -359,7 +360,7 @@ export async function associateExternalFulfillment(input: { orderId: string; ext
   const externalOrderId = input.externalOrderId.trim().toUpperCase();
   const externalShipmentId = input.externalShipmentId?.trim().toUpperCase() || undefined;
   if (!ORDER_REFERENCE.test(externalOrderId)) throw new FulfillmentError("賣貨便訂單編號格式不正確");
-  if (externalShipmentId && !SHIPMENT_REFERENCE.test(externalShipmentId)) throw new FulfillmentError("交貨便單號格式不正確");
+  if (externalShipmentId && (!SHIPMENT_REFERENCE.test(externalShipmentId) || !validSevenElevenShipmentId(externalShipmentId))) throw new FulfillmentError("交貨便單號格式不正確");
   const order = await readOrder(input.orderId);
   if (!order) throw new FulfillmentError("找不到訂單", 404);
   if (order.orderMode !== "711_cod") throw new FulfillmentError("只有 7-ELEVEN 訂單可以連結賣貨便編號");
