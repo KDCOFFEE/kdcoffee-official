@@ -1,4 +1,3 @@
-import { randomBytes } from "node:crypto";
 import assert from "node:assert/strict";
 import { promises as fs } from "node:fs";
 import os from "node:os";
@@ -10,7 +9,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 const root = await fs.mkdtemp(path.join(os.tmpdir(), "kd-credit-integration-"));
 process.env.KD_DATA_DIR = root;
 delete process.env.RAILWAY_VOLUME_MOUNT_PATH;
-process.env.AUTH_SESSION_SECRET = randomBytes(32).toString("hex");
+process.env.AUTH_SESSION_SECRET = "isolated-credit-integration-secret-more-than-32-characters";
 process.env.MEMBER_IDENTITY_SECRET = process.env.AUTH_SESSION_SECRET;
 // No test can contact an external notification service.
 globalThis.fetch = async () => { throw new Error("External network forbidden in isolated test"); };

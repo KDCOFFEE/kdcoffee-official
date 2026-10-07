@@ -2,25 +2,27 @@ import fs from "node:fs";
 
 const read = (file) => fs.readFileSync(file, "utf8");
 const referral = read("components/member/MemberReferralCenter.tsx");
+const share = read("components/member/KdShareDialog.tsx");
+const retail = read("components/member/RetailPromotionCenter.tsx");
 const memberPage = read("app/member/page.tsx");
 const auth = read("lib/memberAuth.ts");
 const email = read("components/member/EmailAuthForms.tsx");
 const css = read("app/globals.css");
 
 const assertions = [
-  ["personal referral code remains visible", referral.includes("查看推薦碼與連結") && referral.includes("推薦碼 <strong>{data.referralCode}</strong>")],
-  ["visible referral url remains available", referral.includes("data.referralUrl") && referral.includes("複製連結")],
-  ["copy referral code and url remain available", referral.includes('copy(data.referralCode, "推薦碼")') && referral.includes('copy(data.referralUrl, "分享連結")') && referral.includes("copyText")],
-  ["copy fallback", referral.includes('document.execCommand("copy")')],
-  ["qr code", referral.includes("quickchart.io/qr") && referral.includes("member-referral-qr-frame")],
-  ["native share with copy fallback", referral.includes("navigator.share") && referral.includes("fullShareText") && referral.includes("分享內容已複製")],
-  ["referral tracking privacy remains implicit", referral.includes("分享給朋友的內容不會強調推薦制度") && referral.includes("referralUrl")],
+  ["one unified share entry remains under Recommendation without a Retail Promotion duplicate", /<section id="referral"[\s\S]*<KdShareDialog\b[\s\S]*<section id="rewards"/u.test(referral) && (referral.match(/<KdShareDialog\b/gu) ?? []).length === 1 && (referral.match(/className=\{styles\.primaryAction\}/gu) ?? []).length === 1 && !/KdShareDialog|shareOpen|retail-promotion-primary-action/u.test(retail)],
+  ["referral team has no duplicate share entry", !referral.includes("member-referral-invite-v2") && !referral.includes("member-referral-share-primary")],
+  ["copy link remains available inside the share dialog", share.includes("複製連結") && share.includes("copyText")],
+  ["copy fallback", share.includes('document.execCommand("copy")')],
+  ["qr code is available on demand", share.includes("quickchart.io/qr") && share.includes("qrOpen ?")],
+  ["native share uses edited copy with fallback", share.includes("navigator.share") && share.includes("text: shareText") && share.includes("分享內容已複製")],
+  ["referral tracking explanation remains consumer-facing", share.includes("推薦關係會由系統自動記錄") && !share.includes("HMAC")],
   ["member page preserves referral return", memberPage.includes("referralCode") && memberPage.includes("/member?ref=")],
   ["safe return allows only canonical referral code", auth.includes('/^KD[A-F0-9]{10}$/') && auth.includes('url.pathname !== "/member"')],
   ["email auth preserves referral return", email.includes('/^\\/member\\?ref=KD[A-F0-9]{10}$/')],
-  ["responsive invite ui", css.includes("member-referral-invite") && css.includes("@media(max-width:560px)")],
-  ["natural share copy", referral.includes("最近喝到一家我很喜歡的咖啡，想分享給你")],
-  ["qr download capability", referral.includes("下載 QR Code 圖片") && referral.includes("anchor.download")],
+  ["responsive share dialog", css.includes(".kd-share-dialog") && css.includes("height:100dvh")],
+  ["natural editable share copy", share.includes("最近喝到一家我很喜歡的咖啡，想分享給你") && share.includes("<textarea")],
+  ["qr download capability", share.includes("下載 QR Code") && share.includes("anchor.download")],
 ];
 
 let pass = 0;

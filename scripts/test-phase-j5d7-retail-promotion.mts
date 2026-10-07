@@ -158,13 +158,18 @@ try {
 
   const lastClick = await context("last-click");
   const tokenB = attributionApi.createRetailPromotionAttributionToken({ referralCode: codeB, attributionWindowDays: 30, now: new Date("2026-09-02T00:00:00.000Z") });
-  check(attributionApi.verifyRetailPromotionAttributionToken(tokenB)?.referralCode === codeB, "last valid B click provides B attribution for future orders");
+  const tokenBValidationTime = new Date("2026-09-23T04:00:00.000Z");
+  const tokenBExpiryTime = new Date("2026-10-02T00:00:00.000Z");
+  check(attributionApi.verifyRetailPromotionAttributionToken(tokenB, tokenBValidationTime)?.referralCode === codeB, "last valid B click provides B attribution for future orders");
+  check(attributionApi.verifyRetailPromotionAttributionToken(tokenB, new Date(tokenBExpiryTime.getTime() - 1))?.referralCode === codeB, "share attribution remains valid one millisecond before expiry");
+  check(attributionApi.verifyRetailPromotionAttributionToken(tokenB, tokenBExpiryTime) === null, "share attribution expires exactly at the expiry boundary");
+  check(attributionApi.verifyRetailPromotionAttributionToken(tokenB, new Date(tokenBExpiryTime.getTime() + 1)) === null, "share attribution remains invalid one millisecond after expiry");
   await completeGuest(lastClick, "KD20260923-1003", snapshot(memberB, codeB));
   check(Object.values((await state(lastClick)).retailPromotionRewards)[0].beneficiaryMemberId === memberB, "guest clicks A then B before order creation: B owns the new order");
 
   const immutable = await context("immutable");
   const immutableOrderSnapshot = snapshot(memberA, codeA);
-  attributionApi.verifyRetailPromotionAttributionToken(tokenB);
+  attributionApi.verifyRetailPromotionAttributionToken(tokenB, tokenBValidationTime);
   await completeGuest(immutable, "KD20260923-1004", immutableOrderSnapshot);
   check(Object.values((await state(immutable)).retailPromotionRewards)[0].beneficiaryMemberId === memberA, "order snapshots A; later B click does not rewrite the existing order");
   check(Object.values((await state(immutable)).retailPromotionRewards)[0].beneficiaryMemberId === memberA, "guest registering after guest order creation does not rewrite A attribution");
