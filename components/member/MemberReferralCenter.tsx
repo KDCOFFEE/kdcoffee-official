@@ -1,6 +1,6 @@
 "use client";
 
-import { MemberCopyValue, MemberCopyText, useMemberCopyKey, MemberCopyElement } from "@/components/member/MemberCenterCopyProvider";
+import { MemberCopyValue, MemberCopyText, useMemberCopyKey, useMemberPointDisplayName, MemberCopyElement } from "@/components/member/MemberCenterCopyProvider";
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState, type ComponentProps } from "react";
@@ -151,10 +151,10 @@ type RewardLedgerRow = {
 };
 
 const pointValue = (value: number, label: string) => `${value.toLocaleString("zh-TW")} ${label}`;
-const creditValue = (value: number) => `${value.toLocaleString("zh-TW")} 元`;
 
 export default function MemberReferralCenter({ initialData: data }: { initialData: MemberReferralCenterData }) {
   const copy = useMemberCopyKey();
+  const creditValue = (value: number) => `${value.toLocaleString("zh-TW")} ${copy("member.dashboard.label.622f3c5acb")}`;
   const router = useRouter();
   const searchParams = useSearchParams();
   const [teamPath, setTeamPath] = useState<Array<{ memberNumber: string; level: number }>>([]);
@@ -315,9 +315,9 @@ export default function MemberReferralCenter({ initialData: data }: { initialDat
     };
   }, [searchParams]);
 
-  const displayPointName = /^[A-Za-z]+$/.test(data.pointDisplayName || "")
+  const displayPointName = useMemberPointDisplayName(/^[A-Za-z]+$/.test(data.pointDisplayName || "")
     ? data.pointDisplayName.toUpperCase()
-    : (data.pointDisplayName || "KD點");
+    : data.pointDisplayName);
   const directMembers = data.summaries[0]?.members ?? 0;
   const rootMemberNumber = data.nodes.find((node) => node.level === 1)?.parentMemberNumber ?? "";
   const currentTeamParent = teamPath.at(-1) ?? null;
@@ -490,40 +490,40 @@ export default function MemberReferralCenter({ initialData: data }: { initialDat
       </section>
 
       <section id="rewards" className="member-ia-section" aria-labelledby="member-rewards-title" data-member-section role="tabpanel" hidden>
-        <header className="member-ia-section-head"><div><p className="eyebrow dark"><MemberCopyValue value={"REWARDS"} /></p><h2 id="member-rewards-title"><MemberCopyValue value={"回饋"} /></h2></div><p><MemberCopyValue value={"推廣零售、會員回饋、資格與歷史明細各自清楚呈現。"} /></p></header>
+        <header className="member-ia-section-head"><div><p className="eyebrow dark"><MemberCopyText copyKey="member.referral.label.d03acbf1f1" /></p><h2 id="member-rewards-title"><MemberCopyText copyKey="member.referral.reward.844ff5842a" /></h2></div><p><MemberCopyText copyKey="member.referral.qualification.78aed18bf0" /></p></header>
         <RetailPromotionCenter />
         <section className="member-commerce-section member-referral-center-v2">
-          <div className="member-section-head"><div><p className="eyebrow dark"><MemberCopyValue value={"MEMBER REWARDS"} /></p><h2><MemberCopyValue value={"會員回饋"} /></h2><p><MemberCopyValue value={"回饋點數與折抵金額都以正式紀錄為準。"} /></p></div></div>
+          <div className="member-section-head"><div><p className="eyebrow dark"><MemberCopyText copyKey="member.referral.label.9f21433d5c" /></p><h2><MemberCopyText copyKey="credit.passbook.memberReward" /></h2><p><MemberCopyText copyKey="member.referral.reward.174938c940" /></p></div></div>
           <div className={`member-referral-primary-grid ${styles.rewardPrimary}`}>
             <article className="member-referral-primary-card">
-              <div><p className="eyebrow dark"><MemberCopyValue value={"MY REWARDS"} /></p><h3><MemberCopyValue value={"我的回饋"} /></h3></div>
-              <dl><div><dt><MemberCopyValue value={"待入帳"} /></dt><dd>NT$ {pendingRewardCredit.toLocaleString("zh-TW")}</dd></div><div><dt><MemberCopyValue value={"已入帳"} /></dt><dd>NT$ {releasedRewardCredit.toLocaleString("zh-TW")}</dd></div></dl>
-              <button ref={rewardTriggerRef} type="button" onClick={() => openRewardDetails("all", rewardTriggerRef.current)}><MemberCopyValue value={"查看回饋明細"} /></button>
+              <div><p className="eyebrow dark"><MemberCopyText copyKey="member.referral.label.899b2f0a17" /></p><h3><MemberCopyText copyKey="member.rewards.title" /></h3></div>
+              <dl><div><dt><MemberCopyText copyKey="member.referral.reward.dc9160b21b" /></dt><dd>{creditValue(pendingRewardCredit)}</dd></div><div><dt><MemberCopyText copyKey="member.referral.reward.6bd122e2dd" /></dt><dd>{creditValue(releasedRewardCredit)}</dd></div></dl>
+              <button ref={rewardTriggerRef} type="button" onClick={() => openRewardDetails("all", rewardTriggerRef.current)}><MemberCopyText copyKey="member.referral.reward.10aad3f559" /></button>
             </article>
           </div>
           <MemberQualificationProgress progress={data.qualificationProgress} />
           <dialog ref={rewardDialogRef} className="member-ia-dialog member-reward-dialog" aria-labelledby="member-reward-ledger-title" onClose={finishClosingRewardDetails}>
         <div className="member-ia-dialog-shell">
-          <header><div><p className="eyebrow dark"><MemberCopyValue value={"REWARD DETAILS"} /></p><h2 id="member-reward-ledger-title"><MemberCopyValue value={"推薦與會員回饋"} /></h2></div><MemberCopyElement as="button" type="button" aria-label="關閉回饋明細" onClick={() => rewardDialogRef.current?.close()}>×</MemberCopyElement></header>
+          <header><div><p className="eyebrow dark"><MemberCopyText copyKey="member.referral.label.2053611867" /></p><h2 id="member-reward-ledger-title"><MemberCopyText copyKey="member.referral.reward.a36b14bb19" /></h2></div><MemberCopyElement as="button" type="button" aria-label="關閉回饋明細" onClick={() => rewardDialogRef.current?.close()}>×</MemberCopyElement></header>
           <div className="member-ia-dialog-body">
       <section className="member-referral-reward-ledger" aria-labelledby="member-reward-ledger-title">
-        <div className="member-referral-subhead"><p className="eyebrow dark"><MemberCopyValue value={"REWARD HISTORY"} /></p><h3><MemberCopyValue value={"回饋總覽"} /></h3><p><MemberCopyValue value={"先看回饋結果，需要時再展開計算、資格與來源訂單。"} /></p></div>
+        <div className="member-referral-subhead"><p className="eyebrow dark"><MemberCopyText copyKey="member.referral.label.1b6580e9b2" /></p><h3><MemberCopyText copyKey="member.referral.reward.da565254f6" /></h3><p><MemberCopyText copyKey="member.referral.qualification.263bbdd968" /></p></div>
         {rewardFilter === "released" ? (
           <MemberCopyElement as="div" className={`member-reward-summary-grid ${styles.rewardSummaryGrid}`} aria-label={copy("member.referral.tooltip.be6e512f4b")}>
             <article><small><MemberCopyText copyKey="member.referral.label.5b29dc001e" /></small><strong>{creditValue(data.availableCreditBalance)}</strong><span><MemberCopyText copyKey="member.referral.reward.0f78857ceb" /></span></article>
-            <article><small><MemberCopyValue value={"回饋入帳來源"} /></small><strong>{releasedRewardSourceCount}<MemberCopyValue value={" 筆"} /></strong><span><MemberCopyValue value={"推廣零售、推薦回饋與自己的消費"} /></span></article>
+            <article><small><MemberCopyText copyKey="member.referral.reward.5513b261d0" /></small><strong>{releasedRewardSourceCount}<MemberCopyText copyKey="member.dashboard.label.d0bb9b2b8e" /></strong><span><MemberCopyText copyKey="member.referral.reward.66ef2bf5c3" /></span></article>
           </MemberCopyElement>
         ) : (
           <MemberCopyElement as="div" className={`member-reward-summary-grid ${styles.rewardSummaryGrid}`} aria-label="回饋點數總覽">
-            <article><small><MemberCopyValue value={"累計回饋"} /></small><strong><MemberCopyValue value={pointValue(totalRewardPoints, displayPointName)} /></strong><span><MemberCopyValue value={"已入帳＋有效待入帳"} /></span></article>
-            <article><small><MemberCopyValue value={"已入帳"} /></small><strong><MemberCopyValue value={pointValue(releasedRewardPoints, displayPointName)} /></strong><span>{releasedRewards.length}<MemberCopyValue value={" 筆"} /></span></article>
-            <article><small><MemberCopyValue value={"待入帳"} /></small><strong><MemberCopyValue value={pointValue(pendingRewardPoints, displayPointName)} /></strong><span>{pendingRewardSourceCount}{" "}<MemberCopyText copyKey="member.dashboard.label.693d81614f" />{" "}{pendingRewardCredit.toLocaleString("zh-TW")}</span></article>
-            <article><small><MemberCopyValue value={"本月已入帳"} /></small><strong><MemberCopyValue value={pointValue(currentMonthRewardPoints, displayPointName)} /></strong><span><MemberCopyValue value={"會員／推薦回饋本月正式發放"} /></span></article>
+            <article><small><MemberCopyText copyKey="member.referral.reward.7dc7d454e0" /></small><strong><MemberCopyValue value={pointValue(totalRewardPoints, displayPointName)} /></strong><span><MemberCopyText copyKey="member.referral.reward.aaf98411db" /></span></article>
+            <article><small><MemberCopyText copyKey="member.referral.reward.6bd122e2dd" /></small><strong><MemberCopyValue value={pointValue(releasedRewardPoints, displayPointName)} /></strong><span>{releasedRewards.length}<MemberCopyText copyKey="member.dashboard.label.d0bb9b2b8e" /></span></article>
+            <article><small><MemberCopyText copyKey="member.referral.reward.dc9160b21b" /></small><strong><MemberCopyValue value={pointValue(pendingRewardPoints, displayPointName)} /></strong><span>{pendingRewardSourceCount}{" "}<MemberCopyText copyKey="member.dashboard.label.693d81614f" />{" "}{pendingRewardCredit.toLocaleString("zh-TW")}</span></article>
+            <article><small><MemberCopyText copyKey="member.referral.reward.761dfcd646" /></small><strong><MemberCopyValue value={pointValue(currentMonthRewardPoints, displayPointName)} /></strong><span><MemberCopyText copyKey="member.referral.reward.d6dee35436" /></span></article>
           </MemberCopyElement>
         )}
-        {data.pvDisclosure ? <details className="member-referral-policy"><summary><MemberCopyValue value={"推薦回饋如何計算？"} /></summary><p>{data.pvDisclosure}</p><p><MemberCopyValue value={"加入推薦團隊不等於立即產生回饋；仍須依活動、消費與成功取貨條件判定。"} /></p></details> : null}
+        {data.pvDisclosure ? <details className="member-referral-policy"><summary><MemberCopyText copyKey="member.referral.reward.4b94fc68fd" /></summary><p>{data.pvDisclosure}</p><p><MemberCopyText copyKey="member.referral.reward.710b7c9cbe" /></p></details> : null}
         <div className="member-reward-details">
-          <div className="member-reward-ledger-heading"><div><p className="eyebrow dark"><MemberCopyValue value={"REWARD DETAILS"} /></p><h4><MemberCopyValue value={"回饋明細"} /></h4><p><MemberCopyValue value={"查看推廣零售、推薦與自己消費所產生的回饋與入帳狀態。"} /></p></div><span><MemberCopyValue value={"共 "} />{allRewardSourceCount}<MemberCopyValue value={" 筆"} /></span></div>
+          <div className="member-reward-ledger-heading"><div><p className="eyebrow dark"><MemberCopyText copyKey="member.referral.label.2053611867" /></p><h4><MemberCopyText copyKey="member.referral.reward.7631502fb3" /></h4><p><MemberCopyText copyKey="member.referral.reward.e2e8a2bbcc" /></p></div><span><MemberCopyText copyKey="member.dashboard.label.3b6ef811b8" />{allRewardSourceCount}<MemberCopyText copyKey="member.dashboard.label.d0bb9b2b8e" /></span></div>
         {(data.rewards.length || data.rewardCreditSources.length || data.pendingRetailPromotionRewards.length) ? <>
           <MemberCopyElement as="div" className={`member-reward-filters ${styles.compactFilters}`} aria-label="回饋紀錄篩選">
             <div>{(["all", "pending", "released"] as const).map((filter) => {
@@ -531,8 +531,8 @@ export default function MemberReferralCenter({ initialData: data }: { initialDat
               return <button type="button" key={filter} className={rewardFilter === filter ? "is-active" : ""} onClick={() => { setRewardFilter(filter); setRewardPage(1); setExpandedRewardKey(null); }}><MemberCopyValue value={filter === "all" ? "全部" : filter === "pending" ? "待入帳" : "已入帳"} /> <span>{count}</span></button>;
             })}</div>
             <MemberCopyElement as="select" aria-label="依推薦代數篩選" value={rewardLevel} onChange={(event) => { setRewardLevel(Number(event.target.value)); setRewardPage(1); setExpandedRewardKey(null); }}>
-              <option value={0}><MemberCopyValue value={"全部代數"} /></option>
-              {data.summaries.map((summary) => <option key={summary.level} value={summary.level}><MemberCopyValue value={"第 "} />{summary.level}<MemberCopyValue value={" 代"} /></option>)}
+              <option value={0}><MemberCopyText copyKey="member.referral.label.da3eb7ffe6" /></option>
+              {data.summaries.map((summary) => <option key={summary.level} value={summary.level}><MemberCopyText copyKey="member.referral.label.dae828fe4f" />{summary.level}<MemberCopyText copyKey="member.referral.label.b5a9258cf7" /></option>)}
             </MemberCopyElement>
           </MemberCopyElement>
           {pagedLedgerRows.length ? (
@@ -560,18 +560,18 @@ export default function MemberReferralCenter({ initialData: data }: { initialDat
                         : `一般會員最近 ${q.generalMember.windowDays} 天累積${qualificationMetric}達 ${qualificationThreshold(q.generalMember.threshold)}，或有效定期配送會員最近 ${q.activeSubscriptionMember.windowDays} 天累積${qualificationMetric}達 ${qualificationThreshold(q.activeSubscriptionMember.threshold)}，任一條件符合即可。`
                   : null;
                 const qualificationSummary = row.kind === "retail"
-                  ? <p><MemberCopyValue value={"推廣零售回饋不需推薦資格；訂單完成後進入安全等待。"} /></p>
+                  ? <p><MemberCopyText copyKey="member.referral.qualification.6d672bbde2" /></p>
                   : !reward
-                    ? <p><MemberCopyValue value={"本筆已完成正式入帳。"} /></p>
+                    ? <p><MemberCopyText copyKey="member.referral.reward.9890baca75" /></p>
                     : isDirectSelfPurchase
-                      ? <p><MemberCopyValue value={"本人消費回饋不需推薦資格。"} /></p>
+                      ? <p><MemberCopyText copyKey="member.referral.qualification.0f87b093ab" /></p>
                       : hasQualificationCoverage
-                        ? <p><MemberCopyValue value={"本筆已由有效推薦資格涵蓋 ✓"} /></p>
+                        ? <p><MemberCopyText copyKey="member.referral.qualification.b0a2ab4719" /></p>
                         : effectiveQualificationStatus === "qualified"
-                          ? <p><MemberCopyValue value={"本筆推薦資格已確認 ✓"} /></p>
+                          ? <p><MemberCopyText copyKey="member.referral.qualification.7763aec47e" /></p>
                           : effectiveQualificationStatus === "expired"
-                            ? <p><MemberCopyValue value={"本筆回饋資格期限已結束。"} /></p>
-                            : <p><MemberCopyValue value={"尚待取得推薦回饋資格。"} /></p>;
+                            ? <p><MemberCopyText copyKey="member.referral.qualification.81110e401b" /></p>
+                            : <p><MemberCopyText copyKey="member.referral.qualification.550d7a2f49" /></p>;
                 const lifecycleStage = row.releasedAt ? 4 : effectiveQualificationStatus === "qualified" ? 3 : 2;
                 const waitingStepLabel = row.displayStatus === "待系統入帳" ? "待系統入帳" : "安全等待";
                 const lifecycleLabels = row.kind === "retail" || isDirectSelfPurchase
@@ -609,9 +609,9 @@ export default function MemberReferralCenter({ initialData: data }: { initialDat
                 );
               })}
             </MemberCopyElement>
-          ) : <div className="member-commerce-empty compact"><strong><MemberCopyValue value={"沒有符合目前篩選條件的回饋紀錄"} /></strong><p><MemberCopyValue value={"可切換狀態或代數查看其他紀錄。"} /></p></div>}
-          {rewardPageCount > 1 ? <MemberCopyElement as="nav" className="member-reward-pagination" aria-label="推薦回饋分頁"><button type="button" disabled={safeRewardPage <= 1} onClick={() => setRewardPage(Math.max(1, safeRewardPage - 1))}><MemberCopyValue value={"上一頁"} /></button><span><MemberCopyValue value={"第 "} />{safeRewardPage} / {rewardPageCount}<MemberCopyValue value={" 頁"} /></span><button type="button" disabled={safeRewardPage >= rewardPageCount} onClick={() => setRewardPage(Math.min(rewardPageCount, safeRewardPage + 1))}><MemberCopyValue value={"下一頁"} /></button></MemberCopyElement> : null}
-        </> : <div className="member-commerce-empty compact"><strong><MemberCopyValue value={"目前還沒有推薦回饋紀錄"} /></strong><p><MemberCopyValue value={"推薦會員產生符合規則的有效消費後，回饋紀錄會顯示在這裡。"} /></p></div>}
+          ) : <div className="member-commerce-empty compact"><strong><MemberCopyText copyKey="member.referral.emptyState.b71404cdb6" /></strong><p><MemberCopyText copyKey="member.referral.button.64d6eec1cf" /></p></div>}
+          {rewardPageCount > 1 ? <MemberCopyElement as="nav" className="member-reward-pagination" aria-label="推薦回饋分頁"><button type="button" disabled={safeRewardPage <= 1} onClick={() => setRewardPage(Math.max(1, safeRewardPage - 1))}><MemberCopyText copyKey="credit.passbook.prevPage" /></button><span><MemberCopyText copyKey="member.referral.label.dae828fe4f" />{safeRewardPage} / {rewardPageCount}<MemberCopyText copyKey="member.referral.label.d04825997b" /></span><button type="button" disabled={safeRewardPage >= rewardPageCount} onClick={() => setRewardPage(Math.min(rewardPageCount, safeRewardPage + 1))}><MemberCopyText copyKey="credit.passbook.nextPage" /></button></MemberCopyElement> : null}
+        </> : <div className="member-commerce-empty compact"><strong><MemberCopyText copyKey="member.referral.emptyState.82aaf191ea" /></strong><p><MemberCopyText copyKey="member.referral.reward.f8ed05c62f" /></p></div>}
         </div>
       </section>
           </div>

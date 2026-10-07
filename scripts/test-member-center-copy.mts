@@ -76,7 +76,7 @@ try {
   const before = render({});
   const after = render({ [labelKey]: "好友分享回饋" });
   check("actual reward card changed label", () => { assert.ok(before.includes("第 1 代推薦回饋")); assert.ok(after.includes("好友分享回饋")); });
-  for (const display of ["NT$ 18", "+ 17.5 KD點", "5%", "待符合資格", "KD-TEST-001"]) check(`business display unchanged ${display}`, () => { assert.ok(before.includes(display)); assert.ok(after.includes(display)); });
+  for (const display of ["18 元", "+ 17.5 KD點", "5%", "待符合資格", "KD-TEST-001"]) check(`business display unchanged ${display}`, () => { assert.ok(before.includes(display)); assert.ok(after.includes(display)); });
   check("canonical percentage points display exactly 5%", () => { assert.ok(before.includes(">5%<")); assert.ok(after.includes(">5%<")); assert.ok(!after.includes("500%")); });
   check("DOM structure unchanged", () => assert.deepEqual(before.match(/<[^>]+>/g), after.match(/<[^>]+>/g)));
   check("ledger qualification points credit unchanged", () => assert.equal(JSON.stringify(ledger), snapshot));
@@ -86,6 +86,11 @@ try {
   check("native attributes preserved display title resolved", () => { assert.ok(attr.includes('title="好友分享回饋"')); assert.ok(attr.includes("disabled")); });
   const admin = renderToStaticMarkup(createElement(MemberCenterCopyManager, { initialRevision: 0, initialOverrides: {} }));
   check("Admin grouped editor renders", () => { assert.ok(admin.includes("會員中心顯示文字與說明")); assert.ok(admin.includes("預設文字：")); assert.ok(admin.includes("恢復預設")); assert.ok(admin.includes("定期配送")); });
+  const renamed = render({ "member.dashboard.label.622f3c5acb": "枚", "member.rewards.kdPoints.title": "咖啡點", "credit.reward.qualifying": "資格待確認" });
+  check("reward details follow shared credit unit and point name", () => {
+    assert.ok(renamed.includes("18 枚")); assert.ok(renamed.includes("17.5 咖啡點")); assert.ok(renamed.includes("資格待確認"));
+    assert.ok(renamed.includes("5%")); assert.ok(!renamed.includes("18 元"));
+  });
   const baselines = JSON.parse(await fs.readFile(path.join(process.cwd(), "scripts/fixtures/member-copy-render-boundary-baseline.json"), "utf8"));
   for (const [file, digest] of Object.entries(baselines)) check(`presentation regression baseline ${file}`, () => assert.equal(memberCopyRenderBoundaryDigest(requireSource(file), file), digest));
   console.log(`MEMBER COPY PASS: ${checks} checks; isolated storage only.`);

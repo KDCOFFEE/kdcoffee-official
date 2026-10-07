@@ -15,6 +15,8 @@ import MemberMobileDisclosure from "@/components/member/MemberMobileDisclosure";
 import MemberSectionNav from "@/components/member/MemberSectionNav";
 import MemberSubscriptionExperience from "@/components/member/MemberSubscriptionExperience";
 import MemberReferralCenter from "@/components/member/MemberReferralCenter";
+import MemberCreditPassbook from "@/components/member/MemberCreditPassbook";
+import { getMemberCreditPassbook } from "@/lib/memberCreditPassbookStore";
 import MemberQualificationSummary from "@/components/member/MemberQualificationSummary";
 import memberExperienceStyles from "@/components/member/MemberCenterExperience.module.css";
 import { getMemberCommerceDashboard, getMemberReferralCenter } from "@/lib/membershipCommerce";
@@ -354,12 +356,13 @@ export default async function MemberPage({
       member.id,
     );
   const memberName = member.pickupName?.trim() || member.displayName?.trim() || "";
-  const [loginMethods, commerce, rulesVersion, subscriptionProducts, referralCenter] = await Promise.all([
+  const [loginMethods, commerce, rulesVersion, subscriptionProducts, referralCenter, creditPassbook] = await Promise.all([
     getMemberLoginMethods(member),
     getMemberCommerceDashboard(member.id),
     getActiveMembershipRules(),
     getSubscriptionProducts(),
     getMemberReferralCenter(member.id, { baseUrl: process.env.MEMBER_SITE_URL || process.env.NEXT_PUBLIC_SITE_URL || "" }),
+    getMemberCreditPassbook(member.id),
   ]);
   const availableCredit = commerce.credits
     .filter((item) => item.status === "available")
@@ -455,15 +458,7 @@ export default async function MemberPage({
 
         <MemberCopyElement as="section" className="member-dashboard" aria-label="會員總覽">
           <div className="member-dashboard-grid">
-            <Link
-              className="member-dashboard-card"
-              href="/member?rewardView=released#rewards"
-              data-reward-shortcut="released"
-            >
-              <small><MemberCopyText copyKey="member.dashboard.label.3dd941956d" /></small>
-              <strong>{availableCredit.toLocaleString("zh-TW")}<MemberCopyValue value={" 元"} /></strong>
-              <span><MemberCopyValue value={"已正式入帳，結帳時可自行選擇使用"} /></span>
-            </Link>
+            <MemberCreditPassbook availableCredit={availableCredit} initialPage={creditPassbook} pointDisplayName={rawPointDisplayName} />
             <Link
               className="member-dashboard-card"
               href="/member?rewardView=pending#rewards"

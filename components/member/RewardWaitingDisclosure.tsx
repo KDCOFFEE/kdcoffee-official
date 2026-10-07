@@ -1,6 +1,6 @@
 "use client";
 
-import { MemberCopyValue, MemberCopyElement } from "@/components/member/MemberCenterCopyProvider";
+import { MemberCopyValue, MemberCopyElement, MemberCopyText } from "@/components/member/MemberCenterCopyProvider";
 
 import { useId, useState } from "react";
 
@@ -37,23 +37,23 @@ export default function RewardWaitingDisclosure({
         aria-expanded={open}
         aria-controls={panelId}
         onClick={() => setOpen((current) => !current)}
-      ><MemberCopyValue value={"說明 "} /><span aria-hidden="true">{open ? "∨" : "〉"}</span>
+      ><MemberCopyText copyKey="member.rewards.label.9b6c1b038a" /><span aria-hidden="true">{open ? "∨" : "〉"}</span>
       </MemberCopyElement>
       <div id={panelId} className={styles.rewardWaitingPanel} hidden={!open}>
-        <p><MemberCopyValue value={"此筆來源訂單已完成取貨。"} /></p>
-        <p><MemberCopyValue value={"為保障退貨、取消或其他交易異常的處理期間，這筆回饋會依本筆回饋建立時的規則經過安全等待期。"} /></p>
-        <p><MemberCopyValue value={"若等待期間內交易維持正常，回饋將由系統自動入帳，您不需要另外操作。"} /></p>
+        <p><MemberCopyText copyKey="member.rewards.label.ec6226ad10" /></p>
+        <p><MemberCopyText copyKey="member.rewards.reward.afccb6ad2c" /></p>
+        <p><MemberCopyText copyKey="member.rewards.reward.e44effcabf" /></p>
         <dl>
-          <div><dt><MemberCopyValue value={"完成取貨"} /></dt><dd>{completedAt}</dd></div>
+          <div><dt><MemberCopyText copyKey="member.rewards.label.363cb82ec7" /></dt><dd>{completedAt}</dd></div>
           {explanation.exactDayBreakdownAvailable ? (
             <>
-              <div><dt><MemberCopyValue value={"基礎等待"} /></dt><dd>{explanation.baseWaitingDays}<MemberCopyValue value={" 天"} /></dd></div>
-              <div><dt><MemberCopyValue value={"退貨保護"} /></dt><dd>{explanation.returnProtectionDays}<MemberCopyValue value={" 天"} /></dd></div>
+              <div><dt><MemberCopyText copyKey="member.rewards.reward.4925fe0641" /></dt><dd>{explanation.baseWaitingDays}<MemberCopyText copyKey="member.subscription.label.c3304d1e49" /></dd></div>
+              <div><dt><MemberCopyText copyKey="member.rewards.label.6c6d2b4aae" /></dt><dd>{explanation.returnProtectionDays}<MemberCopyText copyKey="member.subscription.label.c3304d1e49" /></dd></div>
             </>
           ) : (
-            <div><dt><MemberCopyValue value={"安全等待規則"} /></dt><dd><MemberCopyValue value={"依本筆回饋建立時的規則執行"} /></dd></div>
+            <div><dt><MemberCopyText copyKey="member.rewards.reward.a11162e104" /></dt><dd><MemberCopyText copyKey="member.rewards.reward.d20644062a" /></dd></div>
           )}
-          <div><dt><MemberCopyValue value={"預計入帳"} /></dt><dd><MemberCopyValue value={explanation.projectedReleaseDate ? formatTaipeiDate(explanation.projectedReleaseDate) : "入帳日期確認中"} /></dd></div>
+          <div><dt><MemberCopyText copyKey="member.rewards.reward.a1b04f9a8b" /></dt><dd><MemberCopyValue value={explanation.projectedReleaseDate ? formatTaipeiDate(explanation.projectedReleaseDate) : "入帳日期確認中"} /></dd></div>
         </dl>
       </div>
     </div>

@@ -1,0 +1,60 @@
+.cardSlot { display:contents; }
+.trigger { width:100%; text-align:left; font-family:inherit; cursor:pointer; }
+.dialog { width:min(620px,calc(100vw - 32px)); max-height:calc(100dvh - 48px); padding:0; border:1px solid #d9cfc1; border-radius:20px; background:#fffaf2; color:#503f34; overflow:hidden; }
+.dialog::backdrop { background:rgba(35,25,19,.45); }
+.header { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:20px 24px; border-bottom:1px solid #e7ddcf; }
+.header h2 { min-width:0; margin:0; font-size:20px; overflow-wrap:anywhere; }
+.actions { display:flex; align-items:center; gap:14px; flex-shrink:0; }
+.actions a { font-size:13px; color:#73573f; overflow-wrap:anywhere; }
+.actions button { min-width:36px; min-height:36px; border:0; border-radius:50%; background:#eee5d8; color:inherit; font-size:24px; cursor:pointer; }
+.body { padding:20px 24px; overflow-y:auto; max-height:calc(100dvh - 146px); }
+.summary { display:grid; gap:5px; margin-bottom:18px; }
+.summary small { color:#786656; }
+.summary strong { font-size:28px; }
+.ledger { min-width:0; }
+.rows { display:grid; grid-template-columns:minmax(0,1fr) auto auto; column-gap:16px; list-style:none; padding:0; margin:0; }
+.row { display:grid; grid-template-columns:minmax(0,1fr) auto auto; grid-template-columns:subgrid; grid-column:1 / -1; row-gap:7px; padding:14px 0; border-top:1px solid #e7ddcf; min-width:0; align-items:baseline; }
+.date { grid-column:1 / -1; font-size:12px; color:#786656; }
+.transaction { display:contents; }
+.description { min-width:0; font-size:14px; font-weight:500; overflow-wrap:anywhere; }
+.delta,.balance { min-width:0; text-align:right; font-variant-numeric:tabular-nums; font-size:14px; overflow-wrap:anywhere; }
+.balance { color:#503f34; font-weight:600; }
+.entryAction { grid-column:1; grid-row:3; justify-self:start; min-width:0; min-height:36px; max-width:100%; padding:2px 0; border:0; background:none; color:#73573f; font:inherit; font-size:13px; text-align:left; overflow-wrap:anywhere; cursor:pointer; }
+.entryAction:focus-visible { outline:2px solid #73573f; outline-offset:3px; border-radius:3px; }
+.entryDetail { width:min(520px,calc(100vw - 32px)); }
+.detailTitle { margin:0 0 18px; font-size:17px; overflow-wrap:anywhere; }
+.detailFields { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,2fr); gap:12px; margin:0; font-size:14px; }
+.detailFields dt { color:#786656; min-width:0; overflow-wrap:anywhere; }
+.detailFields dd { margin:0; min-width:0; overflow-wrap:anywhere; }
+.detailBalance { margin:18px 0 0; font-weight:600; text-align:right; overflow-wrap:anywhere; }
+.credit { color:#466348; }
+.debit { color:#8e513d; }
+.empty { padding:20px 0; color:#786656; }
+.pagination { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:16px; font-size:13px; flex-wrap:wrap; }
+.pagination button { min-width:0; max-width:40%; overflow-wrap:anywhere; min-height:40px; padding:8px 12px; border:1px solid #cdbfb3; border-radius:8px; background:#f7efe4; color:inherit; font:inherit; cursor:pointer; }
+.pagination span { min-width:0; overflow-wrap:anywhere; }
+.pagination button:disabled { opacity:.45; cursor:default; }
+.note { font-size:12px; color:#786656; margin:16px 0 0; }
+
+.details { margin:20px 0; padding:18px; border:1px solid #e7ddcf; border-radius:14px; background:#fffaf2; }
+.details h3 { margin:0 0 12px; font-size:18px; }
+@media(max-width:600px) {
+  .header { align-items:flex-start; padding:16px; gap:8px; }
+  .header h2 { font-size:18px; }
+  .actions { gap:8px; }
+  .actions a { font-size:12px; }
+  .body { padding:16px; }
+  .rows { grid-template-columns:minmax(0,1fr) auto; column-gap:8px; }
+  .row { grid-template-columns:minmax(0,1fr) auto; grid-template-columns:subgrid; }
+  .balance { grid-column:1 / -1; justify-self:end; }
+  .row:has(.entryAction) .balance { grid-column:2; grid-row:3; }
+  .delta,.balance,.description { font-size:13px; }
+  .details { padding:14px; }
+}
+
+@media(max-width:340px) {
+  .rows { grid-template-columns:minmax(0,1fr) auto; }
+  .row { grid-template-columns:minmax(0,1fr) auto; grid-template-columns:subgrid; }
+  .balance { grid-column:1 / -1; justify-self:end; white-space:normal; overflow-wrap:anywhere; }
+  .row:has(.entryAction) .balance { grid-column:1 / -1; grid-row:4; }
+}

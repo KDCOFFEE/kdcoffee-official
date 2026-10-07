@@ -58,3 +58,25 @@ export function useMemberCopyKey() {
   const overrides = useContext(CopyContext);
   return (key: string, values: MemberCopyValues = {}) => resolveMemberCopy(overrides, key, values);
 }
+
+/** Keep the configured business point name unless Owner saved a display override. */
+export function useMemberPointDisplayName(configured: string) {
+  const overrides = useContext(CopyContext);
+  return overrides["member.rewards.kdPoints.title"] || configured || resolveMemberCopy(overrides, "member.rewards.kdPoints.title");
+}
+
+/** Internal reward/source codes are presentation keys, never member labels. */
+export function MemberRewardCopyValue({ value }: { value: string }) {
+  const copy = useMemberCopyKey();
+  const keys: Record<string, string> = {
+    admin_grant: "credit.passbook.adminGrant", admin_deduct: "credit.passbook.adminDeduction",
+    referral_reward: "credit.passbook.referral", referral: "credit.passbook.referral",
+    retail_promotion: "credit.passbook.retailReward", member_reward: "credit.passbook.memberReward",
+    self_purchase: "member.selfPurchase.title", credit_release: "credit.passbook.creditIssued",
+    pending: "member.referral.reward.dc9160b21b", released: "member.referral.reward.6bd122e2dd",
+    cancelled: "member.dashboard.button.a5ffdc95ee", reversed: "member.rewards.label.2c0a067be7",
+  };
+  if (keys[value]) return copy(keys[value]);
+  if (/^[a-z][a-z0-9]*_[a-z0-9_]+$/u.test(value)) return copy("credit.reward.unknownStatus");
+  return <MemberCopyValue value={value} />;
+}

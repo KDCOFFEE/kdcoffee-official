@@ -1,5 +1,24 @@
 import ts from "typescript";
 import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
+
+// Parse static catalog records without importing runtime modules or data stores.
+function staticCopyDefaults() {
+  const defaults = new Map();
+  for (const file of ["lib/memberCenterCopyCatalog.ts", "lib/creditCopyCatalog.ts"]) {
+    const tree = ts.createSourceFile(file, readFileSync(file, "utf8"), ts.ScriptTarget.Latest, true);
+    function visit(node) {
+      if (ts.isObjectLiteralExpression(node)) {
+        const fields = new Map(node.properties.filter(ts.isPropertyAssignment).map((field) => [field.name.text, field.initializer]));
+        const key = fields.get("key"), text = fields.get("defaultText");
+        if (key && text && ts.isStringLiteral(key) && ts.isStringLiteral(text) && !text.text.includes("{")) defaults.set(key.text, text.text);
+      }
+      ts.forEachChild(node, visit);
+    }
+    visit(tree);
+  }
+  return defaults;
+}
 
 const jsxText = (value) => {
   const lines = value.split(/\r?\n/); let last = 0;
@@ -46,7 +65,16 @@ export function memberCopyRenderBoundaryDigest(source, file, inspect = false) {
 export function defaultMemberCopySource(source, file) {
   const tree = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
   const edits = [];
+  const defaults = staticCopyDefaults();
   function visit(node) {
+    if (ts.isJsxSelfClosingElement(node) && node.tagName.getText() === "MemberCopyText") {
+      const key = node.attributes.properties.find((attr) => attr.name?.getText() === "copyKey")?.initializer;
+      if (key && ts.isStringLiteral(key) && defaults.has(key.text)) {
+        const replacement = defaults.get(key.text).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        edits.push({ start: node.getStart(), end: node.end, replacement });
+        return;
+      }
+    }
     if (ts.isJsxSelfClosingElement(node) && node.tagName.getText() === "MemberCopyValue") {
       const value = node.attributes.properties.find((attr) => attr.name?.getText() === "value")?.initializer?.expression;
       const replacement = ts.isStringLiteral(value) ? value.text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;") : `{${value.getText()}}`;
