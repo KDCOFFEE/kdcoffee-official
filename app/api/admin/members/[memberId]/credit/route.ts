@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { isAdminAuthenticated } from "@/lib/adminAuth";
 import { adjustMemberCreditByAdmin, MembershipCommerceError } from "@/lib/membershipCommerce";
-import { resolvePublicSiteOrigin } from "@/lib/publicSiteOrigin";
+import { resolveAllowedRequestOrigins } from "@/lib/publicSiteOrigin";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +15,7 @@ function isSameOrigin(request: Request) {
       if (
         (source.protocol !== "http:" && source.protocol !== "https:") ||
         source.username || source.password || source.pathname !== "/" || source.search || source.hash ||
-        source.origin !== resolvePublicSiteOrigin(request)
+        !resolveAllowedRequestOrigins(request).includes(source.origin)
       ) return false;
     } catch {
       return false;
