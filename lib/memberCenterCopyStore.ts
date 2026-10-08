@@ -1,3 +1,4 @@
+import { isPointNameAlias } from "./pointDisplayName";
 import { promises as fs } from "fs";
 import path from "path";
 import { atomicWriteJson, withFileLock } from "./jsonFileStore";
@@ -27,6 +28,7 @@ export async function saveMemberCenterCopy(input: { expectedRevision: number; ov
   if (!Number.isSafeInteger(input.expectedRevision) || input.expectedRevision < 0) throw new MemberCopyValidationError("設定版本不正確，請重新載入。" );
   if (!input.overrides || typeof input.overrides !== "object" || Array.isArray(input.overrides)) throw new MemberCopyValidationError("顯示文字格式不正確。" );
   for (const [key, value] of Object.entries(input.overrides)) {
+    if (isPointNameAlias(key)) throw new MemberCopyValidationError("點數名稱請使用統一點數名稱儲存路徑。");
     const error = memberCopyValidationError(key, value);
     if (error) throw new MemberCopyValidationError(error);
   }
@@ -35,7 +37,7 @@ export async function saveMemberCenterCopy(input: { expectedRevision: number; ov
   return withFileLock(filePath, async () => {
     const current = await readMemberCenterCopy(filePath);
     if (current.revision !== input.expectedRevision) throw new MemberCopyConflictError("顯示文字已由另一個視窗更新，請重新載入後再儲存。" );
-    const updated: MemberCenterCopyStore = { version: 1, revision: current.revision + 1, overrides: normalizeMemberCopyOverrides(input.overrides) };
+    const updated: MemberCenterCopyStore = { version: 1, revision: current.revision + 1, overrides: { ...normalizeMemberCopyOverrides(input.overrides), ...Object.fromEntries(Object.entries(current.overrides).filter(([key]) => isPointNameAlias(key))) } };
     await atomicWriteJson(filePath, updated);
     return updated;
   });

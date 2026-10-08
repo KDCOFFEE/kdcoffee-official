@@ -1,3 +1,4 @@
+import { isPointNameAlias, pointNameAliasValue } from "./pointDisplayName";
 import { DEFAULT_MEMBER_CENTER_COPY, MEMBER_CENTER_COPY_CATALOG } from "./memberCenterCopyCatalog";
 
 export { DEFAULT_MEMBER_CENTER_COPY, MEMBER_CENTER_COPY_CATALOG } from "./memberCenterCopyCatalog";
@@ -25,6 +26,7 @@ export function memberCopyValidationError(key: string, value: unknown): string |
   if (typeof value !== "string" || !value.trim()) return "文字不可留空；請使用恢復預設。";
   if (value.length > MEMBER_COPY_MAX_LENGTH) return "文字最多 4000 個字元。";
   if (/[<>\u0000-\u0008\u000b\u000c\u000e-\u001f]/u.test(value)) return "只支援純文字，不能包含 HTML 或控制字元。";
+  if (isPointNameAlias(key) && value.trim().length > 24) return "點數顯示名稱需為 1～24 個字元";
   const tokens = [...value.matchAll(TOKEN)].map((match) => match[1]);
   if (/[{}]/u.test(value.replace(TOKEN, ""))) return "只能使用此欄位列出的動態變數。";
   if (tokens.some((name) => !Object.hasOwn(entry.tokens, name))) return "含有不允許的動態變數。";
@@ -38,7 +40,8 @@ export function normalizeMemberCopyOverrides(value: unknown): MemberCopyOverride
   return Object.fromEntries(Object.entries(value).filter(([key, text]) => !memberCopyValidationError(key, text)));
 }
 
-export function resolveMemberCopy(overrides: MemberCopyOverrides, key: string, values: MemberCopyValues = {}, safeFallback = "") {
+export function resolveMemberCopy(overrides: MemberCopyOverrides, key: string, values: MemberCopyValues = {}, safeFallback = "", pointDisplayName = "KD點") {
+  if (isPointNameAlias(key)) return pointNameAliasValue(key, pointDisplayName);
   const definition = definitions.get(key);
   if (!definition) return safeFallback;
   const candidate = overrides[key];
@@ -69,26 +72,22 @@ const dynamicDefinitions = MEMBER_CENTER_COPY_CATALOG
  * values/comparisons remain upstream. Captured tokens are already formatted by
  * the original UI; no amounts, dates, rules or identities are recomputed here.
  */
-export function resolveMemberDisplayValue(overrides: MemberCopyOverrides, value: string): string {
+export function resolveMemberDisplayValue(overrides: MemberCopyOverrides, value: string, pointDisplayName = "KD點"): string {
   const trimmed = value.trim();
   const exact = defaultsByText.get(trimmed);
   let resolved: string | undefined;
-  if (exact && !Object.keys(exact.tokens).length) resolved = resolveMemberCopy(overrides, exact.key, {}, trimmed);
+  if (exact && !Object.keys(exact.tokens).length) resolved = resolveMemberCopy(overrides, exact.key, {}, trimmed, pointDisplayName);
   if (resolved == null) {
     for (const { entry, names, pattern } of dynamicDefinitions) {
       if (!overrides[entry.key]) continue;
       const match = pattern.exec(trimmed);
       if (!match) continue;
       const values = Object.fromEntries(names.map((name, index) => [name, match[index + 1]]));
-      resolved = resolveMemberCopy(overrides, entry.key, values, trimmed);
+      resolved = resolveMemberCopy(overrides, entry.key, values, trimmed, pointDisplayName);
       break;
     }
   }
   const result = resolved == null ? value : value.slice(0, value.length - value.trimStart().length) + resolved + value.slice(value.trimEnd().length);
   // Only the printed point-unit label changes; numeric values remain verbatim.
-  const pointKey = "member.rewards.kdPoints.title";
-  const pointLabel = overrides[pointKey];
-  return pointLabel && !memberCopyValidationError(pointKey, pointLabel)
-    ? result.replace(/([0-9][0-9,.]*\s+)KD點(?=$|[\s。，、）])/gu, (_, amount: string) => amount + pointLabel)
-    : result;
+  return result.replace(/([0-9][0-9,.]*\s+)KD點(?=$|[\s。，、）])/gu, (_, amount: string) => amount + pointDisplayName);
 }

@@ -7,6 +7,8 @@ import ts from "typescript";
 // Isolated SSR fixture: only presentation hooks are stubbed, never domain modules.
 registerHooks({
   resolve(specifier, context, nextResolve) {
+    // Standalone tests only; Next enforces the server-only boundary in production.
+    if (specifier === "server-only") return { url: "data:text/javascript,export{}", shortCircuit: true };
     if (specifier === "next/server") return nextResolve("next/server.js", context);
     if (specifier === "next/navigation") return { url: "data:text/javascript,export function usePathname(){return '/member';} export function useSearchParams(){return new URLSearchParams();}", shortCircuit: true };
     if (specifier === "next/link") return nextResolve("next/link.js", context);

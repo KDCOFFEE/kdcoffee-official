@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { MEMBER_CENTER_COPY_CATALOG, resolveMemberCopy } from "../lib/memberCenterCopy";
 
 import type { CreditEntry, MembershipCommerceState, RetailPromotionReward } from "../lib/membershipCommerce";
 
@@ -114,6 +115,7 @@ try {
   check(!JSON.stringify(dashboard.rewardCreditSources).includes("internal-id"), "member-facing reward source projection exposes no internal IDs");
 
   const page = await fs.readFile(path.join(process.cwd(), "app/member/page.tsx"), "utf8");
+  const passbook = await fs.readFile(path.join(process.cwd(), "components/member/MemberCreditPassbook.tsx"), "utf8");
   const center = await fs.readFile(path.join(process.cwd(), "components/member/MemberReferralCenter.tsx"), "utf8");
   const nav = await fs.readFile(path.join(process.cwd(), "components/member/MemberSectionNav.tsx"), "utf8");
   const retailCenter = await fs.readFile(path.join(process.cwd(), "components/member/RetailPromotionCenter.tsx"), "utf8");
@@ -122,7 +124,13 @@ try {
   const compactCard = await fs.readFile(path.join(process.cwd(), "components/member/RewardLedgerCompactCard.tsx"), "utf8");
   const sourceCard = await fs.readFile(path.join(process.cwd(), "components/member/RewardSourceOrderSummaryCard.tsx"), "utf8");
 
-  check(page.includes('href="/member?rewardView=released#rewards"') && page.includes('data-reward-shortcut="released"'), "available-credit overview card is actionable");
+  check(page.includes('<MemberCreditPassbook availableCredit={availableCredit} initialPage={creditPassbook}')
+    && !page.includes('href="/member?rewardView=released#rewards"') && !page.includes('data-reward-shortcut="released"')
+    && passbook.includes('<button ref={trigger}') && passbook.includes('aria-haspopup="dialog"')
+    && passbook.includes('onClick={() => dialog.current?.showModal()}')
+    && passbook.includes('<MemberCreditLedger initialPage={initialPage}')
+    && passbook.includes('<Link href="/member?rewardView=released#rewards" onClick={() => dialog.current?.close()}>'),
+  "available-credit overview opens canonical Passbook with ledger and released-details link, without duplicate legacy shortcut");
   check(page.includes('href="/member?rewardView=pending#rewards"') && page.includes('data-reward-shortcut="pending"'), "pending-reward overview card is actionable");
   check(center.includes('hash === "#rewards"') && center.includes("if (rewardsSection && !rewardsSection.hidden)"), "shortcut requires visible Rewards before opening the dialog");
   check(center.includes('hash === "#credit"') && center.includes('? "released" as const'), "legacy #credit aliases to released reward detail");
@@ -143,11 +151,115 @@ try {
   check(center.includes("if (!isActive && dialog?.open)") && center.includes("closingFromRouteSyncRef.current = true"), "an open reward dialog closes synchronously when Rewards becomes hidden");
   check(center.includes("if (closedForRouteSync) return"), "route-driven modal close cannot race a second navigation or focus restoration");
   check(!center.includes("openRewardDetails(\n          intent"), "URL intent never bypasses section activation by opening the dialog directly");
-  check(center.includes("data.rewardCreditSources.map") && center.includes("推廣零售、推薦回饋與自己的消費"), "released dialog unifies Retail Promotion and member/referral credits");
+  {
+    const key = "member.referral.reward.66ef2bf5c3";
+    const customCopy = "推廣零售、推薦與自購的入帳來源";
+    check(center.includes('<MemberCopyText copyKey="' + key + '" />')
+      && MEMBER_CENTER_COPY_CATALOG.some(entry => entry.key === key)
+      && resolveMemberCopy({}, key) === "推廣零售、推薦回饋與自己的消費"
+      && resolveMemberCopy({ [key]: customCopy }, key) === customCopy
+      && center.includes("data.rewardCreditSources.map")
+      && center.includes('entry.sourceCategory === "retail_promotion"')
+      && center.includes('entry.sourceCategory === "self_purchase"')
+      && ["retail_promotion", "referral", "self_purchase"].every(category => dashboard.rewardCreditSources.some(entry => entry.sourceCategory === category))
+      && /const unsortedLedgerRows = rewardFilter === "released"\s*\? creditedLedgerRows/u.test(center)
+      && (center.match(/<dialog ref=\{rewardDialogRef\}/gu) ?? []).length === 1,
+    "released dialog unifies Retail Promotion and member/referral credits through copy key, catalog and override resolver");
+  }
   check(center.includes("data.pendingRetailPromotionRewards.map"), "pending dialog renders scheduled Retail Promotion entries");
-  check(compactCard.includes('credited ? "實際入帳" : "預估折抵"') && sourceCard.includes("目前可用"), "released cards distinguish original credit from current availability");
-  check(center.includes("直接取自正式抵用金帳本，不由回饋紀錄重算"), "available-credit total remains canonical and is not reconstructed from reward records");
-  check(sourceCard.includes("summary.canViewFullOrder") && sourceCard.includes("查看完整訂單 →"), "unified detail links only source orders owned by the signed-in member");
+  {
+    const distinctStrings = (left: string, right: string) => left !== right;
+    const originalKey = "member.rewards.reward.14f77fbdd5";
+    const availableKey = "credit.passbook.available";
+    const originalText = resolveMemberCopy({}, originalKey);
+    const availableText = resolveMemberCopy({}, availableKey);
+    const originalOverride = "原入帳金額";
+    const availableOverride = "可使用餘額";
+    check(distinctStrings(originalKey, availableKey)
+      && [originalKey, availableKey].every(key => MEMBER_CENTER_COPY_CATALOG.some(entry => entry.key === key))
+      && originalText === "實際入帳" && availableText === "目前可用" && distinctStrings(originalText, availableText)
+      && resolveMemberCopy({ [originalKey]: originalOverride }, originalKey) === originalOverride
+      && resolveMemberCopy({ [originalKey]: originalOverride }, availableKey) === availableText
+      && resolveMemberCopy({ [availableKey]: availableOverride }, availableKey) === availableOverride
+      && resolveMemberCopy({ [availableKey]: availableOverride }, originalKey) === originalText
+      && compactCard.includes('credited && !reversed ? <MemberCopyText copyKey="' + originalKey + '" />')
+      && compactCard.includes('</dt><dd>{creditMoney(creditAmount)}</dd>')
+      && compactCard.includes('"member.rewards.label.de7f9bd9d5"')
+      && center.includes('creditAmount: entry.creditedAmount')
+      && /const creditAmount = summary.rewardStatus === "released"\s*\? summary.actualCreditAmount \?\? summary.projectedCreditAmount/u.test(sourceCard)
+      && sourceCard.includes('summary.rewardStatus === "released" ? <MemberCopyText copyKey="' + originalKey + '" />')
+      && sourceCard.includes('}</small><strong>{creditMoney(creditAmount)}</strong></span>')
+      && sourceCard.includes('summary.rewardStatus === "released" && summary.availableCreditAmount != null')
+      && sourceCard.includes('<MemberCopyText copyKey="' + availableKey + '" /></small><strong>{creditMoney(summary.availableCreditAmount)}</strong>')
+      && referral?.creditedAmount !== referral?.availableAmount && referral?.creditedAmount === 100 && referral.availableAmount === 40,
+    "released cards distinguish original credit from current availability through independent labels, overrides and numeric fields");
+  }
+  {
+    const key = "member.referral.reward.0f78857ceb";
+    const creditNameKey = "member.rewards.storeCredit.title";
+    const balanceBinding = page.match(/const availableCredit =([\s\S]*?);/u)?.[1]?.replace(/\s+/gu, " ").trim();
+    const availableTotal = dashboard.credits.filter(entry => entry.status === "available").reduce((sum, entry) => sum + entry.remainingAmount, 0);
+    const originalTotal = dashboard.rewardCreditSources.reduce((sum, entry) => sum + entry.creditedAmount, 0);
+    check(balanceBinding === 'commerce.credits .filter((item) => item.status === "available") .reduce((sum, item) => sum + item.remainingAmount, 0)'
+      && !/(?:referralCenter|rewardCreditSources|referralRewards|retailPromotionRewards)/u.test(balanceBinding)
+      && page.includes('availableCreditBalance: availableCredit')
+      && center.includes('<strong>{creditValue(data.availableCreditBalance)}</strong><span><MemberCopyText copyKey="' + key + '" /></span>')
+      && MEMBER_CENTER_COPY_CATALOG.some(entry => entry.key === key)
+      && resolveMemberCopy({}, key) === "直接取自正式抵用金帳本，不由回饋紀錄重算"
+      && resolveMemberCopy({ [creditNameKey]: "咖啡金" }, key) === "直接取自正式咖啡金帳本，不由回饋紀錄重算"
+      && resolveMemberCopy({ [key]: "目前餘額以正式{creditName}帳本為準" }, key) === "目前餘額以正式抵用金帳本為準"
+      && availableTotal !== originalTotal && availableTotal === 120 && originalTotal === 180
+      && referral?.creditedAmount !== referral?.availableAmount && referral?.creditedAmount === 100 && referral.availableAmount === 40,
+    "available-credit total remains canonical and is not reconstructed from reward records, with resolver-backed explanatory copy");
+  }
+  {
+    const key = "member.rewards.button.52c7dd3708";
+    const label = "unified detail links only source orders owned by the signed-in member";
+    const { buildSafeRewardSourceOrderSummary } = await import("../lib/memberRewardPresentation");
+    const { createElement } = await import("react");
+    const { renderToStaticMarkup } = await import("react-dom/server");
+    const cardModulePath = "../components/member/RewardSourceOrderSummaryCard.tsx";
+    const providerModulePath = "../components/member/MemberCenterCopyProvider.tsx";
+    const { default: Card } = await import(cardModulePath) as typeof import("../components/member/RewardSourceOrderSummaryCard");
+    const { default: Provider } = await import(providerModulePath) as typeof import("../components/member/MemberCenterCopyProvider");
+    const currentMemberId = "member-deep-link";
+    const orderNumber = "KD20260920-000001";
+    const input = {
+      currentMemberId, rewardBeneficiaryMemberId: currentMemberId, sourceOrderNumber: orderNumber,
+      referralLevel: 0, effectivePV: 100, rewardRate: 5, rewardPV: 5,
+      projectedCreditAmount: 100, actualCreditAmount: 100, availableCreditAmount: 40,
+      rewardStatus: "released", todayDate: "2026-09-29",
+    };
+    const owned = buildSafeRewardSourceOrderSummary({ ...input, order: { orderNumber, member: { memberId: currentMemberId } } });
+    const nonOwned = buildSafeRewardSourceOrderSummary({ ...input, order: { orderNumber, member: { memberId: "another-member" } } });
+    assert.ok(owned && nonOwned, label);
+    const render = (summary: NonNullable<typeof owned>, overrides: Record<string, string> = {}) =>
+      // eslint-disable-next-line react/no-children-prop -- typed SSR Provider fixture.
+      renderToStaticMarkup(createElement(Provider, { initialOverrides: overrides,
+        children: createElement(Card, { summary, pointDisplayName: "KD點", variant: "source-only" }) }));
+    const ownedMarkup = render(owned);
+    const nonOwnedMarkup = render(nonOwned, { [key]: "開啟我的訂單" });
+    const unsafeOrderNumber = orderNumber + '/?"&';
+    // Presentation boundary probe; the domain builder separately rejects this identifier.
+    const encodedMarkup = render({ ...owned, orderNumber: unsafeOrderNumber });
+    check(page.includes('await getCurrentMember()') && page.includes('getMemberCommerceDashboard(member.id)')
+      && owned.canViewFullOrder === true && nonOwned.canViewFullOrder === false
+      && buildSafeRewardSourceOrderSummary({ ...input, rewardBeneficiaryMemberId: "another-member", order: { orderNumber, member: { memberId: currentMemberId } } }) === null
+      && buildSafeRewardSourceOrderSummary({ ...input, sourceOrderNumber: unsafeOrderNumber, order: { orderNumber: unsafeOrderNumber, member: { memberId: currentMemberId } } }) === null
+      && sourceCard.includes('summary.canViewFullOrder ? (')
+      && sourceCard.includes('href={`/orders/${encodeURIComponent(summary.orderNumber)}`}')
+      && sourceCard.includes('copyKey="' + key + '"')
+      && MEMBER_CENTER_COPY_CATALOG.some(entry => entry.key === key)
+      && resolveMemberCopy({}, key) === "查看完整訂單 →"
+      && resolveMemberCopy({ [key]: "開啟我的訂單" }, key) === "開啟我的訂單"
+      && ownedMarkup.includes('href="/orders/' + encodeURIComponent(orderNumber) + '"')
+      && ownedMarkup.includes("查看完整訂單 →")
+      && render(owned, { [key]: "開啟我的訂單" }).includes("開啟我的訂單")
+      && !nonOwnedMarkup.includes('<a ') && !nonOwnedMarkup.includes('href="/orders/')
+      && !nonOwnedMarkup.includes("查看完整訂單 →") && !nonOwnedMarkup.includes("開啟我的訂單")
+      && encodedMarkup.includes('href="/orders/' + encodeURIComponent(unsafeOrderNumber) + '"')
+      && !encodedMarkup.includes('href="/orders/' + unsafeOrderNumber), label);
+  }
   check(retailCenter.includes("查看詳情") && retailCenter.includes("retail-promotion-dialog"), "existing specialized Retail Promotion detail remains available");
   check(center.includes('openRewardDetails("all", rewardTriggerRef.current)'), "existing reward-detail button still opens the all view");
   check(center.includes("rewardFocusReturnRef") && center.includes("focusTarget.focus()"), "dialog preserves accessible focus return");

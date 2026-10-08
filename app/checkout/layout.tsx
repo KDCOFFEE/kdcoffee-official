@@ -1,9 +1,10 @@
+import { readPointDisplayName } from "@/lib/pointDisplayNameStore";
 import type { ReactNode } from "react";
 import MemberCenterCopyProvider from "@/components/member/MemberCenterCopyProvider";
 import { readMemberCenterCopy } from "@/lib/memberCenterCopyStore";
 
 export const dynamic = "force-dynamic";
 export default async function CheckoutLayout({ children }: { children: ReactNode }) {
-  const copy = await readMemberCenterCopy();
-  return <MemberCenterCopyProvider initialOverrides={copy.overrides}>{children}</MemberCenterCopyProvider>;
+  const [copy, pointDisplayName] = await Promise.all([readMemberCenterCopy(), readPointDisplayName()]);
+  return <MemberCenterCopyProvider initialOverrides={copy.overrides} initialPointDisplayName={pointDisplayName}>{children}</MemberCenterCopyProvider>;
 }

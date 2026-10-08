@@ -1,3 +1,4 @@
+import { readPointDisplayNameSetting, savePointDisplayName } from "../lib/pointDisplayNameStore";
 import assert from "node:assert/strict";
 import { promises as fs } from "node:fs";
 import os from "node:os";
@@ -45,7 +46,7 @@ try {
   check("dynamic rendered output matches original formatted values", () => assert.equal(resolveMemberDisplayValue({ [dynamic.key]: template }, resolveMemberCopy({}, dynamic.key, values)), resolveMemberCopy({ [dynamic.key]: template }, dynamic.key, values)));
   check("required tokens cannot be removed", () => assert.ok(memberCopyValidationError(dynamic.key, "直接符合資格")));
   check("missing token value returns safe fallback", () => assert.equal(resolveMemberCopy({ [dynamic.key]: template }, dynamic.key, {}, "資料確認中"), "資料確認中"));
-  check("display-only point unit keeps numeric value", () => assert.equal(resolveMemberDisplayValue({ "member.rewards.kdPoints.title": "咖啡點" }, "+ 1,234.5 KD點"), "+ 1,234.5 咖啡點"));
+  check("display-only point unit keeps numeric value", () => assert.equal(resolveMemberDisplayValue({}, "+ 1,234.5 KD點", "咖啡點"), "+ 1,234.5 咖啡點"));
   const absent = await readMemberCenterCopy();
   check("missing file defaults", () => assert.deepEqual(absent, { version: 1, revision: 0, overrides: {} }));
   check("same persistent storage root", () => assert.equal(getMemberCenterCopyFile(), copyFile));
@@ -65,14 +66,15 @@ try {
   // Compare the canonical DTOs at the same instant, including rolling windows.
   mock.timers.enable({ apis: ["Date"], now: new Date("2026-10-01T00:00:00.000Z") });
   const beforeDomain = await Promise.all([getMemberCommerceDashboard(canonical.member.memberId), getMemberReferralCenter(canonical.member.memberId)]);
-  await saveMemberCenterCopy({ expectedRevision: 3, overrides: { [labelKey]: "好友分享回饋", "member.rewards.kdPoints.title": "咖啡點" } });
+  await saveMemberCenterCopy({ expectedRevision: 3, overrides: { [labelKey]: "好友分享回饋" } });
   const afterDomain = await Promise.all([getMemberCommerceDashboard(canonical.member.memberId), getMemberReferralCenter(canonical.member.memberId)]);
   check("canonical dashboard referral qualification ledger credit DTOs identical", () => assert.deepEqual(afterDomain, beforeDomain));
+  await savePointDisplayName({ expectedRevision: (await readPointDisplayNameSetting()).revision, pointDisplayName: "咖啡點" });
   mock.timers.reset();
   const ledger = { referralProgram: "referralGeneration1", amount: 18, pv: 17.5, rate: 5, status: "pending", creditBalance: 300, qualified: false, records: [{ id: "reward-original", amount: 18 }] };
   const snapshot = JSON.stringify(ledger);
   const props = { detailId: "copy-regression", expanded: true, onToggle: () => undefined, title: "第 1 代推薦回饋", displayStatus: "待符合資格", sourceDate: "2026-10-01", sourceOrderNumber: "KD-TEST-001", sourceItems: [], rewardPV: ledger.pv, creditAmount: ledger.amount, pointDisplayName: "KD點", releaseEligibleBusinessDate: null, releasedAt: null, calculationBasis: "pv" as const, calculationBaseValue: 350, rewardRate: ledger.rate, sourceOrderSummary: null, waitingExplanation: null, qualificationSummary: "尚未符合資格", lifecycleLabels: ["訂單完成", "等待資格", "安全等待", "已入帳"], lifecycleStage: 2 };
-  const render = (overrides: Record<string, string>) => renderToStaticMarkup(createElement(Provider, { initialOverrides: overrides, children: createElement(RewardLedgerCompactCard, props) }));
+  const render = (overrides: Record<string, string>, pointDisplayName = "KD點") => renderToStaticMarkup(createElement(Provider, { initialOverrides: overrides, initialPointDisplayName: pointDisplayName, children: createElement(RewardLedgerCompactCard, props) }));
   const before = render({});
   const after = render({ [labelKey]: "好友分享回饋" });
   check("actual reward card changed label", () => { assert.ok(before.includes("第 1 代推薦回饋")); assert.ok(after.includes("好友分享回饋")); });
@@ -86,7 +88,7 @@ try {
   check("native attributes preserved display title resolved", () => { assert.ok(attr.includes('title="好友分享回饋"')); assert.ok(attr.includes("disabled")); });
   const admin = renderToStaticMarkup(createElement(MemberCenterCopyManager, { initialRevision: 0, initialOverrides: {} }));
   check("Admin grouped editor renders", () => { assert.ok(admin.includes("會員中心顯示文字與說明")); assert.ok(admin.includes("預設文字：")); assert.ok(admin.includes("恢復預設")); assert.ok(admin.includes("定期配送")); });
-  const renamed = render({ "member.dashboard.label.622f3c5acb": "枚", "member.rewards.kdPoints.title": "咖啡點", "credit.reward.qualifying": "資格待確認" });
+  const renamed = render({ "member.dashboard.label.622f3c5acb": "枚", "credit.reward.qualifying": "資格待確認" }, "咖啡點");
   check("reward details follow shared credit unit and point name", () => {
     assert.ok(renamed.includes("18 枚")); assert.ok(renamed.includes("17.5 咖啡點")); assert.ok(renamed.includes("資格待確認"));
     assert.ok(renamed.includes("5%")); assert.ok(!renamed.includes("18 元"));
