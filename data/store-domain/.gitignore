@@ -1,0 +1,3 @@
+# Private mutable Store catalog, locks, and backups are never commit candidates.
+*
+!.gitignore
