@@ -68,6 +68,9 @@ export type StoreProduct = StoreEntity & {
   heroMedia?: StoreMediaReference;
   gallery: StoreMediaReference[];
   specifications: StoreSpecification[];
+  /** Optional manual SEO only; automatic preview fallbacks are never persisted. */
+  seoTitle?: string;
+  seoDescription?: string;
   /** Required, independently persisted finite non-negative number; decimals and 0 allowed. */
   pvValue: number;
   kdRedemption?: StoreKdRedemption;

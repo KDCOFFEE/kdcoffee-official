@@ -11,6 +11,7 @@ import {
   getReferencedCloudinaryVideoPublicIds,
   type CloudinaryMediaReference,
 } from "@/lib/cloudinaryMediaUsage";
+import { createStoreRepository } from "@/lib/storeRepository";
 import { withFileLock } from "@/lib/jsonFileStore";
 import { CLOUDINARY_VIDEO_FOLDER } from "@/lib/media";
 import { getHomepageDataFile, getWebsiteDataFile } from "@/lib/storagePaths";
@@ -138,7 +139,8 @@ export async function deleteCloudinaryOrphanVideos(
         getHomepageDataFile(),
         () => withFileLock(
           getWebsiteDataFile(),
-          async (): Promise<CloudinaryCleanupDeleteResult["status"]> => {
+          // Lock order: homepage -> website -> Store. Store writers take only the catalog lock.
+          () => createStoreRepository().withCatalogLock(async (): Promise<CloudinaryCleanupDeleteResult["status"]> => {
             const referencedImmediatelyBeforeDelete =
               await getReferencedCloudinaryVideoPublicIds();
             if (referencedImmediatelyBeforeDelete.has(publicId)) {
@@ -147,7 +149,7 @@ export async function deleteCloudinaryOrphanVideos(
             return await destroyCloudinaryCleanupVideo(publicId)
               ? "deleted"
               : "failed";
-          },
+          }),
         ),
       );
       results.push({ publicId, status });

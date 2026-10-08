@@ -6,7 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-const { createStoreRepository, StoreRevisionConflictError, StoreEntityNotFoundError } = await import("../lib/storeRepository");
+const { createStoreRepository, StoreRevisionConflictError, StoreEntityNotFoundError, StoreRepositoryIntegrityError } = await import("../lib/storeRepository");
 const { StoreValidationError, validateStoreCatalog, validateStoreProduct, validateStoreSection, validateStoreCategory } = await import("../lib/storeValidation");
 const timestamp = "2026-10-08T00:00:00.000Z";
 
@@ -307,26 +307,28 @@ async function main() {
   await test("Corrupt catalog fails closed without replacing original bytes", async () => {
     const corrupt = createStoreRepository({ dataRoot: path.join(root, "corrupt"), now: () => new Date(timestamp) });
     await fs.mkdir(path.dirname(corrupt.catalogPath), { recursive: true }); await fs.writeFile(corrupt.catalogPath, "{corrupt");
-    await assert.rejects(corrupt.read(), StoreValidationError);
-    await assert.rejects(() => corrupt.createSection({ id: "must-not-overwrite", name: "invalid", slug: "invalid" }), StoreValidationError);
+    await assert.rejects(corrupt.read(), StoreRepositoryIntegrityError);
+    await assert.rejects(() => corrupt.createSection({ id: "must-not-overwrite", name: "invalid", slug: "invalid" }), StoreRepositoryIntegrityError);
     assert.equal(await fs.readFile(corrupt.catalogPath, "utf8"), "{corrupt");
   });
   await test("Unsupported schema fails closed", async () => {
     const incompatible = createStoreRepository({ dataRoot: path.join(root, "unsupported") }); await fs.mkdir(path.dirname(incompatible.catalogPath), { recursive: true });
     const json = JSON.stringify({ ...await repository.read(), schemaVersion: 2 }); await fs.writeFile(incompatible.catalogPath, json);
-    await assert.rejects(incompatible.read(), StoreValidationError); assert.equal(await fs.readFile(incompatible.catalogPath, "utf8"), json);
+    await assert.rejects(incompatible.read(), StoreRepositoryIntegrityError); assert.equal(await fs.readFile(incompatible.catalogPath, "utf8"), json);
   });
   await test("Store directory junction cannot redirect writes", async () => {
     const linkedRoot = path.join(root, "linked"); const destination = path.join(root, "link-destination");
     await fs.mkdir(linkedRoot); await fs.mkdir(destination); await fs.writeFile(path.join(destination, "sentinel.txt"), "unchanged");
     await fs.symlink(destination, path.join(linkedRoot, "store-domain"), process.platform === "win32" ? "junction" : "dir");
     const linked = createStoreRepository({ dataRoot: linkedRoot });
-    await assert.rejects(linked.initialize(), StoreValidationError); assert.deepEqual(await fs.readdir(destination), ["sentinel.txt"]);
+    await assert.rejects(linked.initialize(), StoreRepositoryIntegrityError); assert.deepEqual(await fs.readdir(destination), ["sentinel.txt"]);
   });
   await test("Existing Artwork/coffee sources and sentinel remain unchanged", async () => {
     assert.deepEqual(await hashes(), protectedBefore); assert.equal(await fs.readFile(artworkSentinel, "utf8"), sentinel);
     const source = await fs.readFile("lib/storeRepository.ts", "utf8");
     assert.ok(!/membershipCommerce|websiteData|ProductManager|productCommerceUpdates|productAssetUpdates|getWebsiteDataFile/u.test(source));
   });
+  const { runStoreSeoTests } = await import(new URL("./test-phase-j6b-store-seo.mts", import.meta.url).href);
+  await runStoreSeoTests(test, path.join(root, "seo-regression"));
   console.log(`J.6B Store domain: PASS ${passed}/${passed}; fixture root: ${root}`);
 }

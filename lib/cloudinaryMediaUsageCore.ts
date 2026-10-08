@@ -1,5 +1,5 @@
 export type CloudinaryMediaReference = {
-  sourceType: "homepage" | "product";
+  sourceType: "homepage" | "product" | "store-product";
   sourceLabel: string;
   section?: string;
   field: string;
@@ -145,6 +145,7 @@ function collectProductUsage(
 export function collectCloudinaryVideoUsage(
   homepage: unknown,
   website: unknown,
+  storeCatalog?: unknown,
 ): CloudinaryVideoUsageSnapshot {
   const snapshot: CloudinaryVideoUsageSnapshot = {
     referencedPublicIds: new Set<string>(),
@@ -152,5 +153,18 @@ export function collectCloudinaryVideoUsage(
   };
   if (isRecord(homepage)) collectHomepageUsage(homepage, snapshot);
   if (isRecord(website)) collectProductUsage(website, snapshot);
+  if (isRecord(storeCatalog)) {
+    for (const product of recordArray(storeCatalog.products)) {
+      const reference = {
+        sourceType: "store-product" as const,
+        sourceLabel: cleanLabel(product.name, "Store 商品"),
+        slug: cleanLabel(product.slug, ""),
+      };
+      addReferencedVideo({ media: product.heroMedia }, { ...reference, field: "heroMedia" }, snapshot);
+      recordArray(product.gallery).forEach((media, index) => {
+        addReferencedVideo({ media }, { ...reference, field: `gallery[${index}]` }, snapshot);
+      });
+    }
+  }
   return snapshot;
 }

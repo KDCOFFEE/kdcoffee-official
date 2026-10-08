@@ -10,7 +10,7 @@ function ensure(condition: unknown, message: string): asserts condition {
 
 export const STORE_SECTION_FIELDS = ["name", "slug", "shortDescription", "description", "active", "published", "sortOrder", "showOnHomepage", "homepageSortOrder", "showInNavigation", "navigationSortOrder", "seoTitle", "seoDescription"] as const;
 export const STORE_CATEGORY_FIELDS = ["sectionId", "name", "slug", "description", "sortOrder", "active"] as const;
-export const STORE_PRODUCT_FIELDS = ["slug", "name", "shortDescription", "description", "sectionId", "categoryId", "productType", "sku", "price", "salePrice", "inventory", "active", "published", "sortOrder", "featured", "heroMedia", "gallery", "specifications", "pvValue", "kdRedemption"] as const;
+export const STORE_PRODUCT_FIELDS = ["slug", "name", "shortDescription", "description", "sectionId", "categoryId", "productType", "sku", "price", "salePrice", "inventory", "active", "published", "sortOrder", "featured", "heroMedia", "gallery", "specifications", "pvValue", "kdRedemption", "seoTitle", "seoDescription"] as const;
 const ENTITY_FIELDS = ["id", "revision", "createdAt", "updatedAt", "archivedAt"];
 
 /** Reject unknown/server-owned keys, accessors, and prototype-shaped payloads. */
@@ -124,11 +124,18 @@ function media(input: unknown) {
   } else ensure(!("videoId" in value), "media: videoId only permitted for YouTube");
 }
 
+/** Same limits as StoreSection; absence remains valid for legacy catalogs. */
+export function validateStoreProductSeo(value: Record<string, unknown>) {
+  if ("seoTitle" in value) text(value.seoTitle, "product.seoTitle", 160);
+  if ("seoDescription" in value) text(value.seoDescription, "product.seoDescription", 500);
+}
+
 export function validateStoreProduct(input: unknown): asserts input is StoreProduct {
   const value = storeInputRecord(input, [...ENTITY_FIELDS, ...STORE_PRODUCT_FIELDS, "subscriptionEligible"], "product");
   entity(value, "product");
   bool(value.published, "product.published");
   text(value.shortDescription, "product.shortDescription", 500);
+  validateStoreProductSeo(value);
   id(value.sectionId, "product.sectionId");
   if ("categoryId" in value) id(value.categoryId, "product.categoryId");
   ensure(typeof value.productType === "string" && ["general", "equipment", "food", "gift"].includes(value.productType), "product.productType: invalid type");

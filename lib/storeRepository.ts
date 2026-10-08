@@ -7,7 +7,11 @@ import path from "node:path";
 import { atomicWriteJson, serializeJson, withFileLock } from "./jsonFileStore";
 import { getPersistentDataRoot } from "./storagePaths";
 import type { StoreCatalog, StoreCategory, StoreEntity, StoreProduct, StoreSection } from "./storeTypes";
-import { STORE_CATEGORY_FIELDS, STORE_PRODUCT_FIELDS, STORE_SECTION_FIELDS, StoreValidationError, storeInputRecord, validateStoreCatalog, validateStoreProduct } from "./storeValidation";
+import { STORE_CATEGORY_FIELDS, STORE_PRODUCT_FIELDS, STORE_SECTION_FIELDS, StoreValidationError, storeInputRecord, validateStoreCatalog, validateStoreProduct, validateStoreProductSeo } from "./storeValidation";
+
+export class StoreRepositoryIntegrityError extends Error {
+  constructor(message: string) { super(message); this.name = "StoreRepositoryIntegrityError"; }
+}
 
 export class StoreRevisionConflictError extends Error {
   constructor(id: string, expected: number, actual: number) {
@@ -82,7 +86,7 @@ export function createStoreRepository(options: StoreRepositoryOptions = {}) {
   async function assertPrivateDirectory() {
     try {
       const stat = await fs.lstat(directory);
-      if (!stat.isDirectory() || stat.isSymbolicLink()) throw new StoreValidationError("Store domain directory must not be a link");
+      if (!stat.isDirectory() || stat.isSymbolicLink()) throw new StoreRepositoryIntegrityError("Store domain directory must not be a link");
     } catch (error) { if (!hasCode(error, "ENOENT")) throw error; }
   }
   async function read(): Promise<StoreCatalog> {
@@ -90,15 +94,19 @@ export function createStoreRepository(options: StoreRepositoryOptions = {}) {
     let json: string;
     try {
       const stat = await fs.lstat(catalogPath);
-      if (!stat.isFile() || stat.isSymbolicLink() || stat.size > 32 * 1024 * 1024) throw new StoreValidationError("Store catalog must be a bounded regular file");
+      if (!stat.isFile() || stat.isSymbolicLink() || stat.size > 32 * 1024 * 1024) throw new StoreRepositoryIntegrityError("Store catalog must be a bounded regular file");
       json = await fs.readFile(catalogPath, "utf8");
     } catch (error) {
       if (hasCode(error, "ENOENT")) return emptyStoreCatalog();
       throw error;
     }
     let catalog: unknown;
-    try { catalog = JSON.parse(json); } catch { throw new StoreValidationError("Store catalog JSON is corrupt; refusing replacement"); }
-    validateStoreCatalog(catalog);
+    try { catalog = JSON.parse(json); } catch { throw new StoreRepositoryIntegrityError("Store catalog JSON is corrupt; refusing replacement"); }
+    try { validateStoreCatalog(catalog); }
+    catch (error) {
+      if (error instanceof StoreValidationError) throw new StoreRepositoryIntegrityError(error.message);
+      throw error;
+    }
     return catalog;
   }
   async function locked<T>(operation: () => Promise<T>) {
@@ -120,7 +128,7 @@ export function createStoreRepository(options: StoreRepositoryOptions = {}) {
       // A backup must succeed before replacement. Only Store-owned data is saved.
       await fs.mkdir(backupsPath, { recursive: true });
       const backupStat = await fs.lstat(backupsPath);
-      if (!backupStat.isDirectory() || backupStat.isSymbolicLink()) throw new StoreValidationError("Store backup directory must not be a link");
+      if (!backupStat.isDirectory() || backupStat.isSymbolicLink()) throw new StoreRepositoryIntegrityError("Store backup directory must not be a link");
       await atomicWriteJson(path.join(backupsPath, `catalog-r${previous.revision}-${randomUUID()}.json`), previous);
       await atomicWriteJson(catalogPath, catalog);
       return structuredClone(result);
@@ -129,12 +137,14 @@ export function createStoreRepository(options: StoreRepositoryOptions = {}) {
   function patch<K extends Kind>(kind: K, id: string, expectedRevision: number, input: unknown, fields: readonly string[]) {
     assertRevision(expectedRevision);
     const values = structuredClone(storeInputRecord(input, fields, `${kind}.patch`));
+    if (kind === "products") validateStoreProductSeo(values);
     if (Object.keys(values).length === 0) throw new StoreValidationError("Store patch must not be empty");
     return mutate((catalog, timestamp) => {
       const entity = find(catalog, kind, id, expectedRevision);
       const record = entity as unknown as Record<string, unknown>;
       for (const [key, value] of Object.entries(values)) {
         if (kind === "products" && CLEARABLE_PRODUCT_FIELDS.has(key) && value === null) delete record[key];
+        else if (kind === "products" && (key === "seoTitle" || key === "seoDescription") && typeof value === "string" && !value.trim()) delete record[key];
         else record[key] = value;
       }
       touch(entity, timestamp);
@@ -161,6 +171,8 @@ export function createStoreRepository(options: StoreRepositoryOptions = {}) {
   return {
     catalogPath,
     read,
+    // Trusted server coordination only. Read is lock-free; do not call a writer inside this callback.
+    withCatalogLock: locked,
     initialize: () => locked(async () => {
       const catalog = await read();
       try { await fs.lstat(catalogPath); }
@@ -192,6 +204,8 @@ export function createStoreRepository(options: StoreRepositoryOptions = {}) {
     },
     createProduct: (input: unknown) => {
       const values = structuredClone(storeInputRecord(input, ["id", ...STORE_PRODUCT_FIELDS, "subscriptionEligible"], "product.create"));
+      validateStoreProductSeo(values);
+      for (const key of ["seoTitle", "seoDescription"]) if (typeof values[key] === "string" && !values[key].trim()) delete values[key];
       return mutate((catalog, timestamp) => {
         const product = {
           shortDescription: "", description: "", productType: "general", active: true, published: false, sortOrder: 0, featured: false,
