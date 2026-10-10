@@ -1,4 +1,6 @@
 import type { MediaAsset } from "./media";
+import type { HeroTiming } from "./homepageCms";
+import type { VisualColorValue } from "./pageBuilderVisualStyle";
 
 export type StoreEntity = {
   id: string;
@@ -77,8 +79,37 @@ export type StoreProduct = StoreEntity & {
   subscriptionEligible: false;
 };
 
+export type StoreHeroTiming = Pick<HeroTiming, "mediaDuration" | "headlineLine1Start" | "leadStart">;
+
+/** Optional Store landing content; legacy catalogs need no migration. */
+export type StoreHeroSettings = {
+  title?: string;
+  subtitle?: string;
+  backgroundImage?: StoreMediaReference;
+  mobileBackgroundImage?: StoreMediaReference;
+  titleFontSize?: number;
+  titleColor?: VisualColorValue;
+  subtitleFontSize?: number;
+  subtitleColor?: VisualColorValue;
+  motionEnabled?: boolean;
+  timing?: Partial<StoreHeroTiming>;
+};
+export type StoreHeroPatch = {
+  title?: string | null;
+  subtitle?: string | null;
+  backgroundImage?: StoreMediaReference | null;
+  mobileBackgroundImage?: StoreMediaReference | null;
+  titleFontSize?: number | null;
+  titleColor?: VisualColorValue | null;
+  subtitleFontSize?: number | null;
+  subtitleColor?: VisualColorValue | null;
+  motionEnabled?: boolean | null;
+  timing?: Partial<StoreHeroTiming> | null;
+};
+
 export type StoreCatalog = {
   schemaVersion: 1;
+  settings?: { hero?: StoreHeroSettings };
   revision: number;
   updatedAt: string | null;
   sections: StoreSection[];

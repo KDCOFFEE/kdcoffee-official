@@ -69,3 +69,44 @@
 .settings dt{color:#737b68}.settings dd{margin:0;font-weight:600}
 @media(max-width:900px){.workspace{padding:24px 16px 40px}.columns{grid-template-columns:240px minmax(0,1fr)}.group,.editorHeader{padding:20px}.spec{grid-template-columns:1fr 1fr}.spec label:nth-child(3){grid-column:1/-1}.gallery{grid-template-columns:1fr}}
 @media(max-width:680px){.workspace{padding:20px 12px 36px}.header{align-items:flex-start;gap:12px}.header h1{font-size:26px}.header p{font-size:13px}.header>button{font-size:12px;white-space:nowrap}.tabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:3px}.tabs button{min-width:0;padding:11px 4px;font-size:13px}.columns{grid-template-columns:1fr}.list{position:static;max-height:none}.rows{max-height:260px;overflow:auto}.editorHeader{align-items:flex-start;flex-direction:column;gap:14px}.editorHeader .actions{width:100%}.grid{grid-template-columns:1fr}.group{padding:22px 18px}.footer{padding:18px;position:sticky;bottom:0;border-top:1px solid #e2e6d8}.message{align-items:flex-start;flex-direction:column}.settings{padding:22px}.settings dl{grid-template-columns:1fr;gap:4px}.settings dd{margin-bottom:12px}}
+
+.heroSettings{margin:24px 0 32px;padding:24px 0;border-top:1px solid #e4e7de;border-bottom:1px solid #e4e7de}
+.heroSettings h3{margin:0 0 14px;font-size:20px}
+.heroSettings .field{margin-top:16px}
+.heroPreview{width:100%;aspect-ratio:16/9;overflow:hidden;border-radius:10px;margin:16px 0;background:#ebe2d5}
+.heroPreview img{width:100%;height:100%;object-fit:cover}
+.heroSettings button{min-height:44px}
+
+.heroMediaEditors{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px;margin:24px 0}
+.heroMediaPanel{min-width:0;border:1px solid #dde0d5;border-radius:12px;padding:18px}
+.heroMediaPanel h4{margin:0 0 10px;font-size:17px}
+.heroMediaPanel .heroPreview{aspect-ratio:4/3;margin:12px 0 18px}
+.heroMediaPanel .actions{margin:16px 0}
+.heroMediaPanel .field{margin-bottom:0}
+@media(max-width:680px){.heroMediaEditors{grid-template-columns:1fr;gap:20px}.heroMediaPanel{padding:16px}}
+
+.heroStyleGroups{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px;margin-top:24px}
+.heroStyleGroup,.heroAnimation{padding:18px;border:1px solid #dde0d5;border-radius:12px;min-width:0}
+.heroStyleGroup h4,.heroAnimation h4,.heroAppearancePreview h4{margin:0 0 14px;font-size:17px}
+.heroColorControl>p{margin:16px 0 10px}
+.heroSwatches{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.heroSwatches button{display:flex;align-items:center;gap:6px;font-size:12px;padding:8px}
+.heroSwatches button[aria-pressed="true"]{outline:2px solid #8a7254;outline-offset:1px}
+.heroSwatches i{width:18px;height:18px;border:1px solid #bbb;border-radius:50%}
+.heroSwatches label{display:flex;align-items:center;gap:8px;font-size:13px}
+.heroSwatches input{width:44px;height:36px;padding:2px}
+.heroAnimation{margin-bottom:24px}
+.heroAppearancePreview{margin:24px 0}
+.heroAppearancePreview>.actions{margin-bottom:14px}
+.heroAppearanceFrame{position:relative;overflow:hidden;min-height:300px;border-radius:12px;background:#ebe2d5;display:flex;align-items:flex-end}
+.heroAppearanceFrame>img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:-1}
+.heroAppearanceFrame::before{content:"";position:absolute;inset:0;background:radial-gradient(ellipse at left bottom,rgba(250,246,237,.9),rgba(250,246,237,0) 80%);pointer-events:none}
+.heroAppearanceFrame>div{position:relative;width:min(460px,100%);padding:30px}
+.heroAppearanceFrame h2{margin:0;font-family:var(--font-display);font-weight:500;line-height:1.3;overflow-wrap:anywhere;font-size:var(--store-hero-title-size);color:var(--store-hero-title-color)}
+.heroAppearanceFrame p{margin:20px 0 0;line-height:1.8;white-space:pre-line;overflow-wrap:anywhere;font-size:var(--store-hero-subtitle-size);color:var(--store-hero-subtitle-color)}
+.heroAppearanceMobile{width:min(360px,100%);display:block;min-height:0;background:#faf6ed}
+.heroAppearanceMobile>img{position:relative;height:220px;display:block;z-index:auto}
+.heroAppearanceMobile::before{display:none}
+.heroAppearanceMobile h2{font-size:var(--store-hero-title-mobile-size)}
+.heroAppearanceMobile p{font-size:var(--store-hero-subtitle-mobile-size)}
+@media(max-width:680px){.heroStyleGroups{grid-template-columns:1fr}.heroAppearanceFrame>div{padding:24px}}

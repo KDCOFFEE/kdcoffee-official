@@ -1,0 +1,30 @@
+.motion { isolation: isolate; }
+/* Existing global Homepage keyframes; no observer, extra runtime or new keyframe engine. */
+@media (prefers-reduced-motion: no-preference) {
+  .motion[data-store-hero-motion="on"] > img {
+    animation-name: var(--store-hero-media-animation);
+    animation-duration: var(--store-hero-media-duration);
+    animation-timing-function: linear;
+    animation-iteration-count: 1;
+  }
+  .motion[data-store-hero-motion="on"] > div > :is(h1, h2),
+  .motion[data-store-hero-motion="on"] > div > p {
+    animation-name: var(--store-hero-text-animation);
+    animation-duration: 580ms;
+    animation-timing-function: cubic-bezier(.22,.61,.36,1);
+    /* Keep the SSR text visible during delays; reuse Homepage entrance transform. */
+    opacity: 1 !important;
+    animation-fill-mode: backwards;
+    animation-iteration-count: 1;
+  }
+  .motion[data-store-hero-motion="on"] > div > :is(h1, h2) { animation-delay: var(--store-hero-title-start); }
+  .motion[data-store-hero-motion="on"] > div > p { animation-delay: var(--store-hero-subtitle-start); animation-duration: 500ms; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .motion > img, .motion > div > :is(h1, h2), .motion > div > p {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+    filter: none !important;
+  }
+}

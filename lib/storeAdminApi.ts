@@ -53,6 +53,16 @@ export async function getStoreAdminCatalog() {
   try { await requireStoreOwner(); return NextResponse.json(await createStoreRepository().read(), { headers }); }
   catch (error) { return failure(error); }
 }
+export async function patchStoreAdminHero(request: Request) {
+  try {
+    await requireStoreOwner();
+    const envelope = storeInputRecord(await body(request), ["expectedRevision", "changes"], "hero.operation");
+    if (typeof envelope.expectedRevision !== "number" || !Number.isSafeInteger(envelope.expectedRevision) || envelope.expectedRevision < 0) throw new StoreValidationError("請提供有效的商店版本。");
+    const result = await createStoreRepository().updateHero(envelope.expectedRevision, envelope.changes);
+    return NextResponse.json(result, { headers });
+  } catch (error) { return failure(error); }
+}
+
 export function storeAdminHandlers(kind: Kind) {
   const fields = kind === "sections" ? STORE_SECTION_FIELDS : kind === "categories" ? STORE_CATEGORY_FIELDS : STORE_PRODUCT_FIELDS;
   return {

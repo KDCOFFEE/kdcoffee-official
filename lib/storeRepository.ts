@@ -6,8 +6,8 @@ import path from "node:path";
 
 import { atomicWriteJson, serializeJson, withFileLock } from "./jsonFileStore";
 import { getPersistentDataRoot } from "./storagePaths";
-import type { StoreCatalog, StoreCategory, StoreEntity, StoreProduct, StoreSection } from "./storeTypes";
-import { STORE_CATEGORY_FIELDS, STORE_PRODUCT_FIELDS, STORE_SECTION_FIELDS, StoreValidationError, storeInputRecord, validateStoreCatalog, validateStoreProduct, validateStoreProductSeo } from "./storeValidation";
+import type { StoreCatalog, StoreCategory, StoreEntity, StoreProduct, StoreSection, StoreHeroSettings } from "./storeTypes";
+import { STORE_CATEGORY_FIELDS, STORE_PRODUCT_FIELDS, STORE_SECTION_FIELDS, StoreValidationError, storeInputRecord, validateStoreCatalog, validateStoreProduct, validateStoreProductSeo, validateStoreHero } from "./storeValidation";
 
 export class StoreRepositoryIntegrityError extends Error {
   constructor(message: string) { super(message); this.name = "StoreRepositoryIntegrityError"; }
@@ -215,6 +215,25 @@ export function createStoreRepository(options: StoreRepositoryOptions = {}) {
         validateStoreProduct(product);
         catalog.products.push(product);
         return product;
+      });
+    },
+    updateHero: (expectedRevision: number, input: unknown) => {
+      // Catalog revision 0 is valid only here: a legacy/absent Store has no entities yet.
+      if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0) throw new StoreValidationError("expectedRevision: non-negative safe integer required");
+      const values = structuredClone(storeInputRecord(input, ["title", "subtitle", "backgroundImage", "mobileBackgroundImage", "titleFontSize", "titleColor", "subtitleFontSize", "subtitleColor", "motionEnabled", "timing"], "hero.patch"));
+      if (!Object.keys(values).length) throw new StoreValidationError("Hero patch must not be empty");
+      return mutate((catalog) => {
+        if (catalog.revision !== expectedRevision) throw new StoreRevisionConflictError("settings.hero", expectedRevision, catalog.revision);
+        const hero: Record<string, unknown> = { ...catalog.settings?.hero };
+        for (const [key, value] of Object.entries(values)) {
+          if (value === null || ((key === "title" || key === "subtitle") && typeof value === "string" && !value.trim())) delete hero[key];
+          else hero[key] = value;
+        }
+        validateStoreHero(hero);
+        if (Object.keys(hero).length) catalog.settings = { hero: hero as StoreHeroSettings };
+        else delete catalog.settings;
+        // mutate increments this catalog's revision atomically before returning its detached snapshot.
+        return catalog;
       });
     },
     updateSection: (id: string, expectedRevision: number, input: unknown) => patch("sections", id, expectedRevision, input, STORE_SECTION_FIELDS),

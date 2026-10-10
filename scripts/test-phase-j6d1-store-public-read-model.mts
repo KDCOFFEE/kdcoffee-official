@@ -420,9 +420,15 @@ async function main() {
       assert.deepEqual(await diskSnapshot(), before);
     });
 
-    await test("No public Store route or API exists in this phase", async () => {
-      await assert.rejects(fs.access("app/store"), { code: "ENOENT" });
+    await test("Public Store landing has no detail route, public API or commerce wiring", async () => {
+      await fs.access("app/store/page.tsx");
+      await assert.rejects(fs.access("app/store/[slug]"), { code: "ENOENT" });
       await assert.rejects(fs.access("app/api/store"), { code: "ENOENT" });
+      const publicSource = (await Promise.all([
+        "app/store/layout.tsx", "app/store/page.tsx", "app/store/error.tsx",
+        "components/store/StoreFilters.tsx", "components/store/StoreProductCard.tsx", "lib/storePublicMetadata.ts",
+      ].map(file => fs.readFile(file, "utf8")))).join("\n");
+      assert.doesNotMatch(publicSource, /AddToCart|CartProvider|\/api\/orders|membershipCommerce|referralPv|checkout|wallet|subscription/i);
     });
     await test("Pure selectors import only domain types and contain no environment filesystem or repository access", async () => {
       const source = await fs.readFile("lib/storePublicSelectors.ts", "utf8");
@@ -437,7 +443,7 @@ async function main() {
       assert.doesNotMatch(source, /\.initialize\(|\.create(?:Product|Section|Category)\(|\.update|\.archive|withCatalogLock|atomicWrite|writeFile|fetch\(|catch\s*\(/);
       assert.doesNotMatch(source, /AddToCart|CartProvider|checkout|\/api\/orders|membershipCommerce|referral|reward|cloudinary/i);
       const dependencies = [...source.matchAll(/(?:from\s+|import\s+)["']([^"']+)["']/g)].map(match => match[1]);
-      assert.deepEqual([...new Set(dependencies)].sort(), ["./storePublicSelectors", "./storeRepository", "server-only"].sort());
+      assert.deepEqual([...new Set(dependencies)].sort(), ["./storeHero", "./storePublicSelectors", "./storeRepository", "server-only"].sort());
     });
     await test("Protected sources production fixture and package manifests remain unchanged", async () => assert.deepEqual(await protectedHashes(), beforeHashes));
     console.log(`J.6D.1 Public Store Read Model: ${passed}/${passed} PASS; ${protectedFiles.length} protected file hashes unchanged; isolated fixtures only.`);

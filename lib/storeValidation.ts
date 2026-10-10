@@ -1,4 +1,7 @@
-import type { StoreCatalog, StoreCategory, StoreProduct, StoreSection } from "./storeTypes";
+import type { StoreCatalog, StoreCategory, StoreProduct, StoreSection, StoreHeroTiming } from "./storeTypes";
+import { TYPOGRAPHY_SIZE_RANGES, resolveVisualColor } from "./pageBuilderVisualStyle";
+import { PREMIUM_HERO_TIMING } from "./homepageCms";
+import { resolveStoreHeroTiming } from "./storeHero";
 
 export class StoreValidationError extends Error {
   constructor(message: string) { super(message); this.name = "StoreValidationError"; }
@@ -167,11 +170,43 @@ export function validateStoreProduct(input: unknown): asserts input is StoreProd
   }
 }
 
+export function validateStoreHero(input: unknown) {
+  const hero = storeInputRecord(input, ["title", "subtitle", "backgroundImage", "mobileBackgroundImage", "titleFontSize", "titleColor", "subtitleFontSize", "subtitleColor", "motionEnabled", "timing"], "settings.hero");
+  if ("title" in hero) text(hero.title, "settings.hero.title", 200);
+  if ("subtitle" in hero) text(hero.subtitle, "settings.hero.subtitle", 500);
+  for (const [key, role] of [["titleFontSize", "heading"], ["subtitleFontSize", "body"]] as const) if (key in hero) {
+    const value = hero[key], [minimum, maximum] = TYPOGRAPHY_SIZE_RANGES[role].desktop;
+    ensure(typeof value === "number" && Number.isSafeInteger(value) && value >= minimum && value <= maximum, `settings.hero.${key}: bounded integer font size required`);
+  }
+  for (const key of ["titleColor", "subtitleColor"]) if (key in hero) {
+    const value = hero[key];
+    ensure(typeof value === "string" && resolveVisualColor(value, "#000000") === value.toLowerCase(), `settings.hero.${key}: palette or six-digit hex color required`);
+  }
+  if ("motionEnabled" in hero) ensure(typeof hero.motionEnabled === "boolean", "settings.hero.motionEnabled: boolean required");
+  if ("timing" in hero) {
+    const timing = storeInputRecord(hero.timing, ["mediaDuration", "headlineLine1Start", "leadStart"], "settings.hero.timing");
+    const resolved = resolveStoreHeroTiming(timing as Partial<StoreHeroTiming>);
+    for (const key of Object.keys(timing) as Array<keyof StoreHeroTiming>) {
+      const value = timing[key];
+      ensure(typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 10_000 && (value % 100 === 0 || value === PREMIUM_HERO_TIMING[key]), `settings.hero.timing.${key}: Homepage timing range/step required`);
+      ensure(resolved[key] === value, "settings.hero.timing: subtitle cannot enter before title");
+    }
+  }
+  for (const key of ["backgroundImage", "mobileBackgroundImage"]) if (key in hero) {
+    media(hero[key]);
+    ensure((hero[key] as Record<string, unknown>).type === "image", `settings.hero.${key}: image required`);
+  }
+}
+
 function unique(values: string[], label: string) { ensure(new Set(values).size === values.length, `${label}: duplicate identity`); }
 
 export function validateStoreCatalog(input: unknown): asserts input is StoreCatalog {
-  const value = storeInputRecord(input, ["schemaVersion", "revision", "updatedAt", "sections", "categories", "products"], "catalog");
+  const value = storeInputRecord(input, ["schemaVersion", "revision", "updatedAt", "sections", "categories", "products", "settings"], "catalog");
   ensure(value.schemaVersion === 1, "catalog.schemaVersion: unsupported version");
+  if ("settings" in value) {
+    const settings = storeInputRecord(value.settings, ["hero"], "settings");
+    if ("hero" in settings) validateStoreHero(settings.hero);
+  }
   const revision = integer(value.revision, "catalog.revision");
   if (value.updatedAt !== null) timestamp(value.updatedAt, "catalog.updatedAt");
   ensure(revision === 0 ? value.updatedAt === null : value.updatedAt !== null, "catalog: inconsistent revision timestamp");

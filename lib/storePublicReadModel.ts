@@ -1,6 +1,7 @@
 import "server-only";
 
 import { createStoreRepository } from "./storeRepository";
+import { publicStoreHero } from "./storeHero";
 import { findPublicStoreProductBySlug, selectPublicStoreIndex } from "./storePublicSelectors";
 import type { PublicStoreIndexOptions, PublicStoreProductDetail } from "./storePublicSelectors";
 
@@ -13,7 +14,11 @@ export type PublicStoreProductReadModel = {
 /** One lock-free repository read; integrity and filesystem errors propagate unchanged. */
 export async function readPublicStoreIndex(options: PublicStoreIndexOptions = {}) {
   const catalog = await createStoreRepository().read();
-  return selectPublicStoreIndex(catalog, options);
+  return {
+    ...selectPublicStoreIndex(catalog, options),
+    // Only a narrow public projection is added when optional settings exist.
+    ...(catalog.settings?.hero ? { hero: publicStoreHero(catalog.settings.hero) } : {}),
+  };
 }
 
 export async function readPublicStoreProductBySlug(slug: string): Promise<PublicStoreProductReadModel | null> {
