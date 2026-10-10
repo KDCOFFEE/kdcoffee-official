@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import type { PublicStoreProductReadModel } from "./storePublicReadModel";
+import { storeSeoPreview } from "./storeSeo";
 import type { PublicStoreIndexOptions } from "./storePublicSelectors";
 
 export type StoreSearchParams = Record<string, string | string[] | undefined>;
@@ -46,5 +48,44 @@ export function storeLandingMetadata(query: StoreSearchParams = {}): Metadata {
       siteName: "KD Coffee", locale: "zh_TW", type: "website",
     },
     twitter: { card: "summary", title: "商店｜KD Coffee", description },
+  };
+}
+
+/** Slugs arrive already decoded from Next; do not normalize product identities. */
+export function isStoreProductSlug(value: unknown): value is string {
+  return typeof value === "string" && value.length <= 80 && /^[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(value);
+}
+export function storeProductHref(slug: string): string {
+  return `/store/${encodeURIComponent(slug)}`;
+}
+
+function safeShareImage(url: string | undefined): string | undefined {
+  if (!url || /[\\\s]/u.test(url) || url.startsWith("//")) return undefined;
+  if (url.startsWith("/")) return /[?#]/u.test(url) ? undefined : url;
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "https:" && !parsed.username && !parsed.password ? url : undefined;
+  } catch { return undefined; }
+}
+
+/** Pure metadata projection. Only the server uses the manual SEO wrapper. */
+export function storeProductMetadata(model: PublicStoreProductReadModel): Metadata {
+  const { product, manualSeo } = model;
+  const seo = storeSeoPreview({ ...product, ...manualSeo });
+  const description = seo.description || `${product.name}，KD Coffee 精選商品。`;
+  const canonical = storeProductHref(product.slug);
+  const imageCandidates = [
+    product.heroMedia?.type === "image" ? product.heroMedia.url : product.heroMedia?.type === "video" ? product.heroMedia.posterUrl : undefined,
+    ...product.gallery.filter(media => media.type === "image").map(media => media.url),
+  ];
+  const image = imageCandidates.map(safeShareImage).find(Boolean);
+  return {
+    title: seo.title, description,
+    alternates: { canonical },
+    robots: { index: true, follow: true },
+    openGraph: { title: seo.title, description, url: canonical, siteName: "KD Coffee", locale: "zh_TW", type: "website",
+      images: image ? [{ url: image, alt: product.name }] : [] },
+    twitter: { card: image ? "summary_large_image" : "summary", title: seo.title, description,
+      ...(image ? { images: [image] } : {}) },
   };
 }

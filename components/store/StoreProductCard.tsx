@@ -1,3 +1,5 @@
+import Link from "next/link";
+import { storeProductHref } from "@/lib/storePublicMetadata";
 import type { PublicStoreProductCard } from "@/lib/storePublicSelectors";
 import styles from "./StorePublic.module.css";
 
@@ -24,7 +26,7 @@ export default function StoreProductCard({ product }: { product: PublicStoreProd
       <div className={styles.cardBody}>
         {product.featured ? <p className={styles.featured}>精選</p> : null}
         <p className={styles.cardContext}>{product.section.name}{product.category ? ` ／ ${product.category.name}` : ""}</p>
-        <h3>{product.name}</h3>
+        <h3><Link className={styles.textLink} href={storeProductHref(product.slug)}>{product.name}</Link></h3>
         {product.shortDescription.trim() ? <p className={styles.cardDescription}>{product.shortDescription}</p> : null}
         <div className={styles.cardBottom}>
           <p className={styles.price}>

@@ -603,13 +603,15 @@ try {
     assert.match(admin, /type="button" onClick=\{\(\) => \{ setHeroPreviewKey/);
   });
 
-  await test("Hero subtitle/title HTML stays plain escaped text and no new public detail/API exists", async () => {
+  await test("Hero subtitle/title HTML stays escaped with the approved read-only detail and no public API", async () => {
     await repository.updateHero((await repository.read()).revision, { title: "<script>bad</script>", subtitle: "<b>text</b>" });
     const page = await StorePage({ searchParams: Promise.resolve({}) });
     const hero = nodes(page, node => node.type === "header" && node.props.className?.split(" ").includes("hero"))[0];
     const markup = renderToStaticMarkup(hero);
     assert.match(markup, /&lt;script&gt;/); assert.match(markup, /&lt;b&gt;/); assert.doesNotMatch(markup, /<script>bad/);
-    await assert.rejects(fs.access("app/store/[slug]"), { code: "ENOENT" });
+    const detailSource = await fs.readFile("app/store/[slug]/page.tsx", "utf8");
+    assert.match(detailSource, /readPublicStoreProductBySlug/);
+    assert.doesNotMatch(detailSource, /createStoreRepository|AddToCart|CartProvider/);
     await assert.rejects(fs.access("app/api/store"), { code: "ENOENT" });
   });
   await test("Protected commerce member media Artwork data packages remain unchanged", async () => assert.deepEqual(await hashes(), before));

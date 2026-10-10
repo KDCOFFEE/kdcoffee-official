@@ -194,7 +194,7 @@ try {
   await test('Admin entry and responsive stacked layout exist',async()=>{assert.match(await fs.readFile('app/admin/page.tsx','utf8'),/href="\/admin\/store"/);assert.match(await fs.readFile('components/admin/StoreWorkspace.module.css','utf8'),/@media\(max-width:680px\)/);});
   await test('No tracked Store catalog or public Store transaction route introduced',async()=>{
     await fs.access('app/store/page.tsx');
-    await assert.rejects(fs.access('app/store/[slug]'),{code:'ENOENT'});
+    await fs.access('app/store/[slug]');
     await assert.rejects(fs.access('app/api/store'),{code:'ENOENT'});
     const backupFiles=await fs.readdir(path.join(path.dirname(repository.catalogPath),'backups'));
     assert.ok(backupFiles.length>0,'Actual Store backups must exist for ignore evaluation');

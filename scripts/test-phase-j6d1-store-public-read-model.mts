@@ -420,13 +420,14 @@ async function main() {
       assert.deepEqual(await diskSnapshot(), before);
     });
 
-    await test("Public Store landing has no detail route, public API or commerce wiring", async () => {
+    await test("Public Store landing and approved detail remain read-only without public API or commerce wiring", async () => {
       await fs.access("app/store/page.tsx");
-      await assert.rejects(fs.access("app/store/[slug]"), { code: "ENOENT" });
+      await fs.access("app/store/[slug]/page.tsx");
       await assert.rejects(fs.access("app/api/store"), { code: "ENOENT" });
       const publicSource = (await Promise.all([
         "app/store/layout.tsx", "app/store/page.tsx", "app/store/error.tsx",
         "components/store/StoreFilters.tsx", "components/store/StoreProductCard.tsx", "lib/storePublicMetadata.ts",
+        "app/store/[slug]/page.tsx", "app/store/[slug]/not-found.tsx", "components/store/StoreProductGallery.tsx",
       ].map(file => fs.readFile(file, "utf8")))).join("\n");
       assert.doesNotMatch(publicSource, /AddToCart|CartProvider|\/api\/orders|membershipCommerce|referralPv|checkout|wallet|subscription/i);
     });

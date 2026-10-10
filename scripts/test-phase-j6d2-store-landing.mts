@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
 import ts from "typescript";
-import { firstStoreQueryValue, parseStorePublicQuery, storeBrowseHref, storeLandingMetadata } from "../lib/storePublicMetadata";
+import { firstStoreQueryValue, parseStorePublicQuery, storeBrowseHref, storeLandingMetadata, storeProductMetadata } from "../lib/storePublicMetadata";
 import type { PublicStoreProductCard } from "../lib/storePublicSelectors";
 
 const paths = {
@@ -84,9 +84,13 @@ async function main() {
   await test("Landing layout page and error boundary exist", async () => {
     for (const file of [paths.layout, paths.page, paths.error]) await fs.access(file);
   });
-  await test("Store route contains exactly the approved three files", async () =>
-    assert.deepEqual((await fs.readdir("app/store")).sort(), ["error.tsx", "layout.tsx", "page.tsx"]));
-  await test("Product detail route remains absent", async () => assert.rejects(fs.access("app/store/[slug]"), { code: "ENOENT" }));
+  await test("Store route contains the approved landing files and detail segment", async () =>
+    assert.deepEqual((await fs.readdir("app/store")).sort(), ["[slug]", "error.tsx", "layout.tsx", "page.tsx"]));
+  await test("Approved detail route uses the public read model without repository bypass", async () => {
+    const detailSource = await fs.readFile("app/store/[slug]/page.tsx", "utf8");
+    assert.match(detailSource, /readPublicStoreProductBySlug/);
+    assert.doesNotMatch(detailSource, /createStoreRepository|storeRepository/);
+  });
   await test("Public Store API remains absent", async () => assert.rejects(fs.access("app/api/store"), { code: "ENOENT" }));
   await test("Page is a dynamic Node Server Component", () => {
     assert.match(source.page, /export const runtime = "nodejs"/); assert.match(source.page, /export const dynamic = "force-dynamic"/);
@@ -196,10 +200,13 @@ async function main() {
     assert.doesNotMatch(source.page, /\.featured|\.sort\(/);
   });
 
-  await test("Cards are non-clickable semantic articles with no fake CTA", () => {
+  await test("Cards are semantic articles with one accessible detail link and no fake CTA", () => {
     assert.equal(nodes(ast.card).filter(node => jsxTag(node) === "article").length, 1);
-    for (const tag of ["a", "Link", "button"]) assert.equal(nodes(ast.card).filter(node => jsxTag(node) === tag).length, 0);
-    assert.doesNotMatch(source.card, /\/store\/|coming soon|即將推出|next\/link/i);
+    assert.equal(nodes(ast.card).filter(node => jsxTag(node) === "Link").length, 1);
+    for (const tag of ["a", "button"]) assert.equal(nodes(ast.card).filter(node => jsxTag(node) === tag).length, 0);
+    assert.match(source.card, /href=\{storeProductHref\(product\.slug\)\}/);
+    assert.match(source.card, /\{product\.name\}<\/Link>/);
+    assert.doesNotMatch(source.card, /coming soon|即將推出/i);
   });
   await test("Cards render no live video iframe YouTube embed or KdMedia", () => {
     for (const tag of ["video", "iframe"]) assert.equal(nodes(ast.card).filter(node => jsxTag(node) === tag).length, 0);
@@ -311,9 +318,29 @@ async function main() {
     assert.deepEqual(meta.openGraph, { title: "商店｜KD Coffee", description: "探索 KD Coffee 精選商品。", url: "/store", siteName: "KD Coffee", locale: "zh_TW", type: "website" });
     assert.deepEqual(meta.twitter, { card: "summary", title: "商店｜KD Coffee", description: "探索 KD Coffee 精選商品。" });
   });
-  await test("Metadata/query module has only erased type imports and no persistence dependency", () => {
-    for (const node of ast.metadata.statements.filter(ts.isImportDeclaration)) assert.ok(node.importClause?.isTypeOnly);
-    assert.doesNotMatch(source.metadata, /storeRepository|readPublicStoreIndex|process\.env|node:|fetch\(|write|canonical.*=/);
+  await test("Metadata/query module allows only the pure SEO runtime helper and no persistence dependency", () => {
+    for (const node of ast.metadata.statements.filter(ts.isImportDeclaration)) {
+      if (node.importClause?.isTypeOnly) continue;
+      assert.equal((node.moduleSpecifier as ts.StringLiteral).text, "./storeSeo");
+      assert.equal(node.importClause?.getText(), "{ storeSeoPreview }");
+    }
+    const detail = ast.metadata.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === "storeProductMetadata");
+    assert.ok(detail && ts.isFunctionDeclaration(detail) && detail.body);
+    const declarations = nodes(ast.metadata).filter(node => ts.isVariableDeclaration(node) && node.name.getText() === "canonical");
+    assert.equal(declarations.length, 1);
+    const canonical = declarations[0];
+    assert.ok(canonical && ts.isVariableDeclaration(canonical) && canonical.initializer);
+    assert.equal(canonical.parent.parent.parent, detail.body);
+    assert.ok(canonical.parent.flags & ts.NodeFlags.Const);
+    assert.equal(canonical.initializer.getText(), "storeProductHref(product.slug)");
+    // Keep the original guard everywhere except this exact approved, immutable detail initializer.
+    const guardedSource = source.metadata.slice(0, canonical.getStart()) + source.metadata.slice(canonical.end);
+    assert.doesNotMatch(guardedSource, /storeRepository|readPublicStoreIndex|process\.env|node:|fetch\(|write|canonical.*=/);
+    const meta = storeProductMetadata({
+      product: { ...cardFixture(), description: "", gallery: [], specifications: [] }, manualSeo: {},
+    });
+    assert.deepEqual(meta.alternates, { canonical: "/store/review-product" });
+    assert.equal(meta.openGraph?.url, "/store/review-product");
   });
   await test("Route metadata uses the complete awaited query, with no catalog read", () =>
     assert.match(source.page, /return storeLandingMetadata\(await searchParams\)/));
