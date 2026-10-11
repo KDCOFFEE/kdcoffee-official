@@ -7,7 +7,9 @@ import type { SubscriptionCreditPreference } from "@/lib/subscriptionCreditPrefe
 import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { cartItemKey, cartSkuKey, useCart } from "@/components/commerce/CartProvider";
+import { useCart } from "@/components/commerce/CartProvider";
+import CommerceCheckoutBoundary from "@/components/commerce/CommerceCheckoutBoundary";
+import { coffeeCheckoutItems, cartLineKey, cartInventoryKey } from "@/lib/commerceCart";
 import StoreSelector from "@/components/commerce/StoreSelector";
 import {
   addDateOnlyDays,
@@ -35,14 +37,20 @@ function getOrCreateIdempotencyKey() {
 }
 
 export default function CheckoutPage() {
+  return <CommerceCheckoutBoundary><CoffeeCheckout /></CommerceCheckoutBoundary>;
+}
+
+function CoffeeCheckout() {
   const {
-    items,
+    items: unifiedItems,
     subtotal,
     clearCart,
     ready,
     updateQuantity,
     removeItem,
+    getCoffeeCheckoutItems,
   } = useCart();
+  const items = coffeeCheckoutItems(unifiedItems);
   const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -188,6 +196,10 @@ export default function CheckoutPage() {
 
   async function submitOrder(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setError(""); setWarning("");
+    // Recheck the current provider state, including changes since this handler rendered.
+    let items: ReturnType<typeof getCoffeeCheckoutItems>;
+    try { items = getCoffeeCheckoutItems(); }
+    catch { return setError("購物車狀態已變更，請返回購物車確認。"); }
     if (!items.length) return setError("購物車沒有商品。");
     const form = new FormData(event.currentTarget);
     if (mode === "studio_pickup") {
@@ -553,8 +565,8 @@ export default function CheckoutPage() {
         <aside className="checkout-summary">
           <h2>訂單摘要</h2>
 
-          {items.map((item) => {
-            const key = cartItemKey(item);
+          {items.map((item, index) => {
+            const key = cartLineKey(unifiedItems[index]);
 
             const stockLimit =
               typeof item.stock === "number" &&
@@ -563,10 +575,10 @@ export default function CheckoutPage() {
                 ? item.stock
                 : undefined;
 
-            const skuQuantity = items.reduce(
+            const skuQuantity = unifiedItems.reduce(
               (sum, entry) =>
                 sum +
-                (cartSkuKey(entry) === cartSkuKey(item)
+                (cartInventoryKey(entry) === cartInventoryKey(unifiedItems[index])
                   ? entry.quantity
                   : 0),
               0,

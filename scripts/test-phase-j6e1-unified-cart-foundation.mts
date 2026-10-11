@@ -455,11 +455,32 @@ try {
     assert.equal((await POST(request(payload()))).status, 500);
     await assert.rejects(fs.access(livePath), { code: "ENOENT" });
   });
-  await test("protected files stay unchanged and live provider has no foundation wiring", async () => {
+  await test("protected files stay unchanged and canonical coffee foundation remains isolated", async () => {
     assert.deepEqual(await hashes(), before);
-    for (const file of ["components/commerce/CartProvider.tsx", "app/checkout/page.tsx", "app/store/[slug]/page.tsx"]) {
-      assert.doesNotMatch(await fs.readFile(file, "utf8"), /commerceCart|kdcoffee-cart-v16|commerce\/cart\/resolve/u);
+    const [model, storage, resolver, api, provider] = await Promise.all([
+      "lib/commerceCart.ts", "lib/commerceCartStorage.ts", "lib/commerceCartResolver.ts",
+      "app/api/commerce/cart/resolve/route.ts", "components/commerce/CartProvider.tsx",
+    ].map(file => fs.readFile(file, "utf8")));
+    assert.match(model, /export type UnifiedCartItem = CoffeeCartItem \| StoreCartItem/u);
+    for (const primitive of ["validateUnifiedCartItem", "cartLineKey", "cartInventoryKey"]) {
+      assert.match(model, new RegExp("export function " + primitive + "\\("));
     }
+    assert.match(storage, /from "\.\/commerceCart"/u);
+    assert.match(storage, /CURRENT_CART_STORAGE_KEY = "kdcoffee-cart-v16"/u);
+    assert.match(resolver, /from "\.\/commerceCart"/u);
+    assert.match(api, /import \{ readCanonicalCoffeeCartProducts, resolveLegacyCoffeeCart \} from "[^"]*\/lib\/commerceCartResolver"/u);
+    assert.match(provider, /from "@\/lib\/commerceCart"/u);
+    assert.match(provider, /from "@\/lib\/commerceCartStorage"/u);
+    for (const file of ["components/commerce/CartProvider.tsx", "components/commerce/AddToCart.tsx",
+      "components/commerce/FloatingCart.tsx", "components/commerce/CommerceCheckoutBoundary.tsx",
+      "app/cart/page.tsx", "app/checkout/page.tsx"]) {
+      assert.doesNotMatch(await fs.readFile(file, "utf8"),
+        /\b(?:function|const|class|type)\s+(?:UnifiedCartItem|validateUnifiedCartItem|cartLineKey|cartInventoryKey|CartEnvelope|validateCartEnvelope|readCartStorage|writeCartEnvelope|resolveLegacyCoffeeCart)\b/u);
+    }
+    for (const source of [model, storage, resolver, api]) {
+      assert.doesNotMatch(source, /StoreAddToCart|STORE_COMMERCE_ENABLED|storeCommerceOffer|storeRepository|orderPricing|orderInventoryTransaction|orderInventoryReturn|membershipCommerce|\/api\/orders/u);
+    }
+    assert.doesNotMatch(resolver + api, /domain\s*:\s*["']store["']|\bStoreCartItem\b|\bfs\.(?:writeFile|appendFile|rename|unlink|rm|mkdir)\b|pvValue|kdRedemption/u);
   });
 } finally {
   if (previousRoot === undefined) delete process.env.KD_DATA_DIR; else process.env.KD_DATA_DIR = previousRoot;

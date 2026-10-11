@@ -1,6 +1,7 @@
 import {
   ALLOWED_BEAN_PREPARATIONS,
   ALLOWED_ROAST_LEVELS,
+  isCustomRoastSku, isCustomRoastLineEligible, CUSTOM_ROAST_MIN_QUANTITY,
 } from "./checkoutRules";
 
 export type CommerceDomain = "coffee" | "store";
@@ -169,4 +170,112 @@ export function cartLineKey(item: UnifiedCartItem): string {
   return JSON.stringify(["coffee", valid.productId, valid.variantId,
     selection.preparation ?? "", selection.customRoast ? "custom" : "standard",
     selection.roastLevel ?? "", selection.roastNote ?? ""]);
+}
+
+/** URLs are display destinations, never identity authority. */
+export function cartProductHref(item: UnifiedCartItem): string {
+  const valid = validateUnifiedCartItem(item);
+  return (valid.domain === "coffee" ? "/works/" : "/store/") + encodeURIComponent(valid.slug);
+}
+export type CoffeeCheckoutItem = {
+  slug: string; name: string; optionId: string; optionLabel: string; optionDetail: string;
+  preparationLabel?: CoffeePreparation; customRoast: boolean;
+  roastLevel?: CoffeeRoastLevel; roastNote?: string;
+  unitPrice: number; quantity: number; stock?: number;
+};
+/** Whole-cart adapter. Never filters Store lines or submits a coffee subset. */
+export function coffeeCheckoutItems(items: readonly UnifiedCartItem[]): CoffeeCheckoutItem[] {
+  const checked = items.map(validateUnifiedCartItem);
+  if (checked.some(item => item.domain !== "coffee")) throw new CommerceCartValidationError("Store checkout is not enabled");
+  return checked.map(item => {
+    if (item.domain !== "coffee" || !item.optionLabel) throw new CommerceCartValidationError("Invalid coffee checkout item");
+    return {
+      slug: item.slug, name: item.name, optionId: item.variantId,
+      optionLabel: item.optionLabel, optionDetail: item.optionDetail ?? "",
+      ...(item.coffeeOptions.preparation ? { preparationLabel: item.coffeeOptions.preparation } : {}),
+      customRoast: item.coffeeOptions.customRoast,
+      ...(item.coffeeOptions.roastLevel ? { roastLevel: item.coffeeOptions.roastLevel } : {}),
+      ...(item.coffeeOptions.roastNote !== undefined ? { roastNote: item.coffeeOptions.roastNote } : {}),
+      unitPrice: item.unitPrice, quantity: item.quantity,
+      ...(item.quantityLimit !== undefined ? { stock: item.quantityLimit } : {}),
+    };
+  });
+}
+export function cartInventoryDemand(items: readonly UnifiedCartItem[], target: UnifiedCartItem): number {
+  const key = cartInventoryKey(target);
+  return items.reduce((sum, item) => sum + (cartInventoryKey(item) === key ? item.quantity : 0), 0);
+}
+export function cartInventoryLimit(items: readonly UnifiedCartItem[], target: UnifiedCartItem): number {
+  const key = cartInventoryKey(target);
+  return Math.min(99, target.quantityLimit ?? 99, ...items
+    .filter(item => cartInventoryKey(item) === key).map(item => item.quantityLimit ?? 99));
+}
+export function mergeCartLines(items: readonly UnifiedCartItem[]): UnifiedCartItem[] {
+  const lines = new Map<string, UnifiedCartItem>();
+  for (const raw of items) {
+    const item = validateUnifiedCartItem(raw), key = cartLineKey(item);
+    const existing = lines.get(key);
+    if (existing) lines.set(key, validateUnifiedCartItem({
+      ...item, quantity: cartQuantity(existing.quantity + item.quantity),
+      quantityLimit: Math.min(existing.quantityLimit ?? 99, item.quantityLimit ?? 99),
+    }));
+    else lines.set(key, item);
+  }
+  if (lines.size > MAX_CART_ITEMS) throw new CommerceCartValidationError("Too many cart lines");
+  return [...lines.values()];
+}
+export type CartMigrationState = "PENDING" | "READY" | "FAILED";
+export type CheckoutEligibility = "ELIGIBLE" | "EMPTY" | "MIGRATION_PENDING" | "MIGRATION_FAILED"
+  | "UNRESOLVED_LEGACY_ITEMS" | "STORE_CHECKOUT_NOT_ENABLED" | "PERSISTENCE_FAILED" | "CART_UNAVAILABLE";
+export function cartCheckoutEligibility(
+  items: readonly UnifiedCartItem[], migration: CartMigrationState,
+  unresolved: readonly MigrationIssue[], persistenceWarning = false,
+): CheckoutEligibility {
+  if (migration === "PENDING") return "MIGRATION_PENDING";
+  if (migration === "FAILED") return "MIGRATION_FAILED";
+  if (unresolved.length) return "UNRESOLVED_LEGACY_ITEMS";
+  if (items.some(item => item.domain === "store")) return "STORE_CHECKOUT_NOT_ENABLED";
+  if (persistenceWarning) return "PERSISTENCE_FAILED";
+  if (!items.length) return "EMPTY";
+  try {
+    const legacy = coffeeCheckoutItems(items);
+    if (items.some(item => cartInventoryDemand(items, item) > cartInventoryLimit(items, item))) return "CART_UNAVAILABLE";
+    for (const [index, item] of legacy.entries()) {
+      if (!item.customRoast) continue;
+      const canonical = items[index];
+      const total = items.reduce((sum, entry) => sum + (
+        entry.domain === "coffee" && entry.productId === canonical.productId && entry.coffeeOptions.customRoast
+          ? entry.quantity : 0), 0);
+      if (!isCoffeeRoastSku(canonical) || total < CUSTOM_ROAST_MIN_QUANTITY) return "CART_UNAVAILABLE";
+    }
+    return "ELIGIBLE";
+  } catch { return "CART_UNAVAILABLE"; }
+}
+export function isCoffeeRoastSku(item: UnifiedCartItem): boolean {
+  return item.domain === "coffee" && isCustomRoastSku({ optionLabel: item.optionLabel, optionDetail: item.optionDetail });
+}
+export function coffeeRoastEligible(item: UnifiedCartItem): boolean {
+  return item.domain === "coffee" && isCustomRoastLineEligible({
+    optionLabel: item.optionLabel, optionDetail: item.optionDetail, quantity: item.quantity,
+  });
+}
+export function cartSpecification(item: UnifiedCartItem): string {
+  return [item.optionLabel, item.optionDetail,
+    ...(item.domain === "coffee" ? [
+      item.coffeeOptions.preparation,
+      item.coffeeOptions.customRoast ? item.coffeeOptions.roastLevel : undefined,
+    ] : []),
+  ].filter(Boolean).join(" · ");
+}
+export function checkoutEligibilityMessage(status: CheckoutEligibility): string {
+  switch (status) {
+    case "MIGRATION_PENDING": return "購物車資料正在更新，請稍候。";
+    case "MIGRATION_FAILED": return "購物車資料正在更新，暫時無法完成載入。";
+    case "UNRESOLVED_LEGACY_ITEMS": return "部分舊購物項目已無法辨識，需要重新選購。";
+    case "STORE_CHECKOUT_NOT_ENABLED": return "商店商品的結帳整合仍在測試中，目前請先返回購物車。";
+    case "PERSISTENCE_FAILED": return "購物車尚未成功儲存，請重試後再結帳。";
+    case "CART_UNAVAILABLE": return "部分商品數量或專屬烘焙需求需要確認，請返回購物車調整。";
+    case "EMPTY": return "購物車目前是空的";
+    case "ELIGIBLE": return "";
+  }
 }

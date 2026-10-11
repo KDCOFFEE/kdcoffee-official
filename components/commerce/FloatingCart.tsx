@@ -4,9 +4,11 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { cartItemKey, cartSkuKey, useCart } from "./CartProvider";
+import { cartProductHref, cartSpecification, cartInventoryLimit, checkoutEligibilityMessage } from "@/lib/commerceCart";
+import { CartRecoveryNotice } from "./CommerceCheckoutBoundary";
 
 export default function FloatingCart() {
-  const { count, items, removeItem, subtotal, updateQuantity, ready } = useCart();
+  const { count, items, removeItem, subtotal, updateQuantity, ready, unresolved, persistenceWarning, checkoutEligibility } = useCart();
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [pendingRemove, setPendingRemove] = useState<string | null>(null);
@@ -59,19 +61,13 @@ export default function FloatingCart() {
     };
   }, []);
 
-  if (!ready || pathname === "/cart" || pathname === "/checkout" || pathname.startsWith("/admin") || (count < 1 && !open)) return null;
+  const recovery = !ready || unresolved.length > 0 || persistenceWarning;
+  if (pathname === "/cart" || pathname === "/checkout" || pathname.startsWith("/admin") || (count < 1 && !open && !recovery)) return null;
 
   const pendingItem = pendingRemove ? items.find((item) => cartItemKey(item) === pendingRemove) : null;
-  const specification = (item: typeof items[number]) => [
-    item.optionLabel,
-    item.optionDetail,
-    item.preparationLabel,
-    item.customRoast ? item.roastLevel || "專屬烘焙" : undefined,
-  ].filter(Boolean).join(" · ");
-
   return (
     <div className={`floating-cart-wrap${headerCartVisible ? " is-header-cart-visible" : ""}`}>
-      {count > 0 ? <button
+      {count > 0 || recovery ? <button
         type="button"
         className="floating-cart"
         aria-label={`開啟購物車，共 ${count} 件商品`}
@@ -92,18 +88,21 @@ export default function FloatingCart() {
             <button type="button" aria-label="關閉購物車" onClick={() => setOpen(false)}>×</button>
           </header>
           <div className="mini-cart-items">
+            <CartRecoveryNotice />
             {items.length ? items.map((item) => {
               const key = cartItemKey(item);
-              const stockLimit = typeof item.stock === "number" && Number.isInteger(item.stock) && item.stock >= 0 ? item.stock : 99;
+              const stockLimit = cartInventoryLimit(items, item);
               const skuQuantity = items.reduce((sum, entry) => sum + (cartSkuKey(entry) === cartSkuKey(item) ? entry.quantity : 0), 0);
               const atStockLimit = skuQuantity >= stockLimit;
               return <article className="mini-cart-row" key={key}>
                 <div className="mini-cart-line-head">
-                  <strong>{item.name}</strong>
+                  <strong><Link href={cartProductHref(item)} onClick={() => setOpen(false)}>{item.name}</Link></strong>
                   <button type="button" className="mini-cart-remove" aria-label={`刪除 ${item.name}`} onClick={() => setPendingRemove(key)}>刪除</button>
                 </div>
                 <div className="mini-cart-line-copy">
-                  <small>{specification(item)}</small>
+                  {cartSpecification(item) ? <small>{cartSpecification(item)}</small> : null}
+                  {stockLimit === 0 ? <small role="status">目前無法購買</small> : null}
+                  {item.domain === "store" ? <small>商店結帳整合尚未開放</small> : null}
                   <span>NT$ {item.unitPrice.toLocaleString("zh-TW")}</span>
                 </div>
                 <div className="mini-cart-line-actions">
@@ -115,12 +114,13 @@ export default function FloatingCart() {
                   <p>小計 <b>NT$ {(item.unitPrice * item.quantity).toLocaleString("zh-TW")}</b></p>
                 </div>
               </article>;
-            }) : <p className="mini-cart-empty">購物車目前是空的</p>}
+            }) : ready && !unresolved.length && !persistenceWarning ? <p className="mini-cart-empty">購物車目前是空的</p> : null}
           </div>
           {items.length ? <footer>
             <p>商品總計（{count} 件） <strong>NT$ {subtotal.toLocaleString("zh-TW")}</strong></p>
-            <div><Link href="/cart" onClick={() => setOpen(false)}>查看購物車</Link><Link href="/checkout" onClick={() => setOpen(false)}>前往結帳</Link></div>
-          </footer> : <footer className="mini-cart-empty-footer"><Link href="/works" onClick={() => setOpen(false)}>繼續選購</Link></footer>}
+            {checkoutEligibility !== "ELIGIBLE" ? <p role="status">{checkoutEligibilityMessage(checkoutEligibility)}</p> : null}
+            <div><Link href="/cart" onClick={() => setOpen(false)}>查看購物車</Link>{checkoutEligibility === "ELIGIBLE" ? <Link href="/checkout" onClick={() => setOpen(false)}>前往結帳</Link> : <Link href="/cart" onClick={() => setOpen(false)}>確認購物車</Link>}</div>
+          </footer> : <footer className="mini-cart-empty-footer"><Link href="/cart" onClick={() => setOpen(false)}>查看購物車</Link>{ready && !recovery ? <><Link href="/works" onClick={() => setOpen(false)}>選購咖啡</Link><Link href="/store" onClick={() => setOpen(false)}>逛逛商店</Link></> : null}</footer>}
           {pendingItem ? <section className="mini-cart-confirm" role="dialog" aria-modal="true" aria-label="確認刪除商品">
             <p>確定要刪除「{pendingItem.name}」嗎？</p>
             <div><button type="button" onClick={() => setPendingRemove(null)}>取消</button><button type="button" onClick={() => { removeItem(pendingRemove!); setPendingRemove(null); }}>確定刪除</button></div>

@@ -4,7 +4,7 @@ import path from "node:path";
 
 const root = process.cwd();
 const read = (file: string) => readFile(path.join(root, file), "utf8");
-const [product, miniCart, provider, fullCart, checkout, orderRoute, css] = await Promise.all([
+const [product, miniCart, provider, fullCart, checkout, orderRoute, css, model] = await Promise.all([
   read("components/commerce/AddToCart.tsx"),
   read("components/commerce/FloatingCart.tsx"),
   read("components/commerce/CartProvider.tsx"),
@@ -12,6 +12,7 @@ const [product, miniCart, provider, fullCart, checkout, orderRoute, css] = await
   read("app/checkout/page.tsx"),
   read("app/api/orders/route.ts"),
   read("app/globals.css"),
+  read("lib/commerceCart.ts"),
 ]);
 
 let passed = 0;
@@ -34,9 +35,12 @@ test("minus requests exactly one fewer unit", () => assert.match(miniCart, /upda
 test("minus is disabled at quantity one", () => assert.match(miniCart, /disabled=\{item\.quantity <= 1\}/));
 test("plus is disabled at the shared SKU inventory limit", () => assert.match(miniCart, /disabled=\{atStockLimit\}/));
 test("mini-cart quantity controls meet the 48px preferred target", () => assert.match(css, /\.mini-cart-quantity button \{ width: 48px; height: 48px;/));
-test("provider clamps quantities to at least one", () => assert.match(provider, /Math\.max\(1, Math\.min\(99, Number\(quantity\) \|\| 1\)\)/));
-test("provider preserves the existing maximum of 99", () => assert.match(provider, /Math\.min\(99, Number\(quantity\)/));
-test("provider applies the shared SKU inventory limit", () => assert.match(provider, /maxForThisLine = Math\.max\(1, stockLimit - otherSkuQuantity\)/));
+test("provider rejects non-integer and below-one quantities", () => {
+  assert.match(provider, /requestedQuantity = cartQuantity\(quantity\)/);
+  assert.match(model, /!Number\.isSafeInteger\(value\) \|\| value < 1/);
+});
+test("provider preserves the existing maximum of 99", () => assert.match(model, /value < 1 \|\| value > 99/));
+test("provider applies the shared SKU inventory limit", () => assert.match(provider, /maxForThisLine = Math\.max\(0, cartInventoryLimit\(existing, target\) - otherSkuQuantity\)/));
 test("cart badge count is quantity-based", () => assert.match(provider, /count: items\.reduce\(\(sum, item\) => sum \+ item\.quantity, 0\)/));
 test("canonical cart subtotal is quantity-based", () => assert.match(provider, /subtotal: items\.reduce\(\(sum, item\) => sum \+ item\.unitPrice \* item\.quantity, 0\)/));
 test("mini-cart line subtotal reacts to quantity", () => assert.match(miniCart, /item\.unitPrice \* item\.quantity/));
@@ -45,15 +49,15 @@ test("mini-cart total renders canonical subtotal", () => assert.match(miniCart, 
 test("Add to Cart has its own mutation handler", () => assert.match(product, /function addSelectedItem\(\)/));
 test("Add to Cart still invokes addItem", () => assert.match(addHandlerSource, /addItem\(\{/));
 test("Add to Cart passes the selected quantity", () => assert.match(addHandlerSource, /\}, quantity\)/));
-test("Add to Cart preserves selected option identity", () => assert.match(addHandlerSource, /optionId: option\.id/));
-test("Add to Cart preserves bean or ground preparation", () => assert.match(addHandlerSource, /preparationLabel: prep/));
+test("Add to Cart preserves selected option identity", () => assert.match(addHandlerSource, /variantId: option\.id!/));
+test("Add to Cart preserves bean or ground preparation", () => assert.match(addHandlerSource, /preparation: prep as/));
 test("Immediate Checkout uses a dedicated non-mutating handler", () => assert.match(product, /onClick=\{goToCheckout\}>立即結帳/));
 test("Immediate Checkout no longer shares a mutation handler", () => assert.doesNotMatch(product, /commit\(goCheckout|commit\(true\)/));
 test("Immediate Checkout label is concise", () => assert.match(product, />立即結帳<\/button>/));
 test("obsolete buy-and-add label is absent", () => assert.doesNotMatch(product, /立即購買，前往結帳/));
 test("Immediate Checkout explains that it does not add again", () => assert.match(product, /直接前往結帳，不會再次加入此商品/));
 test("Immediate Checkout is not disabled by the displayed product", () => assert.doesNotMatch(product, /className="buy-now-button"[^>]*disabled/));
-test("Immediate Checkout reads canonical cart items", () => assert.match(product, /const \{ addItem, items \} = useCart\(\)/));
+test("Immediate Checkout reads canonical cart items", () => assert.match(product, /const \{ addItem, items, ready, checkoutEligibility \} = useCart\(\)/));
 test("empty cart returns before navigation", () => assert.match(checkoutHandlerSource, /if \(!items\.length\) \{[\s\S]*setEmptyCartDialogOpen\(true\);[\s\S]*return;[\s\S]*\}[\s\S]*router\.push\("\/checkout"\)/));
 test("non-empty cart still navigates to checkout", () => assert.match(checkoutHandlerSource, /router\.push\("\/checkout"\)/));
 test("checkout handler never adds or mutates a line", () => assert.doesNotMatch(checkoutHandlerSource, /addItem|updateQuantity|removeItem|setItems/));
@@ -92,7 +96,10 @@ test("guest checkout remains explicitly supported", () => assert.match(checkout,
 test("member checkout remains explicitly supported", () => assert.match(checkout, /已登入會員/));
 test("checkout line conversion preserves option, preparation, roast, and quantity", () => assert.match(checkout, /items\.map\(\(\{ slug, optionId, optionLabel, unitPrice, preparationLabel, customRoast, roastLevel, roastNote, quantity \}\)/));
 test("order creation still uses the inventory transaction", () => assert.match(orderRoute, /runInventoryOrderTransaction/));
-test("cart line identity still includes option, preparation, and roast", () => assert.match(provider, /item\.slug[\s\S]*item\.optionId \|\| item\.optionLabel[\s\S]*item\.preparationLabel[\s\S]*item\.customRoast/));
+test("cart line identity includes persisted IDs, preparation, roast and note", () => {
+  assert.match(provider, /cartItemKey = cartLineKey/);
+  assert.match(model, /valid\.productId, valid\.variantId,[\s\S]*selection\.preparation[\s\S]*selection\.customRoast[\s\S]*selection\.roastLevel[\s\S]*selection\.roastNote/);
+});
 test("phase components do not access protected production data files", () => {
   const changedUi = `${product}\n${miniCart}`;
   assert.doesNotMatch(changedUi, /fulfillment\/state|member-identity\/registry|commerce-state|business-rules|public\/uploads/);

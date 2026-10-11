@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { validateUnifiedCartItem, coffeeCheckoutItems, CommerceCartValidationError } from "../lib/commerceCart";
 
 import type { WebsiteData } from "../data/websiteData";
 import {
@@ -81,6 +82,36 @@ assert.match(orderRouteSource, /provisionalPendingActivationAnchorDate/);
 assert.match(orderRouteSource, /createIdempotencyRequestHash/);
 assert.match(checkoutCss, /\.checkout-summary \.quantity-control span\{[^}]*background:#fffdf9[^}]*color:#251b16[^}]*font-weight:800/);
 assert.match(cartSource, /roastLevel/);
-assert.match(cartSource, /preparationLabel/);
+// Preparation crosses the canonical model and whole-cart adapter before the existing request contract.
+const canonicalCoffee = validateUnifiedCartItem({
+  domain: "coffee", productId: product.id, variantId: option.id,
+  slug: product.slug, name: product.name, optionLabel: option.label, optionDetail: option.detail,
+  unitPrice: Number(option.price), quantity: 1,
+  coffeeOptions: { preparation: "咖啡粉", customRoast: false },
+});
+const adaptedCoffee = coffeeCheckoutItems([canonicalCoffee])[0];
+const storeFixture = validateUnifiedCartItem({
+  domain: "store", productId: "checkout-contract-store", variantId: "default",
+  slug: "checkout-contract-store", name: "Store fixture", unitPrice: 520, quantity: 1,
+});
+const mixedAdapterRejected = (() => {
+  try { coffeeCheckoutItems([canonicalCoffee, storeFixture]); return false; }
+  catch (error) { return error instanceof CommerceCartValidationError; }
+})();
+assert.deepEqual({
+  canonicalPreparation: canonicalCoffee.domain === "coffee" ? canonicalCoffee.coffeeOptions.preparation : undefined,
+  providerKeepsCanonicalPreparation: /target\.coffeeOptions\.preparation/u.test(cartSource),
+  adapterPreparation: adaptedCoffee.preparationLabel,
+  checkoutUsesAdapter: /const items = coffeeCheckoutItems\(unifiedItems\);/u.test(checkoutSource),
+  requestCarriesPreparation: /items:\s*items\.map\(\(\{[^}]*\bpreparationLabel\b[^}]*\}\)\s*=>\s*\(\{[^}]*\bpreparationLabel\s*,/u.test(checkoutSource),
+  mixedAdapterRejected,
+}, {
+  canonicalPreparation: "咖啡粉",
+  providerKeepsCanonicalPreparation: true,
+  adapterPreparation: "咖啡粉",
+  checkoutUsesAdapter: true,
+  requestCarriesPreparation: true,
+  mixedAdapterRejected: true,
+}, "Canonical coffee preparation must survive the adapter into the existing coffee checkout contract");
 
 console.log("Order/cart/checkout regression PASS");

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
@@ -10,7 +10,17 @@ const acceptanceFiles = [
   path.join(process.cwd(), "public", "data", "website-data.json"),
 ];
 const hash = async (filePath: string) => createHash("sha256").update(await readFile(filePath)).digest("hex");
-const realHashesBefore = await Promise.all(acceptanceFiles.map(hash));
+type ProtectedFileBaseline = { exists: true; hash: string } | { exists: false };
+async function captureProtectedFileBaseline(filePath: string): Promise<ProtectedFileBaseline> {
+  try {
+    await stat(filePath);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return { exists: false };
+    throw error;
+  }
+  return { exists: true, hash: await hash(filePath) };
+}
+const realBaselinesBefore = await Promise.all(acceptanceFiles.map(captureProtectedFileBaseline));
 
 const root = await mkdtemp(path.join(os.tmpdir(), "kd-phase-i4a3-"));
 process.env.KD_DATA_DIR = root;
@@ -98,8 +108,11 @@ try {
   const cancellationSource = await readFile(path.join(process.cwd(), "lib", "orderCancellation.ts"), "utf8");
   check("cancellation route wires shared inventory return and idempotent credit release", routeSource.includes("cancelOrderCanonically") && cancellationSource.includes("returnCommittedInventoryForCancellation") && cancellationSource.includes("settleCreditReservationForOrder") && routeSource.includes("admin-cancel:${orderNumber}"));
 
-  const realHashesAfter = await Promise.all(acceptanceFiles.map(hash));
-  check("O isolated tests do not mutate real acceptance data", realHashesAfter.every((value, index) => value === realHashesBefore[index]));
+  const realBaselinesAfter = await Promise.all(acceptanceFiles.map(captureProtectedFileBaseline));
+  check("O isolated tests do not mutate real acceptance data", realBaselinesAfter.every((value, index) => {
+    const baseline = realBaselinesBefore[index];
+    return value.exists === baseline.exists && (!value.exists || (baseline.exists && value.hash === baseline.hash));
+  }));
   console.log(`\nPhase I.4A Round 3 cancellation and credit release: ${checks} checks passed.`);
 } finally {
   await rm(root, { recursive: true, force: true });

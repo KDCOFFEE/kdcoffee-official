@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useCart } from "./CartProvider";
+import { cartInventoryKey, validateUnifiedCartItem } from "@/lib/commerceCart";
 import type { CoffeeArtwork, PurchaseOption } from "@/data/websiteData";
 import {
   ALLOWED_BEAN_PREPARATIONS,
@@ -22,9 +23,9 @@ function normalizeOptions(product: CoffeeArtwork): PurchaseOption[] {
   const source = Array.isArray(product.skus) && product.skus.length ? product.skus : product.purchase;
   return (Array.isArray(source) ? source : [])
     .filter((item) => item && item.enabled !== false)
-    .map((item, index) => ({
+    .map((item) => ({
       ...item,
-      id: item.id || `${product.slug}-${index + 1}`,
+      id: item.id,
       label: String(item.label || "商品規格"),
       detail: String(item.detail || ""),
       price: Math.max(0, Number(item.price) || 0),
@@ -33,7 +34,7 @@ function normalizeOptions(product: CoffeeArtwork): PurchaseOption[] {
 }
 
 export default function AddToCart({ product, showPv = false, pointDisplayName = "KD點" }: { product: CoffeeArtwork; showPv?: boolean; pointDisplayName?: string }) {
-  const { addItem, items } = useCart();
+  const { addItem, items, ready, checkoutEligibility } = useCart();
   const router = useRouter();
   const options = useMemo(() => normalizeOptions(product), [product]);
   const [selectedId, setSelectedId] = useState(options[0]?.id || "");
@@ -62,16 +63,20 @@ export default function AddToCart({ product, showPv = false, pointDisplayName = 
     !!selectedLine &&
     isCustomRoastLineEligible(selectedLine);
   const optionStock = option && typeof option.stock === "number" && Number.isInteger(option.stock) && option.stock >= 0 ? option.stock : 0;
-  const sameSkuInCart = option
-    ? items.reduce((sum, item) => sum + (
-        item.slug === product.slug &&
-        (item.optionId || item.optionLabel) === (option.id || option.label)
-          ? item.quantity
-          : 0
-      ), 0)
+  let selectedInventoryKey: string | null = null;
+  try {
+    selectedInventoryKey = option ? cartInventoryKey(validateUnifiedCartItem({
+      domain: "coffee", productId: product.id, variantId: option.id,
+      slug: product.slug, name: product.name, unitPrice: option.price, quantity: 1,
+      coffeeOptions: { customRoast: false },
+    })) : null;
+  } catch { /* Missing persisted IDs fail closed; never fabricate canonical identity. */ }
+  const sameSkuInCart = selectedInventoryKey
+    ? items.reduce((sum, item) => sum + (cartInventoryKey(item) === selectedInventoryKey ? item.quantity : 0), 0)
     : 0;
-  const remainingStock = Math.max(0, optionStock - sameSkuInCart);
-  const unavailable = product.purchasable === false || product.status === "sold_out" || !option || option.enabled === false || optionStock === 0;
+  const remainingStock = Math.max(0, Math.min(99, optionStock) - sameSkuInCart);
+  const unavailable = !ready || !selectedInventoryKey || product.active === false || product.status === "hidden"
+    || product.purchasable === false || product.status === "sold_out" || !option || option.enabled === false || optionStock === 0;
 
   useEffect(() => {
     const dialog = emptyCartDialogRef.current;
@@ -114,34 +119,47 @@ export default function AddToCart({ product, showPv = false, pointDisplayName = 
   }
 
   function addSelectedItem() {
+    if (!ready) return setNotice("購物車尚未完成載入，請先返回購物車確認。");
+    if (!selectedInventoryKey) return setNotice("此商品識別資料需要更新，暫時無法加入購物車。");
     if (!option || unavailable) return setNotice("此規格目前暫停供應。");
     if (remainingStock <= 0) return setNotice(`購物車已達此規格的現貨上限（${optionStock} 包）。`);
     if (quantity > remainingStock) return setNotice(`目前現貨最多還可加入 ${remainingStock} 包。`);
     if (customRoast && !customRoastEligible) return setNotice("專屬烘焙需同一款半磅咖啡豆或咖啡粉達 4 包（2 磅）。");
     if (customRoast && !roastLevel) return setNotice("請先選擇專屬烘焙的烘焙度。");
     const prep = needsPreparation ? preparation || "咖啡豆" : undefined;
-    addItem({
+    const added = addItem({
+      domain: "coffee",
+      productId: product.id!,
+      variantId: option.id!,
       slug: product.slug,
       name: product.name,
-      optionId: option.id,
       optionLabel: option.label,
       optionDetail: option.detail,
-      preparationLabel: prep,
-      customRoast: customRoastEligible && customRoast,
-      roastLevel: customRoastEligible && customRoast ? roastLevel : undefined,
-      roastNote: customRoastEligible && customRoast ? roastNote.trim() : undefined,
+      coffeeOptions: {
+        ...(prep ? { preparation: prep as (typeof ALLOWED_BEAN_PREPARATIONS)[number] } : {}),
+        customRoast: customRoastEligible && customRoast,
+        ...(customRoastEligible && customRoast ? {
+          roastLevel: roastLevel as (typeof ALLOWED_ROAST_LEVELS)[number], roastNote: roastNote.trim(),
+        } : {}),
+      },
       unitPrice: option.price,
-      stock: optionStock,
+      quantityLimit: Math.min(99, optionStock),
     }, quantity);
 
+    if (!added) return setNotice("目前無法加入此商品，請確認購物車狀態與數量。");
     const roastText = customRoast ? `・專屬烘焙 ${roastLevel}` : "";
-    setNotice(`已加入購物車：${product.name}・${option.label}${prep ? `・${prep}` : ""}${roastText} × ${quantity}`);
+    setNotice(`已加入購物車：${product.name}・${option.label}${prep ? `・${prep}` : ""}${roastText} × ${added}`);
     window.dispatchEvent(new CustomEvent("kdcoffee:cart-added"));
   }
 
   function goToCheckout() {
     if (!items.length) {
-      setEmptyCartDialogOpen(true);
+      if (checkoutEligibility === "EMPTY") setEmptyCartDialogOpen(true);
+      else router.push("/cart");
+      return;
+    }
+    if (checkoutEligibility !== "ELIGIBLE") {
+      router.push("/cart");
       return;
     }
     router.push("/checkout");

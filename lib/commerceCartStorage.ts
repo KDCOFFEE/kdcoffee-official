@@ -111,7 +111,7 @@ export type CartStorageWrite =
 /** Delete only the selected source, and only after verified completed migration.
  * Other legacy keys remain untouched. No live/browser wiring or cross-tab behavior.
  */
-export function writeCartEnvelope(storage: CartStorage, input: unknown): CartStorageWrite {
+export function writeCartEnvelope(storage: CartStorage, input: unknown, options: { removeLegacy?: boolean } = {}): CartStorageWrite {
   let envelope: CartEnvelope;
   try { envelope = validateCartEnvelope(input); } catch { return { ok: false, reason: "INVALID_ENVELOPE" }; }
   const encoded = JSON.stringify(envelope);
@@ -123,7 +123,7 @@ export function writeCartEnvelope(storage: CartStorage, input: unknown): CartSto
       return { ok: false, reason: "VERIFICATION_FAILED" };
     }
   } catch { return { ok: false, reason: "VERIFICATION_FAILED" }; }
-  const source = envelope.migration.completed ? envelope.migration.sourceKey : undefined;
+  const source = options.removeLegacy !== false && envelope.migration.completed ? envelope.migration.sourceKey : undefined;
   if (!source) return { ok: true, legacyRemoved: false };
   try { storage.removeItem(source); return { ok: true, legacyRemoved: true }; }
   catch { return { ok: true, legacyRemoved: false }; } // Verified v16 still prevents repeat migration.

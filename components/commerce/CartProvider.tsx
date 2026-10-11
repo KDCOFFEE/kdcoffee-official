@@ -1,220 +1,200 @@
 "use client";
 
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
-import { isCustomRoastLineEligible } from "@/lib/checkoutRules";
+import { createContext, useContext, useEffect, useMemo, useRef, useState, useCallback } from "react";
+import {
+  cartLineKey, cartInventoryKey, cartInventoryLimit, cartQuantity, validateUnifiedCartItem,
+  mergeCartLines, coffeeRoastEligible, isCoffeeRoastSku, validateCoffeeOptions,
+  cartCheckoutEligibility, coffeeCheckoutItems, isCartRecord, assertCartFields,
+} from "@/lib/commerceCart";
+import type { UnifiedCartItem, CoffeeCheckoutItem, CheckoutEligibility, CartMigrationState, MigrationIssue, MigrationNotice } from "@/lib/commerceCart";
+import { readCartStorage, validateCartEnvelope, writeCartEnvelope } from "@/lib/commerceCartStorage";
+import type { CartEnvelope } from "@/lib/commerceCartStorage";
 
-export type CartItem = {
-  slug: string;
-  name: string;
-  optionId?: string;
-  optionLabel: string;
-  optionDetail: string;
-  preparationLabel?: string;
-  customRoast?: boolean;
-  roastLevel?: string;
-  roastNote?: string;
-  unitPrice: number;
-  quantity: number;
-  stock?: number;
-};
-
-type CartContextValue = {
-  items: CartItem[];
-  count: number;
-  subtotal: number;
-  ready: boolean;
-  addItem: (item: Omit<CartItem, "quantity">, quantity?: number) => void;
-  updateQuantity: (key: string, quantity: number) => void;
+export type CartItem = UnifiedCartItem;
+type CartAddition = Omit<Extract<UnifiedCartItem, { domain: "coffee" }>, "quantity">
+  | Omit<Extract<UnifiedCartItem, { domain: "store" }>, "quantity">;
+export type CartContextValue = {
+  items: UnifiedCartItem[]; count: number; subtotal: number; ready: boolean;
+  addItem: (item: CartAddition, quantity?: number) => number;
+  updateQuantity: (key: string, quantity: number) => boolean;
   removeItem: (key: string) => void;
-  updateCustomRoast: (key: string, config: { enabled: boolean; roastLevel?: string; roastNote?: string }) => void;
+  updateCustomRoast: (key: string, config: { enabled: boolean; roastLevel?: string; roastNote?: string }) => boolean;
   clearCart: () => void;
+  migrationState: CartMigrationState;
+  unresolved: MigrationIssue[]; notices: MigrationNotice[];
+  persistenceWarning: boolean;
+  checkoutEligibility: CheckoutEligibility;
+  retryMigration: () => Promise<void>;
+  discardUnresolved: () => void;
+  getCoffeeCheckoutItems: () => CoffeeCheckoutItem[];
 };
-
 const CartContext = createContext<CartContextValue | null>(null);
-const STORAGE_KEY = "kdcoffee-cart-v15";
-const LEGACY_KEYS = ["kdcoffee-cart-v13", "kdcoffee-cart-v3", "kdcoffee-cart-v2", "kdcoffee-cart-v1"];
+// Compatibility names now reference the foundation functions, never slug-based keys.
+export const cartItemKey = cartLineKey;
+export const cartSkuKey = cartInventoryKey;
 
-export const cartItemKey = (item: Pick<CartItem, "slug" | "optionId" | "optionLabel" | "preparationLabel" | "customRoast" | "roastLevel">) =>
-  `${item.slug}::${item.optionId || item.optionLabel}::${item.preparationLabel || "default"}::${item.customRoast ? item.roastLevel || "custom" : "standard"}`;
-
-export const cartSkuKey = (item: Pick<CartItem, "slug" | "optionId" | "optionLabel">) =>
-  `${item.slug}::${item.optionId || item.optionLabel}`;
-
-function normalizeCartCustomRoast(items: CartItem[]) {
-  return items.map((item) => {
-    const eligible = isCustomRoastLineEligible(item);
-    if (item.customRoast === true && eligible) return item;
-    return {
-      ...item,
-      customRoast: false,
-      roastLevel: undefined,
-      roastNote: undefined,
-    };
-  });
+function emptyEnvelope(): CartEnvelope {
+  return { version: 16, items: [], migration: { completed: true, unresolved: [], notices: [] } };
 }
-
-function sanitizeCart(value: unknown): CartItem[] {
-  if (!Array.isArray(value)) return [];
-  const items = value.flatMap((raw: any) => {
-    if (!raw || typeof raw !== "object") return [];
-    const slug = String(raw.slug || "").trim();
-    const name = String(raw.name || "").trim();
-    const optionLabel = String(raw.optionLabel || "").trim();
-    const optionDetail = String(raw.optionDetail || "").trim();
-    const unitPrice = Number(raw.unitPrice);
-    const quantity = Math.max(1, Math.min(99, Number(raw.quantity) || 1));
-    if (!slug || !name || !optionLabel || !Number.isFinite(unitPrice) || unitPrice < 0) return [];
-    const customRoast = raw.customRoast === true;
-    return [{
-      slug,
-      name,
-      optionId: raw.optionId ? String(raw.optionId) : undefined,
-      optionLabel,
-      optionDetail,
-      preparationLabel: raw.preparationLabel ? String(raw.preparationLabel) : undefined,
-      customRoast,
-      roastLevel: customRoast && raw.roastLevel ? String(raw.roastLevel).slice(0, 30) : undefined,
-      roastNote: customRoast && raw.roastNote ? String(raw.roastNote).slice(0, 160) : undefined,
-      unitPrice,
-      quantity,
-      stock: typeof raw.stock === "number" && Number.isInteger(raw.stock) && raw.stock >= 0 ? raw.stock : undefined,
-    }];
-  });
-  return normalizeCartCustomRoast(items);
-}
-
-function persist(items: CartItem[]) {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(items)); } catch {}
-}
+type ProviderState = { envelope: CartEnvelope; migrationState: CartMigrationState; persistenceWarning: boolean };
 
 export function CartProvider({ children }: { children: React.ReactNode }) {
-  const [items, setItems] = useState<CartItem[]>([]);
-  const [ready, setReady] = useState(false);
+  const [state, setState] = useState<ProviderState>({
+    envelope: emptyEnvelope(), migrationState: "PENDING", persistenceWarning: false,
+  });
+  const current = useRef(state);
+  const epoch = useRef(0);
+  const controller = useRef<AbortController | null>(null);
+  // A failed write/readback retries this same resolved envelope, never an unverified storage value.
+  const pendingMigration = useRef<CartEnvelope | null>(null);
+  const publish = useCallback((next: ProviderState) => { current.current = next; setState(next); }, []);
+
+  const hydrate = useCallback(async () => {
+    if (current.current.migrationState === "READY") {
+      let ok = false;
+      try { ok = writeCartEnvelope(window.localStorage, current.current.envelope, { removeLegacy: false }).ok; } catch {}
+      publish({ ...current.current, persistenceWarning: !ok });
+      return;
+    }
+    const attempt = ++epoch.current;
+    controller.current?.abort();
+    controller.current = new AbortController();
+    publish({ ...current.current, migrationState: "PENDING" });
+    try {
+      const storage = window.localStorage;
+      let envelope = pendingMigration.current;
+      if (!envelope) {
+        const saved = readCartStorage(storage);
+        if (saved.kind === "invalid") throw new Error("Cart storage unavailable");
+        if (saved.kind === "current") {
+          envelope = { ...saved.envelope, items: mergeCartLines(saved.envelope.items) };
+          if (attempt === epoch.current) publish({ envelope, migrationState: "READY", persistenceWarning: false });
+          return; // Valid v16, including completed empty carts, never calls legacy resolution.
+        }
+        if (saved.kind === "empty") envelope = emptyEnvelope();
+        else {
+          const response = await fetch("/api/commerce/cart/resolve", {
+            method: "POST", headers: { "Content-Type": "application/json" }, cache: "no-store",
+            body: JSON.stringify({ sourceKey: saved.sourceKey, items: saved.items }),
+            signal: controller.current.signal,
+          });
+          if (!response.ok) throw new Error("Legacy resolution unavailable");
+          const result: unknown = await response.json();
+          if (!isCartRecord(result)) throw new Error("Invalid resolution");
+          assertCartFields(result, ["version", "sourceKey", "items", "unresolved", "notices"]);
+          if (result.sourceKey !== saved.sourceKey) throw new Error("Invalid resolution source");
+          envelope = validateCartEnvelope({
+            version: result.version, items: result.items,
+            migration: { completed: true, sourceKey: result.sourceKey, unresolved: result.unresolved, notices: result.notices },
+          });
+          if (envelope.items.some(item => item.domain !== "coffee")) throw new Error("Invalid legacy domain");
+          envelope = { ...envelope, items: mergeCartLines(envelope.items) };
+        }
+      }
+      if (attempt !== epoch.current) return;
+      pendingMigration.current = envelope;
+      const written = writeCartEnvelope(storage, envelope);
+      if (!written.ok) throw new Error("Cart migration persistence failed");
+      pendingMigration.current = null;
+      publish({ envelope, migrationState: "READY", persistenceWarning: false });
+    } catch {
+      if (attempt === epoch.current) publish({ ...current.current, migrationState: "FAILED" });
+    }
+  }, [publish]);
 
   useEffect(() => {
-    try {
-      for (const key of [STORAGE_KEY, ...LEGACY_KEYS]) {
-        const saved = localStorage.getItem(key);
-        if (!saved) continue;
-        const parsed = sanitizeCart(JSON.parse(saved));
-        setItems(parsed);
-        persist(parsed);
-        LEGACY_KEYS.forEach((legacy) => localStorage.removeItem(legacy));
-        break;
-      }
-    } catch {
-      localStorage.removeItem(STORAGE_KEY);
-      LEGACY_KEYS.forEach((legacy) => localStorage.removeItem(legacy));
-      setItems([]);
-    } finally { setReady(true); }
-  }, []);
+    void hydrate();
+    return () => { ++epoch.current; controller.current?.abort(); };
+  }, [hydrate]);
 
-  const value = useMemo<CartContextValue>(() => ({
-    items,
-    ready,
-    count: items.reduce((sum, item) => sum + item.quantity, 0),
-    subtotal: items.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0),
-    addItem: (item, quantity = 1) => {
-      setItems((current) => {
-        const requestedQuantity = Math.max(1, Math.min(99, Number(quantity) || 1));
-        const stockLimit =
-          typeof item.stock === "number" && Number.isInteger(item.stock) && item.stock >= 0
-            ? item.stock
-            : 99;
-        const inventoryKey = cartSkuKey(item);
-        const existingSkuQuantity = current.reduce(
-          (sum, entry) => sum + (cartSkuKey(entry) === inventoryKey ? entry.quantity : 0),
-          0,
-        );
-        const safeQuantity = Math.min(requestedQuantity, Math.max(0, stockLimit - existingSkuQuantity));
-        if (safeQuantity <= 0) return current;
-        const candidate = {
-          ...item,
-          quantity: safeQuantity,
-        };
-        const customRoast =
-          item.customRoast === true &&
-          isCustomRoastLineEligible(candidate);
-        const normalized = {
-          ...item,
-          customRoast,
-          roastLevel: customRoast ? item.roastLevel : undefined,
-          roastNote: customRoast ? item.roastNote : undefined,
-        };
-        const key = cartItemKey(normalized);
-        const found = current.find((entry) => cartItemKey(entry) === key);
-        const merged = found
-          ? current.map((entry) => cartItemKey(entry) === key
-            ? { ...entry, quantity: Math.min(99, entry.quantity + safeQuantity) }
-            : entry)
-          : [...current, { ...normalized, quantity: safeQuantity }];
-        const next = normalizeCartCustomRoast(merged);
-        persist(next);
-        return next;
-      });
-    },
-    updateQuantity: (key, quantity) => {
-      setItems((current) => {
-        const target = current.find((item) => cartItemKey(item) === key);
-        if (!target) return current;
-        const requestedQuantity = Math.max(1, Math.min(99, Number(quantity) || 1));
-        const stockLimit =
-          typeof target.stock === "number" && Number.isInteger(target.stock) && target.stock >= 0
-            ? target.stock
-            : 99;
-        const inventoryKey = cartSkuKey(target);
-        const otherSkuQuantity = current.reduce(
-          (sum, entry) =>
-            sum + (cartItemKey(entry) !== key && cartSkuKey(entry) === inventoryKey ? entry.quantity : 0),
-          0,
-        );
-        const maxForThisLine = Math.max(1, stockLimit - otherSkuQuantity);
-        const safeQuantity = Math.min(requestedQuantity, maxForThisLine);
-        const updated = current.map((item) => cartItemKey(item) === key
-          ? {
-              ...item,
-              quantity: safeQuantity,
-            }
-          : item);
-        const next = normalizeCartCustomRoast(updated);
-        persist(next);
-        return next;
-      });
-    },
-    removeItem: (key) => {
-      setItems((current) => {
-        const next = normalizeCartCustomRoast(
-          current.filter((item) => cartItemKey(item) !== key),
-        );
-        persist(next);
-        return next;
-      });
-    },
-    updateCustomRoast: (key, config) => {
-      setItems((current) => {
-        const next = current.map((item) => {
-          if (cartItemKey(item) !== key) return item;
-          const eligible = isCustomRoastLineEligible(item);
-          if (!eligible || !config.enabled) {
-            return { ...item, customRoast: false, roastLevel: undefined, roastNote: undefined };
-          }
-          return {
-            ...item,
-            customRoast: true,
-            roastLevel: config.roastLevel?.slice(0, 30),
-            roastNote: config.roastNote?.slice(0, 160),
-          };
-        });
-        persist(next);
-        return next;
-      });
-    },
-    clearCart: () => { persist([]); setItems([]); },
-  }), [items, ready]);
+  function commit(envelope: CartEnvelope): boolean {
+    if (current.current.migrationState !== "READY") return false;
+    let checked: CartEnvelope;
+    try { checked = validateCartEnvelope({ ...envelope, items: mergeCartLines(envelope.items) }); } catch { return false; }
+    let persisted = false;
+    try { persisted = writeCartEnvelope(window.localStorage, checked, { removeLegacy: false }).ok; } catch {}
+    // Keep a safe in-memory cart, surface failed persistence and block checkout until retry.
+    publish({ envelope: checked, migrationState: "READY", persistenceWarning: !persisted });
+    return true;
+  }
+
+  const value = useMemo<CartContextValue>(() => {
+    const items = state.envelope.items;
+    const eligibility = () => cartCheckoutEligibility(current.current.envelope.items,
+      current.current.migrationState, current.current.envelope.migration.unresolved, current.current.persistenceWarning);
+    return {
+      items, ready: state.migrationState === "READY",
+      count: items.reduce((sum, item) => sum + item.quantity, 0),
+      subtotal: items.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0),
+      migrationState: state.migrationState, unresolved: state.envelope.migration.unresolved,
+      notices: state.envelope.migration.notices, persistenceWarning: state.persistenceWarning,
+      checkoutEligibility: cartCheckoutEligibility(items, state.migrationState,
+        state.envelope.migration.unresolved, state.persistenceWarning),
+      retryMigration: hydrate,
+      discardUnresolved: () => commit({ ...current.current.envelope,
+        migration: { ...current.current.envelope.migration, unresolved: [] } }),
+      getCoffeeCheckoutItems: () => {
+        if (eligibility() !== "ELIGIBLE") throw new Error("Cart is not eligible for coffee checkout");
+        return coffeeCheckoutItems(current.current.envelope.items);
+      },
+      addItem: (raw, quantity = 1) => {
+        if (current.current.migrationState !== "READY") return 0;
+        try {
+          const requestedQuantity = cartQuantity(quantity);
+          const item = validateUnifiedCartItem({ ...raw, quantity: requestedQuantity });
+          const existing = current.current.envelope.items;
+          const inventoryKey = cartInventoryKey(item);
+          const existingSkuQuantity = existing.reduce((sum, entry) => sum + (cartInventoryKey(entry) === inventoryKey ? entry.quantity : 0), 0);
+          const capacity = Math.max(0, cartInventoryLimit(existing, item) - existingSkuQuantity);
+          const safeQuantity = Math.min(requestedQuantity, capacity);
+          if (safeQuantity <= 0) return 0;
+          const candidate = validateUnifiedCartItem({ ...item, quantity: safeQuantity });
+          if (candidate.domain === "coffee" && candidate.coffeeOptions.customRoast && !coffeeRoastEligible(candidate)) return 0;
+          const next = mergeCartLines([...existing, candidate]);
+          return commit({ ...current.current.envelope, items: next }) ? safeQuantity : 0;
+        } catch { return 0; }
+      },
+      updateQuantity: (key, quantity) => {
+        if (current.current.migrationState !== "READY") return false;
+        try {
+          const requestedQuantity = cartQuantity(quantity);
+          const existing = current.current.envelope.items;
+          const target = existing.find(item => cartLineKey(item) === key);
+          if (!target) return false;
+          const otherSkuQuantity = existing.reduce((sum, entry) => sum + (
+            cartLineKey(entry) !== key && cartInventoryKey(entry) === cartInventoryKey(target) ? entry.quantity : 0), 0);
+          const maxForThisLine = Math.max(0, cartInventoryLimit(existing, target) - otherSkuQuantity);
+          const safeQuantity = Math.min(requestedQuantity, maxForThisLine);
+          if (safeQuantity <= 0) return false; // Retain unavailable line; never manufacture quantity one.
+          return commit({ ...current.current.envelope, items: existing.map(item =>
+            cartLineKey(item) === key ? { ...item, quantity: safeQuantity } : item) });
+        } catch { return false; }
+      },
+      removeItem: key => commit({ ...current.current.envelope,
+        items: current.current.envelope.items.filter(item => cartLineKey(item) !== key) }),
+      updateCustomRoast: (key, config) => {
+        const existing = current.current.envelope.items;
+        const target = existing.find(item => cartLineKey(item) === key);
+        if (!target || target.domain !== "coffee" || typeof config.enabled !== "boolean") return false;
+        if (config.enabled && (!isCoffeeRoastSku(target) || (!target.coffeeOptions.customRoast && !coffeeRoastEligible(target)))) return false;
+        try {
+          const selection = validateCoffeeOptions(config.enabled ? {
+            ...target.coffeeOptions, customRoast: true,
+            roastLevel: config.roastLevel ?? target.coffeeOptions.roastLevel,
+            ...(config.roastNote !== undefined ? { roastNote: config.roastNote } : {}),
+          } : { ...(target.coffeeOptions.preparation ? { preparation: target.coffeeOptions.preparation } : {}), customRoast: false });
+          // Changed keys are merged only after preserving/normalizing the customer's note.
+          return commit({ ...current.current.envelope, items: existing.map(item =>
+            cartLineKey(item) === key ? { ...target, coffeeOptions: selection } : item) });
+        } catch { return false; }
+      },
+      clearCart: () => commit({ ...current.current.envelope, items: [],
+        migration: { ...current.current.envelope.migration, unresolved: [], notices: [] } }),
+    };
+  }, [state, hydrate]);
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
 }
-
 export function useCart() {
   const context = useContext(CartContext);
   if (!context) throw new Error("useCart must be used inside CartProvider");
