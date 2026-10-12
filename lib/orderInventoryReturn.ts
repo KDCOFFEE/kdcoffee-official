@@ -1,4 +1,6 @@
 import crypto from "crypto";
+import { inspectInventoryCommitState } from "./orderInventoryTransaction";
+import { findInventoryReceipt, makeInventoryReceipt, addInventoryReceipt, receiptDemandHash, type InventoryReceipts } from "./inventoryReceipts";
 import { promises as fs } from "fs";
 
 import type { StoredOrder } from "@/lib/adminOrders";
@@ -26,6 +28,7 @@ type ProductRecord = {
 };
 
 type WebsiteDataRecord = {
+  inventoryReceipts?: InventoryReceipts;
   menu?: { products?: ProductRecord[] };
   version?: unknown;
   updatedAt?: string;
@@ -45,6 +48,7 @@ export type InventoryReturnedChange = InventoryCommittedChange & {
 };
 
 export type InventoryReturnMetadata = {
+  operationId?: string;
   state: "return_pending" | "returned" | "return_failed";
   startedAt: string;
   returnedAt?: string;
@@ -221,9 +225,26 @@ export async function returnCommittedInventoryForCancellation({
   dependencies,
 }: ReturnCommittedInventoryInput): Promise<InventoryReturnResult> {
   const deps = { ...DEFAULT_DEPENDENCIES, ...dependencies };
+  if (!websiteLockHeld) return deps.withFileLock(websiteFile, () => returnCommittedInventoryForCancellation({ order, websiteFile, persistOrder, now, lockOptions, websiteLockHeld: true, dependencies: deps }), { ...lockOptions, commerceLock: { rank: 2, key: '0000:coffee:' + websiteFile } });
+  const transaction = order.inventoryTransaction;
+  if (transaction && ['inventory_pending','inventory_write_failed'].includes(transaction.state)) {
+    const state = inspectInventoryCommitState(transaction, await deps.readFile(websiteFile, 'utf8'));
+    if (state === 'inventory_state_diverged') {
+      const warning = '庫存交易結果無法確認，未執行回補，請人工核對';
+      const failed = await persistFailure(order, order.inventoryReturn || { state: 'return_pending', startedAt: now().toISOString(), changes: [] }, warning, persistOrder, now);
+      return { order: failed, state: 'return_failed', warning };
+    }
+    if (state === 'inventory_not_committed') { await persistOrder(order); return { order, state: 'not_applicable' }; }
+    order = { ...order, inventoryTransaction: { ...transaction, state: 'inventory_committed' } };
+  }
   const existing = order.inventoryReturn as InventoryReturnMetadata | undefined;
 
   if (existing?.state === "returned") {
+    if (existing.operationId) {
+      const document = JSON.parse(await deps.readFile(websiteFile, "utf8")) as WebsiteDataRecord;
+      const receipt = findInventoryReceipt(document, existing.operationId);
+      if (!receipt || receipt.kind !== "RESTORE" || receipt.parentOperationId !== order.inventoryTransaction?.operationId) throw new Error("缺少可信庫存回補 receipt");
+    }
     await persistOrder(order);
     return { order, state: "already_returned" };
   }
@@ -251,6 +272,20 @@ export async function returnCommittedInventoryForCancellation({
   const performReturn = async (): Promise<InventoryReturnResult> => {
       const beforeJson = await deps.readFile(websiteFile, "utf8");
       const beforeSha256 = sha256(beforeJson);
+      const receiptDocument = JSON.parse(beforeJson) as WebsiteDataRecord;
+      const parentOperationId = order.inventoryTransaction?.operationId as string | undefined;
+      const operationId = parentOperationId ? 'cancel-restore:' + parentOperationId : undefined;
+      if (operationId) {
+        const parent = findInventoryReceipt(receiptDocument, parentOperationId!);
+        if (!parent || parent.kind !== 'APPLY' || parent.domain !== 'coffee' || parent.demandHash !== order.inventoryTransaction.demandHash) throw new Error('原庫存扣除 receipt 無法驗證');
+        const restored = findInventoryReceipt(receiptDocument, operationId);
+        const expected = receiptDemandHash('coffee', 'RESTORE', parentOperationId, committed.map(item => ({ identity: item.skuId, quantity: item.demand })));
+        if (restored) {
+          if (restored.demandHash !== expected) throw new Error('庫存回補 receipt 與訂單不一致');
+          const recovered = withInventoryReturn(order, { ...(existing || { startedAt: now().toISOString(), changes: [] }), operationId, state: 'returned', returnedAt: restored.recordedAt, failedAt: undefined, warning: undefined });
+          await persistOrder(recovered); return { order: recovered, state: 'returned' };
+        }
+      }
 
       if (
         existing &&
@@ -270,7 +305,7 @@ export async function returnCommittedInventoryForCancellation({
       }
 
       if (
-        existing &&
+        !operationId && existing &&
         (existing.state === "return_pending" || existing.state === "return_failed") &&
         existing.beforeWebsiteSha256 &&
         beforeSha256 !== existing.beforeWebsiteSha256
@@ -299,9 +334,14 @@ export async function returnCommittedInventoryForCancellation({
 
       websiteData.version = Number(websiteData.version || 0) + 1;
       websiteData.updatedAt = now().toISOString();
+      if (operationId && parentOperationId) addInventoryReceipt(websiteData, makeInventoryReceipt({
+        operationId, parentOperationId, transactionId: parentOperationId, domain: 'coffee', kind: 'RESTORE', recordedAt: now().toISOString(),
+        items: returnedChanges.map(item => ({ identity: item.skuId, quantity: item.demand, beforeStock: item.beforeStock, afterStock: item.afterStock })),
+      }));
       const afterJson = serializeJson(websiteData);
       const pending: InventoryReturnMetadata = {
         state: "return_pending",
+        ...(operationId ? { operationId } : {}),
         startedAt: existing?.startedAt || now().toISOString(),
         beforeWebsiteSha256: beforeSha256,
         afterWebsiteSha256: sha256(afterJson),

@@ -2,6 +2,7 @@ import { randomBytes } from "crypto";
 import { promises as fs } from "fs";
 import type { FileHandle } from "fs/promises";
 import path from "path";
+import { inCommerceLock, inferCommerceLock, type CommerceLock } from "./commerceLockProtocol";
 
 const DEFAULT_LOCK_TIMEOUT_MS = 5_000;
 const DEFAULT_LOCK_RETRY_MS = 50;
@@ -83,9 +84,10 @@ export async function atomicWriteJson(filePath: string, data: unknown) {
 export type FileLockOptions = {
   timeoutMs?: number;
   retryDelayMs?: number;
+  commerceLock?: CommerceLock;
 };
 
-export async function withFileLock<T>(
+async function withFileLockCore<T>(
   filePath: string,
   operation: () => Promise<T>,
   options: FileLockOptions = {},
@@ -134,5 +136,30 @@ export async function withFileLock<T>(
       if (!hasErrorCode(error, "ENOENT")) releaseError ??= error;
     }
     if (releaseError) throw releaseError;
+  }
+}
+
+/** Ordering is checked before acquiring the filesystem lock. Never removes stale locks. */
+export function withFileLock<T>(filePath: string, operation: () => Promise<T>, options: FileLockOptions = {}): Promise<T> {
+  return inCommerceLock(filePath, options.commerceLock ?? inferCommerceLock(filePath), () => withFileLockCore(filePath, operation, options));
+}
+/** Publish complete JSON once. Readers never observe a partially written new file. */
+export async function publishJsonExclusive(filePath: string, data: unknown) {
+  const target = path.resolve(filePath);
+  const temporary = path.join(path.dirname(target), "." + path.basename(target) + "." + randomBytes(12).toString("hex") + ".tmp");
+  let handle: FileHandle | undefined;
+  try {
+    handle = await fs.open(temporary, "wx", 0o600);
+    await handle.writeFile(serializeJson(data), "utf8");
+    await handle.sync();
+    await handle.close(); handle = undefined;
+    await fs.link(temporary, target);
+    if (process.platform !== "win32") {
+      const directory = await fs.open(path.dirname(target), "r");
+      try { await directory.sync(); } finally { await directory.close(); }
+    }
+  } finally {
+    await handle?.close().catch(() => undefined);
+    await fs.unlink(temporary).catch(error => { if (!hasErrorCode(error, "ENOENT")) throw error; });
   }
 }

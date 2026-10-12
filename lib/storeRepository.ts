@@ -1,4 +1,5 @@
 import "server-only";
+import { assertCommerceLockHeld } from "./commerceLockProtocol";
 
 import { randomUUID } from "node:crypto";
 import { promises as fs } from "node:fs";
@@ -116,7 +117,10 @@ export function createStoreRepository(options: StoreRepositoryOptions = {}) {
     return withFileLock(catalogPath, operation);
   }
   async function mutate<T>(operation: (catalog: StoreCatalog, timestamp: string) => T): Promise<T> {
-    return locked(async () => {
+    return locked(() => mutateLocked(operation));
+  }
+  async function mutateLocked<T>(operation: (catalog: StoreCatalog, timestamp: string) => T): Promise<T> {
+      assertCommerceLockHeld(catalogPath);
       const catalog = await read();
       const previous = structuredClone(catalog);
       const timestamp = now();
@@ -132,7 +136,6 @@ export function createStoreRepository(options: StoreRepositoryOptions = {}) {
       await atomicWriteJson(path.join(backupsPath, `catalog-r${previous.revision}-${randomUUID()}.json`), previous);
       await atomicWriteJson(catalogPath, catalog);
       return structuredClone(result);
-    });
   }
   function patch<K extends Kind>(kind: K, id: string, expectedRevision: number, input: unknown, fields: readonly string[]) {
     assertRevision(expectedRevision);
@@ -173,6 +176,8 @@ export function createStoreRepository(options: StoreRepositoryOptions = {}) {
     read,
     // Trusted server coordination only. Read is lock-free; do not call a writer inside this callback.
     withCatalogLock: locked,
+    // Trusted coordinator only; never acquires another lock.
+    mutateInventoryLocked: mutateLocked,
     initialize: () => locked(async () => {
       const catalog = await read();
       try { await fs.lstat(catalogPath); }

@@ -1,8 +1,11 @@
 import { promises as fs } from "fs";
-import type { FileHandle } from "fs/promises";
+import { withOrderGate } from "./commerceLocks";
+import { isCommerceLockHeld } from "./commerceLockProtocol";
+import { prepareOrderCompletionWrite } from "./orderCompletion";
 import path from "path";
 import {
   atomicWriteJson,
+  publishJsonExclusive,
   withFileLock,
   type FileLockOptions,
 } from "./jsonFileStore";
@@ -50,42 +53,27 @@ function isFileExistsError(error: unknown): error is NodeJS.ErrnoException {
 }
 
 export async function createOrderFile(
-  dir: string,
-  initialOrderNumber: string,
-  order: Record<string, unknown>,
-  generateOrderNumber: () => string,
+  dir: string, initialOrderNumber: string, order: Record<string, unknown>, generateOrderNumber: () => string,
 ) {
-  try {
-    await fs.mkdir(dir, { recursive: true });
-  } catch {
-    throw new OrderFileCreationError("訂單儲存空間無法使用，請稍後再試");
-  }
-
+  await fs.mkdir(dir, { recursive: true });
   let orderNumber = initialOrderNumber;
   for (let attempt = 1; attempt <= MAX_ORDER_NUMBER_ATTEMPTS; attempt++) {
-    const candidateOrder = { ...order, orderNumber };
-    const orderPath = path.join(dir, `${orderNumber}.json`);
-    let handle: FileHandle | undefined;
+    validateOrderNumber(orderNumber);
+    const candidate = { ...order, orderNumber };
+    const file = path.join(dir, orderNumber + ".json");
     try {
-      handle = await fs.open(orderPath, "wx", 0o600);
-      await handle.writeFile(JSON.stringify(candidateOrder, null, 2), "utf8");
-      await handle.sync();
-      await handle.close();
-      handle = undefined;
-      return { orderNumber, order: candidateOrder };
+      await withOrderGate(dir, orderNumber, () => publishJsonExclusive(file, candidate));
+      return { orderNumber, order: candidate };
     } catch (error) {
-      if (handle) {
-        await handle.close().catch(() => undefined);
-        handle = undefined;
-        await fs.unlink(orderPath).catch(() => undefined);
-      }
       if (!isFileExistsError(error)) {
+        // Publication may have completed before an IO error. Never delete that order.
+        const saved = await fs.readFile(file, "utf8").then(JSON.parse).catch(() => null);
+        if (JSON.stringify(saved) === JSON.stringify(candidate)) return { orderNumber, order: candidate };
         throw new OrderFileCreationError("訂單檔案建立失敗，請稍後再試");
       }
       if (attempt < MAX_ORDER_NUMBER_ATTEMPTS) orderNumber = generateOrderNumber();
     }
   }
-
   throw new OrderFileCreationError("無法產生未重複的訂單編號，請稍後再試");
 }
 
@@ -120,9 +108,7 @@ export async function withOrderFileUpdateLock<T>(
 
   await fs.mkdir(dir, { recursive: true });
 
-  return withFileLock(
-    orderPath,
-    async () => {
+  const locked = async () => {
       let latestOrder: Record<string, unknown>;
       try {
         const value: unknown = JSON.parse(
@@ -145,14 +131,17 @@ export async function withOrderFileUpdateLock<T>(
 
       const persistOrder: PersistLockedOrder = async (order) => {
         validateOrderForWrite(orderNumber, order);
-        await atomicWriteJson(orderPath, order);
-        return order;
+        const prepared = await prepareOrderCompletionWrite(latestOrder, order);
+        await atomicWriteJson(orderPath, prepared);
+        latestOrder = prepared;
+        return prepared;
       };
 
       return operation(latestOrder, persistOrder);
-    },
-    lockOptions,
-  );
+  };
+  return withOrderGate(dir, orderNumber, () => isCommerceLockHeld(orderPath)
+    ? locked()
+    : withFileLock(orderPath, locked, { ...lockOptions, commerceLock: { rank: 3, key: orderNumber.toLowerCase() + '.json' } }), lockOptions);
 }
 
 /**

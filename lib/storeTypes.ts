@@ -108,6 +108,7 @@ export type StoreHeroPatch = {
 };
 
 export type StoreCatalog = {
+  inventoryReceipts?: import('./inventoryReceipts').InventoryReceipts;
   schemaVersion: 1;
   settings?: { hero?: StoreHeroSettings };
   revision: number;

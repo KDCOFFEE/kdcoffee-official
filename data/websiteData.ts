@@ -145,6 +145,7 @@ export type MonthlyCampaign = {
  * website-data.json 的完整資料格式
  */
 export type WebsiteData = {
+  inventoryReceipts?: import('../lib/inventoryReceipts').InventoryReceipts;
   version: number;
   updatedAt: string;
 

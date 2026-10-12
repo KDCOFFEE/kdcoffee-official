@@ -1,3 +1,5 @@
+import { synchronizeCompletedOrderFulfillment } from "@/lib/fulfillment";
+import { OrderCompletionIntegrityError } from "@/lib/orderCompletion";
 import { creditSystemMessage } from "@/lib/creditDisplayCopy";
 import { settleCreditReservationForOrder } from "@/lib/membershipCommerce";
 import { NextResponse } from "next/server";
@@ -76,7 +78,8 @@ export async function PATCH(
             { from: previous, to: requestedStatus, at: updatedAt },
           ],
         };
-        await persistOrder(order);
+        order = await persistOrder(order);
+        if (requestedStatus === 'completed') await synchronizeCompletedOrderFulfillment(order);
 
         if (previous !== requestedStatus) {
           const { sent } = await sendInternalLineNotification(
@@ -97,6 +100,7 @@ export async function PATCH(
       ? 404
       : error instanceof OrderCancellationReasonError
         ? error.status
+        : error instanceof OrderCompletionIntegrityError ? error.status
         : error instanceof OrderStatusTransitionError
           ? error.status
           : 500;

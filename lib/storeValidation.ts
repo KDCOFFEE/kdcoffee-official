@@ -1,3 +1,4 @@
+import { validateInventoryReceipts } from "./inventoryReceipts";
 import type { StoreCatalog, StoreCategory, StoreProduct, StoreSection, StoreHeroTiming } from "./storeTypes";
 import { TYPOGRAPHY_SIZE_RANGES, resolveVisualColor } from "./pageBuilderVisualStyle";
 import { PREMIUM_HERO_TIMING } from "./homepageCms";
@@ -201,8 +202,12 @@ export function validateStoreHero(input: unknown) {
 function unique(values: string[], label: string) { ensure(new Set(values).size === values.length, `${label}: duplicate identity`); }
 
 export function validateStoreCatalog(input: unknown): asserts input is StoreCatalog {
-  const value = storeInputRecord(input, ["schemaVersion", "revision", "updatedAt", "sections", "categories", "products", "settings"], "catalog");
+  const value = storeInputRecord(input, ["schemaVersion", "revision", "updatedAt", "sections", "categories", "products", "settings", "inventoryReceipts"], "catalog");
   ensure(value.schemaVersion === 1, "catalog.schemaVersion: unsupported version");
+  if ("inventoryReceipts" in value) {
+    try { validateInventoryReceipts(value.inventoryReceipts); }
+    catch { throw new StoreValidationError("catalog.inventoryReceipts: invalid durable evidence"); }
+  }
   if ("settings" in value) {
     const settings = storeInputRecord(value.settings, ["hero"], "settings");
     if ("hero" in settings) validateStoreHero(settings.hero);

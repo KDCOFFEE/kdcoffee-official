@@ -1,3 +1,4 @@
+import { hasOrderCompletion } from "./orderCompletion";
 import { validSevenElevenShipmentId } from "./sevenElevenEmailSummary";
 import { trackLogisticsEmail } from "./logisticsTracking";
 import { createHash, randomUUID } from "node:crypto";
@@ -259,9 +260,20 @@ function review(store: FulfillmentStore, parsed: ParsedFulfillmentEvidence, reas
   return reviewId;
 }
 
-async function appendCanonicalEvent(input: { order: StoredOrder; state: FulfillmentState; source: FulfillmentSource; sourceFingerprint: string; sourceReference?: string; externalOrderId?: string; externalShipmentId?: string; occurredAt: string; actor?: string; note?: string; expectedRevision?: number; delivered?: boolean; codCollected?: boolean; persistLockedOrder?: (order: StoredOrder) => Promise<StoredOrder>; filePath: string; settings: LogisticsSettings; now: Date }) {
+async function appendCanonicalEvent(input: { order: StoredOrder; state: FulfillmentState; source: FulfillmentSource; sourceFingerprint: string; sourceReference?: string; externalOrderId?: string; externalShipmentId?: string; occurredAt: string; actor?: string; note?: string; expectedRevision?: number; delivered?: boolean; codCollected?: boolean; persistLockedOrder?: (order: StoredOrder) => Promise<StoredOrder>; filePath: string; settings: LogisticsSettings; now: Date }): Promise<{ event?: FulfillmentEvent; record: FulfillmentRecord; replayed: boolean; ignored: boolean }> {
+  if (!input.persistLockedOrder) return withStoredOrderUpdateLock(input.order.orderNumber, (order, persistLockedOrder) => appendCanonicalEvent({ ...input, order, persistLockedOrder }));
   return withFileLock(input.filePath, async () => {
+    if (hasOrderCompletion(input.order) && input.state !== 'completed' && input.source === 'admin') throw new FulfillmentError('已完成訂單不可被後續履約事件改寫', 409);
+    if (input.order.status === 'cancelled' && input.state !== 'cancelled') throw new FulfillmentError('已取消訂單不可重新履約', 409);
     const store = await readFulfillmentStore(input.filePath);
+    if (hasOrderCompletion(input.order) && input.state !== 'completed') {
+      const record = recordForOrder(store, input.order, input.now);
+      if (!store.processedFingerprints[input.sourceFingerprint]) {
+        store.processedFingerprints[input.sourceFingerprint] = { orderId: record.orderId };
+        await persistStore(input.filePath, store, input.now);
+      }
+      return { event: undefined, record: { ...record, currentState: 'completed' as const }, replayed: false, ignored: true };
+    }
     const existingPointer = store.processedFingerprints[input.sourceFingerprint];
     const existingRecord = existingPointer?.orderId ? store.records[existingPointer.orderId] : undefined;
     const existingEvent = existingRecord?.events.find((event) => event.eventId === existingPointer.eventId);
@@ -281,6 +293,7 @@ async function appendCanonicalEvent(input: { order: StoredOrder; state: Fulfillm
 
     let order = input.order;
     const record = recordForOrder(store, order, input.now);
+    if (hasOrderCompletion(order)) return { event: undefined, record: { ...record, currentState: 'completed' as const }, replayed: true, ignored: true };
     if (input.expectedRevision !== undefined && record.revision !== input.expectedRevision) throw new FulfillmentError("訂單履約狀態已更新，請重新整理後再試", 409);
     if (order.orderMode === "home_delivery") {
       if (!input.persistLockedOrder) throw new FulfillmentError("宅配訂單需要訂單鎖才能更新履約", 409);
@@ -488,7 +501,9 @@ export async function evaluatePickupDeadlines(options: { filePath?: string; sett
 }
 
 export function fulfillmentRecordForOrder(store: FulfillmentStore, order: StoredOrder) {
-  return store.records[order.orderNumber] || {
+  const existing = store.records[order.orderNumber];
+  if (existing && hasOrderCompletion(order)) return { ...existing, currentState: 'completed' as const };
+  return existing || {
     orderId: order.orderNumber,
     currentState: inferredState(order),
     revision: 0,
@@ -496,4 +511,22 @@ export function fulfillmentRecordForOrder(store: FulfillmentStore, order: Stored
     createdAt: order.createdAt,
     updatedAt: order.updatedAt || order.createdAt,
   } satisfies FulfillmentRecord;
+}
+
+/** Repair the completion projection only; preserves the advanced Admin route's existing credit behavior. */
+export async function synchronizeCompletedOrderFulfillment(order: StoredOrder) {
+  if (!hasOrderCompletion(order) || order.status !== "completed") throw new FulfillmentError("缺少可信完成事實", 409);
+  const file = getFulfillmentStateFile();
+  await fs.mkdir(path.dirname(file), { recursive: true });
+  return withFileLock(file, async () => {
+    const store = await readFulfillmentStore(file);
+    const record = recordForOrder(store, order, new Date());
+    if (record.currentState === "completed") return record;
+    if (TERMINAL.has(record.currentState)) throw new FulfillmentError("訂單與履約終止狀態不一致，請人工核對", 409);
+    record.currentState = "completed"; record.revision += 1;
+    record.updatedAt = new Date().toISOString();
+    // Original canonical completion facts live in the order, never reconstructed here.
+    await persistStore(file, store);
+    return record;
+  }, { timeoutMs: 15_000 });
 }

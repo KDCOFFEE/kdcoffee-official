@@ -6,6 +6,8 @@ import {
   type StoredOrder,
 } from "@/lib/adminOrders";
 import { withFileLock } from "@/lib/jsonFileStore";
+import { withOrderGate } from "./commerceLocks";
+import { getOrdersDir } from "./storagePaths";
 import {
   cancelOrReverseRetailPromotionRewards,
   cancelSubscriptionCycleForOrder,
@@ -107,7 +109,7 @@ export async function cancelOrderCanonically(input: CancelOrderInput): Promise<C
     options?: { attempts?: number; timeoutMs?: number; retryDelayMs?: number; fetcher?: typeof fetch },
   ) => (await import("@/lib/internalLineNotifications")).sendInternalLineNotification(text, options));
 
-  const result = await withFileLock(
+  const result = await withOrderGate(getOrdersDir(), input.orderNumber, () => withFileLock(
     websiteFile,
     () => withStoredOrderUpdateLock(input.orderNumber, async (latestOrder, persistOrder) => {
       input.authorize?.(latestOrder);
@@ -115,10 +117,11 @@ export async function cancelOrderCanonically(input: CancelOrderInput): Promise<C
       // A prior attempt may have saved cancellation before a later consequence
       // failed. Retrying resumes only idempotent consequences below.
       if (latestOrder.status === "cancelled") {
-        const warning = latestOrder.inventoryReturn?.state === "return_failed"
-          ? String(latestOrder.inventoryReturn.warning || "取消狀態已儲存，但庫存回補失敗。")
-          : undefined;
-        return { ok: !warning, order: latestOrder, warning, alreadyCancelled: true };
+        const recovered = await returnCommittedInventoryForCancellation({
+          order: latestOrder, websiteFile, persistOrder: async next => { await persistOrder(next); }, websiteLockHeld: true, now,
+        });
+        const warning = recovered.state === "return_failed" ? recovered.warning : undefined;
+        return { ok: !warning, order: recovered.order, warning, alreadyCancelled: true };
       }
 
       const request = latestOrder.memberCancellationRequest as MemberCancellationRequest | undefined;
@@ -187,8 +190,8 @@ export async function cancelOrderCanonically(input: CancelOrderInput): Promise<C
       await persistOrder(order);
       return { ok: true, order, alreadyCancelled: false };
     }),
-    { timeoutMs: 15_000 },
-  );
+    { timeoutMs: 15_000, commerceLock: { rank: 2, key: "0000:coffee:" + websiteFile } },
+  ));
 
   const stableKey = `order-cancel:${input.orderNumber}`;
   await settleCreditReservationForOrder({

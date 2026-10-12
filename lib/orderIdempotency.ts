@@ -1,4 +1,5 @@
 import { createHash } from "crypto";
+import { withOrderGate } from "./commerceLocks";
 import { promises as fs } from "fs";
 import path from "path";
 import { withFileLock } from "./jsonFileStore";
@@ -137,7 +138,7 @@ export async function resolveExistingIdempotentOrder(
     };
   }
 
-  return withFileLock(websiteFile, async () => {
+  return withOrderGate(orderDir, order.orderNumber, () => withFileLock(websiteFile, async () => {
     let currentWebsiteJson: string;
     try {
       currentWebsiteJson = await fs.readFile(websiteFile, "utf8");
@@ -191,5 +192,5 @@ export async function resolveExistingIdempotentOrder(
         warning: "庫存已提交，但訂單狀態仍待工作室確認；系統不會再次扣庫存。",
       };
     }
-  });
+  }, { commerceLock: { rank: 2, key: '0000:coffee:' + websiteFile } }));
 }

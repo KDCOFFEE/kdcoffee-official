@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
@@ -12,7 +12,17 @@ const realFiles = [
   path.join(process.cwd(), "data", "fulfillment", "state.json"),
 ];
 const sha256File = async (filePath: string) => createHash("sha256").update(await readFile(filePath)).digest("hex");
-const realHashesBefore = await Promise.all(realFiles.map(sha256File));
+type ProtectedFileBaseline = { exists: true; hash: string } | { exists: false };
+async function captureProtectedFileBaseline(filePath: string): Promise<ProtectedFileBaseline> {
+  try {
+    await stat(filePath);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return { exists: false };
+    throw error;
+  }
+  return { exists: true, hash: await sha256File(filePath) };
+}
+const realBaselinesBefore = await Promise.all(realFiles.map(captureProtectedFileBaseline));
 
 const root = await mkdtemp(path.join(os.tmpdir(), "kd-phase-i4a4-"));
 process.env.KD_DATA_DIR = root;
@@ -96,8 +106,11 @@ try {
   check("M Member projection remains privacy-safe", !["PRIVATE_PHONE", "PRIVATE_EMAIL", "PRIVATE_ADDRESS", "後台管理員", "sourceFingerprint"].some((secret) => memberProjection.includes(secret)));
   check("local Admin fulfillment path adds no external notification", completedOrder.lineNotification.sent === false && completedOrder.customerNotifications === undefined && completedOrder.adminLineNotification === undefined);
 
-  const realHashesAfter = await Promise.all(realFiles.map(sha256File));
-  check("N isolated storage leaves all real acceptance data unchanged", realHashesAfter.every((value, index) => value === realHashesBefore[index]));
+  const realBaselinesAfter = await Promise.all(realFiles.map(captureProtectedFileBaseline));
+  check("N isolated storage leaves all real acceptance data unchanged", realBaselinesAfter.every((value, index) => {
+    const baseline = realBaselinesBefore[index];
+    return value.exists === baseline.exists && (!value.exists || (baseline.exists && value.hash === baseline.hash));
+  }));
   console.log(`\nPhase I.4A Round 4 successful fulfillment: ${checks} checks passed.`);
 } finally {
   await rm(root, { recursive: true, force: true });

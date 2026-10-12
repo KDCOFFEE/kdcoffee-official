@@ -1,4 +1,6 @@
-import { createHash } from "crypto";
+import { createHash, randomUUID } from "crypto";
+import { withOrderGate } from "./commerceLocks";
+import { findInventoryReceipt, makeInventoryReceipt, addInventoryReceipt, isPrivateInventoryFile } from "./inventoryReceipts";
 import { promises as fs } from "fs";
 import type { PurchaseOption, WebsiteData } from "../data/websiteData";
 import { atomicWriteJson, serializeJson, withFileLock } from "./jsonFileStore";
@@ -23,6 +25,8 @@ export type InventoryChange = {
 };
 
 export type InventoryTransactionMetadata = {
+  operationId?: string;
+  demandHash?: string;
   state: "inventory_pending" | "inventory_committed" | "inventory_write_failed";
   finalStatus: string;
   startedAt: string;
@@ -125,13 +129,20 @@ export function inspectInventoryCommitState(
   metadata: InventoryTransactionMetadata,
   currentWebsiteJson: string,
 ) {
+  if (metadata.operationId) {
+    try {
+      const receipt = findInventoryReceipt(JSON.parse(currentWebsiteJson), metadata.operationId);
+      if (receipt && receipt.domain === 'coffee' && receipt.kind === 'APPLY' && receipt.demandHash === metadata.demandHash) return 'inventory_committed' as const;
+      if (receipt) return 'inventory_state_diverged' as const;
+    } catch { return 'inventory_state_diverged' as const; }
+  }
   const currentHash = sha256(currentWebsiteJson);
   if (currentHash === metadata.afterWebsiteSha256) return "inventory_committed" as const;
   if (currentHash === metadata.beforeWebsiteSha256) return "inventory_not_committed" as const;
   return "inventory_state_diverged" as const;
 }
 
-export async function runInventoryOrderTransaction(input: InventoryOrderTransactionInput) {
+async function runInventoryOrderTransactionLocked(input: InventoryOrderTransactionInput) {
   const dependencies = { ...defaultDependencies, ...input.dependencies };
   const now = input.now ?? (() => new Date());
   let completedResult:
@@ -161,6 +172,10 @@ export async function runInventoryOrderTransaction(input: InventoryOrderTransact
     website.updatedAt = now().toISOString();
     website.version = Number(website.version || 1) + 1;
 
+    const operationId = isPrivateInventoryFile(input.websiteFile) ? 'coffee-apply:' + randomUUID() : undefined;
+    const receipt = operationId ? makeInventoryReceipt({ operationId, transactionId: operationId, domain: 'coffee', kind: 'APPLY', recordedAt: now().toISOString(),
+      items: changes.map(change => ({ identity: change.skuId, quantity: change.demand, beforeStock: change.beforeStock, afterStock: change.afterStock })) }) : undefined;
+    if (receipt) addInventoryReceipt(website, receipt);
     const afterWebsiteJson = serializeJson(website);
     const startedAt = now().toISOString();
     const built = input.buildOrder(input.initialOrderNumber, prepared.priced);
@@ -168,6 +183,7 @@ export async function runInventoryOrderTransaction(input: InventoryOrderTransact
     if (!finalStatus) throw new InventoryTransactionError("訂單狀態資料異常，訂單未成立。");
     const transaction: InventoryTransactionMetadata = {
       state: "inventory_pending",
+      ...(receipt ? { operationId, demandHash: receipt.demandHash } : {}),
       finalStatus,
       startedAt,
       beforeWebsiteSha256: sha256(beforeWebsiteJson),
@@ -269,7 +285,7 @@ export async function runInventoryOrderTransaction(input: InventoryOrderTransact
       };
       return completedResult;
     }
-    });
+    }, { commerceLock: { rank: 2, key: '0000:coffee:' + input.websiteFile } });
   } catch (error) {
     if (!completedResult) throw error;
     const releaseWarning = "訂單已成立，但庫存鎖釋放異常，工作室需立即檢查系統。";
@@ -278,4 +294,21 @@ export async function runInventoryOrderTransaction(input: InventoryOrderTransact
       warning: completedResult.warning ? `${completedResult.warning} ${releaseWarning}` : releaseWarning,
     };
   }
+}
+
+class OrderNumberReplan extends Error {}
+/** Replan order-number collisions only after releasing the gate and inventory lock. */
+export async function runInventoryOrderTransaction(input: InventoryOrderTransactionInput) {
+  let candidate = input.reuseOrderNumber ?? input.initialOrderNumber;
+  for (let attempt = 0; attempt < 25; attempt++) {
+    try {
+      return await withOrderGate(input.orderDir, candidate, () => runInventoryOrderTransactionLocked({
+        ...input, initialOrderNumber: candidate, generateOrderNumber: () => { throw new OrderNumberReplan(); },
+      }));
+    } catch (error) {
+      if (!(error instanceof OrderNumberReplan)) throw error;
+      candidate = input.generateOrderNumber();
+    }
+  }
+  throw new InventoryTransactionError("無法取得唯一訂單編號");
 }

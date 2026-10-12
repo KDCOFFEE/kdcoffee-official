@@ -15,6 +15,7 @@ import {
 } from "@/lib/orderInventoryPolicy";
 import { getOrdersDir } from "@/lib/storagePaths";
 import { assessOrderStatusProgression } from "@/lib/orderStatusPolicy";
+import { hasOrderCompletion } from "./orderCompletion";
 
 export {
   assessOrderCancellation,
@@ -148,6 +149,7 @@ export function assertOrderStatusTransition(
   order: StoredOrder,
   nextStatus: OrderStatus,
 ) {
+  if (hasOrderCompletion(order) && nextStatus !== "completed") throw new OrderStatusTransitionError("已完成訂單不可變更為其他狀態；退貨須使用独立追加紀錄。");
   if (isCancelledOrderTerminal(order) && nextStatus !== "cancelled") {
     if (hasReturnedOrderInventory(order)) {
       throw new OrderStatusTransitionError(
