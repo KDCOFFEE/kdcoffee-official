@@ -1,0 +1,7 @@
+.action { margin-top: 24px; max-width: 360px; }
+.action button { display: block; width: 100%; min-height: 48px; padding: 13px 24px; border: 1px solid #795a3d; border-radius: 3px; background: #795a3d; color: #fffaf2; font: inherit; font-size: 15px; line-height: 1.5; cursor: pointer; }
+.action button:hover:not(:disabled) { background: #654a32; }
+.action button:focus-visible { outline: 3px solid var(--color-focus, #9b784e); outline-offset: 3px; }
+.action button:disabled { opacity: .55; cursor: default; }
+.status { min-height: 1.8em; margin: 10px 0 0; color: var(--color-text-secondary, #655649); font-size: 13px; line-height: 1.8; overflow-wrap: anywhere; }
+@media (max-width: 640px) { .action { max-width: none; } }

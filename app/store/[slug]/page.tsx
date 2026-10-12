@@ -2,6 +2,8 @@ import Link from "next/link";
 import { cache } from "react";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import StoreAddToCart from "@/components/store/StoreAddToCart";
+import { isStoreCommerceEnabled } from "@/lib/storeCommerceCapability";
 import StoreProductGallery from "@/components/store/StoreProductGallery";
 import styles from "@/components/store/StoreProductDetail.module.css";
 import { readPublicStoreProductBySlug } from "@/lib/storePublicReadModel";
@@ -59,6 +61,7 @@ export default async function StoreProductPage({ params }: DetailProps) {
               {onSale ? <><span className={styles.srOnly}>原價：</span><del>NT$ {money.format(product.price)}</del></> : null}
             </p>
             <p className={styles.availability}>{product.inStock ? "有庫存" : "目前無庫存"}</p>
+            {isStoreCommerceEnabled() ? <StoreAddToCart key={product.slug} slug={product.slug} inStock={product.inStock} /> : null}
           </section>
         </div>
       </div>

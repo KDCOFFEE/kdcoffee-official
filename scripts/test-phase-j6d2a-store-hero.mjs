@@ -611,7 +611,8 @@ try {
     assert.match(markup, /&lt;script&gt;/); assert.match(markup, /&lt;b&gt;/); assert.doesNotMatch(markup, /<script>bad/);
     const detailSource = await fs.readFile("app/store/[slug]/page.tsx", "utf8");
     assert.match(detailSource, /readPublicStoreProductBySlug/);
-    assert.doesNotMatch(detailSource, /createStoreRepository|AddToCart|CartProvider/);
+    assert.match(detailSource, /isStoreCommerceEnabled\(\) \? <StoreAddToCart/);
+    assert.doesNotMatch(detailSource, /createStoreRepository|<AddToCart|CartProvider|\/api\/orders|\/checkout|writeFile/);
     await assert.rejects(fs.access("app/api/store"), { code: "ENOENT" });
   });
   await test("Protected commerce member media Artwork data packages remain unchanged", async () => assert.deepEqual(await hashes(), before));

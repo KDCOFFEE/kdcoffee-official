@@ -428,10 +428,20 @@ try {
     assert.match(pageSource, /params: Promise</); assert.match(pageSource, /await params/); assert.match(pageSource, /cache\(async/);
     assert.doesNotMatch(pageSource, /createStoreRepository|storeRepository|revalidate|unstable_cache|use cache|catch\s*\(/);
   });
-  await test("Purchase area contains only pricing/availability and no functional transaction CTA", async () => {
-    assert.match(await render(), /aria-label="商品價格與供應狀態"/);
-    assert.doesNotMatch(await render(), /加入購物車|立即結帳|Add.to.Cart/);
-    for (const source of [pageSource, gallerySource, notFoundSource]) {
+  await test("Purchase area retains display and exposes only capability-gated Store CTA", async () => {
+    const previousCapability = process.env.STORE_COMMERCE_ENABLED;
+    delete process.env.STORE_COMMERCE_ENABLED;
+    try {
+      assert.match(await render(), /aria-label="商品價格與供應狀態"/);
+      assert.doesNotMatch(await render(), /加入購物車|立即結帳|Add.to.Cart/);
+    } finally {
+      if (previousCapability === undefined) delete process.env.STORE_COMMERCE_ENABLED;
+      else process.env.STORE_COMMERCE_ENABLED = previousCapability;
+    }
+    assert.match(pageSource, /isStoreCommerceEnabled\(\) \? <StoreAddToCart/);
+    assert.match(pageSource, /slug=\{product.slug\} inStock=\{product.inStock\}/);
+    assert.doesNotMatch(pageSource, /CartProvider|addItem|(?<!Store)AddToCart|\/checkout|\/api\/orders|orderPricing|membershipCommerce|reward|referral|subscription|wallet|process\.env|writeFile|atomicWrite/i);
+    for (const source of [gallerySource, notFoundSource]) {
       assert.doesNotMatch(source, /CartProvider|addItem|addToCart|AddToCart|\/checkout|\/api\/orders|orderPricing|membershipCommerce|reward|referral|subscription|wallet|process\.env|writeFile|atomicWrite/i);
     }
   });

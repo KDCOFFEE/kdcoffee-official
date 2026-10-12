@@ -420,16 +420,20 @@ async function main() {
       assert.deepEqual(await diskSnapshot(), before);
     });
 
-    await test("Public Store landing and approved detail remain read-only without public API or commerce wiring", async () => {
+    await test("Public Store landing stays read-only and detail permits only capability-gated Store CTA", async () => {
       await fs.access("app/store/page.tsx");
       await fs.access("app/store/[slug]/page.tsx");
       await assert.rejects(fs.access("app/api/store"), { code: "ENOENT" });
-      const publicSource = (await Promise.all([
+      const landingSource = (await Promise.all([
         "app/store/layout.tsx", "app/store/page.tsx", "app/store/error.tsx",
         "components/store/StoreFilters.tsx", "components/store/StoreProductCard.tsx", "lib/storePublicMetadata.ts",
-        "app/store/[slug]/page.tsx", "app/store/[slug]/not-found.tsx", "components/store/StoreProductGallery.tsx",
+        "app/store/[slug]/not-found.tsx", "components/store/StoreProductGallery.tsx",
       ].map(file => fs.readFile(file, "utf8")))).join("\n");
-      assert.doesNotMatch(publicSource, /AddToCart|CartProvider|\/api\/orders|membershipCommerce|referralPv|checkout|wallet|subscription/i);
+      assert.doesNotMatch(landingSource, /AddToCart|CartProvider|\/api\/orders|membershipCommerce|referralPv|checkout|wallet|subscription|reward/i);
+      const detailSource = await fs.readFile("app/store/[slug]/page.tsx", "utf8");
+      assert.match(detailSource, /import StoreAddToCart from "@\/components\/store\/StoreAddToCart"/);
+      assert.match(detailSource, /isStoreCommerceEnabled\(\) \? <StoreAddToCart/);
+      assert.doesNotMatch(detailSource, /(?<!Store)AddToCart|CartProvider|addItem\(|\/api\/orders|membershipCommerce|referralPv|checkout|wallet|subscription|reward|writeFile|atomicWrite|createStoreRepository/i);
     });
     await test("Pure selectors import only domain types and contain no environment filesystem or repository access", async () => {
       const source = await fs.readFile("lib/storePublicSelectors.ts", "utf8");

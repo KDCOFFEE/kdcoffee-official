@@ -511,8 +511,15 @@ try {
     assert.doesNotMatch(storage.values.get(V16)!, /pvValue|kdRedemption|reward|catalog|orderId|customer|manualSeo|revision/);
     assert.doesNotMatch(providerSource, /kdcoffee-cart-v15|localStorage\.setItem|\/api\/orders|storeRepository/);
   });
-  await test("Store detail still has no commerce CTA or offer capability", () => {
-    assert.doesNotMatch(storeSource, /StoreAddToCart|STORE_COMMERCE_ENABLED|<AddToCart|addItem\(/);
+  await test("Store detail CTA is capability-gated and coffee orders remain separate", async () => {
+    assert.match(storeSource, /isStoreCommerceEnabled\(\) \? <StoreAddToCart/);
+    assert.doesNotMatch(storeSource, /<AddToCart|addItem\(|\/api\/orders|productId=/);
+    const storeAction = await readFile("components/store/StoreAddToCart.tsx", "utf8");
+    assert.match(storeAction, /fetch\("\/api\/commerce\/store\/offer"/);
+    assert.match(storeAction, /storeCartItemFromOffer\(await response.json\(\), slug\)/);
+    assert.doesNotMatch(storeAction, /\/api\/orders|\/checkout|localStorage|pvValue|kdRedemption/);
+    assert.throws(() => coffeeCheckoutItems([store()]));
+    assert.equal(cartCheckoutEligibility([store()], "READY", []), "STORE_CHECKOUT_NOT_ENABLED");
   });
   await test("Store rows reject coffeeOptions at model trust boundary", () => {
     assert.throws(() => validateUnifiedCartItem({ ...store(), coffeeOptions: { customRoast: false } }));
