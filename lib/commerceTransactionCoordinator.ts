@@ -2,7 +2,8 @@ import "server-only";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { isDeepStrictEqual } from "node:util";
-import { withCommerceLockPlan, orderGateResource } from "./commerceLocks";
+import { withCommerceLockPlan, orderGateResource, type CommerceLockResource } from "./commerceLocks";
+import { assertCommerceLockHeld } from "./commerceLockProtocol";
 import { createCommerceTransactionJournal } from "./commerceTransactionJournal";
 import { createOrderFile, withOrderFileUpdateLock } from "./orderFiles";
 import { inventoryHash, inventoryOperationKey, normalizeInventoryDemand } from "./inventoryReceipts";
@@ -63,15 +64,20 @@ export function createCommerceTransactionCoordinator(options: {
       return order.inventoryTransaction.state==="inventory_pending" ? "PENDING" : "UNKNOWN";
     } catch(error){return (error as NodeJS.ErrnoException).code==="ENOENT" ? "ABSENT":"UNKNOWN";}
   }
-  async function execute(raw: TransactionIntent, newRequest: boolean): Promise<TransactionResult> {
-    const input=validate(raw), journal=createCommerceTransactionJournal(options.orderDir,input.transactionId);
-    const resources=[
+  function resourcesFor(input: TransactionIntent): CommerceLockResource[] {
+    const journal=createCommerceTransactionJournal(options.orderDir,input.transactionId);
+    return [
       {file:journal.lockFile,rank:0 as const,key:input.transactionId},
       orderGateResource(options.orderDir,input.orderNumber),
       ...input.participants.map(item=>registry.get(item.domain)!.resource),
       {file:path.join(options.orderDir,input.orderNumber+".json"),rank:3 as const,key:input.orderNumber.toLowerCase()+".json"},
     ];
-    return withCommerceLockPlan(resources,async():Promise<TransactionResult>=>{
+  }
+  async function execute(raw: TransactionIntent, newRequest: boolean, alreadyLocked = false): Promise<TransactionResult> {
+    const input=validate(raw), journal=createCommerceTransactionJournal(options.orderDir,input.transactionId);
+    const resources=resourcesFor(input);
+    if (alreadyLocked) for (const resource of resources) assertCommerceLockHeld(resource.file);
+    const locked=async():Promise<TransactionResult>=>{
       let entries;
       try { entries=await journal.read(); } catch { return {state:"REVIEW_REQUIRED",observations:{}}; }
       const prepared=entries[0]?.event;
@@ -192,7 +198,8 @@ export function createCommerceTransactionCoordinator(options: {
       await options.hook?.("FINALIZED");
       await journal.append({type:"FINALIZED"});
       return {state:"FINALIZED",observations};
-    },{timeoutMs:15000}).catch(error=>{
+    };
+    return (alreadyLocked ? locked() : withCommerceLockPlan(resources,locked,{timeoutMs:15000})).catch(error=>{
       if(error instanceof CommerceTransactionConflictError)throw error;
       // IO/journal/lock failures cannot authorize downstream success or remove stale locks.
       return {state:"PENDING" as const,observations:{}};
@@ -200,6 +207,10 @@ export function createCommerceTransactionCoordinator(options: {
   }
   return {
     run:(intent:TransactionIntent)=>execute(intent,true),
+    /** Trusted orchestration only: discover all resources before acquiring a sealed plan. */
+    resources:(intent:TransactionIntent)=>resourcesFor(validate(intent)),
+    /** Reuses exactly the same execution/recovery engine; every required lock must be held. */
+    runLocked:(intent:TransactionIntent)=>execute(intent,true,true),
     recover:async(transactionId:string):Promise<TransactionResult>=>{
       try{
         const entries=await createCommerceTransactionJournal(options.orderDir,transactionId).read();

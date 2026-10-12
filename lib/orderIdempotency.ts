@@ -1,5 +1,5 @@
 import { createHash } from "crypto";
-import { withOrderGate } from "./commerceLocks";
+import { withOrderGate, type CommerceLockResource } from "./commerceLocks";
 import { promises as fs } from "fs";
 import path from "path";
 import { withFileLock } from "./jsonFileStore";
@@ -32,6 +32,13 @@ export function isValidIdempotencyKey(value: unknown): value is string {
 
 function keyHash(key: string) {
   return createHash("sha256").update(key).digest("hex");
+}
+
+/** Same existing idempotency lock file, exposed for a single canonical transaction plan. */
+export function orderIdempotencyResource(orderDir: string, idempotencyKey: string): CommerceLockResource {
+  if (!isValidIdempotencyKey(idempotencyKey)) throw new OrderIdempotencyError("Invalid idempotency key");
+  const hash = keyHash(idempotencyKey);
+  return { file: path.join(orderDir, ".idempotency", hash), rank: 0, key: "0000:idempotency:" + hash };
 }
 
 export function createIdempotencyRequestHash(value: unknown) {
