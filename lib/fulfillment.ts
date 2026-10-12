@@ -1,4 +1,5 @@
 import { hasOrderCompletion } from "./orderCompletion";
+import { resolveOrderRewardBasis } from "./orderRewardBasis";
 import { validSevenElevenShipmentId } from "./sevenElevenEmailSummary";
 import { trackLogisticsEmail } from "./logisticsTracking";
 import { createHash, randomUUID } from "node:crypto";
@@ -219,32 +220,31 @@ async function mirrorEventToOrder(order: StoredOrder, event: FulfillmentEvent, r
   else await updateStoredOrderSafely(order.orderNumber, update);
 }
 
-async function runConsequence(order: StoredOrder, event: FulfillmentEvent) {
+async function runConsequence(order: StoredOrder, event: FulfillmentEvent): Promise<"completed" | "failed"> {
   if (event.state === "cancelled") {
     const memberId = typeof order.member?.memberId === "string" ? order.member.memberId : undefined;
     if (memberId) await handleReferralQualificationOrderOutcome({ memberId, orderId: order.orderNumber, outcome: "cancelled", idempotencyKey: `fulfillment:${event.eventId}`, now: new Date(event.occurredAt) });
     if (!memberId && order.retailPromotionAttribution) await cancelOrReverseRetailPromotionRewards({ orderId: order.orderNumber, outcome: "cancelled", idempotencyKey: `fulfillment:${event.eventId}:retail-promotion`, now: new Date(event.occurredAt) });
-    return;
+    return "completed";
   }
-  if (event.state !== "completed" && event.state !== "uncollected") return;
-  const items = Array.isArray(order.items) ? order.items as Array<Record<string, unknown>> : [];
-  const creditApplied = Math.max(0, Number(order.credit?.appliedAmount || 0));
-  const merchandiseAmount = Math.max(0, Number(order.subtotal || 0) - creditApplied);
-  const basePV = items.reduce((sum, item) => sum + Math.max(0, Number(item.basePV || 0)) * Math.max(1, Number(item.quantity || 1)), 0);
-  const effectivePV = items.reduce((sum, item) => sum + Math.max(0, Number(item.effectivePV || item.basePV || 0)) * Math.max(1, Number(item.quantity || 1)), 0);
-  await handleCanonicalOrderOutcome({
+  if (event.state !== "completed" && event.state !== "uncollected") return "completed";
+  const basis = resolveOrderRewardBasis(order);
+  const basePV = basis.coffeeBasePV, effectivePV = basis.coffeeEffectivePV;
+  const consequence = await handleCanonicalOrderOutcome({
     orderId: order.orderNumber,
     outcome: event.state,
     memberId: typeof order.member?.memberId === "string" ? order.member.memberId : undefined,
     retailPromotionAttribution: typeof order.member?.memberId === "string" ? null : order.retailPromotionAttribution as RetailPromotionOrderSnapshot | undefined,
-    merchandiseAmount,
+    merchandiseAmount: basis.rewardMerchandiseAmount ?? 0,
     basePV,
     effectivePV,
     discountRatio: basePV > 0 ? Math.min(1, effectivePV / basePV) : 1,
-    eligibleItemCount: Array.isArray(order.items) ? order.items.reduce((sum: number, item: Record<string, unknown>) => sum + Math.max(0, Number(item.quantity) || 0), 0) : 0,
+    eligibleItemCount: basis.coffeeEligibleQuantity,
     idempotencyKey: `fulfillment:${event.eventId}`,
     now: new Date(event.occurredAt),
   });
+  // Keep completion durable; the existing failed-consequence replay gate retries unresolved rewards.
+  return event.state === "completed" && consequence.rewardBasisStatus !== "resolved" ? "failed" : "completed";
 }
 
 async function persistStore(filePath: string, store: FulfillmentStore, now = new Date()) {
@@ -281,8 +281,7 @@ async function appendCanonicalEvent(input: { order: StoredOrder; state: Fulfillm
       if (store.consequenceStatus[existingEvent.eventId] !== "completed") {
         await mirrorEventToOrder(input.order, existingEvent, existingRecord!, input.persistLockedOrder);
         try {
-          await runConsequence(input.order, existingEvent);
-          store.consequenceStatus[existingEvent.eventId] = "completed";
+          store.consequenceStatus[existingEvent.eventId] = await runConsequence(input.order, existingEvent);
         } catch {
           store.consequenceStatus[existingEvent.eventId] = "failed";
         }
@@ -356,8 +355,7 @@ async function appendCanonicalEvent(input: { order: StoredOrder; state: Fulfillm
     await mirrorEventToOrder(order, event, record, input.persistLockedOrder);
     if (store.consequenceStatus[event.eventId] === "pending") {
       try {
-        await runConsequence(order, event);
-        store.consequenceStatus[event.eventId] = "completed";
+        store.consequenceStatus[event.eventId] = await runConsequence(order, event);
       } catch (error) {
         store.consequenceStatus[event.eventId] = "failed";
         await persistStore(input.filePath, store, input.now);

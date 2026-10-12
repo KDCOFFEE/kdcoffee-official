@@ -41,6 +41,21 @@ import {
   type SubscriptionItem,
 } from "./membershipPolicies";
 import { projectOrderFinancialBreakdown } from "./orderFinancialProjection";
+import { resolveOrderRewardBasis, type OrderRewardBasis } from "./orderRewardBasis";
+
+async function persistedCoffeeRewardBasis(orderId: string) {
+  const order = await readOrder(orderId);
+  return order ? resolveOrderRewardBasis(order) : null;
+}
+function currentCoffeeRewardsAllowed(basis: OrderRewardBasis | null) {
+  return !basis || (basis.coffeeEligible && basis.monetaryBasisStatus === "resolved");
+}
+function isolatePaidRewardInput<T extends { paidAmountBasis: number; basePV?: number; effectivePV?: number; discountRatio?: number }>(input: T, basis: OrderRewardBasis | null): T {
+  if (!basis?.hasStore) return input;
+  return { ...input, paidAmountBasis: basis.rewardMerchandiseAmount!,
+    basePV: basis.coffeeBasePV, effectivePV: basis.coffeeEffectivePV,
+    discountRatio: basis.coffeeBasePV > 0 ? Math.min(1, basis.coffeeEffectivePV / basis.coffeeBasePV) : 1 };
+}
 import {
   buildRewardWaitingExplanation,
   buildSafeRewardSourceOrderSummary,
@@ -1005,6 +1020,13 @@ async function activateSubscriptionFromCompletedFirstOrder(input: {
 
 /** One membership entry point for canonical order outcomes. */
 export async function handleCanonicalOrderOutcome(input: { orderId: string; outcome: "completed" | "uncollected"; memberId?: string; retailPromotionAttribution?: RetailPromotionOrderSnapshot | null; merchandiseAmount: number; basePV?: number; effectivePV?: number; discountRatio?: number; eligibleItemCount?: number; idempotencyKey: string; now?: Date; stateFilePath?: string; rulesFilePath?: string }) {
+  const basis = await persistedCoffeeRewardBasis(input.orderId);
+  const coffeeRewardsAllowed = currentCoffeeRewardsAllowed(basis);
+  const coffeeSubscriptionAllowed = coffeeRewardsAllowed && !basis?.hasStore;
+  if (basis?.hasStore && coffeeRewardsAllowed) input = { ...input,
+    merchandiseAmount: basis.rewardMerchandiseAmount!, basePV: basis.coffeeBasePV,
+    effectivePV: basis.coffeeEffectivePV, eligibleItemCount: basis.coffeeEligibleQuantity,
+    discountRatio: basis.coffeeBasePV > 0 ? Math.min(1, basis.coffeeEffectivePV / basis.coffeeBasePV) : 1 };
   const snapshot = await readMembershipCommerceState(input.stateFilePath);
   const subscription = Object.values(snapshot.subscriptions).find((item) => item.startedFromOrderId === input.orderId);
   const cycle = Object.values(snapshot.cycles).find((item) => item.createdOrderId === input.orderId);
@@ -1013,13 +1035,13 @@ export async function handleCanonicalOrderOutcome(input: { orderId: string; outc
     : undefined;
 
   if (input.outcome === "completed") {
-    if (subscription?.status === "pending_activation") {
+    if (coffeeSubscriptionAllowed && subscription?.status === "pending_activation") {
       await activateSubscriptionFromCompletedFirstOrder({ subscriptionId: subscription.subscriptionId, orderId: input.orderId, idempotencyKey: `${input.idempotencyKey}:activate`, now: input.now, stateFilePath: input.stateFilePath, rulesFilePath: input.rulesFilePath });
     }
-    if (cycle) {
+    if (coffeeSubscriptionAllowed && cycle) {
       await recordCycleFulfillment({ cycleId: cycle.cycleId, orderId: input.orderId, idempotencyKey: `${input.idempotencyKey}:cycle`, now: input.now, stateFilePath: input.stateFilePath, rulesFilePath: input.rulesFilePath });
     }
-    if (input.memberId) {
+    if (coffeeRewardsAllowed && input.memberId) {
       await recordValidConsumptionFromCompletedOrder({ memberId: input.memberId, orderId: input.orderId, idempotencyKey: `${input.idempotencyKey}:valid-consumption`, now: input.now, stateFilePath: input.stateFilePath, rulesFilePath: input.rulesFilePath });
     }
   } else if (subscription || cycle) {
@@ -1027,11 +1049,11 @@ export async function handleCanonicalOrderOutcome(input: { orderId: string; outc
     await markUncollected({ subscriptionId: linkedSubscription.subscriptionId, cycleId: cycle?.cycleId, orderId: input.orderId, idempotencyKey: `${input.idempotencyKey}:uncollected`, now: input.now, stateFilePath: input.stateFilePath, rulesFilePath: input.rulesFilePath });
   }
 
-  if (input.memberId) {
+  if (input.memberId && (input.outcome !== "completed" || coffeeRewardsAllowed)) {
     await handleReferralQualificationOrderOutcome({ memberId: input.memberId, orderId: input.orderId, outcome: input.outcome, idempotencyKey: `${input.idempotencyKey}:referral-qualification`, now: input.now, stateFilePath: input.stateFilePath, rulesFilePath: input.rulesFilePath });
   }
 
-  if (input.memberId && input.outcome === "completed") {
+  if (coffeeRewardsAllowed && input.memberId && input.outcome === "completed") {
     const activeRules =
       await getActiveMembershipRules(
         input.now,
@@ -1071,11 +1093,11 @@ export async function handleCanonicalOrderOutcome(input: { orderId: string; outc
   }
 
   if (relationship && input.memberId) {
-    if (input.outcome === "completed") {
+    if (input.outcome === "completed" && coffeeRewardsAllowed && (!cycle || coffeeSubscriptionAllowed)) {
       const alreadyHadFirstReferralPurchase = snapshot.events.some((item) => item.type === "referral_new_qualified" && item.memberId === input.memberId);
       const rewardType: ReferralReward["rewardType"] = cycle ? "subscription" : alreadyHadFirstReferralPurchase ? "repeat_purchase" : "new_referral";
       await createReferralRewardsFromFulfillment({ sourceMemberId: input.memberId, orderId: input.orderId, rewardType, paidAmountBasis: input.merchandiseAmount, basePV: input.basePV, effectivePV: input.effectivePV, discountRatio: input.discountRatio, idempotencyKey: `${input.idempotencyKey}:referral-v2`, now: input.now, stateFilePath: input.stateFilePath, rulesFilePath: input.rulesFilePath });
-    } else {
+    } else if (input.outcome !== "completed") {
       await cancelOrReverseReferralRewards({ orderId: input.orderId, outcome: input.outcome, idempotencyKey: `${input.idempotencyKey}:referral-reversal`, now: input.now, stateFilePath: input.stateFilePath, rulesFilePath: input.rulesFilePath });
     }
   } else if (input.memberId && input.outcome !== "completed") {
@@ -1085,7 +1107,7 @@ export async function handleCanonicalOrderOutcome(input: { orderId: string; outc
   // Absolute identity precedence: authenticated/member orders can never enter
   // the guest retail-promotion domain, even if a forged snapshot is supplied.
   if (!input.memberId && input.retailPromotionAttribution) {
-    if (input.outcome === "completed") {
+    if (input.outcome === "completed" && coffeeRewardsAllowed) {
       await createRetailPromotionRewardFromFulfillment({
         orderId: input.orderId,
         attribution: input.retailPromotionAttribution,
@@ -1094,7 +1116,7 @@ export async function handleCanonicalOrderOutcome(input: { orderId: string; outc
         now: input.now,
         stateFilePath: input.stateFilePath,
       });
-    } else {
+    } else if (input.outcome !== "completed") {
       await cancelOrReverseRetailPromotionRewards({
         orderId: input.orderId,
         outcome: input.outcome,
@@ -1106,11 +1128,11 @@ export async function handleCanonicalOrderOutcome(input: { orderId: string; outc
     }
   }
 
-  if (input.outcome === "completed") await runReferralRewardReleaseScheduler({ now: input.now, stateFilePath: input.stateFilePath, rulesFilePath: input.rulesFilePath });
+  if (input.outcome === "completed" && coffeeRewardsAllowed) await runReferralRewardReleaseScheduler({ now: input.now, stateFilePath: input.stateFilePath, rulesFilePath: input.rulesFilePath });
 
   await settleCreditReservationForOrder({ orderId: input.orderId, action: input.outcome === "completed" ? "consume" : "release", idempotencyKey: `${input.idempotencyKey}:credit`, reason: input.outcome === "completed" ? "訂單成功取貨" : "訂單未取貨，釋放抵用金", now: input.now, stateFilePath: input.stateFilePath });
 
-  return { subscriptionHandled: Boolean(subscription || cycle), referralEvaluated: Boolean(relationship), retailPromotionEvaluated: Boolean(!input.memberId && input.retailPromotionAttribution) };
+  return { subscriptionHandled: coffeeSubscriptionAllowed && Boolean(subscription || cycle), referralEvaluated: coffeeRewardsAllowed && Boolean(relationship), retailPromotionEvaluated: coffeeRewardsAllowed && Boolean(!input.memberId && input.retailPromotionAttribution), rewardBasisStatus: basis?.monetaryBasisStatus ?? "resolved" };
 }
 
 export async function generateSubscriptionCycle(input: { subscriptionId: string; sequence: number; plannedDate: string; kind?: CycleKind; idempotencyKey: string; now?: Date; stateFilePath?: string; rulesFilePath?: string }) {
@@ -2261,6 +2283,8 @@ export async function recordValidConsumptionFromCompletedOrder(input: { memberId
   const orderMemberId = typeof order.member?.memberId === "string" ? order.member.memberId : typeof order.memberId === "string" ? order.memberId : null;
   if (orderMemberId && orderMemberId !== input.memberId) throw new MembershipCommerceError("有效消費訂單會員不一致");
 
+  const basis = resolveOrderRewardBasis(order);
+  if (!currentCoffeeRewardsAllowed(basis)) return null;
   const financial = projectOrderFinancialBreakdown(order);
   if (!Number.isSafeInteger(order.subtotal) || order.subtotal < 0 || !Number.isSafeInteger(order.shipping) || order.shipping < 0) throw new MembershipCommerceError("有效消費訂單金額證據不完整");
   const rawCredit = order.credit && typeof order.credit === "object" ? order.credit.appliedAmount : undefined;
@@ -2269,21 +2293,11 @@ export async function recordValidConsumptionFromCompletedOrder(input: { memberId
 
   const version = await getActiveMembershipRules(finalizedAt, input.rulesFilePath);
   const qualificationRules = structuredClone(version.rules.referral.payoutQualification);
-  const validConsumptionAmount = Math.max(0, financial.subtotal - (qualificationRules.validConsumption.includeCreditDiscount ? 0 : appliedCreditAmount) + (qualificationRules.validConsumption.includeShipping ? financial.shipping : 0));
-
-  const orderItems = Array.isArray(order.items)
-    ? order.items as Array<Record<string, unknown>>
-    : [];
-
-  const validConsumptionPV = orderItems.reduce((sum, item) => {
-    const quantity = Math.max(1, Number(item.quantity || 1));
-    const itemPV = Math.max(
-      0,
-      Number(item.effectivePV ?? item.basePV ?? 0),
-    );
-
-    return sum + itemPV * quantity;
-  }, 0);
+  const coffeeSubtotal = basis.coffeeMerchandiseSubtotal!;
+  // Shared mixed-order shipping has no Coffee allocation evidence; never allocate it by guess.
+  const coffeeShipping = basis.hasStore ? 0 : financial.shipping;
+  const validConsumptionAmount = Math.max(0, coffeeSubtotal - (qualificationRules.validConsumption.includeCreditDiscount ? 0 : appliedCreditAmount) + (qualificationRules.validConsumption.includeShipping ? coffeeShipping : 0));
+  const validConsumptionPV = basis.coffeeValidConsumptionPV;
 
   if (!Number.isFinite(validConsumptionPV) || validConsumptionPV < 0) {
     throw new MembershipCommerceError("有效消費訂單 KD點證據不完整");
@@ -2307,9 +2321,9 @@ export async function recordValidConsumptionFromCompletedOrder(input: { memberId
       sourceReference,
       finalizedAt: finalizedAt.toISOString(),
       createdAt: nowIso(now),
-      merchandiseSubtotal: financial.subtotal,
+      merchandiseSubtotal: coffeeSubtotal,
       appliedCreditAmount,
-      shippingAmount: financial.shipping,
+      shippingAmount: coffeeShipping,
       validConsumptionAmount,
       validConsumptionPV,
       includeCreditDiscount: qualificationRules.validConsumption.includeCreditDiscount,
@@ -2869,6 +2883,8 @@ function syncQualificationPointer(reward: ReferralReward) {
 /** Associates a member's own normal or subscription order without changing price or issuing credit. */
 export async function registerReferralQualificationOrder(input: { memberId: string; orderId: string; orderCreatedAt: string; orderType: "normal" | "subscription"; idempotencyKey: string; now?: Date; stateFilePath?: string; rulesFilePath?: string }) {
   const version = await getActiveMembershipRules(input.now, input.rulesFilePath);
+  const basis = await persistedCoffeeRewardBasis(input.orderId);
+  if (!currentCoffeeRewardsAllowed(basis) || (input.orderType === "subscription" && basis?.hasStore)) return [];
   const key = `referral-qualification:order-created:${input.idempotencyKey}`;
   return transaction((state, now) => {
     if (remembered(state, key)) return Object.values(state.referralRewards).filter((reward) => reward.qualificationAttempts?.some((attempt) => attempt.orderNumber === input.orderId));
@@ -2906,6 +2922,7 @@ function reverseReleasedQualificationReward(state: MembershipCommerceState, rewa
 /** Applies trusted outcomes to qualification attempts; source reward cancellation remains a separate flow. */
 export async function handleReferralQualificationOrderOutcome(input: { memberId: string; orderId: string; outcome: "completed" | "cancelled" | "uncollected" | "refunded" | "returned"; idempotencyKey: string; now?: Date; stateFilePath?: string; rulesFilePath?: string }) {
   const version = await getActiveMembershipRules(input.now, input.rulesFilePath);
+  if (input.outcome === "completed" && !currentCoffeeRewardsAllowed(await persistedCoffeeRewardBasis(input.orderId))) return [];
   const key = `referral-qualification:order-outcome:${input.idempotencyKey}`;
   return transaction((state, now) => {
     if (remembered(state, key)) return [];
@@ -2963,6 +2980,9 @@ export async function handleReferralQualificationOrderOutcome(input: { memberId:
 /** Creates immutable multi-generation reward snapshots from a trusted fulfillment outcome. */
 export async function createReferralRewardsFromFulfillment(input: { sourceMemberId: string; orderId: string; rewardType: "new_referral" | "repeat_purchase" | "subscription"; paidAmountBasis: number; basePV?: number; discountRatio?: number; effectivePV?: number; idempotencyKey: string; now?: Date; stateFilePath?: string; rulesFilePath?: string }) {
   const version = await getActiveMembershipRules(input.now, input.rulesFilePath);
+  const basis = await persistedCoffeeRewardBasis(input.orderId);
+  if (!currentCoffeeRewardsAllowed(basis) || (input.rewardType === "subscription" && basis?.hasStore)) return [];
+  input = isolatePaidRewardInput(input, basis);
   const key = `referral-rewards:create:${input.idempotencyKey}`;
   return transaction((state, now) => {
     if (remembered(state, key)) return Object.values(state.referralRewards).filter((item) => item.sourceOrderNumber === input.orderId);
@@ -3021,6 +3041,9 @@ export async function createReferralRewardsFromFulfillment(input: { sourceMember
 /** Creates a member's own completed-order reward after the caller applies the configured eligibility start mode. */
 export async function createSelfPurchaseRewardFromFulfillment(input: { sourceMemberId: string; orderId: string; paidAmountBasis: number; basePV?: number; discountRatio?: number; effectivePV?: number; idempotencyKey: string; now?: Date; stateFilePath?: string; rulesFilePath?: string }) {
   const version = await getActiveMembershipRules(input.now, input.rulesFilePath);
+  const basis = await persistedCoffeeRewardBasis(input.orderId);
+  if (!currentCoffeeRewardsAllowed(basis)) return [];
+  input = isolatePaidRewardInput(input, basis);
   const key = `self-purchase-reward:create:${input.idempotencyKey}`;
   return transaction((state, now) => {
     if (remembered(state, key)) return Object.values(state.referralRewards).filter((item) => item.sourceOrderNumber === input.orderId && item.rewardType === "self_purchase");
@@ -3113,6 +3136,11 @@ export async function createRetailPromotionRewardFromFulfillment(input: {
   now?: Date;
   stateFilePath?: string;
 }) {
+  const basis = await persistedCoffeeRewardBasis(input.orderId);
+  if (!currentCoffeeRewardsAllowed(basis)) return null;
+  if (basis?.hasStore) input = { ...input, eligibleMerchandiseAmount: basis.rewardMerchandiseAmount!,
+    attribution: { ...input.attribution, calculationBaseValue: input.attribution.calculationBasis === "pv"
+      ? basis.coffeeEffectivePV : basis.rewardMerchandiseAmount! } };
   if (referralCodeForMember(input.attribution.referrerMemberId) !== input.attribution.referralCode) {
     throw new MembershipCommerceError("推廣零售訂單快照與分享會員不一致");
   }
@@ -3638,6 +3666,10 @@ function referralRewardAmount(rules: MembershipBusinessRules, orderMerchandiseAm
 
 export async function processReferralOrderOutcome(input: { referredMemberId: string; orderId: string; outcome: "completed" | "uncollected"; orderMerchandiseAmount: number; eligibleItemCount?: number; referrerCompletedOrders?: number; referrerLifetimeSpend?: number; referrerLastValidPurchaseAt?: string; idempotencyKey: string; now?: Date; stateFilePath?: string; rulesFilePath?: string }) {
   const version = await getActiveMembershipRules(input.now, input.rulesFilePath);
+  const basis = await persistedCoffeeRewardBasis(input.orderId);
+  if (input.outcome === "completed" && !currentCoffeeRewardsAllowed(basis)) return null;
+  if (basis?.hasStore && input.outcome === "completed") input = { ...input,
+    orderMerchandiseAmount: basis.rewardMerchandiseAmount!, eligibleItemCount: basis.coffeeEligibleQuantity };
   const key = `referral:conversion:${input.idempotencyKey}`;
   return transaction((state, now) => {
     const existingId = remembered(state, key);
@@ -4263,14 +4295,18 @@ export async function getMemberRetailPromotionCenter(memberId: string, options: 
       ["completed", "cancelled", "uncollected"].includes(order.status) ||
       rewardedOrders.has(order.orderNumber)
     ) return [];
+    const basis = resolveOrderRewardBasis(order);
+    if (!currentCoffeeRewardsAllowed(basis)) return [];
     const subtotal = Number(order.subtotal);
     const appliedCredit = Number(order.credit?.appliedAmount ?? 0);
     if (!Number.isSafeInteger(subtotal) || subtotal < 0 || !Number.isSafeInteger(appliedCredit) || appliedCredit < 0) return [];
-    const eligibleSales = Math.max(0, subtotal - appliedCredit);
+    const eligibleSales = basis.hasStore ? basis.rewardMerchandiseAmount! : Math.max(0, subtotal - appliedCredit);
     const rewardRate = Number(attribution.rewardRate);
     if (!Number.isFinite(rewardRate) || rewardRate < 0 || rewardRate > 100 || !Number.isSafeInteger(attribution.ruleVersionId)) return [];
     const calculationBasis: RewardCalculationBasis = attribution.calculationBasis === "pv" ? "pv" : "paid_amount";
-    const calculationBaseValue = typeof attribution.calculationBaseValue === "number" && Number.isFinite(attribution.calculationBaseValue) && attribution.calculationBaseValue >= 0
+    const calculationBaseValue = basis.hasStore
+      ? (calculationBasis === "pv" ? basis.coffeeEffectivePV : basis.rewardMerchandiseAmount!)
+      : typeof attribution.calculationBaseValue === "number" && Number.isFinite(attribution.calculationBaseValue) && attribution.calculationBaseValue >= 0
       ? attribution.calculationBaseValue
       : calculationBasis === "paid_amount"
         ? eligibleSales
