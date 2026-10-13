@@ -70,10 +70,13 @@ async function suite() {
   function check(name: string, condition: unknown) {
     assert.ok(condition, name); console.log(`PASS ${++checks} ${name}`);
   }
-  const baseline = execFileSync(process.execPath, [...process.execArgv, process.argv[1], "--baseline-worker"],
-    { cwd: process.cwd(), encoding: "utf8", windowsHide: true, timeout: 60_000 });
-  console.log(baseline.trim());
-  check("preserved pre-fix commit baseline proves active order / cancelled fulfillment / stock unchanged / reserved credit", baseline.includes("BASELINE_SPLIT_PROOF"));
+  const targetedProjection = process.argv.includes("--targeted-projection");
+  if (!targetedProjection) {
+    const baseline = execFileSync(process.execPath, [...process.execArgv, process.argv[1], "--baseline-worker"],
+      { cwd: process.cwd(), encoding: "utf8", windowsHide: true, timeout: 60_000 });
+    console.log(baseline.trim());
+    check("preserved pre-fix commit baseline proves active order / cancelled fulfillment / stock unchanged / reserved credit", baseline.includes("BASELINE_SPLIT_PROOF"));
+  }
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "kd-j6f4a-convergence-"));
   console.log("ISOLATED_FIXTURE " + root);
   process.env.KD_DATA_DIR = root;
@@ -199,6 +202,62 @@ async function suite() {
     await visit(folder); return result;
   }
   const runtimeBefore = await snapshot("F:\\KD_Coffee_LOCAL_RUNTIME");
+  if (targetedProjection) {
+    const fixture = await seed();
+    const blocker = path.join(root, "projection-blocker");
+    const blockedPath = path.join(blocker, "fulfillment", "state.json");
+    await fs.writeFile(blocker, "owned isolated fixture blocker");
+    await calls();
+    await assert.rejects(() => core(fixture.id, { fulfillmentFilePath: blockedPath }));
+    once("targeted initial projection failure", await calls());
+    check("targeted blocker file remains untouched", (await fs.stat(blocker)).isFile() &&
+      await fs.readFile(blocker, "utf8") === "owned isolated fixture blocker");
+    const cancelled = await readOrder(fixture.id);
+    check("targeted initial order cancelled", cancelled.status === "cancelled");
+    check("targeted initial effects completed", cancelled.canonicalCancellation?.state === "completed");
+    check("targeted initial Coffee restored once", await stock() === 7);
+    check("targeted initial credit released", await creditStatus(fixture.reservationId) === "released");
+    check("targeted initial Store stock unchanged", JSON.parse(await fs.readFile(storeFile, "utf8")).products[0].stock === 9);
+    const returned = JSON.stringify(cancelled.inventoryReturn), marker = JSON.stringify(cancelled.canonicalCancellation);
+    const coffeeBytes = await fs.readFile(website, "utf8"), storeBytes = await fs.readFile(storeFile, "utf8");
+    const creditFile = path.join(root, "membership-commerce", "commerce-state.json");
+    const creditBytes = await fs.readFile(creditFile, "utf8");
+    await calls();
+    await assert.rejects(() => fulfill(fixture.id, { filePath: blockedPath }), fulfillment.FulfillmentError);
+    noBusiness("targeted blocker retry", await calls());
+    check("targeted production does not delete blocker", await fs.readFile(blocker, "utf8") === "owned isolated fixture blocker");
+    await fs.unlink(blocker); // Remove only the known fixture file; production must prepare the missing directory.
+    check("targeted missing fulfillment parent not created by test", await fs.access(path.dirname(blockedPath))
+      .then(() => false, error => { if (error.code !== "ENOENT") throw error; return true; }));
+    await calls();
+    const repaired = await fulfill(fixture.id, { filePath: blockedPath });
+    const repairCalls = await calls();
+    noBusiness("targeted projection-only repair", repairCalls);
+    check("targeted repaired cancelled record", repaired.record.currentState === "cancelled");
+    check("targeted production prepared parent", (await fs.stat(path.dirname(blockedPath))).isDirectory());
+    check("targeted projection file created", (await fulfillment.readFulfillmentStore(blockedPath)).records[fixture.id]?.currentState === "cancelled");
+    const order = await readOrder(fixture.id);
+    check("targeted order and summary cancelled", order.status === "cancelled" && order.fulfillmentSummary?.state === "cancelled");
+    check("targeted original inventoryReturn preserved", JSON.stringify(order.inventoryReturn) === returned);
+    check("targeted original effects marker preserved", JSON.stringify(order.canonicalCancellation) === marker);
+    check("targeted Coffee inventory bytes unchanged", await fs.readFile(website, "utf8") === coffeeBytes);
+    check("targeted Store inventory bytes unchanged", await fs.readFile(storeFile, "utf8") === storeBytes);
+    check("targeted credit bytes unchanged", await fs.readFile(creditFile, "utf8") === creditBytes);
+    check("targeted credit remains released", await creditStatus(fixture.reservationId) === "released");
+    check("targeted one projection event", repaired.record.events.length === 1);
+    const projectionBytes = await fs.readFile(blockedPath, "utf8");
+    await calls(); await fulfill(fixture.id, { filePath: blockedPath });
+    const replayCalls = await calls(); noBusiness("targeted repaired replay", replayCalls);
+    check("targeted replay projection bytes unchanged", await fs.readFile(blockedPath, "utf8") === projectionBytes);
+    check("targeted replay Coffee and credit unchanged", await fs.readFile(website, "utf8") === coffeeBytes &&
+      await fs.readFile(creditFile, "utf8") === creditBytes);
+    check("targeted LOCAL_RUNTIME unchanged", JSON.stringify(await snapshot("F:\\KD_Coffee_LOCAL_RUNTIME")) === JSON.stringify(runtimeBefore));
+    console.log("TARGETED_PROJECTION_EVIDENCE " + JSON.stringify({root, orderNumber:fixture.id, blockedPath,
+      coffeeAfterInitial:7, coffeeAfterRepair:await stock(), storeAfterRepair:9, creditAfterRepair:await creditStatus(fixture.reservationId),
+      repairCalls, replayCalls, fulfillment:repaired.record.currentState}));
+    await post("Profiler.stopPreciseCoverage"); session.disconnect();
+    console.log(`J.6F.4A TARGETED PROJECTION PASS ${checks}/${checks}`); return;
+  }
   for (const actor of ["member", "admin-order", "admin-fulfillment"] as const) {
     const fixture = await seed();
     await calls();
@@ -279,15 +338,32 @@ async function suite() {
         domain: line.domain, operationId: "fixture-apply:" + sequence + ":" + line.domain, receiptHash: "b".repeat(64),
       })) } });
     const label = lines.map(line => String(line.domain)).join("+");
-    await unchanged(label + " Admin core guard", fixture, async () => assert.rejects(() => core(fixture.id), cancellation.UnsupportedOrderCancellationError));
+    await unchanged(label + " Admin core guard", fixture, async () => {
+      if (label === "store" || label === "coffee+store") {
+        const { CommerceOrderCancellationError } = await import("../lib/commerceOrderCancellation");
+        await assert.rejects(() => core(fixture.id), (error: unknown) =>
+          error instanceof CommerceOrderCancellationError && error.message === "REVIEW_REQUIRED" && error.status === 500);
+      } else await assert.rejects(() => core(fixture.id), cancellation.UnsupportedOrderCancellationError);
+    });
     await unchanged(label + " fulfillment guard", fixture, async () => {
       const response = await routeCall(fulfillmentRoute, fixture.id, { state: "cancelled", expectedRevision: 0, confirmed: true });
-      check(label + " fulfillment returns deterministic 409", response.status === 409);
-      check(label + " typed unsupported error", String((await response.json() as { error?: string }).error).includes(lines.some(line => line.domain === "store") ? "MIXED_CANCELLATION_NOT_SUPPORTED" : "INVALID_CANCELLATION_DOMAIN"));
+      if (label === "store" || label === "coffee+store") {
+        check(label + " fulfillment returns deterministic 500", response.status === 500);
+        check(label + " typed REVIEW_REQUIRED error", (await response.json() as { error?: string }).error === "REVIEW_REQUIRED");
+      } else {
+        check(label + " fulfillment returns deterministic 409", response.status === 409);
+        check(label + " typed unsupported error", String((await response.json() as { error?: string }).error).includes(lines.some(line => line.domain === "store") ? "MIXED_CANCELLATION_NOT_SUPPORTED" : "INVALID_CANCELLATION_DOMAIN"));
+      }
     });
-    await unchanged(label + " Member guard", fixture, async () => assert.rejects(() =>
-      cancellation.requestMemberOrderCancellation({ orderNumber: fixture.id, memberId: member,
-        cancellationReason: "domain guard", idempotencyKey: "member-guard:" + fixture.id, now }), cancellation.UnsupportedOrderCancellationError));
+    await unchanged(label + " Member guard", fixture, async () => {
+      const operation = () => cancellation.requestMemberOrderCancellation({ orderNumber: fixture.id, memberId: member,
+        cancellationReason: "domain guard", idempotencyKey: "member-guard:" + fixture.id, now });
+      if (label === "store" || label === "coffee+store") {
+        const { CommerceOrderCancellationError } = await import("../lib/commerceOrderCancellation");
+        await assert.rejects(operation, (error: unknown) =>
+          error instanceof CommerceOrderCancellationError && error.message === "REVIEW_REQUIRED" && error.status === 500);
+      } else await assert.rejects(operation, cancellation.UnsupportedOrderCancellationError);
+    });
   }
   const explicitCoffee = await seed({ items: [{ domain: "coffee", quantity: 2 }] });
   await calls(); await fulfill(explicitCoffee.id);

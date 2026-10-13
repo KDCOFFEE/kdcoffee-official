@@ -38,13 +38,13 @@ export function createInventoryParticipant(adapter: Adapter): InventoryParticipa
         if (!apply) throw new Error("Compensation without apply");
         checked(apply,operation,"APPLY");
         checked(compensation,{...operation,operationId:compensationId,parentOperationId:operation.operationId},"RESTORE");
-        return { state: "COMPENSATED" as const, apply, compensation };
+        return { state: "COMPENSATED" as const, apply, compensation, snapshotHash: inventoryHash(document) };
       }
       if (apply) {
         checked(apply,operation,"APPLY");
-        return { state: "APPLIED" as const, apply };
+        return { state: "APPLIED" as const, apply, snapshotHash: inventoryHash(document) };
       }
-      return { state: "NOT_APPLIED" as const };
+      return { state: "NOT_APPLIED" as const, snapshotHash: inventoryHash(document) };
     } catch { return { state: "UNKNOWN" as const }; }
   }
   async function execute(operation: ParticipantOperation, kind: "APPLY" | "RESTORE") {

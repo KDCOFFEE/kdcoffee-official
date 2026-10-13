@@ -29,9 +29,9 @@ export function createCommerceTransactionJournal(orderDir: string, transactionId
       try { envelope = JSON.parse(await fs.readFile(file,"utf8")); } catch { throw new CommerceJournalIntegrityError("Corrupt transaction event"); }
       if (envelope.schemaVersion !== 1 || envelope.sequence !== index || envelope.previousHash !== (envelopes.at(-1)?.hash ?? null)
         || !envelope.event || typeof envelope.event !== "object"
-        || !["PREPARED","APPLIED","ABORT","COMPENSATION_PENDING","COMPENSATED","FINALIZED","ABORTED","REVIEW_REQUIRED"].includes(envelope.event.type)
+        || !["RESTORE_PREPARED","RESTORE_PENDING","RESTORED","CANCELLED","PREPARED","APPLIED","ABORT","COMPENSATION_PENDING","COMPENSATED","FINALIZED","ABORTED","REVIEW_REQUIRED"].includes(envelope.event.type)
         || envelope.hash !== inventoryHash({ schemaVersion: 1, sequence: index, previousHash: envelope.previousHash, event: envelope.event })) throw new CommerceJournalIntegrityError("Transaction hash/sequence mismatch");
-      if ((index === 0) !== (envelope.event.type === "PREPARED")) throw new CommerceJournalIntegrityError("Invalid transaction intent placement");
+      if ((index === 0) !== (["PREPARED","RESTORE_PREPARED"].includes(envelope.event.type))) throw new CommerceJournalIntegrityError("Invalid transaction intent placement");
       envelopes.push(envelope);
     }
     return envelopes;

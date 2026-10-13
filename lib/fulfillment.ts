@@ -1,4 +1,5 @@
 import { hasOrderCompletion } from "./orderCompletion";
+import { assertCommerceLockHeld, commerceLockPath } from "./commerceLockProtocol";
 import { cancelOrderCanonically } from "./orderCancellation";
 import { appendFulfillmentCancellationProjection } from "./fulfillmentCancellationProjection";
 import { resolveOrderRewardBasis } from "./orderRewardBasis";
@@ -453,6 +454,13 @@ export async function processSevenElevenEmail(evidence: FulfillmentEmailEvidence
 }
 
 
+/** Pure J.6F.4A authorization decision; loading/locking remain with the declared dependency. */
+function assertAdminFulfillmentCancellationAuthorization(order: StoredOrder, record: FulfillmentRecord, expectedRevision: number) {
+  if (order.status === "cancelled") return;
+  if (record.revision !== expectedRevision) throw new FulfillmentError("訂單履約狀態已更新，請重新整理後再試", 409);
+  if (record.currentState === "completed") throw new FulfillmentError("已完成訂單不可取消", 409);
+}
+
 /** Delegate before taking ordinary fulfillment mutation locks. confirmed is not shipment-void evidence. */
 export async function cancelAdminFulfillmentOrder(input: {
   orderId: string; expectedRevision: number; confirmed?: boolean; note?: string;
@@ -462,18 +470,19 @@ export async function cancelAdminFulfillmentOrder(input: {
   const filePath = input.filePath ?? getFulfillmentStateFile();
   const now = input.now ?? new Date();
   try {
+    await fs.mkdir(path.dirname(filePath), { recursive: true });
     const result = await cancelOrderCanonically({
       orderNumber: input.orderId, cancellationReason: input.note?.trim() || "後台履約取消訂單",
       cancelledBy: "admin", idempotencyKey: `order-cancel:${input.orderId}`,
       now: () => now, fulfillmentFilePath: filePath,
-      authorize: async order => {
-        if (order.status === "cancelled") return; // A successful prior cancellation may need projection repair.
-        await withFileLock(filePath, async () => {
-          const store = await readFulfillmentStore(filePath);
-          const record = fulfillmentRecordForOrder(store, order);
-          if (record.revision !== input.expectedRevision) throw new FulfillmentError("訂單履約狀態已更新，請重新整理後再試", 409);
-          if (record.currentState === "completed") throw new FulfillmentError("已完成訂單不可取消", 409);
-        }, { timeoutMs: 20_000 });
+      lockedAuthorization: {
+        resources: [{ file: filePath, rank: 4, key: commerceLockPath(filePath) }],
+        validateLocked: async order => {
+          assertCommerceLockHeld(filePath);
+          if (order.status === "cancelled") return; // Preserve projection-only repair without a revision conflict.
+          const record = fulfillmentRecordForOrder(await readFulfillmentStore(filePath), order);
+          assertAdminFulfillmentCancellationAuthorization(order, record, input.expectedRevision);
+        },
       },
     });
     if (!result.ok) throw new FulfillmentError(result.warning || "取消後果尚未完成", 500);

@@ -7,13 +7,15 @@ import {
   type StoredOrder,
 } from "@/lib/adminOrders";
 import { withFileLock } from "@/lib/jsonFileStore";
-import { withOrderGate } from "./commerceLocks";
+import { withOrderGate, type CommerceLockResource } from "./commerceLocks";
+import { assertCommerceLockHeld, compareCommerceLocks } from "./commerceLockProtocol";
 import { getOrdersDir } from "./storagePaths";
 import {
   cancelOrReverseRetailPromotionRewards,
   cancelSubscriptionCycleForOrder,
   handleReferralQualificationOrderOutcome,
   settleCreditReservationForOrder,
+  readMembershipCommerceState,
 } from "@/lib/membershipCommerce";
 import {
   returnCommittedInventoryForCancellation,
@@ -22,6 +24,7 @@ import {
 import { getWebsiteDataFile } from "@/lib/storagePaths";
 import { hasOrderCompletion } from "./orderCompletion";
 import { appendFulfillmentCancellationProjection } from "./fulfillmentCancellationProjection";
+import type { createCommerceOrderCancellation } from "./commerceOrderCancellation";
 
 export type CancellationActor = "admin" | "member";
 
@@ -49,6 +52,8 @@ type CancellationRuntime = {
   membershipStateFilePath?: string;
   membershipRulesFilePath?: string;
   fulfillmentFilePath?: string;
+  /** Trusted server/test instrumentation; never forwarded from route payloads. */
+  transactionCancellation?: Parameters<typeof createCommerceOrderCancellation>[0];
   sendNotification?: (
     text: string,
     options?: { attempts?: number; timeoutMs?: number; retryDelayMs?: number; fetcher?: typeof fetch },
@@ -63,6 +68,11 @@ type CancelOrderInput = CancellationRuntime & {
   trackingNumber?: unknown;
   confirmedExternalShipmentVoid?: boolean;
   authorize?: (order: StoredOrder) => void | Promise<void>;
+  /** State dependencies are declared before acquisition. validateLocked may read, never acquire. */
+  lockedAuthorization?: {
+    resources: CommerceLockResource[];
+    validateLocked: (order: StoredOrder) => void | Promise<void>;
+  };
 };
 
 function returnFailureMetadata(
@@ -110,15 +120,16 @@ export class UnsupportedOrderCancellationError extends OrderStatusTransitionErro
 }
 
 function assertCancellationDomainSupported(order: StoredOrder) {
+  const transaction = order.inventoryTransaction;
+  if (transaction && Object.hasOwn(transaction, "protocolVersion") && transaction.protocolVersion !== 1) {
+    throw new UnsupportedOrderCancellationError("UNKNOWN_CANCELLATION_PROTOCOL");
+  }
   for (const line of Array.isArray(order.items) ? order.items : []) {
     if (!line || typeof line !== "object") throw new UnsupportedOrderCancellationError("INVALID_CANCELLATION_DOMAIN");
     if (!Object.hasOwn(line, "domain")) continue; // Historical Coffee lines.
+    if (line.domain === "store" && order.inventoryTransaction?.protocolVersion === 1) continue;
     if (line.domain === "store") throw new UnsupportedOrderCancellationError("MIXED_CANCELLATION_NOT_SUPPORTED");
     if (line.domain !== "coffee") throw new UnsupportedOrderCancellationError("INVALID_CANCELLATION_DOMAIN");
-  }
-  // Receipt-backed J.6F.3 transactions cannot use the legacy changes-based restore.
-  if (order.inventoryTransaction?.protocolVersion === 1) {
-    throw new UnsupportedOrderCancellationError("TRANSACTION_CANCELLATION_NOT_SUPPORTED");
   }
 }
 
@@ -136,14 +147,91 @@ export async function cancelOrderCanonically(input: CancelOrderInput): Promise<C
     options?: { attempts?: number; timeoutMs?: number; retryDelayMs?: number; fetcher?: typeof fetch },
   ) => (await import("@/lib/internalLineNotifications")).sendInternalLineNotification(text, options));
 
-  return withOrderGate(getOrdersDir(), input.orderNumber, async () => {
-  const result = await withFileLock(
-    websiteFile,
-    () => withStoredOrderUpdateLock(input.orderNumber, async (latestOrder, persistOrder) => {
-      await input.authorize?.(latestOrder);
+
+  const initial = await readOrder(input.orderNumber);
+  let transactionReturn: Awaited<ReturnType<ReturnType<typeof createCommerceOrderCancellation>["restore"]>> | undefined;
+  let transactionService: ReturnType<typeof createCommerceOrderCancellation> | undefined;
+  const authorizationResources = input.lockedAuthorization?.resources ?? [];
+  const authorizeLocked = async (order: StoredOrder) => {
+    await input.authorize?.(order);
+    if (input.lockedAuthorization) {
+      for (const resource of authorizationResources) assertCommerceLockHeld(resource.file);
+      await input.lockedAuthorization.validateLocked(order);
+    }
+  };
+  // The legacy/post-RESTORE phase already holds order rank 3; declared higher dependencies follow it.
+  const authorizeWithDependencies = async (order: StoredOrder) => {
+    const sorted = [...authorizationResources].sort(compareCommerceLocks);
+    const acquire = (index: number): Promise<void> => index === sorted.length
+      ? authorizeLocked(order)
+      : withFileLock(sorted[index].file, () => acquire(index + 1),
+        { timeoutMs: 20_000, commerceLock: sorted[index] });
+    await acquire(0);
+  };
+  const validateTransactionOrder = async (raw: Record<string, unknown>) => {
+    const order = raw as StoredOrder;
+    await authorizeLocked(order);
+    assertCancellationDomainSupported(order);
+    if (hasOrderCompletion(order)) assertOrderStatusTransition(order, "cancelled");
+    const hasStore = Array.isArray(order.items) && order.items.some(line => line.domain === "store");
+    if (hasStore) {
+      const amount = order.credit?.appliedAmount ?? order.creditApplied ?? 0;
+      if (!Number.isSafeInteger(amount) || amount < 0 || amount > 0) {
+        throw new UnsupportedOrderCancellationError("MIXED_CREDIT_ALLOCATION_UNRESOLVED");
+      }
+      const state = await readMembershipCommerceState(input.membershipStateFilePath);
+      if (Object.values(state.creditReservations).some(reservation => reservation.orderId === input.orderNumber && reservation.amount > 0)) {
+        throw new UnsupportedOrderCancellationError("MIXED_CREDIT_ALLOCATION_UNRESOLVED");
+      }
+      if (order.subscription || order.subscriptionIntent || order.subscriptionId) {
+        throw new UnsupportedOrderCancellationError("STORE_SUBSCRIPTION_NOT_SUPPORTED");
+      }
+    }
+    if (order.status === "cancelled") return;
+    const request = order.memberCancellationRequest as MemberCancellationRequest | undefined;
+    const manualVoid = input.cancelledBy === "admin" && input.confirmedExternalShipmentVoid === true &&
+      order.status === "shipment_created" && request?.state === "requires_manual_shipment_void";
+    if (!manualVoid) assertOrderStatusTransition(order, "cancelled");
+  };
+  if (initial?.inventoryTransaction && Object.hasOwn(initial.inventoryTransaction, "protocolVersion")) {
+    assertCancellationDomainSupported(initial);
+    if (initial.inventoryTransaction.protocolVersion !== 1) throw new UnsupportedOrderCancellationError("UNKNOWN_CANCELLATION_PROTOCOL");
+    const { createCommerceOrderCancellation } = await import("./commerceOrderCancellation");
+    transactionService = createCommerceOrderCancellation({ now, ...input.transactionCancellation, authorizationResources });
+    transactionReturn = await transactionService.restore(input.orderNumber, {
+      cancelledAt: now().toISOString(), cancelledBy: input.cancelledBy, cancellationReason,
+      cancellationIdempotencyKey: input.idempotencyKey,
+      ...(input.trackingNumber === undefined ? {} : { trackingNumber: String(input.trackingNumber || "").trim().slice(0, 80) }),
+    }, {
+      validateOrder: validateTransactionOrder,
+      commitOrder: async (raw, intent, receipts, persist) => {
+        await validateTransactionOrder(raw);
+        const order = raw as StoredOrder, snapshot = intent.cancellation;
+        const request = order.memberCancellationRequest as MemberCancellationRequest | undefined;
+        await persist({
+          ...order, ...snapshot, status: "cancelled", updatedAt: snapshot.cancelledAt,
+          canonicalCancellation: { state: "pending", operationId: `order-cancel:${input.orderNumber}` },
+          inventoryReturn: { protocolVersion: 1, state: "returned", operationId: intent.transactionId,
+            originalTransactionId: intent.originalTransactionId, returnedAt: snapshot.cancelledAt, participantReceipts: receipts },
+          ...(request?.state === "requires_manual_shipment_void" ? {
+            memberCancellationRequest: { ...request, state: "completed", completedAt: snapshot.cancelledAt },
+          } : {}),
+          statusHistory: [...(Array.isArray(order.statusHistory) ? order.statusHistory : []),
+            { from: order.status, to: "cancelled", at: snapshot.cancelledAt }],
+        });
+      },
+    });
+  }
+
+  const canonicalResult = await withOrderGate(getOrdersDir(), input.orderNumber, async () => {
+  const updateCancellation = () => withStoredOrderUpdateLock(input.orderNumber, async (latestOrder, persistOrder) => {
+      await authorizeWithDependencies(latestOrder);
       assertCancellationDomainSupported(latestOrder);
       if (hasOrderCompletion(latestOrder)) assertOrderStatusTransition(latestOrder, "cancelled");
 
+      if (latestOrder.inventoryTransaction?.protocolVersion === 1 && !transactionReturn) {
+        throw new UnsupportedOrderCancellationError("TRANSACTION_RESTORE_NOT_PROVEN");
+      }
       // A prior attempt may have saved cancellation before a later consequence
       // failed. Retrying resumes only idempotent consequences below.
       if (latestOrder.status === "cancelled") {
@@ -151,6 +239,9 @@ export async function cancelOrderCanonically(input: CancelOrderInput): Promise<C
           (!latestOrder.canonicalCancellation && latestOrder.inventoryReturn?.state !== "return_failed" &&
             latestOrder.inventoryReturn?.state !== "return_pending")) {
           return { ok: true, order: latestOrder, alreadyCancelled: true, projectionOnly: true };
+        }
+        if (transactionReturn && latestOrder.inventoryReturn?.protocolVersion === 1) {
+          return { ok: true, order: latestOrder, alreadyCancelled: !transactionReturn.newlyCancelled };
         }
         const recovered = await returnCommittedInventoryForCancellation({
           order: latestOrder, websiteFile, persistOrder: async next => { await persistOrder(next); }, websiteLockHeld: true, now,
@@ -225,7 +316,9 @@ export async function cancelOrderCanonically(input: CancelOrderInput): Promise<C
       };
       await persistOrder(order);
       return { ok: true, order, alreadyCancelled: false };
-    }),
+    });
+  const result = transactionReturn ? await updateCancellation() : await withFileLock(
+    websiteFile, updateCancellation,
     { timeoutMs: 15_000, commerceLock: { rank: 2, key: "0000:coffee:" + websiteFile } },
   );
 
@@ -291,6 +384,8 @@ export async function cancelOrderCanonically(input: CancelOrderInput): Promise<C
   });
   return { ...result, order: projection.order };
   });
+  if (canonicalResult.ok && transactionService) await transactionService.finalize(input.orderNumber, validateTransactionOrder);
+  return canonicalResult;
 }
 
 export async function requestManualShipmentVoid(input: CancellationRuntime & {

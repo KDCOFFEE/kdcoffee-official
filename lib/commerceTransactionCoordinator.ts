@@ -7,7 +7,7 @@ import { assertCommerceLockHeld } from "./commerceLockProtocol";
 import { createCommerceTransactionJournal } from "./commerceTransactionJournal";
 import { createOrderFile, withOrderFileUpdateLock } from "./orderFiles";
 import { inventoryHash, inventoryOperationKey, normalizeInventoryDemand } from "./inventoryReceipts";
-import type { InventoryParticipant, ParticipantOperation, ParticipantObservation, TransactionIntent, TransactionResult } from "./commerceTransactionTypes";
+import type { InventoryParticipant, ParticipantOperation, ParticipantObservation, TransactionIntent, TransactionResult, CancellationSnapshot, CancellationRestoreIntent, CancellationRestoreResult } from "./commerceTransactionTypes";
 export class CommerceTransactionConflictError extends Error {
   constructor(message: string) { super(message); this.name = "CommerceTransactionConflictError"; }
 }
@@ -205,7 +205,161 @@ export function createCommerceTransactionCoordinator(options: {
       return {state:"PENDING" as const,observations:{}};
     });
   }
+
+  /** Cancellation RESTORE uses its own durable journal, never aborts a finalized creation. */
+  async function restore(originalRaw: TransactionIntent, cancellation: CancellationSnapshot, callbacks: {
+    validateOrder(order: Record<string, unknown>): Promise<void>;
+    commitOrder(order: Record<string, unknown>, intent: CancellationRestoreIntent, receipts: Array<{domain: string; operationId: string; receiptHash: string}>,
+      persist: (order: Record<string, unknown>) => Promise<Record<string, unknown>>): Promise<void>;
+    hook?: (phase: "PREPARED" | "RESTORED" | "BEFORE_CANCELLED" | "CANCELLED", domain?: string) => Promise<void>;
+    finalizeOnly?: boolean;
+    authorizationResources?: CommerceLockResource[];
+  }): Promise<CancellationRestoreResult> {
+    const original = validate(originalRaw);
+    const transactionId = "order-cancel:" + inventoryOperationKey(original.orderNumber + ":" + original.transactionId);
+    const originalJournal = createCommerceTransactionJournal(options.orderDir, original.transactionId);
+    const journal = createCommerceTransactionJournal(options.orderDir, transactionId);
+    const resources = [
+      { file: originalJournal.lockFile, rank: 0 as const, key: original.transactionId },
+      { file: journal.lockFile, rank: 0 as const, key: transactionId },
+      orderGateResource(options.orderDir, original.orderNumber),
+      ...original.participants.map(item => registry.get(item.domain)!.resource),
+      { file: path.join(options.orderDir, original.orderNumber + ".json"), rank: 3 as const, key: original.orderNumber.toLowerCase() + ".json" },
+      ...(callbacks.authorizationResources ?? []),
+    ];
+    const observations: Record<string, ParticipantObservation> = {};
+    let intent: CancellationRestoreIntent | undefined;
+    let newlyCancelled = false;
+    const receiptRefs = () => original.participants.map(item => {
+      const receipt = observations[item.domain]?.compensation;
+      if (observations[item.domain]?.state !== "COMPENSATED" || !receipt) throw new Error("Every restore receipt must be proven");
+      return { domain: item.domain, operationId: receipt.operationId, receiptHash: inventoryHash(receipt) };
+    });
+    const restoreId = (domain: string) => "cancel-restore:" + inventoryOperationKey(transactionId + ":" + domain);
+    const result = (state: CancellationRestoreResult["state"]): CancellationRestoreResult => ({
+      state, transactionId, observations, intent, newlyCancelled,
+    });
+    const locked = async (): Promise<CancellationRestoreResult> => {
+      let creation, entries;
+      try { creation = await originalJournal.read(); entries = await journal.read(); }
+      catch { return result("REVIEW_REQUIRED"); }
+      const prepared = creation[0]?.event;
+      if (prepared?.type !== "PREPARED" || inventoryHash(prepared.intent) !== inventoryHash(original) ||
+        !creation.some(entry => entry.event.type === "FINALIZED") ||
+        creation.some(entry => ["ABORT","ABORTED","REVIEW_REQUIRED","COMPENSATED"].includes(entry.event.type))) return result("REVIEW_REQUIRED");
+      const orderPath = path.join(options.orderDir, original.orderNumber + ".json");
+      let order: Record<string, unknown>;
+      try { order = JSON.parse(await fs.readFile(orderPath, "utf8")); } catch { return result("REVIEW_REQUIRED"); }
+      await callbacks.validateOrder(order);
+      const transaction = order.inventoryTransaction as Record<string, unknown> | undefined;
+      if (transaction?.protocolVersion !== 1 || transaction.transactionId !== original.transactionId ||
+        transaction.intentHash !== inventoryHash(original) || transaction.state !== "inventory_committed") return result("REVIEW_REQUIRED");
+      // Financial/line snapshots stay exactly those used to create the original APPLY plan.
+      for (const field of ["items","subtotal","shipping","total","orderMode","idempotencyKey","idempotencyRequestHash"]) {
+        if (inventoryHash(order[field]) !== inventoryHash(original.order[field])) return result("REVIEW_REQUIRED");
+      }
+      for (const item of original.participants) {
+        const op = operation(original, item.domain);
+        observations[item.domain] = await registry.get(item.domain)!.inspect(op, restoreId(item.domain));
+        const apply = observations[item.domain].apply;
+        if (!apply || !["APPLIED","COMPENSATED"].includes(observations[item.domain].state) ||
+          !creation.some(entry => entry.event.type === "APPLIED" && entry.event.domain === item.domain &&
+            entry.event.receiptHash === inventoryHash(apply))) return result("REVIEW_REQUIRED");
+      }
+      const expectedApply = original.participants.map(item => ({
+        domain: item.domain, operationId: observations[item.domain].apply!.operationId,
+        receiptHash: inventoryHash(observations[item.domain].apply),
+      }));
+      if (inventoryHash(transaction.participantReceipts) !== inventoryHash(expectedApply)) return result("REVIEW_REQUIRED");
+      const participants = original.participants.map(item => ({ ...item,
+        applyOperationId: observations[item.domain].apply!.operationId,
+        applyReceiptHash: inventoryHash(observations[item.domain].apply),
+      }));
+      if (entries.length) {
+        const first = entries[0].event;
+        if (first.type !== "RESTORE_PREPARED") return result("REVIEW_REQUIRED");
+        intent = first.intent;
+        if (intent.schemaVersion !== 1 || intent.transactionId !== transactionId ||
+          intent.originalTransactionId !== original.transactionId || intent.orderNumber !== original.orderNumber ||
+          intent.originalIntentHash !== inventoryHash(original) || inventoryHash(intent.participants) !== inventoryHash(participants)) return result("REVIEW_REQUIRED");
+      } else {
+        if (callbacks.finalizeOnly || original.participants.some(item => observations[item.domain].state === "COMPENSATED") ||
+          order.status === "cancelled") return result("REVIEW_REQUIRED");
+        intent = { schemaVersion: 1, transactionId, originalTransactionId: original.transactionId,
+          originalIntentHash: inventoryHash(original), orderNumber: original.orderNumber, participants, cancellation };
+        await journal.append({ type: "RESTORE_PREPARED", intent });
+        await callbacks.hook?.("PREPARED");
+      }
+      if (entries.some(entry => entry.event.type === "REVIEW_REQUIRED")) return result("REVIEW_REQUIRED");
+      const review = async (reason: string) => {
+        await journal.append({ type: "REVIEW_REQUIRED", reason });
+        return result("REVIEW_REQUIRED");
+      };
+      for (const entry of entries) {
+        if (entry.event.type === "RESTORED" && (!observations[entry.event.domain]?.compensation ||
+          inventoryHash(observations[entry.event.domain].compensation) !== entry.event.receiptHash)) return review("Restore journal and receipt disagree");
+      }
+      if (entries.some(entry => entry.event.type === "CANCELLED" || entry.event.type === "FINALIZED") &&
+        (order.status !== "cancelled" || original.participants.some(item => observations[item.domain].state !== "COMPENSATED"))) {
+        return review("Cancelled persistence and restore evidence disagree");
+      }
+      if (callbacks.finalizeOnly) {
+        const marker = order.canonicalCancellation as Record<string, unknown> | undefined;
+        const summary = order.fulfillmentSummary as Record<string, unknown> | undefined;
+        const returned = order.inventoryReturn as Record<string, unknown> | undefined;
+        if (order.status !== "cancelled" || marker?.state !== "completed" || summary?.state !== "cancelled" ||
+          returned?.operationId !== transactionId || inventoryHash(returned.participantReceipts) !== inventoryHash(receiptRefs())) return result("PENDING");
+        if (!entries.some(entry => entry.event.type === "FINALIZED")) await journal.append({ type: "FINALIZED" });
+        return result("FINALIZED");
+      }
+      for (const item of original.participants) {
+        if (observations[item.domain].state === "COMPENSATED") continue;
+        if (order.status === "cancelled") return review("Cancelled order lacks required restore");
+        const op = operation(original, item.domain);
+        const beforeHash = observations[item.domain].snapshotHash;
+        if (!beforeHash || !/^[a-f0-9]{64}$/.test(beforeHash)) return review("Restore pre-write evidence unavailable");
+        const pending = [...entries].reverse().find(entry => entry.event.type === "RESTORE_PENDING" && entry.event.domain === item.domain)?.event;
+        if (pending?.type === "RESTORE_PENDING" && pending.beforeHash !== beforeHash) return review("Missing restore receipt after changed participant snapshot");
+        await journal.append({ type: "RESTORE_PENDING", domain: item.domain, beforeHash });
+        try {
+          await registry.get(item.domain)!.restore({ ...op, operationId: restoreId(item.domain), parentOperationId: op.operationId });
+          await callbacks.hook?.("RESTORED", item.domain);
+        } catch (error) {
+          observations[item.domain] = await registry.get(item.domain)!.inspect(op, restoreId(item.domain));
+          if (observations[item.domain].state === "UNKNOWN") return review("Restore result unknown");
+          if (observations[item.domain].state !== "COMPENSATED") {
+            if (observations[item.domain].snapshotHash !== beforeHash) return review("Restore failure changed snapshot without receipt");
+            if (error instanceof Error && error.name === "InventoryParticipantRejectedError") return review("Restore identity missing or budget rejected");
+            return result("PENDING");
+          }
+        }
+        observations[item.domain] = await registry.get(item.domain)!.inspect(op, restoreId(item.domain));
+        if (observations[item.domain].state !== "COMPENSATED") return review("Restore lacks durable receipt");
+        await journal.append({ type: "RESTORED", domain: item.domain, receiptHash: inventoryHash(observations[item.domain].compensation) });
+      }
+      const receipts = receiptRefs();
+      await callbacks.hook?.("BEFORE_CANCELLED");
+      if (order.status !== "cancelled") {
+        try {
+          await withOrderFileUpdateLock(options.orderDir, original.orderNumber, (current, persist) =>
+            callbacks.commitOrder(current, intent!, receipts, persist));
+          newlyCancelled = true;
+        } catch { return result("PENDING"); }
+      }
+      const current = JSON.parse(await fs.readFile(orderPath, "utf8"));
+      const returned = current.inventoryReturn;
+      if (current.status !== "cancelled" || returned?.operationId !== transactionId ||
+        inventoryHash(returned.participantReceipts) !== inventoryHash(receipts)) return review("Cancelled order receipt mismatch");
+      await callbacks.hook?.("CANCELLED");
+      if (!entries.some(entry => entry.event.type === "CANCELLED")) await journal.append({ type: "CANCELLED" });
+      return result("FINALIZED");
+    };
+    // Policy/authorization errors stay typed; ambiguous IO never authorizes completion.
+    return withCommerceLockPlan(resources, locked, { timeoutMs: 15_000 });
+  }
+
   return {
+    restore,
     run:(intent:TransactionIntent)=>execute(intent,true),
     /** Trusted orchestration only: discover all resources before acquiring a sealed plan. */
     resources:(intent:TransactionIntent)=>resourcesFor(validate(intent)),
