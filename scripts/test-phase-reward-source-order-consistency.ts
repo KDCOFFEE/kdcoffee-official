@@ -139,7 +139,7 @@ check(resolveEffectiveRewardDisplayStatus({ status: "scheduled", qualificationSt
 
 const root = process.cwd();
 const read = (relative: string) => readFile(path.join(root, relative), "utf8");
-const [page, center, org, retail, card, compactCard, commerce, nav, disclosure, messagesRoute] = await Promise.all([
+const [page, center, org, retail, card, compactCard, commerce, nav, disclosure, messagesRoute, creditPassbook] = await Promise.all([
   read("app/member/page.tsx"),
   read("components/member/MemberReferralCenter.tsx"),
   read("components/member/MemberReferralOrgChart.tsx"),
@@ -150,18 +150,39 @@ const [page, center, org, retail, card, compactCard, commerce, nav, disclosure, 
   read("components/member/MemberSectionNav.tsx"),
   read("components/member/MemberMobileDisclosure.tsx"),
   read("app/api/orders/[orderNumber]/messages/route.ts"),
+  read("components/member/MemberCreditPassbook.tsx"),
 ]);
 
-check(page.includes("commerce.pendingRewardSummary") && page.includes("預估折抵"), "dashboard consumes the unified persisted pending summary");
+check(
+  page.includes("commerce.pendingRewardSummary")
+    && page.includes('MemberCopyText copyKey="member.dashboard.label.693d81614f"'),
+  "dashboard consumes the unified persisted pending summary through canonical member-center copy"
+);
 check(compactCard.includes("<RewardSourceOrderSummaryCard") && org.includes("<RewardSourceOrderSummaryCard") && retail.includes("<RewardSourceOrderSummaryCard"), "all three reward surfaces share one safe order summary component");
 check(center.includes("displayStatus: reward.displayStatus") && !center.includes("待完成資格消費"), "Reward Detail consumes the canonical display status");
 check(!org.includes("rewardRate * 100") && !org.includes("待完成資格消費"), "Organization Chart no longer reinterprets rate or raw qualification status");
 check(card.includes("formatRewardRatePercent(summary.rewardRate)") && card.includes("summary.rewardPV") && card.includes("summary.projectedCreditAmount"), "shared card keeps rate, reward points, and credit value separate");
-check(card.includes("summary.canViewFullOrder") && card.includes("查看完整訂單"), "full-order link is rendered only for verified order ownership");
+check(
+  card.includes("summary.canViewFullOrder")
+    && card.includes('href={`/orders/${encodeURIComponent(summary.orderNumber)}`}')
+    && card.includes('MemberCopyText copyKey="member.rewards.button.52c7dd3708"'),
+  "full-order link is rendered only for verified order ownership through canonical member-center copy"
+);
 check(compactCard.includes("rewardTimingText(explanation)") && compactCard.includes("releaseEligibleBusinessDate") && compactCard.includes("入帳日期確認中") && compactCard.includes("待完成取貨後計算"), "transaction timing uses the shared persisted projection and distinguishes completed pickup from unfinished fulfillment");
-check(compactCard.includes("推薦資格有效至") && center.includes("qualificationCoverage"), "qualification validity remains in the qualification explanation area");
+check(
+  compactCard.includes("qualificationValidUntil")
+    && compactCard.includes('MemberCopyText copyKey="member.rewards.qualification.1eead48278"')
+    && compactCard.includes("formatTaipeiDate(qualificationValidUntil)")
+    && center.includes("qualificationCoverage"),
+  "qualification validity remains in the qualification explanation area through canonical member-center copy"
+);
 check(retail.includes("retail-promotion-dialog") && retail.includes("查看詳情"), "specialized Retail Promotion detail remains available");
-check(page.includes('/member?rewardView=released#rewards') && page.includes('/member?rewardView=pending#rewards'), "released and pending dashboard deep links remain intact");
+check(
+  page.includes("<MemberCreditPassbook")
+    && page.includes('/member?rewardView=pending#rewards')
+    && creditPassbook.includes('/member?rewardView=released#rewards'),
+  "released and pending dashboard deep links remain intact across the dashboard and credit passbook"
+);
 check(nav.includes("usePathname") && nav.includes("useSearchParams") && nav.includes("popstate"), "Member section route synchronization and Back/Forward support remain intact");
 check(disclosure.includes("suppressHydrationWarning") && disclosure.includes("details.open = open"), "MemberMobileDisclosure hydration fix remains intact");
 check(messagesRoute.includes("resolveCustomerOrderAccess") && messagesRoute.includes("authorizedOrder"), "canonical full-order authorization remains in force");
