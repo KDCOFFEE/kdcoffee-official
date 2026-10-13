@@ -119,8 +119,20 @@ try {
     }
     for (const delivery of ["711_cod", "home_delivery"]) {
       const input = request(mode); input.orderMode = delivery;
-      await check(mode + " " + delivery, input, mode === "coffee" ? "LEGACY_COFFEE_REQUIRED" : "REJECTED",
-        mode === "coffee" ? "COFFEE_DELIVERY_MODE" : "MODE_NOT_SUPPORTED");
+      if (mode !== "coffee") {
+        Reflect.deleteProperty(input, "studioPickup");
+        if (delivery === "711_cod") {
+          input.payment = "cash_on_delivery";
+          input.store = { id: "ABC123", name: "Fixture store", address: "Fixture store address" };
+        } else {
+          Reflect.deleteProperty(input, "payment");
+          input.paymentMethod = "cash_on_delivery";
+          input.deliveryAddress = { recipientName: "Fixture recipient", phone: "0912345678", postalCode: "100",
+            city: "臺北市", district: "中正區", addressLine: "Fixture address 1" };
+        }
+      }
+      await check(mode + " " + delivery, input, mode === "coffee" ? "LEGACY_COFFEE_REQUIRED" : "PROTOCOL_V1_ELIGIBLE",
+        mode === "coffee" ? "COFFEE_DELIVERY_MODE" : undefined);
     }
   }
   for (const date of ["invalid", "2026-02-30", "", "2026-13-01"]) {

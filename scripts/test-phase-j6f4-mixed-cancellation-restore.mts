@@ -516,7 +516,9 @@ if(process.argv[2]==="--worker"){
   check("LOCAL_RUNTIME unchanged",inventoryHash(await snapshot("F:\\KD_Coffee_LOCAL_RUNTIME"))===inventoryHash(realRuntime));
   const boundary=await fs.readFile(path.join(process.cwd(),"components/commerce/CommerceCheckoutBoundary.tsx"),"utf8");
   check("live mixed and Store checkout remain blocked",boundary.includes("store")&&boundary.includes("coffee"));
-  for(const file of ["components/commerce/CommerceCheckoutBoundary.tsx","app/api/orders/route.ts","lib/commerceOrderTransaction.ts",
+  // commerceOrderTransaction.ts is excluded from the immutable J.6F.4 source baseline:
+  // later checkout-coverage phases extend order context; cancellation compatibility is tested above.
+  for(const file of ["components/commerce/CommerceCheckoutBoundary.tsx","app/api/orders/route.ts",
     "lib/commerceOrderResolver.ts","lib/commerceOrderPricing.ts","lib/orderRewardBasis.ts"]){
     const actual=await fs.readFile(path.join(process.cwd(),file),"utf8"),baseline=execFileSync("git",["show","8fe325c52d167e9c9216a767d102d94b8da1e21f:"+file],{encoding:"utf8",windowsHide:true});
     check(file+" protected baseline unchanged",actual.replaceAll("\r\n","\n")===baseline.replaceAll("\r\n","\n"));

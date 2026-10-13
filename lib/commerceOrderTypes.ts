@@ -1,3 +1,4 @@
+import { validateDeliveryAddress, type DeliveryAddress } from "./deliveryAddress";
 import {
   cartIdentifier, cartQuantity, isCartRecord, validateCoffeeOptions,
   type CoffeeCartItem, type CoffeePreparation, type CoffeeRoastLevel,
@@ -123,4 +124,82 @@ export function readCommerceOrderLines(value: unknown): ReadableCommerceOrderLin
     return { domain: "store", productId, variantId: "default", slug: raw.slug,
       name: raw.name, sku: raw.sku, quantity, unitPrice, lineTotal };
   });
+}
+
+
+/** User selections only. Derived financial facts and ownership are never request fields. */
+export type CommerceCheckoutCustomer = { name: string; phone: string; email: string; note: string };
+type CheckoutContextBase = { customer: CommerceCheckoutCustomer; creditApplied?: 0; subscriptionIntent?: never };
+export type CommerceCheckoutOrderContext = CheckoutContextBase & (
+  | { orderMode: "studio_pickup"; studioPickup: { preferredDate: string }; payment?: "pickup_confirmation";
+      store?: never; deliveryAddress?: never; paymentMethod?: never }
+  | { orderMode: "711_cod"; store: { id: string; name: string; address: string }; payment: "cash_on_delivery";
+      studioPickup?: never; deliveryAddress?: never; paymentMethod?: never }
+  | { orderMode: "home_delivery"; deliveryAddress: DeliveryAddress; paymentMethod: "atm_transfer" | "cash_on_delivery";
+      studioPickup?: never; store?: never; payment?: never }
+);
+export type CheckoutContextReason = "INVALID_REQUEST" | "INVALID_PICKUP_DATE" | "INVALID_STORE"
+  | "INVALID_ADDRESS" | "PAYMENT_NOT_SUPPORTED";
+export class CheckoutContextValidationError extends Error {
+  readonly reason: CheckoutContextReason;
+  constructor(reason: CheckoutContextReason) { super(reason); this.reason = reason; }
+}
+function contextFail(reason: CheckoutContextReason): never { throw new CheckoutContextValidationError(reason); }
+function contextFields(value: unknown, allowed: readonly string[]): Record<string, unknown> {
+  if (!isCartRecord(value) || Reflect.ownKeys(value).some(key => typeof key !== "string" || !allowed.includes(key))) contextFail("INVALID_REQUEST");
+  return value;
+}
+function contextText(value: unknown, maximum: number, empty = false): string {
+  if (typeof value !== "string" || value.length > maximum || /[\u0000-\u001f\u007f]/u.test(value)) contextFail("INVALID_REQUEST");
+  const result = value.trim();
+  if (!empty && !result) contextFail("INVALID_REQUEST");
+  return result;
+}
+/** The public route's existing 4–10 alphanumeric store-ID rule and snapshot limits.
+ * Pure selection validation; no store lookup, shipping policy or public route dependency.
+ */
+export function validateCommerceStoreSelection(value: unknown) {
+  try {
+    const store = contextFields(value, ["id", "name", "address"]);
+    const id = contextText(store.id, 10), name = contextText(store.name, 30), address = contextText(store.address, 100);
+    if (!/^[0-9A-Za-z]{4,10}$/.test(id)) contextFail("INVALID_STORE");
+    return { id, name, address };
+  } catch { return contextFail("INVALID_STORE"); }
+}
+/** Shared mode-safe parser; existing Coffee studio normalization is preserved. */
+export function normalizeCommerceCheckoutContext(raw: unknown): CommerceCheckoutOrderContext {
+  if (!isCartRecord(raw)) contextFail("INVALID_REQUEST");
+  const mode = raw.orderMode;
+  const allowed = mode === "studio_pickup" ? ["orderMode", "customer", "studioPickup", "creditApplied", "payment"]
+    : mode === "711_cod" ? ["orderMode", "customer", "store", "creditApplied", "payment", "paymentMethod"]
+    : mode === "home_delivery" ? ["orderMode", "customer", "deliveryAddress", "paymentMethod", "creditApplied"]
+    : contextFail("INVALID_REQUEST");
+  const context = contextFields(raw, allowed);
+  if (context.creditApplied !== undefined && context.creditApplied !== 0) contextFail("INVALID_REQUEST");
+  const customer = contextFields(context.customer, ["name", "phone", "email", "note"]);
+  const normalized = { name: contextText(customer.name, 40), phone: contextText(customer.phone, 20),
+    email: contextText(customer.email, 120, true), note: contextText(customer.note, 200, true) };
+  if (!/^09\d{8}$/.test(normalized.phone) || (normalized.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized.email))) contextFail("INVALID_REQUEST");
+  if (mode === "studio_pickup") {
+    if (context.payment !== undefined && context.payment !== "pickup_confirmation") contextFail("PAYMENT_NOT_SUPPORTED");
+    const pickup = contextFields(context.studioPickup, ["preferredDate"]);
+    const preferredDate = pickup.preferredDate;
+    if (typeof preferredDate !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(preferredDate)
+      || !Number.isFinite(Date.parse(preferredDate)) || new Date(preferredDate).toISOString().slice(0, 10) !== preferredDate) contextFail("INVALID_PICKUP_DATE");
+    return { orderMode: "studio_pickup", customer: normalized, studioPickup: { preferredDate }, creditApplied: 0 };
+  }
+  if (mode === "711_cod") {
+    if ((context.payment !== undefined && context.payment !== "cash_on_delivery")
+      || (context.paymentMethod !== undefined && context.paymentMethod !== "cash_on_delivery")) contextFail("PAYMENT_NOT_SUPPORTED");
+    return { orderMode: "711_cod", customer: normalized, store: validateCommerceStoreSelection(context.store),
+      payment: "cash_on_delivery", creditApplied: 0 };
+  }
+  if (context.paymentMethod !== "atm_transfer" && context.paymentMethod !== "cash_on_delivery") contextFail("PAYMENT_NOT_SUPPORTED");
+  let address: DeliveryAddress;
+  try {
+    const selected = contextFields(context.deliveryAddress, ["recipientName", "phone", "postalCode", "city", "district", "addressLine"]);
+    address = validateDeliveryAddress(selected);
+  } catch { return contextFail("INVALID_ADDRESS"); }
+  return { orderMode: "home_delivery", customer: normalized, deliveryAddress: address,
+    paymentMethod: context.paymentMethod, creditApplied: 0 };
 }
