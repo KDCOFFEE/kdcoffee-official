@@ -1,4 +1,6 @@
 import { hasOrderCompletion } from "./orderCompletion";
+import { cancelOrderCanonically } from "./orderCancellation";
+import { appendFulfillmentCancellationProjection } from "./fulfillmentCancellationProjection";
 import { resolveOrderRewardBasis } from "./orderRewardBasis";
 import { validSevenElevenShipmentId } from "./sevenElevenEmailSummary";
 import { trackLogisticsEmail } from "./logisticsTracking";
@@ -10,7 +12,7 @@ import { updateStoredOrderSafely, withStoredOrderUpdateLock, readOrder, type Sto
 import { assessOrderInventoryTransaction } from "./orderInventoryPolicy";
 import type { HomeDeliveryPaymentDetails } from "./homeDeliveryPayment";
 import { atomicWriteJson, withFileLock } from "./jsonFileStore";
-import { cancelOrReverseRetailPromotionRewards, handleCanonicalOrderOutcome, handleReferralQualificationOrderOutcome } from "./membershipCommerce";
+import { handleCanonicalOrderOutcome } from "./membershipCommerce";
 import type { RetailPromotionOrderSnapshot } from "./retailPromotionAttribution";
 import { getFulfillmentSettingsFile, getFulfillmentStateFile } from "./storagePaths";
 import { parseSevenElevenEmail, type FulfillmentEmailEvidence, type ParsedFulfillmentEvidence } from "./sevenElevenEmailParser";
@@ -221,12 +223,7 @@ async function mirrorEventToOrder(order: StoredOrder, event: FulfillmentEvent, r
 }
 
 async function runConsequence(order: StoredOrder, event: FulfillmentEvent): Promise<"completed" | "failed"> {
-  if (event.state === "cancelled") {
-    const memberId = typeof order.member?.memberId === "string" ? order.member.memberId : undefined;
-    if (memberId) await handleReferralQualificationOrderOutcome({ memberId, orderId: order.orderNumber, outcome: "cancelled", idempotencyKey: `fulfillment:${event.eventId}`, now: new Date(event.occurredAt) });
-    if (!memberId && order.retailPromotionAttribution) await cancelOrReverseRetailPromotionRewards({ orderId: order.orderNumber, outcome: "cancelled", idempotencyKey: `fulfillment:${event.eventId}:retail-promotion`, now: new Date(event.occurredAt) });
-    return "completed";
-  }
+  if (event.state === "cancelled") throw new FulfillmentError("取消後果只可由 canonical cancellation 執行", 409);
   if (event.state !== "completed" && event.state !== "uncollected") return "completed";
   const basis = resolveOrderRewardBasis(order);
   const basePV = basis.coffeeBasePV, effectivePV = basis.coffeeEffectivePV;
@@ -261,6 +258,7 @@ function review(store: FulfillmentStore, parsed: ParsedFulfillmentEvidence, reas
 }
 
 async function appendCanonicalEvent(input: { order: StoredOrder; state: FulfillmentState; source: FulfillmentSource; sourceFingerprint: string; sourceReference?: string; externalOrderId?: string; externalShipmentId?: string; occurredAt: string; actor?: string; note?: string; expectedRevision?: number; delivered?: boolean; codCollected?: boolean; persistLockedOrder?: (order: StoredOrder) => Promise<StoredOrder>; filePath: string; settings: LogisticsSettings; now: Date }): Promise<{ event?: FulfillmentEvent; record: FulfillmentRecord; replayed: boolean; ignored: boolean }> {
+  if (input.state === "cancelled") throw new FulfillmentError("取消必須由 canonical cancellation 執行", 409);
   if (!input.persistLockedOrder) return withStoredOrderUpdateLock(input.order.orderNumber, (order, persistLockedOrder) => appendCanonicalEvent({ ...input, order, persistLockedOrder }));
   return withFileLock(input.filePath, async () => {
     if (hasOrderCompletion(input.order) && input.state !== 'completed' && input.source === 'admin') throw new FulfillmentError('已完成訂單不可被後續履約事件改寫', 409);
@@ -454,11 +452,45 @@ export async function processSevenElevenEmail(evidence: FulfillmentEmailEvidence
   return { parsed, mutated: !result.ignored, review: false, ...result };
 }
 
+
+/** Delegate before taking ordinary fulfillment mutation locks. confirmed is not shipment-void evidence. */
+export async function cancelAdminFulfillmentOrder(input: {
+  orderId: string; expectedRevision: number; confirmed?: boolean; note?: string;
+  filePath?: string; now?: Date; actor?: string;
+}) {
+  if (input.confirmed !== true) throw new FulfillmentError("此操作需要再次確認");
+  const filePath = input.filePath ?? getFulfillmentStateFile();
+  const now = input.now ?? new Date();
+  try {
+    const result = await cancelOrderCanonically({
+      orderNumber: input.orderId, cancellationReason: input.note?.trim() || "後台履約取消訂單",
+      cancelledBy: "admin", idempotencyKey: `order-cancel:${input.orderId}`,
+      now: () => now, fulfillmentFilePath: filePath,
+      authorize: async order => {
+        if (order.status === "cancelled") return; // A successful prior cancellation may need projection repair.
+        await withFileLock(filePath, async () => {
+          const store = await readFulfillmentStore(filePath);
+          const record = fulfillmentRecordForOrder(store, order);
+          if (record.revision !== input.expectedRevision) throw new FulfillmentError("訂單履約狀態已更新，請重新整理後再試", 409);
+          if (record.currentState === "completed") throw new FulfillmentError("已完成訂單不可取消", 409);
+        }, { timeoutMs: 20_000 });
+      },
+    });
+    if (!result.ok) throw new FulfillmentError(result.warning || "取消後果尚未完成", 500);
+    return appendFulfillmentCancellationProjection({ orderNumber: input.orderId, filePath, now });
+  } catch (error) {
+    if (error instanceof FulfillmentError) throw error;
+    const status = error instanceof Error && "status" in error && typeof error.status === "number" ? error.status : 500;
+    throw new FulfillmentError(error instanceof Error ? error.message : "訂單取消失敗", status);
+  }
+}
+
 export async function recordAdminFulfillmentEvent(input: { orderId: string; state: FulfillmentState; expectedRevision: number; confirmed?: boolean; delivered?: boolean; codCollected?: boolean; note?: string; filePath?: string; settingsFilePath?: string; now?: Date; actor?: string }) {
   if (!(fulfillmentStates as readonly string[]).includes(input.state)) throw new FulfillmentError("履約狀態不正確");
   if (["completed", "uncollected", "cancelled"].includes(input.state) && input.confirmed !== true) throw new FulfillmentError("此操作需要再次確認");
   const order = await readOrder(input.orderId);
   if (!order) throw new FulfillmentError("找不到訂單", 404);
+  if (input.state === "cancelled") return cancelAdminFulfillmentOrder(input);
   const now = input.now ?? new Date();
   const settings = await readLogisticsSettings(input.settingsFilePath);
   const sourceFingerprint = createHash("sha256").update(`admin:${input.orderId}:${input.state}:${input.expectedRevision}`).digest("hex");

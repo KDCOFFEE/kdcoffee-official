@@ -1,5 +1,6 @@
 import {
   assertOrderStatusTransition,
+  OrderStatusTransitionError,
   normalizeCancellationReason,
   readOrder,
   withStoredOrderUpdateLock,
@@ -19,6 +20,8 @@ import {
   type InventoryReturnMetadata,
 } from "@/lib/orderInventoryReturn";
 import { getWebsiteDataFile } from "@/lib/storagePaths";
+import { hasOrderCompletion } from "./orderCompletion";
+import { appendFulfillmentCancellationProjection } from "./fulfillmentCancellationProjection";
 
 export type CancellationActor = "admin" | "member";
 
@@ -45,6 +48,7 @@ type CancellationRuntime = {
   websiteFile?: string;
   membershipStateFilePath?: string;
   membershipRulesFilePath?: string;
+  fulfillmentFilePath?: string;
   sendNotification?: (
     text: string,
     options?: { attempts?: number; timeoutMs?: number; retryDelayMs?: number; fetcher?: typeof fetch },
@@ -58,7 +62,7 @@ type CancelOrderInput = CancellationRuntime & {
   idempotencyKey: string;
   trackingNumber?: unknown;
   confirmedExternalShipmentVoid?: boolean;
-  authorize?: (order: StoredOrder) => void;
+  authorize?: (order: StoredOrder) => void | Promise<void>;
 };
 
 function returnFailureMetadata(
@@ -95,6 +99,29 @@ export class MemberOrderCancellationError extends Error {
   }
 }
 
+
+export class UnsupportedOrderCancellationError extends OrderStatusTransitionError {
+  readonly code: string;
+  constructor(code: string) {
+    super(code);
+    this.name = "UnsupportedOrderCancellationError";
+    this.code = code;
+  }
+}
+
+function assertCancellationDomainSupported(order: StoredOrder) {
+  for (const line of Array.isArray(order.items) ? order.items : []) {
+    if (!line || typeof line !== "object") throw new UnsupportedOrderCancellationError("INVALID_CANCELLATION_DOMAIN");
+    if (!Object.hasOwn(line, "domain")) continue; // Historical Coffee lines.
+    if (line.domain === "store") throw new UnsupportedOrderCancellationError("MIXED_CANCELLATION_NOT_SUPPORTED");
+    if (line.domain !== "coffee") throw new UnsupportedOrderCancellationError("INVALID_CANCELLATION_DOMAIN");
+  }
+  // Receipt-backed J.6F.3 transactions cannot use the legacy changes-based restore.
+  if (order.inventoryTransaction?.protocolVersion === 1) {
+    throw new UnsupportedOrderCancellationError("TRANSACTION_CANCELLATION_NOT_SUPPORTED");
+  }
+}
+
 /**
  * The single canonical order-cancellation pipeline used by Admin and members.
  * It preserves the established website-file -> order-file lock order and reuses
@@ -109,14 +136,22 @@ export async function cancelOrderCanonically(input: CancelOrderInput): Promise<C
     options?: { attempts?: number; timeoutMs?: number; retryDelayMs?: number; fetcher?: typeof fetch },
   ) => (await import("@/lib/internalLineNotifications")).sendInternalLineNotification(text, options));
 
-  const result = await withOrderGate(getOrdersDir(), input.orderNumber, () => withFileLock(
+  return withOrderGate(getOrdersDir(), input.orderNumber, async () => {
+  const result = await withFileLock(
     websiteFile,
     () => withStoredOrderUpdateLock(input.orderNumber, async (latestOrder, persistOrder) => {
-      input.authorize?.(latestOrder);
+      await input.authorize?.(latestOrder);
+      assertCancellationDomainSupported(latestOrder);
+      if (hasOrderCompletion(latestOrder)) assertOrderStatusTransition(latestOrder, "cancelled");
 
       // A prior attempt may have saved cancellation before a later consequence
       // failed. Retrying resumes only idempotent consequences below.
       if (latestOrder.status === "cancelled") {
+        if (latestOrder.canonicalCancellation?.state === "completed" ||
+          (!latestOrder.canonicalCancellation && latestOrder.inventoryReturn?.state !== "return_failed" &&
+            latestOrder.inventoryReturn?.state !== "return_pending")) {
+          return { ok: true, order: latestOrder, alreadyCancelled: true, projectionOnly: true };
+        }
         const recovered = await returnCommittedInventoryForCancellation({
           order: latestOrder, websiteFile, persistOrder: async next => { await persistOrder(next); }, websiteLockHeld: true, now,
         });
@@ -144,6 +179,7 @@ export async function cancelOrderCanonically(input: CancelOrderInput): Promise<C
         cancelledBy: input.cancelledBy,
         cancellationReason,
         cancellationIdempotencyKey: input.idempotencyKey,
+        canonicalCancellation: { state: "pending", operationId: `order-cancel:${input.orderNumber}` },
         ...(request?.state === "requires_manual_shipment_void"
           ? { memberCancellationRequest: { ...request, state: "completed", completedAt: updatedAt } }
           : {}),
@@ -191,7 +227,13 @@ export async function cancelOrderCanonically(input: CancelOrderInput): Promise<C
       return { ok: true, order, alreadyCancelled: false };
     }),
     { timeoutMs: 15_000, commerceLock: { rank: 2, key: "0000:coffee:" + websiteFile } },
-  ));
+  );
+
+  if (!result.ok) return result; // Never project an incomplete cancellation.
+  if ("projectionOnly" in result && result.projectionOnly) {
+    const projection = await appendFulfillmentCancellationProjection({ orderNumber: input.orderNumber, filePath: input.fulfillmentFilePath, now: now() });
+    return { ...result, order: projection.order };
+  }
 
   const stableKey = `order-cancel:${input.orderNumber}`;
   await settleCreditReservationForOrder({
@@ -216,6 +258,7 @@ export async function cancelOrderCanonically(input: CancelOrderInput): Promise<C
       });
     } catch (error) {
       console.error(`Order ${input.orderNumber} cancelled but referral qualification sync failed:`, error);
+      throw error; // Keep pending; do not falsely publish a completed projection.
     }
   }
   if (!memberId && result.order.retailPromotionAttribution) {
@@ -238,7 +281,16 @@ export async function cancelOrderCanonically(input: CancelOrderInput): Promise<C
     rulesFilePath: input.membershipRulesFilePath,
   });
 
-  return result;
+  await withStoredOrderUpdateLock(input.orderNumber, async (latest, persistOrder) => {
+    await persistOrder({ ...latest, canonicalCancellation: {
+      state: "completed", operationId: stableKey, completedAt: now().toISOString(),
+    } });
+  });
+  const projection = await appendFulfillmentCancellationProjection({
+    orderNumber: input.orderNumber, filePath: input.fulfillmentFilePath, now: now(),
+  });
+  return { ...result, order: projection.order };
+  });
 }
 
 export async function requestManualShipmentVoid(input: CancellationRuntime & {

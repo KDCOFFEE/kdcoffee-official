@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { isAdminAuthenticated } from "@/lib/adminAuth";
-import { associateExternalFulfillment, confirmHomeDeliveryAtmPayment, evaluatePickupDeadlines, FulfillmentError, fulfillmentRecordForOrder, readFulfillmentStore, recordAdminFulfillmentEvent } from "@/lib/fulfillment";
+import { cancelAdminFulfillmentOrder, associateExternalFulfillment, confirmHomeDeliveryAtmPayment, evaluatePickupDeadlines, FulfillmentError, fulfillmentRecordForOrder, readFulfillmentStore, recordAdminFulfillmentEvent } from "@/lib/fulfillment";
 import { readOrder } from "@/lib/adminOrders";
 import type { FulfillmentState } from "@/lib/fulfillmentTypes";
 import { applyOwnerOrderException } from "@/lib/ownerOrderExceptions";
@@ -40,7 +40,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ or
       const reason = String(body.reason || "").trim();
       if (state === "uncollected" && !["門市確認逾期未取", "顧客確認不取貨", "物流退回確認", "其他人工確認"].includes(reason)) throw new FulfillmentError("請選擇人工確認未取貨的原因");
       const note = [reason, String(body.note || "").trim()].filter(Boolean).join("｜");
-      record = (await recordAdminFulfillmentEvent({ orderId: orderNumber, state, expectedRevision: Number(body.expectedRevision), confirmed: body.confirmed === true, delivered: body.delivered === true, codCollected: body.codCollected === true, note, actor: "後台管理員" })).record;
+      if (state === "cancelled") record = (await cancelAdminFulfillmentOrder({ orderId: orderNumber, expectedRevision: Number(body.expectedRevision), confirmed: body.confirmed === true, note, actor: "後台管理員" })).record;
+      else record = (await recordAdminFulfillmentEvent({ orderId: orderNumber, state, expectedRevision: Number(body.expectedRevision), confirmed: body.confirmed === true, delivered: body.delivered === true, codCollected: body.codCollected === true, note, actor: "後台管理員" })).record;
     }
     return NextResponse.json({ record });
   } catch (error) {
