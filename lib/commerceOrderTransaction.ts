@@ -9,7 +9,7 @@ import { createCommerceTransactionCoordinator } from "./commerceTransactionCoord
 import { createCommerceTransactionJournal } from "./commerceTransactionJournal";
 import { withCommerceLockPlan } from "./commerceLocks";
 import { createCoffeeInventoryParticipant, createStoreInventoryParticipant } from "./inventoryParticipants";
-import { inventoryOperationKey, normalizeInventoryDemand } from "./inventoryReceipts";
+import { normalizeInventoryDemand } from "./inventoryReceipts";
 import { orderIdempotencyResource, isValidIdempotencyKey, createIdempotencyRequestHash, findOrderByIdempotencyKey } from "./orderIdempotency";
 import { MAX_ORDER_NUMBER_ATTEMPTS } from "./orderFiles";
 import { makeOrderNumber } from "./orders";
@@ -17,6 +17,10 @@ import { getOrdersDir, getWebsiteDataFile, getStorageRootContract } from "./stor
 import type { TransactionIntent, TransactionResult } from "./commerceTransactionTypes";
 import { deriveCheckoutFinancialFacts, resolveTrustedCheckoutOwnership, AdmissionValidationError, type AdmissionReason, type TrustedCheckoutIdentity, type CheckoutOwnership } from "./commerceCheckoutAdmission";
 import { isStoreCommerceEnabled } from "./storeCommerceCapability";
+import { commerceOrderTransactionIdForCanonicalKey } from "./commerceOrderTransactionIdentity";
+import { createProtocolV1SelectedFactsFingerprint, type PublicCheckoutOwnerBinding } from "./publicCheckoutContract";
+import { createCheckoutAttemptBindingSnapshot, validateCheckoutAttemptBindingSnapshot,
+  compareCheckoutAttemptBinding, compareHistoricalV1CheckoutAttempt, type CheckoutAttemptBindingSnapshot } from "./checkoutAttemptBinding";
 
 export type CommerceOrderTransactionErrorCode = "INVALID_REQUEST" | "IDEMPOTENCY_CONFLICT"
   | "MIXED_CREDIT_ALLOCATION_UNRESOLVED" | "SUBSCRIPTION_NOT_SUPPORTED" | "REVIEW_REQUIRED" | "STORAGE_UNAVAILABLE" | AdmissionReason;
@@ -68,7 +72,7 @@ function request(raw: unknown): AnyCommerceOrderTransactionRequest {
 /** Existing transaction journal is the durable intent registry; no second registry is introduced. */
 export function commerceOrderTransactionId(idempotencyKey: string): string {
   if (!isValidIdempotencyKey(idempotencyKey)) return fail("INVALID_REQUEST");
-  return "commerce-order:" + inventoryOperationKey(idempotencyKey.toLowerCase());
+  return commerceOrderTransactionIdForCanonicalKey(idempotencyKey.toLowerCase());
 }
 type CoordinatorOptions = Parameters<typeof createCommerceTransactionCoordinator>[0];
 export function createCommerceOrderTransactionService(options: {
@@ -89,7 +93,7 @@ export function createCommerceOrderTransactionService(options: {
       || getStorageRootContract().root !== storage.root) return fail("STORAGE_UNAVAILABLE");
   }
   async function intentFor(input: AnyCommerceOrderTransactionRequest, hash: string, orderNumber: string,
-    resolution: CommerceOrderResolution, owner?: CheckoutOwnership): Promise<TransactionIntent> {
+    resolution: CommerceOrderResolution, owner?: CheckoutOwnership, binding?: CheckoutAttemptBindingSnapshot): Promise<TransactionIntent> {
     const intents = participants.filter(participant => resolution.inventoryDemand.some(item => item.domain === participant.domain))
       .map(participant => ({ domain: participant.domain, registryRank: participant.registryRank,
         // Preserve existing adapter authorities: global Coffee SKU ID, StoreProduct ID.
@@ -112,6 +116,7 @@ export function createCommerceOrderTransactionService(options: {
     return { ...base, finalStatus: derived.finalStatus,
       order: { orderNumber, createdAt: at.toISOString(), orderMode: context.orderMode, customer: context.customer,
         ...(owner.kind === "member" ? { member: owner.member } : { member: null, guestOrderAccess: owner.guestOrderAccess }),
+        ...(binding ? { checkoutAttemptBinding: binding } : {}),
         ...derived.facts, idempotencyKey: input.idempotencyKey, idempotencyRequestHash: hash, items, subtotal } };
 
   }
@@ -121,8 +126,22 @@ export function createCommerceOrderTransactionService(options: {
     try { owner = trustedIdentity === undefined ? undefined : resolveTrustedCheckoutOwnership(trustedIdentity); }
     catch (error) { if (error instanceof AdmissionValidationError) return fail(error.reason); throw error; }
     if (input.orderContext.orderMode !== "studio_pickup" && !owner) return fail("INVALID_IDENTITY");
-    const hash = createIdempotencyRequestHash({ items: input.items, orderContext: input.orderContext,
-      ...(owner ? { ownership: owner } : {}) });
+    // B3B applies only to Store-containing owned internal V1 requests. Coffee-only
+    // and ownerless F3 retain their exact historical hash contract.
+    const stableOwner: PublicCheckoutOwnerBinding | undefined = owner?.kind === "member"
+      ? { kind: "member", memberId: owner.member.memberId }
+      : owner?.kind === "guest" ? { kind: "guest", canonicalAttemptKey: input.idempotencyKey, tokenHash: owner.guestOrderAccess.tokenHash } : undefined;
+    const binding = stableOwner && input.items.some(item => item.domain === "store")
+      ? createCheckoutAttemptBindingSnapshot({
+          canonicalAttemptKey: input.idempotencyKey, ownerBinding: stableOwner,
+          selectedFactsFingerprint: createProtocolV1SelectedFactsFingerprint({
+            canonicalAttemptKey: input.idempotencyKey, ownerBinding: stableOwner,
+            items: input.items, orderContext: input.orderContext,
+          }).fingerprint,
+        }) : undefined;
+    const hash = binding?.selectedFactsFingerprint ?? createIdempotencyRequestHash({
+      items: input.items, orderContext: input.orderContext, ...(owner ? { ownership: owner } : {}),
+    });
     const transactionId = commerceOrderTransactionId(input.idempotencyKey);
     const journal = createCommerceTransactionJournal(orderDir, transactionId);
     const readIntent = async () => {
@@ -130,7 +149,28 @@ export function createCommerceOrderTransactionService(options: {
       if (!events.length) return null;
       const first = events[0].event;
       if (first.type !== "PREPARED" || first.intent.transactionId !== transactionId) return fail("REVIEW_REQUIRED");
-      if (first.intent.requestHash !== hash) return fail("IDEMPOTENCY_CONFLICT");
+      if (binding) {
+        const durable = first.intent;
+        if (!isCartRecord(durable.order)) return fail("REVIEW_REQUIRED");
+        // Presence claims the new format, including null/malformed values.
+        // Never repair it or fall back to the historical compatibility path.
+        const comparison = Object.hasOwn(durable.order, "checkoutAttemptBinding") ? (() => {
+          const snapshot = validateCheckoutAttemptBindingSnapshot(durable.order.checkoutAttemptBinding);
+          if (durable.requestHash !== snapshot.selectedFactsFingerprint
+            || durable.order.idempotencyKey !== snapshot.canonicalAttemptKey
+            || (Object.hasOwn(durable.order, "idempotencyRequestHash") && durable.order.idempotencyRequestHash !== durable.requestHash)) return fail("REVIEW_REQUIRED");
+          return compareCheckoutAttemptBinding({
+            currentCanonicalAttemptKey: input.idempotencyKey,
+            currentSelectedFactsFingerprint: binding.selectedFactsFingerprint,
+            currentOwnerBinding: stableOwner, durableSnapshot: snapshot,
+          });
+        })() : compareHistoricalV1CheckoutAttempt({
+          intent: durable, currentRequest: input, currentOwnerBinding: stableOwner,
+        });
+        if (comparison.kind === "OWNER_MISMATCH") return fail("INVALID_IDENTITY");
+        if (comparison.kind === "SELECTION_CONFLICT") return fail("IDEMPOTENCY_CONFLICT");
+        if (comparison.kind !== "MATCH" && comparison.kind !== "MATCH_LEGACY_V1") return fail("REVIEW_REQUIRED");
+      } else if (first.intent.requestHash !== hash) return fail("IDEMPOTENCY_CONFLICT");
       return first.intent;
     };
     try {
@@ -142,7 +182,7 @@ export function createCommerceOrderTransactionService(options: {
         const resolution = await resolveCommerceOrderItems(input.items);
         await options.afterResolve?.(resolution);
         sameStorage();
-        intent = await intentFor(input, hash, generateOrderNumber(), resolution, owner);
+        intent = await intentFor(input, hash, generateOrderNumber(), resolution, owner, binding);
       }
       for (let attempt = 0; attempt < MAX_ORDER_NUMBER_ATTEMPTS; attempt++) {
         const plannedIntent: TransactionIntent = intent;
@@ -166,7 +206,7 @@ export function createCommerceOrderTransactionService(options: {
             // Revalidate BOTH domains under their locks before ANY APPLY or PREPARED event.
             const resolution = await resolveCommerceOrderItems(input.items);
             sameStorage();
-            canonical = await intentFor(input, hash, plannedIntent.orderNumber, resolution, owner);
+            canonical = await intentFor(input, hash, plannedIntent.orderNumber, resolution, owner, binding);
           }
           // Durable PREPARED intent binds this attempt's locked authoritative price.
           // Recovery retains that admitted price; later Admin repricing does not create a new attempt.

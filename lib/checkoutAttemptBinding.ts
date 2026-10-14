@@ -3,7 +3,7 @@ import { canonicalPublicCheckoutAttemptKey, type PublicCheckoutOwnerBinding } fr
 import { isCartRecord, cartIdentifier } from "./commerceCart";
 import { validateCommerceOrderInput, normalizeCommerceCheckoutContext } from "./commerceOrderTypes";
 import { resolveTrustedCheckoutOwnership, type CheckoutOwnership } from "./commerceCheckoutAdmission";
-import { commerceOrderTransactionId } from "./commerceOrderTransaction";
+import { commerceOrderTransactionIdForCanonicalKey as commerceOrderTransactionId } from "./commerceOrderTransactionIdentity";
 import { createIdempotencyRequestHash } from "./orderIdempotency";
 
 export type CheckoutAttemptBindingSnapshot = Readonly<{

@@ -139,6 +139,34 @@ function storeContext(input: Record<string, unknown>): CommerceCheckoutOrderCont
   try { return normalizeCommerceCheckoutContext(selected); }
   catch { return fail("INVALID_CONTEXT"); }
 }
+/** Pure shared B1 identity construction from internal selections, never live admission.
+ * Public field/quote validation stays in the classifier; transaction callers
+ * supply normalized selections and derive the stable owner from trusted identity.
+ */
+export function createProtocolV1SelectedFactsFingerprint(input: {
+  canonicalAttemptKey: unknown; ownerBinding: unknown; items: unknown; orderContext: unknown;
+}): { selectedFacts: PublicCheckoutSelectedFacts; fingerprint: string } {
+  const canonicalAttemptKey = canonicalPublicCheckoutAttemptKey(input.canonicalAttemptKey);
+  const items = validateCommerceOrderInput(input.items).sort((a, b) => {
+    const left = JSON.stringify(a), right = JSON.stringify(b); return left < right ? -1 : left > right ? 1 : 0;
+  });
+  if (!items.some(item => item.domain === "store")) return fail("INVALID_ITEM");
+  const context = normalizeCommerceCheckoutContext(input.orderContext);
+  const selectedFacts: PublicCheckoutSelectedFacts = {
+    contractVersion: 1, canonicalAttemptKey, requestFamily: "STORE_CONTAINING_PROTOCOL_V1",
+    ownerBinding: ownerBinding(input.ownerBinding, canonicalAttemptKey), items,
+    orderMode: context.orderMode, customer: context.customer,
+    store: context.orderMode === "711_cod" ? context.store : null,
+    studioPickup: context.orderMode === "studio_pickup" ? context.studioPickup : null,
+    deliveryAddress: context.orderMode === "home_delivery" ? context.deliveryAddress : null,
+    paymentMethod: context.orderMode === "studio_pickup" ? "pickup_confirmation"
+      : context.orderMode === "711_cod" ? "cash_on_delivery" : context.paymentMethod,
+    creditIntent: { requestedCredit: 0 }, subscriptionIntent: { presence: "absent" },
+  };
+  const fingerprint = createHash("sha256").update(JSON.stringify(selectedFacts)).digest("hex");
+  return { selectedFacts, fingerprint };
+}
+
 /** Pure contract foundation, NOT admission or dispatch. No catalog/capability,
  * environment, filesystem, network, locks or durable writes. Browser ownership
  * and derived facts are rejected; trusted snapshots are deliberately not inputs.
@@ -169,18 +197,9 @@ export function classifyPublicCheckoutRequest(raw: unknown, trustedOwner?: unkno
       return { family: "LEGACY_COFFEE", ...identity };
     }
     const normalized = storeItems(lines), context = storeContext(raw);
-    const selectedFacts: PublicCheckoutSelectedFacts = {
-      contractVersion: 1, canonicalAttemptKey, requestFamily: "STORE_CONTAINING_PROTOCOL_V1",
-      ownerBinding: ownerBinding(trustedOwner, canonicalAttemptKey), items: normalized.items,
-      orderMode: context.orderMode, customer: context.customer,
-      store: context.orderMode === "711_cod" ? context.store : null,
-      studioPickup: context.orderMode === "studio_pickup" ? context.studioPickup : null,
-      deliveryAddress: context.orderMode === "home_delivery" ? context.deliveryAddress : null,
-      paymentMethod: context.orderMode === "studio_pickup" ? "pickup_confirmation"
-        : context.orderMode === "711_cod" ? "cash_on_delivery" : context.paymentMethod,
-      creditIntent: { requestedCredit: 0 }, subscriptionIntent: { presence: "absent" },
-    };
-    const fingerprint = createHash("sha256").update(JSON.stringify(selectedFacts)).digest("hex");
+    const { selectedFacts, fingerprint } = createProtocolV1SelectedFactsFingerprint({
+      canonicalAttemptKey, ownerBinding: trustedOwner, items: normalized.items, orderContext: context,
+    });
     return { family: "STORE_CONTAINING_PROTOCOL_V1", ...identity,
       selectedFacts, fingerprint, admissionItems: normalized.admissionItems };
   } catch (error) {
