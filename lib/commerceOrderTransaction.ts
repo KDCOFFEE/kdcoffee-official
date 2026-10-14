@@ -1,6 +1,7 @@
 import "server-only";
 import { promises as fs } from "node:fs";
 import path from "node:path";
+import { isDeepStrictEqual } from "node:util";
 import { isCartRecord } from "./commerceCart";
 import { validateCommerceOrderInput, CommerceOrderResolutionError, type CommerceOrderInputItem, normalizeCommerceCheckoutContext, CheckoutContextValidationError, type CommerceCheckoutOrderContext } from "./commerceOrderTypes";
 import { resolveCommerceOrderItems, toPersistableCommerceOrderLines, type CommerceOrderResolution } from "./commerceOrderResolver";
@@ -8,9 +9,9 @@ import { commerceOrderMoney } from "./commerceOrderPricing";
 import { createCommerceTransactionCoordinator } from "./commerceTransactionCoordinator";
 import { createCommerceTransactionJournal } from "./commerceTransactionJournal";
 import { withCommerceLockPlan } from "./commerceLocks";
-import { resolveCheckoutAttemptEvidence } from "./checkoutAttemptResolver";
+import { resolveCheckoutAttemptEvidence, resolveCheckoutAttemptRecoveryAuthority, type ProtocolV1RecoveryAuthority } from "./checkoutAttemptResolver";
 import { createCoffeeInventoryParticipant, createStoreInventoryParticipant } from "./inventoryParticipants";
-import { normalizeInventoryDemand } from "./inventoryReceipts";
+import { inventoryHash, normalizeInventoryDemand } from "./inventoryReceipts";
 import { orderIdempotencyResource, isValidIdempotencyKey, createIdempotencyRequestHash, findOrderByIdempotencyKey } from "./orderIdempotency";
 import { MAX_ORDER_NUMBER_ATTEMPTS } from "./orderFiles";
 import { makeOrderNumber } from "./orders";
@@ -81,6 +82,8 @@ export function createCommerceOrderTransactionService(options: {
   /** Trusted test/server instrumentation before locks, never a public request field. */
   afterResolve?: (resolution: CommerceOrderResolution) => Promise<void>;
   generateOrderNumber?: typeof makeOrderNumber;
+  /** Trusted server/test scheduling only; never accepted in request JSON. */
+  beforeRecoveryLocks?: () => Promise<void>;
 } = {}) {
   const now = options.now ?? (() => new Date()), generateOrderNumber = options.generateOrderNumber ?? makeOrderNumber;
   const storage = getStorageRootContract();
@@ -239,5 +242,98 @@ export function createCommerceOrderTransactionService(options: {
       return fail("REVIEW_REQUIRED");
     }
   }
-  return { create };
+
+  /** Existing B3B attempt only; no live admission, new intent or fresh fallback. */
+  async function recoverExisting(raw: unknown, trustedIdentity: TrustedCheckoutIdentity): Promise<CommerceOrderTransactionResult> {
+    const input = request(raw);
+    let owner: CheckoutOwnership;
+    try { owner = resolveTrustedCheckoutOwnership(trustedIdentity); }
+    catch (error) { if (error instanceof AdmissionValidationError) return fail(error.reason); throw error; }
+    const stableOwner: PublicCheckoutOwnerBinding = owner.kind === "member"
+      ? { kind: "member", memberId: owner.member.memberId }
+      : { kind: "guest", canonicalAttemptKey: input.idempotencyKey, tokenHash: owner.guestOrderAccess.tokenHash };
+    function compare(authority: ProtocolV1RecoveryAuthority) {
+      // Owner comparison precedes selection computation/conflict disclosure.
+      const comparison = compareCheckoutAttemptBinding({
+        currentCanonicalAttemptKey: input.idempotencyKey, currentOwnerBinding: stableOwner,
+        currentSelectedFactsFingerprint: authority.selectedFactsFingerprint,
+        durableSnapshot: createCheckoutAttemptBindingSnapshot({
+          canonicalAttemptKey: authority.canonicalAttemptKey, ownerBinding: authority.owner.kind === "member" ? authority.owner
+            : { kind: "guest", canonicalAttemptKey: authority.owner.canonicalAttemptKey, tokenHash: authority.owner.tokenHash },
+          selectedFactsFingerprint: authority.selectedFactsFingerprint,
+        }),
+      });
+      if (comparison.kind === "OWNER_MISMATCH") return fail("INVALID_IDENTITY");
+      if (comparison.kind !== "MATCH") return fail("REVIEW_REQUIRED");
+      const fingerprint = createProtocolV1SelectedFactsFingerprint({
+        canonicalAttemptKey: input.idempotencyKey, ownerBinding: stableOwner, items: input.items, orderContext: input.orderContext,
+      }).fingerprint;
+      if (fingerprint !== authority.selectedFactsFingerprint) return fail("IDEMPOTENCY_CONFLICT");
+    }
+    async function authority(): Promise<ProtocolV1RecoveryAuthority> {
+      const value = await resolveCheckoutAttemptRecoveryAuthority({ orderDir, canonicalAttemptKey: input.idempotencyKey });
+      if (value.kind !== "PROTOCOL_V1_MEMBER" && value.kind !== "PROTOCOL_V1_GUEST") return fail("REVIEW_REQUIRED");
+      compare(value);
+      return value;
+    }
+    async function readDurable(value: ProtocolV1RecoveryAuthority): Promise<TransactionIntent> {
+      const first = (await createCommerceTransactionJournal(orderDir, value.transactionId).read())[0]?.event;
+      if (first?.type !== "PREPARED") return fail("REVIEW_REQUIRED");
+      const intent = first.intent, binding = validateCheckoutAttemptBindingSnapshot(intent.order.checkoutAttemptBinding);
+      if (intent.transactionId !== value.transactionId || intent.orderNumber !== value.orderNumber
+        || intent.requestHash !== value.requestHash || intent.order.idempotencyKey !== value.canonicalAttemptKey
+        || binding.canonicalAttemptKey !== value.canonicalAttemptKey || binding.selectedFactsFingerprint !== value.selectedFactsFingerprint
+        || (Object.hasOwn(intent.order, "idempotencyRequestHash") && intent.order.idempotencyRequestHash !== intent.requestHash)) return fail("REVIEW_REQUIRED");
+      if (value.kind === "PROTOCOL_V1_GUEST") {
+        if (!isDeepStrictEqual(intent.order.guestOrderAccess, { tokenHash: value.owner.tokenHash, createdAt: value.owner.createdAt })
+          || intent.order.member != null || !isDeepStrictEqual(binding.ownerBinding, {
+            kind: "guest", canonicalAttemptKey: value.canonicalAttemptKey, tokenHash: value.owner.tokenHash,
+          })) return fail("REVIEW_REQUIRED");
+      } else if (!isCartRecord(intent.order.member) || intent.order.member.memberId !== value.owner.memberId
+        || intent.order.guestOrderAccess != null || !isDeepStrictEqual(binding.ownerBinding, value.owner)) return fail("REVIEW_REQUIRED");
+      return intent;
+    }
+    try {
+      sameStorage();
+      const provisional = await authority(), planned = await readDurable(provisional);
+      const originalHash = inventoryHash(planned);
+      await options.beforeRecoveryLocks?.();
+      return await withCommerceLockPlan([
+        orderIdempotencyResource(orderDir, input.idempotencyKey), ...coordinator.resources(planned),
+      ], async (): Promise<CommerceOrderTransactionResult> => {
+        sameStorage();
+        const locked = await authority();
+        if (locked.kind !== provisional.kind || locked.transactionId !== provisional.transactionId
+          || locked.orderNumber !== provisional.orderNumber || locked.requestHash !== provisional.requestHash
+          || locked.selectedFactsFingerprint !== provisional.selectedFactsFingerprint
+          || !isDeepStrictEqual(locked.owner, provisional.owner)) return fail("REVIEW_REQUIRED");
+        const durable = await readDurable(locked);
+        if (inventoryHash(durable) !== originalHash) return fail("REVIEW_REQUIRED");
+        if (locked.journalState === "ABORTED") return {
+          state: "ABORTED", observations: {}, transactionId: durable.transactionId, orderNumber: durable.orderNumber,
+        };
+        const result = await coordinator.recoverLocked(durable);
+        let order: Record<string, unknown> | undefined;
+        if (result.state === "FINALIZED") {
+          const finalAuthority = await authority();
+          if (finalAuthority.transactionId !== locked.transactionId || finalAuthority.orderNumber !== locked.orderNumber
+            || finalAuthority.requestHash !== locked.requestHash || finalAuthority.journalState !== "FINALIZED"
+            || finalAuthority.orderState !== "inventory_committed" || !isDeepStrictEqual(finalAuthority.owner, locked.owner)
+            || inventoryHash(await readDurable(finalAuthority)) !== originalHash) return fail("REVIEW_REQUIRED");
+          const stored: unknown = JSON.parse(await fs.readFile(path.join(orderDir, durable.orderNumber + ".json"), "utf8"));
+          if (!isCartRecord(stored) || !isCartRecord(stored.inventoryTransaction)
+            || stored.orderNumber !== durable.orderNumber || stored.inventoryTransaction.protocolVersion !== 1
+            || stored.inventoryTransaction.transactionId !== durable.transactionId
+            || stored.inventoryTransaction.intentHash !== originalHash || stored.inventoryTransaction.state !== "inventory_committed"
+            || Object.entries(durable.order).some(([field, value]) => !isDeepStrictEqual(stored[field], value))) return fail("REVIEW_REQUIRED");
+          order = stored;
+        }
+        return { ...result, transactionId: durable.transactionId, orderNumber: durable.orderNumber, ...(order ? { order } : {}) };
+      }, { timeoutMs: 15000 });
+    } catch (error) {
+      if (error instanceof CommerceOrderTransactionError || error instanceof CommerceOrderResolutionError) throw error;
+      return fail("REVIEW_REQUIRED");
+    }
+  }
+  return { create, recoverExisting };
 }

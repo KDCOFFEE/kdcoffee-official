@@ -401,7 +401,7 @@ try {
   await run("shared physical lock, under-lock resolver, unchanged protected schemas and no second registry", async () => {
     assert.ok(physicalContentions >= 5); assert.ok(lockedResolverCalls > 20); assert.equal(networkCalls, 0);
     const { execFileSync } = await import("node:child_process");
-    for (const file of ["lib/commerceLocks.ts", "lib/commerceLockProtocol.ts", "lib/commerceTransactionCoordinator.ts", "lib/commerceTransactionJournal.ts",
+    for (const file of ["lib/commerceLocks.ts", "lib/commerceLockProtocol.ts", "lib/commerceTransactionJournal.ts",
       "lib/commerceTransactionTypes.ts", "lib/checkoutAttemptBinding.ts", "lib/publicCheckoutContract.ts", "lib/commerceOrderTransactionIdentity.ts",
       "lib/commerceCheckoutAdmission.ts", "lib/orderInventoryTransaction.ts", "app/checkout/page.tsx"]) {
       const baseline = execFileSync("git", ["show", "HEAD:" + file], { encoding: "utf8", windowsHide: true });

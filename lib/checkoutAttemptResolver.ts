@@ -7,6 +7,8 @@ import { createCommerceTransactionJournal } from "./commerceTransactionJournal";
 import { inventoryHash, normalizeInventoryDemand, type InventoryDemand } from "./inventoryReceipts";
 import { isCartRecord } from "./commerceCart";
 import type { TransactionIntent } from "./commerceTransactionTypes";
+import { validateCheckoutAttemptBindingSnapshot } from "./checkoutAttemptBinding";
+import { isDeepStrictEqual } from "node:util";
 
 export type CheckoutAttemptReviewReason = "UNSAFE_ORDER_SOURCE" | "ORDER_READ_LIMIT"
   | "CORRUPT_ORDER_SOURCE" | "MALFORMED_MATCHING_ORDER" | "UNSUPPORTED_ORDER_PROTOCOL"
@@ -186,15 +188,16 @@ function summarize(entries: Awaited<ReturnType<Journal["read"]>>, intent: Transa
  * mutation. This API does not authenticate, compare a current request, replay,
  * retry, recover, acquire locks or return full customer/order/ownership data.
  */
-export async function resolveCheckoutAttemptEvidence(input: {
+type CheckoutAttemptSource = { evidence: CheckoutAttemptEvidence; intent?: TransactionIntent; order?: Record<string, unknown> };
+async function resolveCheckoutAttemptSource(input: {
   orderDir: string; canonicalAttemptKey: unknown;
-}): Promise<CheckoutAttemptEvidence> {
+}): Promise<CheckoutAttemptSource> {
   const attempt = canonicalPublicCheckoutAttemptKey(input.canonicalAttemptKey);
   if (typeof input.orderDir !== "string" || !input.orderDir || input.orderDir.includes("\0")
     || !path.isAbsolute(input.orderDir) || path.resolve(input.orderDir) === path.parse(path.resolve(input.orderDir)).root) throw new CheckoutAttemptEvidenceInputError();
   const orderDir = path.resolve(input.orderDir), transactionId = commerceOrderTransactionIdForCanonicalKey(attempt);
   try {
-    if (!await directoryExists(orderDir, "UNSAFE_ORDER_SOURCE")) return { kind: "NONE", canonicalAttemptKey: attempt };
+    if (!await directoryExists(orderDir, "UNSAFE_ORDER_SOURCE")) return { evidence: { kind: "NONE", canonicalAttemptKey: attempt } };
     const entries = await journalEntries(createCommerceTransactionJournal(orderDir, transactionId), orderDir);
     let intent: TransactionIntent | undefined;
     if (entries.length) {
@@ -209,11 +212,11 @@ export async function resolveCheckoutAttemptEvidence(input: {
     if (v1.length > 1) return fail("EXTRA_CANONICAL_V1_ORDER");
     if (!intent || !summary) {
       if (v1.length) return fail("ORPHAN_V1_ORDER");
-      if (!legacy.length) return { kind: "NONE", canonicalAttemptKey: attempt };
+      if (!legacy.length) return { evidence: { kind: "NONE", canonicalAttemptKey: attempt } };
       const order = legacy[0].order;
-      return { kind: "LEGACY_ORDER", canonicalAttemptKey: attempt, orderNumber: order.orderNumber as string,
+      return { evidence: { kind: "LEGACY_ORDER", canonicalAttemptKey: attempt, orderNumber: order.orderNumber as string,
         persistedIdempotencyKey: order.idempotencyKey as string,
-        ...(typeof order.idempotencyRequestHash === "string" ? { requestHash: order.idempotencyRequestHash } : {}) };
+        ...(typeof order.idempotencyRequestHash === "string" ? { requestHash: order.idempotencyRequestHash } : {}) } };
     }
     if (v1.length && v1[0].file !== intent.orderNumber + ".json") return fail("EXTRA_CANONICAL_V1_ORDER");
     let orderState: "ABSENT" | "inventory_pending" | "inventory_committed" = "ABSENT";
@@ -229,12 +232,87 @@ export async function resolveCheckoutAttemptEvidence(input: {
     if (summary.state === "FINALIZED" && orderState !== "inventory_committed") return fail("FINALIZED_ORDER_MISSING_OR_UNCOMMITTED");
     if (summary.executionProgress && orderState === "ABSENT") return fail("EXECUTION_PROGRESS_WITHOUT_ORDER");
     if (summary.abortProgress && orderState === "inventory_committed") return fail("ABORT_WITH_COMMITTED_ORDER");
-    if (legacy.length) return { kind: "CONFLICT", canonicalAttemptKey: attempt, reason: "CROSS_PROTOCOL_DUAL_AUTHORITY",
-      legacyOrderNumber: legacy[0].order.orderNumber as string, transactionId, protocolOrderNumber: intent.orderNumber };
-    return { kind: "PROTOCOL_V1_ATTEMPT", canonicalAttemptKey: attempt, transactionId, orderNumber: intent.orderNumber,
-      requestHash: intent.requestHash, journalState: summary.state, orderState, orderPresent: orderState !== "ABSENT" };
+    if (legacy.length) return { evidence: { kind: "CONFLICT", canonicalAttemptKey: attempt, reason: "CROSS_PROTOCOL_DUAL_AUTHORITY",
+      legacyOrderNumber: legacy[0].order.orderNumber as string, transactionId, protocolOrderNumber: intent.orderNumber } };
+    return { intent, order: orders.declared, evidence: { kind: "PROTOCOL_V1_ATTEMPT", canonicalAttemptKey: attempt, transactionId, orderNumber: intent.orderNumber,
+      requestHash: intent.requestHash, journalState: summary.state, orderState, orderPresent: orderState !== "ABSENT" } };
   } catch (error) {
-    return { kind: "REVIEW_REQUIRED", canonicalAttemptKey: attempt,
-      reason: error instanceof EvidenceFailure ? error.reason : "UNSAFE_ORDER_SOURCE" };
+    return { evidence: { kind: "REVIEW_REQUIRED", canonicalAttemptKey: attempt,
+      reason: error instanceof EvidenceFailure ? error.reason : "UNSAFE_ORDER_SOURCE" } };
   }
+}
+
+/** Generic B2 projection retains its original shape and privacy boundary. */
+export async function resolveCheckoutAttemptEvidence(input: {
+  orderDir: string; canonicalAttemptKey: unknown;
+}): Promise<CheckoutAttemptEvidence> {
+  return (await resolveCheckoutAttemptSource(input)).evidence;
+}
+
+type RecoveryIdentity = Pick<Extract<CheckoutAttemptEvidence, { kind: "PROTOCOL_V1_ATTEMPT" }>,
+  "canonicalAttemptKey" | "transactionId" | "orderNumber" | "requestHash" | "journalState" | "orderState"> & {
+  selectedFactsFingerprint: string;
+};
+export type CheckoutAttemptRecoveryAuthority =
+  | Exclude<CheckoutAttemptEvidence, { kind: "PROTOCOL_V1_ATTEMPT" | "REVIEW_REQUIRED" }>
+  | (EvidenceIdentity & { kind: "REVIEW_REQUIRED";
+      reason: CheckoutAttemptReviewReason | "UNSUPPORTED_DURABLE_OWNER" | "INVALID_DURABLE_OWNER" | "ORDER_OWNER_MISMATCH" })
+  | (RecoveryIdentity & { kind: "PROTOCOL_V1_MEMBER"; owner: Readonly<{ kind: "member"; memberId: string }> })
+  | (RecoveryIdentity & { kind: "PROTOCOL_V1_GUEST"; owner: Readonly<{
+      kind: "guest"; canonicalAttemptKey: string; tokenHash: string; createdAt: string;
+    }> });
+export type ProtocolV1RecoveryAuthority = Extract<CheckoutAttemptRecoveryAuthority,
+  { kind: "PROTOCOL_V1_MEMBER" | "PROTOCOL_V1_GUEST" }>;
+// Ephemeral provenance attestation only; all durable ownership remains in the journal.
+const validatedRecoveryAuthorities = new WeakSet<object>();
+export function isValidatedCheckoutAttemptRecoveryAuthority(value: unknown): value is ProtocolV1RecoveryAuthority {
+  return typeof value === "object" && value !== null && validatedRecoveryAuthorities.has(value);
+}
+function immutableRecoveryOwner(order: Record<string, unknown>, attempt: string, requestHash: string) {
+  const binding = validateCheckoutAttemptBindingSnapshot(order.checkoutAttemptBinding);
+  if (binding.canonicalAttemptKey !== attempt || binding.selectedFactsFingerprint !== requestHash
+    || (Object.hasOwn(order, "idempotencyRequestHash") && order.idempotencyRequestHash !== requestHash)) throw new Error("Binding mismatch");
+  const owner = binding.ownerBinding;
+  if (owner.kind === "member") {
+    if (!isCartRecord(order.member) || order.member.memberId !== owner.memberId || order.guestOrderAccess != null) throw new Error("Member mismatch");
+    return { binding, owner: Object.freeze({ kind: "member" as const, memberId: owner.memberId }) };
+  }
+  const access = order.guestOrderAccess;
+  if (order.member != null || !isCartRecord(access) || Object.keys(access).length !== 2
+    || !Object.hasOwn(access, "tokenHash") || !Object.hasOwn(access, "createdAt")
+    || access.tokenHash !== owner.tokenHash || owner.canonicalAttemptKey !== attempt
+    || typeof access.createdAt !== "string" || !access.createdAt.trim()
+    || !Number.isFinite(Date.parse(access.createdAt))) throw new Error("Guest mismatch");
+  return { binding, owner: Object.freeze({ ...owner, createdAt: access.createdAt }) };
+}
+/** Same bounded source engine as generic B2. Unlocked authority is provisional:
+ * callers must resolve again inside the complete sealed canonical lock plan.
+ * Only new B3B-bound attempts are supported; no historical owner migration.
+ */
+export async function resolveCheckoutAttemptRecoveryAuthority(input: {
+  orderDir: string; canonicalAttemptKey: unknown;
+}): Promise<CheckoutAttemptRecoveryAuthority> {
+  const source = await resolveCheckoutAttemptSource(input), evidence = source.evidence;
+  if (evidence.kind !== "PROTOCOL_V1_ATTEMPT") return evidence;
+  const review = (reason: "UNSUPPORTED_DURABLE_OWNER" | "INVALID_DURABLE_OWNER" | "ORDER_OWNER_MISMATCH"): CheckoutAttemptRecoveryAuthority =>
+    ({ kind: "REVIEW_REQUIRED", canonicalAttemptKey: evidence.canonicalAttemptKey, reason });
+  const intent = source.intent!;
+  if (!Object.hasOwn(intent.order, "checkoutAttemptBinding")) return review("UNSUPPORTED_DURABLE_OWNER");
+  let original: ReturnType<typeof immutableRecoveryOwner>;
+  try { original = immutableRecoveryOwner(intent.order, evidence.canonicalAttemptKey, intent.requestHash); }
+  catch { return review("INVALID_DURABLE_OWNER"); }
+  if (source.order) {
+    try {
+      const stored = immutableRecoveryOwner(source.order, evidence.canonicalAttemptKey, intent.requestHash);
+      if (!isDeepStrictEqual(stored, original)) return review("ORDER_OWNER_MISMATCH");
+    } catch { return review("ORDER_OWNER_MISMATCH"); }
+  }
+  const { canonicalAttemptKey, transactionId, orderNumber, requestHash, journalState, orderState } = evidence;
+  const common = { canonicalAttemptKey, transactionId, orderNumber, requestHash, journalState, orderState,
+    selectedFactsFingerprint: original.binding.selectedFactsFingerprint };
+  const authority: ProtocolV1RecoveryAuthority = original.owner.kind === "member"
+    ? Object.freeze({ ...common, kind: "PROTOCOL_V1_MEMBER", owner: original.owner })
+    : Object.freeze({ ...common, kind: "PROTOCOL_V1_GUEST", owner: original.owner });
+  validatedRecoveryAuthorities.add(authority);
+  return authority;
 }

@@ -365,6 +365,8 @@ export function createCommerceTransactionCoordinator(options: {
     resources:(intent:TransactionIntent)=>resourcesFor(validate(intent)),
     /** Reuses exactly the same execution/recovery engine; every required lock must be held. */
     runLocked:(intent:TransactionIntent)=>execute(intent,true,true),
+    /** Existing-only execution under the caller's complete sealed plan. */
+    recoverLocked:(intent:TransactionIntent)=>execute(intent,false,true),
     recover:async(transactionId:string):Promise<TransactionResult>=>{
       try{
         const entries=await createCommerceTransactionJournal(options.orderDir,transactionId).read();

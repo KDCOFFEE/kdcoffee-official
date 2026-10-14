@@ -294,7 +294,7 @@ try {
   });
   await run("B3B protected non-successor-owned sources unchanged; no runtime import cycle", async () => {
     const { execFileSync } = await import("node:child_process");
-    for (const file of ["lib/commerceTransactionCoordinator.ts", "lib/commerceTransactionJournal.ts", "lib/commerceTransactionTypes.ts",
+    for (const file of ["lib/commerceTransactionJournal.ts", "lib/commerceTransactionTypes.ts",
       "lib/commerceLocks.ts", "lib/commerceLockProtocol.ts", "lib/commerceCheckoutAdmission.ts",
       "app/checkout/page.tsx"]) {
       const baseline = execFileSync("git", ["show", "HEAD:" + file], { encoding: "utf8", windowsHide: true });

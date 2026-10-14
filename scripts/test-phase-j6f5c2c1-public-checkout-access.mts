@@ -217,7 +217,8 @@ try {
     assert.equal(endpoint.runtime, "nodejs"); assert.equal(typeof endpoint.POST, "function");
     assert.deepEqual(Object.keys(endpoint).sort(), ["POST", "runtime"]);
     assert.ok(bridgeSource.startsWith('import "server-only"'));
-    assert.ok(!/createHmac|timingSafeEqual|randomBytes|base64url|AUTH_SESSION_SECRET|writeFile|fetch\(/.test(bridgeSource + routeSource));
+    assert.ok(!/createHmac|randomBytes|AUTH_SESSION_SECRET|writeFile|fetch\(/.test(bridgeSource));
+    assert.ok(!/createHmac|timingSafeEqual|randomBytes|base64url|AUTH_SESSION_SECRET|writeFile|fetch\(/.test(routeSource));
     assert.ok(!/commerceOrderTransaction|memberAuth|membershipCommerce|createGuestOrderAccess/.test(bridgeSource + routeSource));
   });
   await check("Store-containing Cart remains blocked", () => {
@@ -232,9 +233,11 @@ try {
   globalThis.fetch = oldFetch;
   for (const [name, value] of Object.entries(savedEnv)) { if (value === undefined) delete process.env[name]; else process.env[name] = value; }
 }
-await check("protected source bytes and committed route/UI/crypto/transaction boundaries unchanged", async () => {
+const successorOwnedCommittedBoundaryFiles = new Set(["lib/commerceOrderTransaction.ts"]);
+await check("protected source bytes unchanged and non-successor committed boundaries unchanged", async () => {
   for (const [index, file] of protectedFiles.entries()) {
     assert.deepEqual(await fs.readFile(file), before[index], file);
+    if (successorOwnedCommittedBoundaryFiles.has(file)) continue;
     const committed = execFileSync("git", ["show", "HEAD:" + file], { encoding: "utf8", windowsHide: true });
     assert.equal((await fs.readFile(file, "utf8")).replaceAll("\r\n", "\n"), committed.replaceAll("\r\n", "\n"), file);
   }

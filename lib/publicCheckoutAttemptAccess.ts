@@ -1,5 +1,8 @@
 import "server-only";
 import { createCheckoutAttemptAccess } from "./checkoutAttemptAccess";
+import { timingSafeEqual } from "node:crypto";
+import { canonicalPublicCheckoutAttemptKey } from "./publicCheckoutContract";
+import { isValidatedCheckoutAttemptRecoveryAuthority, type CheckoutAttemptRecoveryAuthority } from "./checkoutAttemptResolver";
 import { guestTokenHash } from "./orderConversation";
 import { isStoreCommerceEnabled } from "./storeCommerceCapability";
 import type { TrustedCheckoutIdentity } from "./commerceCheckoutAdmission";
@@ -50,4 +53,26 @@ export function issuePublicGuestCheckoutAttemptAccess(input: { idempotencyKey: u
 }
 export function resolveGuestCheckoutIdentityFromAttemptAccess(input: { token: unknown; idempotencyKey: unknown }) {
   return createPublicCheckoutAttemptAccess().resolveIdentity(input);
+}
+
+export class DurableGuestCheckoutIdentityError extends Error {
+  readonly code = "INVALID_IDENTITY";
+  constructor() { super("INVALID_IDENTITY"); this.name = "DurableGuestCheckoutIdentityError"; }
+}
+/** Existing-attempt possession only. Never verifies fresh capability, reads
+ * current secret/gate, issues a token, or creates durable authority.
+ */
+export function resolveDurableGuestCheckoutIdentity(input: {
+  token: unknown; canonicalAttemptKey: unknown; authority: CheckoutAttemptRecoveryAuthority;
+}): TrustedCheckoutIdentity {
+  const invalid = (): never => { throw new DurableGuestCheckoutIdentityError(); };
+  const authority = input.authority;
+  if (!isValidatedCheckoutAttemptRecoveryAuthority(authority) || authority.kind !== "PROTOCOL_V1_GUEST"
+    || typeof input.token !== "string" || !input.token.trim() || Buffer.byteLength(input.token, "utf8") > 4096) return invalid();
+  let key: string;
+  try { key = canonicalPublicCheckoutAttemptKey(input.canonicalAttemptKey); } catch { return invalid(); }
+  if (key !== authority.canonicalAttemptKey || key !== authority.owner.canonicalAttemptKey) return invalid();
+  const expected = Buffer.from(authority.owner.tokenHash, "base64url"), actual = Buffer.from(guestTokenHash(input.token), "base64url");
+  if (expected.length !== actual.length || !timingSafeEqual(expected, actual)) return invalid();
+  return { guestOrderAccess: { tokenHash: authority.owner.tokenHash, createdAt: authority.owner.createdAt } };
 }
