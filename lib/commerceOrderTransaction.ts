@@ -8,6 +8,7 @@ import { commerceOrderMoney } from "./commerceOrderPricing";
 import { createCommerceTransactionCoordinator } from "./commerceTransactionCoordinator";
 import { createCommerceTransactionJournal } from "./commerceTransactionJournal";
 import { withCommerceLockPlan } from "./commerceLocks";
+import { resolveCheckoutAttemptEvidence } from "./checkoutAttemptResolver";
 import { createCoffeeInventoryParticipant, createStoreInventoryParticipant } from "./inventoryParticipants";
 import { normalizeInventoryDemand } from "./inventoryReceipts";
 import { orderIdempotencyResource, isValidIdempotencyKey, createIdempotencyRequestHash, findOrderByIdempotencyKey } from "./orderIdempotency";
@@ -177,8 +178,7 @@ export function createCommerceOrderTransactionService(options: {
       sameStorage();
       let intent = await readIntent();
       if (!intent) {
-        const existing = await findOrderByIdempotencyKey(orderDir, input.idempotencyKey);
-        if (existing) return fail(existing.idempotencyRequestHash !== hash ? "IDEMPOTENCY_CONFLICT" : "REVIEW_REQUIRED");
+        // Collision authorization is deferred to the canonical under-lock B2 gate.
         const resolution = await resolveCommerceOrderItems(input.items);
         await options.afterResolve?.(resolution);
         sameStorage();
@@ -190,7 +190,15 @@ export function createCommerceOrderTransactionService(options: {
           orderIdempotencyResource(orderDir, input.idempotencyKey), ...coordinator.resources(plannedIntent),
         ], async (): Promise<LockedOrderOutcome> => {
           sameStorage();
+          // B4 collision authority is decided again under the existing sealed
+          // plan, including the canonical UUID rank-0 resource. No nested lock.
+          const evidence = await resolveCheckoutAttemptEvidence({ orderDir, canonicalAttemptKey: input.idempotencyKey });
+          if (evidence.kind === "CONFLICT" || evidence.kind === "REVIEW_REQUIRED") return fail("REVIEW_REQUIRED");
           const prepared = await readIntent();
+          if (evidence.kind === "LEGACY_ORDER") return fail(prepared ? "REVIEW_REQUIRED" : "IDEMPOTENCY_CONFLICT");
+          if (evidence.kind === "NONE" && prepared) return fail("REVIEW_REQUIRED");
+          if (evidence.kind === "PROTOCOL_V1_ATTEMPT"
+            && (!prepared || evidence.transactionId !== transactionId || evidence.orderNumber !== prepared.orderNumber)) return fail("REVIEW_REQUIRED");
           if (prepared && prepared.orderNumber !== plannedIntent.orderNumber) return { replan: prepared };
           let canonical = prepared;
           if (!canonical) {

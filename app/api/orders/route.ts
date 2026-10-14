@@ -18,8 +18,10 @@ import {
   isValidIdempotencyKey,
   OrderIdempotencyError,
   resolveExistingIdempotentOrder,
+  findOrderByIdempotencyKey,
   withOrderIdempotencyLock,
 } from "@/lib/orderIdempotency";
+import { resolveCheckoutAttemptEvidence } from "@/lib/checkoutAttemptResolver";
 import { getCurrentMember, updateMemberProfile } from "@/lib/memberAuth";
 import { updateStoredOrderSafely } from "@/lib/adminOrders";
 import { createGuestOrderAccess } from "@/lib/orderConversation";
@@ -107,8 +109,28 @@ export async function POST(request: Request) {
     });
 
     const core = await withOrderIdempotencyLock(orderDir(), idempotencyKey, async () => {
-      const existing = await resolveExistingIdempotentOrder(orderDir(), websiteFile(), idempotencyKey, requestHash);
-      if (existing.action === "replay") return { kind: "replay" as const, ...existing };
+      // Only collision identity is lowercase. Existing legacy lookup and stored
+      // key spelling remain exact; B2 owns canonical discovery under this lock.
+      const evidence = await resolveCheckoutAttemptEvidence({ orderDir: orderDir(), canonicalAttemptKey: idempotencyKey.toLowerCase() });
+      if (evidence.kind !== "NONE" && evidence.kind !== "LEGACY_ORDER") {
+        throw new OrderIdempotencyError("結帳識別碼狀態需要人工確認，請聯絡 KD Coffee。");
+      }
+      const durableLegacyIdempotencyKey = evidence.kind === "LEGACY_ORDER" ? evidence.persistedIdempotencyKey : idempotencyKey;
+      if (evidence.kind === "LEGACY_ORDER") {
+        const persisted = await findOrderByIdempotencyKey(orderDir(), durableLegacyIdempotencyKey);
+        // Check the durable family BEFORE the existing retry resolver can mutate.
+        if (!persisted || persisted.orderNumber !== evidence.orderNumber
+          || (persisted.orderMode === "corporate_gift") !== (orderMode === "corporate_gift")) {
+          throw new OrderIdempotencyError("結帳識別碼狀態需要人工確認，請聯絡 KD Coffee。");
+        }
+      }
+      const existing = evidence.kind === "LEGACY_ORDER"
+        ? await resolveExistingIdempotentOrder(orderDir(), websiteFile(), durableLegacyIdempotencyKey, requestHash)
+        : { action: "none" as const };
+      if (evidence.kind === "LEGACY_ORDER" && existing.action === "none") {
+        throw new OrderIdempotencyError("結帳識別碼狀態需要人工確認，請聯絡 KD Coffee。");
+      }
+      if (existing.action === "replay") return { kind: "replay" as const, ...existing, durableLegacyIdempotencyKey };
 
       const retailPromotionAttribution: RetailPromotionOrderSnapshot | null = member
         ? null
@@ -127,7 +149,7 @@ export async function POST(request: Request) {
       if (orderMode === "corporate_gift") {
         const gift = { companyName: clean(body.corporateGift?.companyName, 80), boxSize: clean(body.corporateGift?.boxSize, 20), boxQuantity: Number(body.corporateGift?.boxQuantity || 0), desiredDate: clean(body.corporateGift?.desiredDate, 20), invoiceTaxId: clean(body.corporateGift?.invoiceTaxId, 8), customization: clean(body.corporateGift?.customization, 600) };
         if (!gift.companyName || !["18", "24", "custom"].includes(gift.boxSize) || !Number.isInteger(gift.boxQuantity) || gift.boxQuantity < 1) throw new Error("企業送禮資料不完整");
-        order = { orderNumber, createdAt, status: "corporate_gift_inquiry", orderMode, customer, member: memberInfo, guestOrderAccess, corporateGift: gift, startingPrice: 1200, idempotencyKey, idempotencyRequestHash: requestHash };
+        order = { orderNumber, createdAt, status: "corporate_gift_inquiry", orderMode, customer, member: memberInfo, guestOrderAccess, corporateGift: gift, startingPrice: 1200, idempotencyKey: durableLegacyIdempotencyKey, idempotencyRequestHash: requestHash };
         const boxLabel = gift.boxSize === "custom" ? "其他客製數量" : `${gift.boxSize} 入耳掛禮盒`;
         lineText = `【KD Coffee 企業送禮需求】\n\n洽詢編號：${orderNumber}\n會員：${member ? `${member.displayName}（LINE 會員）` : "訪客"}\n公司／單位：${gift.companyName}\n聯絡人：${customer.name}\n手機：${customer.phone}\nEmail：${customer.email || "未提供"}\n\n希望盒型：${boxLabel}\n預估盒數：${gift.boxQuantity} 盒\n方案價格：NT$1,200 起／依需求正式報價\n希望交貨日：${gift.desiredDate || "未指定"}\n統一編號：${gift.invoiceTaxId || "未提供"}\n\n客製需求：${gift.customization || "未填寫"}\n其他備註：${customer.note || "無"}`;
         const created = await createOrderFile(orderDir(), orderNumber, order, makeOrderNumber);
@@ -155,7 +177,7 @@ export async function POST(request: Request) {
               if (!validStoreId(store.id) || !store.name || !store.address) throw new Error("請選擇正確且完整的 7-ELEVEN 門市");
               favoriteStore = store;
               return {
-                order: { orderNumber: candidateOrderNumber, createdAt, status: "waiting_merchant_create_cod_shipment", orderMode, customer, member: memberInfo, guestOrderAccess, ...(orderRetailPromotionAttribution ? { retailPromotionAttribution: orderRetailPromotionAttribution } : {}), store, deliveryAddress: null, subscriptionIntent, payment: "cash_on_delivery", delivery: "7-ELEVEN 門市取貨付款", lineNotification: { sent: false, status: "pending" }, idempotencyKey, idempotencyRequestHash: requestHash, ...priced },
+                order: { orderNumber: candidateOrderNumber, createdAt, status: "waiting_merchant_create_cod_shipment", orderMode, customer, member: memberInfo, guestOrderAccess, ...(orderRetailPromotionAttribution ? { retailPromotionAttribution: orderRetailPromotionAttribution } : {}), store, deliveryAddress: null, subscriptionIntent, payment: "cash_on_delivery", delivery: "7-ELEVEN 門市取貨付款", lineNotification: { sent: false, status: "pending" }, idempotencyKey: durableLegacyIdempotencyKey, idempotencyRequestHash: requestHash, ...priced },
                 lineText: `【KD Coffee 新訂單｜7-ELEVEN 取貨付款】\n\n訂單編號：${candidateOrderNumber}\n會員：${member ? `${member.displayName}（LINE 會員）` : "訪客"}\n姓名：${customer.name}\n手機：${customer.phone}\nEmail：${customer.email || "未提供"}\n\n門市店號：${store.id}\n門市名稱：${store.name}\n門市地址：${store.address}\n\n訂購內容：\n${itemLines}\n\n商品小計：NT$ ${priced.subtotal.toLocaleString("zh-TW")}\n運費：${priced.shipping ? `NT$ ${priced.shipping}` : "免運"}\n取貨付款總額：NT$ ${priced.total.toLocaleString("zh-TW")}\n\n備註：${customer.note || "無"}\n\n下一步：請核對門市資料後，建立 7-ELEVEN 取貨付款寄件單。`,
               };
             }
@@ -164,7 +186,7 @@ export async function POST(request: Request) {
               const payment = quoteHomeDeliveryPayable({ merchandiseSubtotal: priced.subtotal, shipping, availableCredit: 0, requestedCredit: 0, method: paymentMethod as ActiveHomeDeliveryPaymentMethod, rules: rulesVersion.rules });
               const atmTransferSnapshot = paymentMethod === "atm_transfer" ? createAtmTransferSnapshot(rulesVersion.rules) : null;
               return {
-                order: { orderNumber: candidateOrderNumber, createdAt, status: "new_order", orderMode, customer, member: memberInfo, guestOrderAccess, ...(orderRetailPromotionAttribution ? { retailPromotionAttribution: orderRetailPromotionAttribution } : {}), deliveryAddress, subscriptionIntent, payment: payment.payment, paymentDetails: { ...payment.paymentDetails, paidAt: null }, atmTransferSnapshot, codServiceFee: payment.codServiceFee, delivery: "宅配", lineNotification: { sent: false, status: "pending" }, idempotencyKey, idempotencyRequestHash: requestHash, ...priced, shipping, totalBeforeCredit: payment.totalBeforeCredit, total: payment.total },
+                order: { orderNumber: candidateOrderNumber, createdAt, status: "new_order", orderMode, customer, member: memberInfo, guestOrderAccess, ...(orderRetailPromotionAttribution ? { retailPromotionAttribution: orderRetailPromotionAttribution } : {}), deliveryAddress, subscriptionIntent, payment: payment.payment, paymentDetails: { ...payment.paymentDetails, paidAt: null }, atmTransferSnapshot, codServiceFee: payment.codServiceFee, delivery: "宅配", lineNotification: { sent: false, status: "pending" }, idempotencyKey: durableLegacyIdempotencyKey, idempotencyRequestHash: requestHash, ...priced, shipping, totalBeforeCredit: payment.totalBeforeCredit, total: payment.total },
                 lineText: `【KD Coffee 新訂單｜宅配】\n\n訂單編號：${candidateOrderNumber}\n會員：${member ? `${member.displayName}（LINE 會員）` : "訪客"}\n姓名：${customer.name}\n手機：${customer.phone}\nEmail：${customer.email || "未提供"}\n\n收件人：${deliveryAddress!.recipientName}\n聯絡電話：${deliveryAddress!.phone}\n宅配地址：${deliveryAddress!.postalCode} ${deliveryAddress!.city}${deliveryAddress!.district}${deliveryAddress!.addressLine}\n付款方式：${paymentMethod === "atm_transfer" ? "ATM 轉帳" : "貨到付款"}\n\n訂購內容：\n${itemLines}\n\n商品小計：NT$ ${priced.subtotal.toLocaleString("zh-TW")}\n運費：NT$ ${shipping.toLocaleString("zh-TW")}\n貨到付款手續費：NT$ ${payment.codServiceFee.toLocaleString("zh-TW")}\n應付總額：NT$ ${payment.total.toLocaleString("zh-TW")}\n\n備註：${customer.note || "無"}`,
               };
             }
@@ -174,7 +196,7 @@ export async function POST(request: Request) {
             const pickupAvailability = resolvePickupDateAvailability({ requestedDate: pickup.preferredDate, today: taipeiToday, customRoast: hasCustomRoast, rules: rulesVersion.rules });
             if (!pickupAvailability.allowed) throw new Error(pickupAvailability.reason === "blocked-date" ? "這一天工作室暫停自取，請選擇其他日期" : `工作室自取最早可選 ${pickupAvailability.earliestDate}`);
             return {
-              order: { orderNumber: candidateOrderNumber, createdAt, status: "waiting_studio_pickup_confirmation", orderMode, customer, member: memberInfo, guestOrderAccess, ...(orderRetailPromotionAttribution ? { retailPromotionAttribution: orderRetailPromotionAttribution } : {}), studioPickup: pickup, deliveryAddress: null, subscriptionIntent, payment: "pickup_confirmation", delivery: "KD Coffee 工作室自取", lineNotification: { sent: false, status: "pending" }, idempotencyKey, idempotencyRequestHash: requestHash, ...priced, shipping: 0, total: priced.subtotal },
+              order: { orderNumber: candidateOrderNumber, createdAt, status: "waiting_studio_pickup_confirmation", orderMode, customer, member: memberInfo, guestOrderAccess, ...(orderRetailPromotionAttribution ? { retailPromotionAttribution: orderRetailPromotionAttribution } : {}), studioPickup: pickup, deliveryAddress: null, subscriptionIntent, payment: "pickup_confirmation", delivery: "KD Coffee 工作室自取", lineNotification: { sent: false, status: "pending" }, idempotencyKey: durableLegacyIdempotencyKey, idempotencyRequestHash: requestHash, ...priced, shipping: 0, total: priced.subtotal },
               lineText: `【KD Coffee 新訂單｜工作室自取】\n\n訂單編號：${candidateOrderNumber}\n會員：${member ? `${member.displayName}（LINE 會員）` : "訪客"}\n姓名：${customer.name}\n手機：${customer.phone}\nEmail：${customer.email || "未提供"}\n\n希望取貨日期：${pickup.preferredDate || "未指定"}\n取貨時間：由工作室確認後通知\n\n訂購內容：\n${itemLines}\n\n訂單總額：NT$ ${priced.subtotal.toLocaleString("zh-TW")}\n備註：${customer.note || "無"}`,
             };
           },
@@ -183,10 +205,10 @@ export async function POST(request: Request) {
         order = transaction.order;
         lineText = transaction.lineText;
         if (!transaction.finalized) {
-          return { kind: "pending" as const, orderNumber, orderMode, warning: transaction.warning };
+          return { kind: "pending" as const, orderNumber, orderMode, durableLegacyIdempotencyKey, warning: transaction.warning };
         }
       }
-      return { kind: "created" as const, orderNumber, orderMode, order, lineText, favoriteStore };
+      return { kind: "created" as const, orderNumber, orderMode, order, lineText, favoriteStore, durableLegacyIdempotencyKey };
     });
 
     if (core.kind === "replay") {
@@ -200,7 +222,7 @@ export async function POST(request: Request) {
       let replayWarning = core.warning;
       if (replayAsSameMember && member && requestedCredit > 0 && core.order.orderMode !== "corporate_gift" && !(core.order.credit && typeof core.order.credit === "object" && typeof (core.order.credit as Record<string, unknown>).reservationId === "string")) {
         try {
-          const recovered = await applyCheckoutCredit({ memberId: member.id, orderNumber: String(core.order.orderNumber), order: core.order, requestedCredit, idempotencyKey });
+          const recovered = await applyCheckoutCredit({ memberId: member.id, orderNumber: String(core.order.orderNumber), order: core.order, requestedCredit, idempotencyKey: core.durableLegacyIdempotencyKey });
           replayCredit = { requestedAmount: requestedCredit, appliedAmount: recovered.appliedAmount, reservationId: recovered.reservationId };
           if (recovered.warning) replayWarning = [replayWarning, recovered.warning].filter(Boolean).join(" ");
         } catch {
@@ -209,13 +231,13 @@ export async function POST(request: Request) {
       }
       if (replayAsSameMember && member && core.order.orderMode !== "corporate_gift") {
         try {
-          await registerReferralQualificationOrder({ memberId: member.id, orderId: String(core.order.orderNumber), orderCreatedAt: String(core.order.createdAt), orderType: core.order.subscriptionIntent ? "subscription" : "normal", idempotencyKey: `checkout:${idempotencyKey}` });
+          await registerReferralQualificationOrder({ memberId: member.id, orderId: String(core.order.orderNumber), orderCreatedAt: String(core.order.createdAt), orderType: core.order.subscriptionIntent ? "subscription" : "normal", idempotencyKey: `checkout:${core.durableLegacyIdempotencyKey}` });
         } catch {
           replayWarning = [replayWarning, "訂單已成立，但推薦獎勵資格狀態暫時無法同步。"].filter(Boolean).join(" ");
         }
       }
       if (replayAsSameMember && member && core.order.subscriptionIntent) {
-        try { await ensureCheckoutSubscription(member.id, core.order, idempotencyKey); }
+        try { await ensureCheckoutSubscription(member.id, core.order, core.durableLegacyIdempotencyKey); }
         catch { replayWarning = [replayWarning, "訂單已成立；定期配送申請已保存在訂單中，工作室將協助完成確認。"].filter(Boolean).join(" "); }
       }
       return NextResponse.json({
@@ -247,7 +269,7 @@ export async function POST(request: Request) {
     const warnings: string[] = [];
     if (member && orderMode !== "corporate_gift") {
       try {
-        await registerReferralQualificationOrder({ memberId: member.id, orderId: orderNumber, orderCreatedAt: String(core.order.createdAt), orderType: subscriptionIntent ? "subscription" : "normal", idempotencyKey: `checkout:${idempotencyKey}` });
+        await registerReferralQualificationOrder({ memberId: member.id, orderId: orderNumber, orderCreatedAt: String(core.order.createdAt), orderType: subscriptionIntent ? "subscription" : "normal", idempotencyKey: `checkout:${core.durableLegacyIdempotencyKey}` });
       } catch (error) {
         warnings.push("訂單已成立，但推薦獎勵資格狀態暫時無法同步。");
         console.error(`Order ${orderNumber} saved but referral qualification registration failed:`, error);
@@ -256,7 +278,7 @@ export async function POST(request: Request) {
     let appliedCredit = 0;
     let creditReservationId: string | undefined;
     if (member && requestedCredit > 0 && orderMode !== "corporate_gift") {
-      const creditResult = await applyCheckoutCredit({ memberId: member.id, orderNumber, order: core.order, requestedCredit, idempotencyKey });
+      const creditResult = await applyCheckoutCredit({ memberId: member.id, orderNumber, order: core.order, requestedCredit, idempotencyKey: core.durableLegacyIdempotencyKey });
       appliedCredit = creditResult.appliedAmount;
       creditReservationId = creditResult.reservationId;
       if (creditResult.warning) warnings.push(creditResult.warning);
@@ -271,7 +293,7 @@ export async function POST(request: Request) {
       }
       if (subscriptionIntent) {
         try {
-          await ensureCheckoutSubscription(member.id, core.order, idempotencyKey);
+          await ensureCheckoutSubscription(member.id, core.order, core.durableLegacyIdempotencyKey);
         } catch (error) {
           warnings.push("訂單已成立；定期配送申請已保存在訂單中，工作室將協助完成確認。");
           console.error(`Order ${orderNumber} saved but subscription enrollment failed:`, error);

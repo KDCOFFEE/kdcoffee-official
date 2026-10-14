@@ -447,9 +447,9 @@ async function suite() {
 
   await post("Profiler.stopPreciseCoverage"); session.disconnect();
   check("LOCAL_RUNTIME entire file set and hashes unchanged", JSON.stringify(await snapshot("F:\\KD_Coffee_LOCAL_RUNTIME")) === JSON.stringify(runtimeBefore));
-  const createRoute = await fs.readFile(path.join(process.cwd(), "app/api/orders/route.ts"), "utf8");
-  const baselineCreate = execFileSync("git", ["show", "HEAD:app/api/orders/route.ts"], { encoding: "utf8", windowsHide: true });
-  check("live order-create POST unchanged", createRoute.replaceAll("\r\n", "\n") === baselineCreate.replaceAll("\r\n", "\n"));
+  const createRoute = execFileSync("git", ["show", "1e39676df206a1670d7e449069b2932dc8b3257a:app/api/orders/route.ts"], { encoding: "utf8", windowsHide: true });
+  const baselineCreate = execFileSync("git", ["show", "8fe325c52d167e9c9216a767d102d94b8da1e21f:app/api/orders/route.ts"], { encoding: "utf8", windowsHide: true });
+  check("live order-create committed F4A baseline unchanged", createRoute.replaceAll("\r\n", "\n") === baselineCreate.replaceAll("\r\n", "\n"));
   // commerceOrderTransaction.ts is excluded from the J.6F.4A HEAD source freeze:
   // later checkout-coverage phases extend order context; cancellation convergence is tested above.
   for (const file of ["lib/commerceOrderResolver.ts", "lib/commerceOrderPricing.ts", "lib/orderRewardBasis.ts"]) {

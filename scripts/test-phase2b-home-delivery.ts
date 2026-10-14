@@ -151,13 +151,17 @@ try {
   check("home shipped and completed cancellation are blocked", !adminOrders.assessOrderCancellation((await adminOrders.readOrder(codId))!).allowed && !adminOrders.assessOrderCancellation({ orderMode: "home_delivery", status: "shipped" }).allowed);
   const invalidId = "KD20260922-2007";
   await createHomeOrder(invalidId, "cash_on_delivery");
-  for (const state of ["arrived_at_pickup_store", "ready_for_store_pickup", "uncollected", "cancelled"] as const) {
+  for (const state of ["arrived_at_pickup_store", "ready_for_store_pickup", "uncollected"] as const) {
     await assert.rejects(fulfillment.recordAdminFulfillmentEvent({ orderId: invalidId, state, expectedRevision: 0, confirmed: true }));
   }
-  check("home rejects store and cancellation fulfillment events", true);
+  check("home rejects store-only fulfillment events", true);
   await adminOrders.updateStoredOrderSafely(invalidId, (order) => ({ ...order, inventoryTransaction: { state: "inventory_failed" } }));
   await assert.rejects(fulfillment.recordAdminFulfillmentEvent({ orderId: invalidId, state: "preparing", expectedRevision: 0 }));
   check("home cannot prepare with failed inventory", true);
+  const cancellationEntryId = "KD20260922-2009";
+  await createHomeOrder(cancellationEntryId, "cash_on_delivery");
+  const cancellationEntry = await fulfillment.recordAdminFulfillmentEvent({ orderId: cancellationEntryId, state: "cancelled", expectedRevision: 0, confirmed: true });
+  check("home fulfillment cancellation delegates to canonical cancellation", cancellationEntry.record.currentState === "cancelled" && (await adminOrders.readOrder(cancellationEntryId))?.status === "cancelled");
   const controls = await readFile(path.join(process.cwd(), "components/admin/FulfillmentOrderControls.tsx"), "utf8");
   check("home Admin controls use an explicit branch before studio controls", controls.indexOf("if (isHomeDelivery)") < controls.indexOf("if (!isSevenEleven && orderMode !== \"studio_pickup\")"));
 

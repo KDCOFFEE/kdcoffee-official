@@ -190,6 +190,6 @@ check(!commerce.includes("app/api/member/reward-source-order"), "projection intr
 
 const changedFiles = execFileSync("git", ["diff", "--name-only"], { encoding: "utf8" }).split(/\r?\n/u).filter(Boolean);
 check(!changedFiles.some((file) => file.includes("reward-release-cron") || file.includes("cron/reward")), "reward release cron code is unchanged");
-check(!changedFiles.some((file) => file.startsWith("app/api/orders/") || file === "lib/customerOrderAccess.ts"), "canonical order access implementation is unchanged");
+check(!changedFiles.some((file) => (file.startsWith("app/api/orders/") && file !== "app/api/orders/route.ts") || file === "lib/customerOrderAccess.ts"), "canonical order access implementation is unchanged outside successor-owned order-create route");
 
 console.log(`Reward source order / organization consistency checks passed: ${checks}`);

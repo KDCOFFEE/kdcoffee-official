@@ -167,7 +167,8 @@ try {
   const replenishResponse = await PATCH(new Request("http://localhost/api/member/subscription", { method: "PATCH", headers: { origin: "http://localhost", "Content-Type": "application/json" }, body: JSON.stringify({ action: "replenish", subscriptionId: subscription.subscriptionId, idempotencyKey: "api-manual" }) }));
   assert.equal(replenishResponse.status, 200, JSON.stringify(await replenishResponse.json()));
   const manual = Object.values((await commerce.readMembershipCommerceState()).cycles).find((item) => item.kind === "manual_replenishment")!;
-  await scheduler.runSubscriptionOrderScheduler({ today: "2026-10-10", now });
+  const manualSchedulerToday = manual.orderCreationDate > "2026-10-10" ? manual.orderCreationDate : "2026-10-10";
+  await scheduler.runSubscriptionOrderScheduler({ today: manualSchedulerToday, now });
   state = await commerce.readMembershipCommerceState();
   const manualOrder = await readOrder(state.cycles[manual.cycleId].createdOrderId!);
   check("manual replenishment uses fixed preference and preserves anchor", () => { assert.equal(manualOrder.credit.appliedAmount, 300); assert.equal(state.subscriptions[subscription.subscriptionId].anchorDate, anchor); });
@@ -191,7 +192,7 @@ try {
   await writeOrder({ ...(await readOrder(renewalOrder.orderNumber)), status: "completed" });
   const terminalStock = await fs.readFile(websiteFile, "utf8");
   const terminalBalance = await commerce.getAvailableCredit(memberId, now);
-  const terminalRecovery = await scheduler.runSubscriptionOrderScheduler({ today: "2026-10-10", now });
+  const terminalRecovery = await scheduler.runSubscriptionOrderScheduler({ today: manualSchedulerToday, now });
   assert.equal(terminalRecovery.failed, 0, JSON.stringify(terminalRecovery));
   state = await commerce.readMembershipCommerceState();
   assert.equal(state.cycles[manual.cycleId].status, "cancelled");
@@ -199,7 +200,7 @@ try {
   assert.equal(await commerce.getAvailableCredit(memberId, now), terminalBalance);
   assert.equal(await fs.readFile(websiteFile, "utf8"), terminalStock); checks++;
   const recoveredProgress = await commerce.getGiftProgress(subscription.subscriptionId);
-  await scheduler.runSubscriptionOrderScheduler({ today: "2026-10-10", now });
+  await scheduler.runSubscriptionOrderScheduler({ today: manualSchedulerToday, now });
   assert.equal(await commerce.getGiftProgress(subscription.subscriptionId), recoveredProgress); checks++;
   // Request-local API action validates ownership/revision and changes only future preferences.
   state = await commerce.readMembershipCommerceState(); subscription = state.subscriptions[subscription.subscriptionId];

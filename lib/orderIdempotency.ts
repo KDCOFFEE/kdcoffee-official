@@ -37,7 +37,7 @@ function keyHash(key: string) {
 /** Same existing idempotency lock file, exposed for a single canonical transaction plan. */
 export function orderIdempotencyResource(orderDir: string, idempotencyKey: string): CommerceLockResource {
   if (!isValidIdempotencyKey(idempotencyKey)) throw new OrderIdempotencyError("Invalid idempotency key");
-  const hash = keyHash(idempotencyKey);
+  const hash = keyHash(idempotencyKey.toLowerCase());
   return { file: path.join(orderDir, ".idempotency", hash), rank: 0, key: "0000:idempotency:" + hash };
 }
 
@@ -73,17 +73,16 @@ export async function withOrderIdempotencyLock<T>(
   idempotencyKey: string,
   operation: () => Promise<T>,
 ) {
-  const lockDir = path.join(orderDir, ".idempotency");
-  await fs.mkdir(lockDir, { recursive: true });
-  const lockTarget = path.join(lockDir, keyHash(idempotencyKey));
+  const resource = orderIdempotencyResource(orderDir, idempotencyKey);
+  await fs.mkdir(path.dirname(resource.file), { recursive: true });
   let completed = false;
   let result: T | undefined;
   try {
-    return await withFileLock(lockTarget, async () => {
+    return await withFileLock(resource.file, async () => {
       result = await operation();
       completed = true;
       return result;
-    }, { timeoutMs: 15_000, retryDelayMs: 40 });
+    }, { timeoutMs: 15_000, retryDelayMs: 40, commerceLock: resource });
   } catch (error) {
     if (completed) return result as T;
     throw error;

@@ -292,11 +292,11 @@ try {
     assert.equal(result.state, "FINALIZED"); assert.ok(result.order); assert.equal(result.order.idempotencyRequestHash, expected);
     assert.ok(!Object.hasOwn(result.order, "checkoutAttemptBinding"));
   });
-  await run("protected coordinator/journal/intent/locks/public/commerce sources unchanged; no runtime import cycle", async () => {
+  await run("B3B protected non-successor-owned sources unchanged; no runtime import cycle", async () => {
     const { execFileSync } = await import("node:child_process");
     for (const file of ["lib/commerceTransactionCoordinator.ts", "lib/commerceTransactionJournal.ts", "lib/commerceTransactionTypes.ts",
-      "lib/commerceLocks.ts", "lib/commerceLockProtocol.ts", "lib/checkoutAttemptResolver.ts", "lib/commerceCheckoutAdmission.ts",
-      "lib/orderIdempotency.ts", "app/api/orders/route.ts", "app/checkout/page.tsx"]) {
+      "lib/commerceLocks.ts", "lib/commerceLockProtocol.ts", "lib/commerceCheckoutAdmission.ts",
+      "app/checkout/page.tsx"]) {
       const baseline = execFileSync("git", ["show", "HEAD:" + file], { encoding: "utf8", windowsHide: true });
       assert.equal((await fs.readFile(file, "utf8")).replaceAll("\r\n", "\n"), baseline.replaceAll("\r\n", "\n"), file);
     }

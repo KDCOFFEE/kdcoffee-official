@@ -2,7 +2,7 @@ import "server-only";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { canonicalPublicCheckoutAttemptKey } from "./publicCheckoutContract";
-import { commerceOrderTransactionId } from "./commerceOrderTransaction";
+import { commerceOrderTransactionIdForCanonicalKey } from "./commerceOrderTransactionIdentity";
 import { createCommerceTransactionJournal } from "./commerceTransactionJournal";
 import { inventoryHash, normalizeInventoryDemand, type InventoryDemand } from "./inventoryReceipts";
 import { isCartRecord } from "./commerceCart";
@@ -192,7 +192,7 @@ export async function resolveCheckoutAttemptEvidence(input: {
   const attempt = canonicalPublicCheckoutAttemptKey(input.canonicalAttemptKey);
   if (typeof input.orderDir !== "string" || !input.orderDir || input.orderDir.includes("\0")
     || !path.isAbsolute(input.orderDir) || path.resolve(input.orderDir) === path.parse(path.resolve(input.orderDir)).root) throw new CheckoutAttemptEvidenceInputError();
-  const orderDir = path.resolve(input.orderDir), transactionId = commerceOrderTransactionId(attempt);
+  const orderDir = path.resolve(input.orderDir), transactionId = commerceOrderTransactionIdForCanonicalKey(attempt);
   try {
     if (!await directoryExists(orderDir, "UNSAFE_ORDER_SOURCE")) return { kind: "NONE", canonicalAttemptKey: attempt };
     const entries = await journalEntries(createCommerceTransactionJournal(orderDir, transactionId), orderDir);

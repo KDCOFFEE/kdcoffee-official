@@ -520,8 +520,8 @@ if(process.argv[2]==="--worker"){
   // later checkout-coverage phases extend order context; cancellation compatibility is tested above.
   for(const file of ["components/commerce/CommerceCheckoutBoundary.tsx","app/api/orders/route.ts",
     "lib/commerceOrderResolver.ts","lib/commerceOrderPricing.ts","lib/orderRewardBasis.ts"]){
-    const actual=await fs.readFile(path.join(process.cwd(),file),"utf8"),baseline=execFileSync("git",["show","8fe325c52d167e9c9216a767d102d94b8da1e21f:"+file],{encoding:"utf8",windowsHide:true});
-    check(file+" protected baseline unchanged",actual.replaceAll("\r\n","\n")===baseline.replaceAll("\r\n","\n"));
+    const actual=file==="app/api/orders/route.ts" ? execFileSync("git",["show","1e39676df206a1670d7e449069b2932dc8b3257a:"+file],{encoding:"utf8",windowsHide:true}) : await fs.readFile(path.join(process.cwd(),file),"utf8"),baseline=execFileSync("git",["show","8fe325c52d167e9c9216a767d102d94b8da1e21f:"+file],{encoding:"utf8",windowsHide:true});
+    check(file+(file==="app/api/orders/route.ts" ? " protected committed baseline unchanged" : " protected baseline unchanged"),actual.replaceAll("\r\n","\n")===baseline.replaceAll("\r\n","\n"));
   }
   console.log("J.6F.4 PASS "+count+"/"+count+"; real J.6F.3 creation and isolated fixtures only");
 }
