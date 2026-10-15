@@ -17,7 +17,14 @@ expect(checkout.includes('setSubscriptionBlockedDialogOpen(true)'), "checkout in
 expect(checkout.includes("ATM 轉帳僅提供單次宅配訂單"), "checkout explains ATM is single-order only");
 expect(checkout.includes('宅配定期配送目前固定使用「貨到付款」'), "checkout explains subscription COD-only rule");
 expect(checkout.includes('setPaymentMethod("atm_transfer"); setJoinSubscription(false);'), "switching to ATM clears subscription intent immediately");
-expect(checkout.includes('if (subscriptionHomeDeliveryBlocked && joinSubscription)'), "checkout clears stale subscription intent defensively");
+const staleSubscriptionGuard = checkout.indexOf(
+  'if (member && joinSubscription && paymentMethod === "atm_transfer")'
+);
+const ordersSubmit = checkout.indexOf('fetch("/api/orders"');
+expect(
+  staleSubscriptionGuard >= 0 && ordersSubmit >= 0 && staleSubscriptionGuard < ordersSubmit,
+  "checkout rejects stale ATM subscription intent before order submit"
+);
 expect(checkout.includes('subscriptionRenewalCodServiceFee'), "subscription preview uses COD service fee");
 
 const orders = source("app/api/orders/route.ts");

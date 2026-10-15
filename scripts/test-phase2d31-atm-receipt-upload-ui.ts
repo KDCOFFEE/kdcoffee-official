@@ -6,7 +6,7 @@ function expect(condition: boolean, message: string) {
   if (!condition) throw new Error(`FAIL ${checks}: ${message}`);
 }
 
-const source = fs.readFileSync("components/orders/OrderConversation.tsx", "utf8");
+const source = fs.readFileSync("components/orders/OrderConversation.tsx", "utf8").replace(/\r\n/g, "\n");
 expect(source.includes('htmlFor="atm-transfer-receipt"'), "custom upload label exists");
 expect(source.includes('style={{\n                    position: "absolute"'), "native file input is visually hidden");
 expect(source.includes('選擇匯款明細圖片'), "friendly upload CTA exists");

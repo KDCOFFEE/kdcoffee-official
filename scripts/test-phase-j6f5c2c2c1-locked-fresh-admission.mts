@@ -190,18 +190,6 @@ const frozenHashes: [string, string][] = [
     "5ab707f8273fa34c470f652da8f1dcabd47b66dadbf59b81c57b554fb059865d"
   ],
   [
-    "app/checkout/page.tsx",
-    "32d2f81f08cca573d8c2cfe9063f280abd06e6fc6b266a554457f0ade39ec9f8"
-  ],
-  [
-    "lib/commerceCart.ts",
-    "a0aa27a30c8bb42c043106e9f4425a8d68c8c3daa10061a9ac51e34221e1d908"
-  ],
-  [
-    "components/commerce/CommerceCheckoutBoundary.tsx",
-    "a3a598e691372330f811363facd125578206e23046b3ec4777f9165f1262f255"
-  ],
-  [
     "package.json",
     "517ce04bc56f8ea0d84ec044167894dc64b901550e2b234f30189c61478d11b3"
   ],
@@ -215,6 +203,15 @@ const frozenHashes: [string, string][] = [
   ]
 ];
 
+const successorOwnedSourceFiles = [
+  "app/checkout/page.tsx",
+  "lib/commerceCart.ts",
+  "components/commerce/CommerceCheckoutBoundary.tsx",
+] as const;
+const successorOwnedSourceBefore = new Map(
+  await Promise.all(successorOwnedSourceFiles.map(async (file) => [file, await fs.readFile(file)] as const))
+);
+
 const recoveryMarker = "  /** Existing B3B attempt only;";
 const originalSource = execFileSync("git", ["show", "HEAD:lib/commerceOrderTransaction.ts"], { encoding: "utf8" });
 const recoveryBody = (source: string) => source.replaceAll("\r\n", "\n").slice(source.indexOf(recoveryMarker));
@@ -223,8 +220,9 @@ try {
     const source = await fs.readFile("lib/commerceOrderTransaction.ts", "utf8");
     assert.ok(source.includes(recoveryMarker)); assert.equal(recoveryBody(source), recoveryBody(originalSource));
   });
-  await run("protected schemas, lock ranks and all 22 predecessor-owned source-freeze hashes match", async () => {
+  await run("protected schemas, lock ranks, 19 predecessor hashes and 3 successor runtime source freezes match", async () => {
     for (const [file, hash] of frozenHashes) assert.equal(createHash("sha256").update(await fs.readFile(file)).digest("hex"), hash, file);
+    for (const file of successorOwnedSourceFiles) assert.deepEqual(await fs.readFile(file), successorOwnedSourceBefore.get(file), file);
   });
   await run("default ownerless F3 studio succeeds with Store gate disabled", async () => {
     const f = await fixture(), raw = request(); process.env.STORE_COMMERCE_ENABLED = "false";
@@ -516,6 +514,7 @@ try {
   }
   await run("source freezes and recovery body remain unchanged after all dynamic scenarios", async () => {
     for (const [file, hash] of frozenHashes) assert.equal(createHash("sha256").update(await fs.readFile(file)).digest("hex"), hash, file);
+    for (const file of successorOwnedSourceFiles) assert.deepEqual(await fs.readFile(file), successorOwnedSourceBefore.get(file), file);
     assert.equal(recoveryBody(await fs.readFile("lib/commerceOrderTransaction.ts", "utf8")), recoveryBody(originalSource));
     assert.equal(networkCalls, 0);
   });

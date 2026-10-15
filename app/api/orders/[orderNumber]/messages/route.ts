@@ -96,7 +96,7 @@ export async function POST(
 
   try {
     const body = await request.json();
-    const guestToken = typeof body.token === "string" ? body.token : undefined;
+    const guestToken = request.headers.get("X-Order-Access-Token") || (typeof body.token === "string" ? body.token : undefined);
     const actionId = validateOrderMessageActionId(body.actionId);
     const message = validateOrderMessage(body.message);
     const authorized = await authorizedOrder(orderNumber, guestToken);

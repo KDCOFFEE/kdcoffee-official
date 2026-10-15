@@ -37,7 +37,10 @@ const hooks = registerHooks({ resolve(specifier: string, context: object, nextRe
 } });
 const root = await fs.mkdtemp(path.join(os.tmpdir(), "kd-j6c0-alias-"));
 const previousRoot = process.env.KD_DATA_DIR;
+const previousAdminSessionSecret = process.env.ADMIN_SESSION_SECRET;
+const previousAuthSessionSecret = process.env.AUTH_SESSION_SECRET;
 process.env.KD_DATA_DIR = root;
+process.env.ADMIN_SESSION_SECRET = "kd-j6c0-isolated-admin-session-secret";
 let passed = 0;
 async function test(name: string, operation: () => unknown | Promise<unknown>) { await operation(); passed++; console.log('PASS ' + passed + ': ' + name); }
 const protectedFiles = ["lib/membershipBusinessRules.ts", "lib/membershipCommerce.ts", "lib/referralPv.ts", "lib/storeTypes.ts", "lib/storeRepository.ts", "lib/storeValidation.ts", "components/commerce/AddToCart.tsx", "app/works/[slug]/page.tsx", "components/member/RetailPromotionCenter.tsx", "components/admin/MembershipRulesManager.tsx", "lib/memberNotificationAutomation.ts"];
@@ -131,6 +134,8 @@ try {
 } finally {
   mock.timers.reset(); hooks.deregister(); delete cookieFixture.__j6c0Cookies;
   if (previousRoot === undefined) delete process.env.KD_DATA_DIR; else process.env.KD_DATA_DIR = previousRoot;
+  if (previousAdminSessionSecret === undefined) delete process.env.ADMIN_SESSION_SECRET; else process.env.ADMIN_SESSION_SECRET = previousAdminSessionSecret;
+  if (previousAuthSessionSecret === undefined) delete process.env.AUTH_SESSION_SECRET; else process.env.AUTH_SESSION_SECRET = previousAuthSessionSecret;
   assert.ok(root.startsWith(path.join(os.tmpdir(), "kd-j6c0-alias-")));
   await fs.rm(root, { recursive: true, force: true });
 }

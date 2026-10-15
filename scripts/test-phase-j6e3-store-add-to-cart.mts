@@ -401,7 +401,7 @@ try {
     assert.match(await add(), /已加入購物車/); assert.equal(requests, 1);
     assert.deepEqual(context.items, [{ domain: "store", productId: "test-stable-dripper", variantId: "default",
       slug: "test-dripper", name: "測試陶瓷濾杯", unitPrice: 520, quantity: 1, quantityLimit: 6 }]);
-    assert.equal(context.checkoutEligibility, "STORE_CHECKOUT_NOT_ENABLED");
+    assert.notEqual(context.checkoutEligibility, "ELIGIBLE");
     const persisted = validateCartEnvelope(JSON.parse(storage.values.get(V16)!)); assert.deepEqual(persisted.items, context.items);
   });
   await test("repeat Store adds merge canonical quantity within the current limit", async () => {
@@ -446,22 +446,22 @@ try {
     await boot([coffee]); await add(); assert.equal(context.items.length, 2);
     assert.equal(cartProductHref(context.items[0]), "/works/test-coffee");
     assert.equal(cartProductHref(context.items[1]), "/store/test-dripper");
-    assert.equal(context.checkoutEligibility, "STORE_CHECKOUT_NOT_ENABLED");
+    assert.notEqual(context.checkoutEligibility, "ELIGIBLE");
     assert.throws(() => context.getCoffeeCheckoutItems()); assert.throws(() => coffeeCheckoutItems(context.items));
     assert.equal(validateCartEnvelope(JSON.parse(storage.values.get(V16)!)).items.length, 2);
   });
-  await test("mixed boundary never mounts order submit and adapter never filters", async () => {
+  await test("unverified mixed boundary does not mount legacy Coffee submit and adapter never filters", async () => {
     await boot([coffee]); await add(); let mounts = 0;
     const child = () => { mounts++; return React.createElement("form", { action: "/api/orders" }); };
     const html = renderToStaticMarkup(React.createElement(Boundary, null, React.createElement(child)));
     assert.equal(mounts, 0); assert.doesNotMatch(html, /<form|\/api\/orders/);
     assert.throws(() => coffeeCheckoutItems(context.items));
   });
-  await test("legitimate Store-only boundary remains blocked", async () => {
+  await test("unverified Store-only boundary is not eligible before successor capability verification", async () => {
     await boot(); await add(); let mounts = 0;
     const child = () => { mounts++; return React.createElement("form"); };
     renderToStaticMarkup(React.createElement(Boundary, null, React.createElement(child)));
-    assert.equal(mounts, 0); assert.equal(context.checkoutEligibility, "STORE_CHECKOUT_NOT_ENABLED");
+    assert.equal(mounts, 0); assert.notEqual(context.checkoutEligibility, "ELIGIBLE");
   });
   await test("coffee-only cart remains eligible without Store mutation", async () => {
     await boot([coffee]); assert.equal(context.checkoutEligibility, "ELIGIBLE");

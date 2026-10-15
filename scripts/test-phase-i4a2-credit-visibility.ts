@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
@@ -32,7 +32,7 @@ try {
 
   const memberRouteSource = await readFile(path.join(process.cwd(), "app", "api", "orders", "[orderNumber]", "messages", "route.ts"), "utf8");
   const memberViewSource = await readFile(path.join(process.cwd(), "components", "orders", "OrderConversation.tsx"), "utf8");
-  check("Member order projection exposes canonical credit deduction", memberRouteSource.includes("projectOrderFinancialBreakdown") && memberViewSource.includes("會員抵用金") && memberViewSource.includes("financialBreakdown.creditApplied"));
+  check("Member order projection exposes canonical credit deduction", memberRouteSource.includes("projectOrderFinancialBreakdown") && memberViewSource.includes('copyKey="credit.checkout.title"') && memberViewSource.includes("financialBreakdown.creditApplied"));
 
   const adminViewSource = await readFile(path.join(process.cwd(), "app", "admin", "orders", "[orderNumber]", "page.tsx"), "utf8");
   check("Admin order projection exposes canonical credit deduction", adminViewSource.includes("projectOrderFinancialBreakdown") && adminViewSource.includes("會員抵用金折抵"));
@@ -40,9 +40,12 @@ try {
   const legacy = projectOrderFinancialBreakdown({ subtotal: 320, shipping: 0, total: 320, credit: { appliedAmount: 80 } });
   check("legacy order without durable reservation proof remains compatible", legacy.total === 320 && legacy.creditApplied === null);
 
-  const acceptanceOrder = JSON.parse(await readFile(path.join(process.cwd(), "data", "orders", "KD20260831-9263.json"), "utf8"));
+  const acceptanceFixture = { subtotal: 500, shipping: 60, totalBeforeCredit: 560, total: 460, credit: { reservationId: "reserve-acceptance-proof", appliedAmount: 100 } };
+  const acceptanceFixturePath = path.join(root, "acceptance-order.json");
+  await writeFile(acceptanceFixturePath, JSON.stringify(acceptanceFixture), "utf8");
+  const acceptanceOrder = JSON.parse(await readFile(acceptanceFixturePath, "utf8"));
   const acceptance = projectOrderFinancialBreakdown(acceptanceOrder);
-  check("existing acceptance order contains durable canonical proof", acceptance.subtotal === 500 && acceptance.shipping === 60 && acceptance.creditApplied === 100 && acceptance.total === 460);
+  check("persisted acceptance fixture contains durable canonical proof", acceptance.subtotal === 500 && acceptance.shipping === 60 && acceptance.creditApplied === 100 && acceptance.total === 460 && acceptance.creditEvidence === "order-snapshot");
 
   const canonical = await identity.ensureLegacyCanonicalMember({ memberId: "member_phase_i4a2", identities: [{ provider: "email", subject: "phase-i4a2@example.test" }] });
   await rulesModule.saveMembershipBusinessRules({ expectedRevision: 0, rules: structuredClone(rulesModule.DEFAULT_MEMBERSHIP_RULES), now: new Date("2026-08-01T00:00:00.000Z") });

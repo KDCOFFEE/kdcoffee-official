@@ -24,7 +24,34 @@ const protectedPaths = [
   "public/data/website-data.json",
 ] as const;
 const hash = (value: Buffer) => createHash("sha256").update(value).digest("hex");
-const beforeHashes = Object.fromEntries(await Promise.all(protectedPaths.map(async (file) => [file, hash(await readFile(file))])));
+async function snapshotProtectedPath(file: string) {
+  try {
+    return {
+      exists: true as const,
+      sha256: hash(await readFile(file)),
+    };
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return {
+        exists: false as const,
+        sha256: null,
+      };
+    }
+    throw error;
+  }
+}
+
+async function snapshotProtectedPaths() {
+  return Object.fromEntries(
+    await Promise.all(
+      protectedPaths.map(
+        async (file) => [file, await snapshotProtectedPath(file)] as const
+      )
+    )
+  );
+}
+
+const beforeProtectedSnapshots = await snapshotProtectedPaths();
 
 const order = {
   orderNumber: "KD20260929-1663",
@@ -126,21 +153,21 @@ const styles = await readFile("components/member/MemberReferralExperience.module
 const presentation = await readFile("lib/memberRewardPresentation.ts", "utf8");
 const commerce = await readFile("lib/membershipCommerce.ts", "utf8");
 
-check(explanationCopy.includes("說明 ") && !explanationCopy.includes("為什麼要等待"), "32 visible disclosure label is 說明");
+check(explanationCopy.includes('copyKey="member.rewards.label.9b6c1b038a"') && !explanationCopy.includes("為什麼要等待"), "32 visible disclosure label is 說明");
 check(explanationCopy.includes("useState(false)"), "33 說明 is collapsed by default");
 check(explanationCopy.includes('type="button"'), "34 說明 uses button semantics");
 check(explanationCopy.includes("aria-expanded={open}"), "35 說明 exposes aria-expanded");
 check(explanationCopy.includes("aria-controls={panelId}"), "36 說明 exposes aria-controls");
 check(explanationCopy.includes('aria-label="查看安全等待說明"'), "37 disclosure has an accessible label");
-check(explanationCopy.includes("您不需要另外操作"), "38 explanation communicates no member action is required");
-check(explanationCopy.includes("此筆來源訂單已完成取貨"), "39 explanation distinguishes completed order from waiting reward");
-check(explanationCopy.includes("基礎等待") && explanationCopy.includes("退貨保護"), "40 explanation exposes historical day components when available");
-check(explanationCopy.includes("依本筆回饋建立時的規則執行"), "41 missing day breakdown uses neutral historical wording");
+check(explanationCopy.includes('copyKey="member.rewards.reward.e44effcabf"'), "38 explanation communicates no member action is required");
+check(explanationCopy.includes('copyKey="member.rewards.label.ec6226ad10"'), "39 explanation distinguishes completed order from waiting reward");
+check(explanationCopy.includes('copyKey="member.rewards.reward.4925fe0641"') && explanationCopy.includes('copyKey="member.rewards.label.6c6d2b4aae"'), "40 explanation exposes historical day components when available");
+check(explanationCopy.includes('copyKey="member.rewards.reward.d20644062a"'), "41 missing day breakdown uses neutral historical wording");
 check(!/Reward Engine|qualification coverage|maturation|snapshot|scheduler|authority/u.test(explanationCopy), "42 member explanation contains no technical engine wording");
 
 check(compactCard.includes("rewardTimingText(explanation)"), "43 compact ledger displays projected timing in collapsed state");
 check(compactCard.includes("<RewardWaitingDisclosure"), "44 compact ledger exposes the shared explanation control");
-check(compactCard.includes("預計至") && compactCard.includes("安全等待"), "45 lifecycle stepper includes concise projected timing");
+check(compactCard.includes('copyKey="member.rewards.label.b416dd2263"') && compactCard.includes('label === "安全等待"') && compactCard.includes("formatTaipeiMonthDay(explanation.projectedReleaseDate)"), "45 lifecycle stepper includes concise projected timing");
 check(compactCard.includes("aria-expanded={expanded}") && compactCard.includes("aria-controls={detailId}"), "46 main compact accordion accessibility remains intact");
 check(referralCenter.includes("expandedRewardKey") && referralCenter.includes("current === row.stableKey ? null"), "47 one-expanded-card behavior remains intact");
 check(referralCenter.includes("rewardView") && referralCenter.includes('currentUrl.hash === "#credit"'), "48 reward deep links and legacy credit intent remain wired");
@@ -151,7 +178,7 @@ check(sourceCard.includes("rewardTimingText(summary.waitingExplanation)"), "51 O
 check(sourceCard.includes("summary.waitingExplanation") && sourceCard.includes("summary.releaseEligibleBusinessDate"), "52 safe source card consumes one canonical timing projection");
 check(!orgChart.includes("Reward Engine"), "53 Organization Chart no longer exposes technical Reward Engine wording");
 check(orgChart.includes("onPointerMove") && orgChart.includes("pointers.current"), "54 Organization Chart zoom and pan remain intact");
-check(sourceCard.includes("summary.canViewFullOrder") && sourceCard.includes("查看完整訂單"), "55 full-order link remains guarded by verified ownership");
+check(sourceCard.includes("summary.canViewFullOrder") && sourceCard.includes('href={`/orders/${encodeURIComponent(summary.orderNumber)}`}') && sourceCard.includes('copyKey="member.rewards.button.52c7dd3708"'), "55 full-order link remains guarded by verified ownership");
 
 check(retailCenter.includes("RewardSourceOrderSummaryCard") && retailCenter.includes("RewardWaitingDisclosure"), "56 Retail Promotion uses the same waiting UX grammar");
 check(commerce.includes("reward.baseWaitingDaysSnapshot") && commerce.includes("reward.returnProtectionDaysSnapshot"), "57 Retail Promotion projects its own persisted timing fields");
@@ -183,7 +210,16 @@ check(!presentation.includes("issueCreditInState") && !presentation.includes("ru
 check(!/^[+-].*(issueCreditInState|runReferralRewardReleaseScheduler|matureCoveredReferralRewards)/mu.test(commerceDiff), "74 accounting, maturation, and scheduler implementations are unchanged");
 check(!/fetch\(|transaction\(|atomicWrite/u.test(explanationCopy + compactCard + sourceCard), "75 presentation components have no write path");
 
-const afterHashes = Object.fromEntries(await Promise.all(protectedPaths.map(async (file) => [file, hash(await readFile(file))])));
-check(protectedPaths.every((file) => beforeHashes[file] === afterHashes[file]), "76 protected production data remains byte-identical during tests");
+const afterProtectedSnapshots = await snapshotProtectedPaths();
+check(
+  protectedPaths.every((file) => {
+    const before = beforeProtectedSnapshots[file];
+    const after = afterProtectedSnapshots[file];
+
+    return before.exists === after.exists
+      && before.sha256 === after.sha256;
+  }),
+  "76 protected production data remains byte-identical during tests"
+);
 
 console.log(`Reward safety waiting status UX checks passed: ${checks}`);

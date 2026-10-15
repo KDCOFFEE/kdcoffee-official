@@ -154,8 +154,8 @@ try {
   const memberNav = await fs.readFile(path.join(process.cwd(), "components/member/MemberSectionNav.tsx"), "utf8");
   const cronScript = await fs.readFile(path.join(process.cwd(), "scripts/run-reward-release-cron.mjs"), "utf8");
   const routeSource = await fs.readFile(path.join(process.cwd(), "app/api/internal/reward-release/route.ts"), "utf8");
-  check(rewardCardUi.includes("來源訂單") && rewardCardUi.includes("歷史資料未記錄"), "expanded reward detail shows source order with a neutral legacy fallback");
-  check(sourceOrderUi.includes("summary.canViewFullOrder") && sourceOrderUi.includes("查看完整訂單 →"), "reward detail links the canonical order only after actual ownership is verified");
+  check(rewardCardUi.includes('copyKey="member.rewards.label.544eb7a56c"') && rewardCardUi.includes('sourceOrderNumber ?? "歷史資料未記錄"') && rewardCardUi.includes('copyKey="member.rewards.label.927baf2c3e"'), "expanded reward detail shows source order with a neutral legacy fallback");
+  check(sourceOrderUi.includes("summary.canViewFullOrder") && sourceOrderUi.includes('href={`/orders/${encodeURIComponent(summary.orderNumber)}`}') && sourceOrderUi.includes('copyKey="member.rewards.button.52c7dd3708"'), "reward detail links the canonical order only after actual ownership is verified");
   check(creditUi.includes("回饋來源訂單") && creditUi.includes("entry.sourceOrderNumber"), "released credit history retains member-visible order traceability");
   check(orderUi.includes('access === "member" ? "/member#orders" : "/member"'), "authenticated order return action targets Member Center Orders");
   check(orderUi.includes('window.addEventListener("popstate"') && orderUi.includes('router.replace("/member#orders")'), "stale browser-history UI is reconciled through App Router navigation");

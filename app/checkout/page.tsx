@@ -9,6 +9,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useCart } from "@/components/commerce/CartProvider";
 import CommerceCheckoutBoundary from "@/components/commerce/CommerceCheckoutBoundary";
+import ProtocolV1Checkout from "@/components/commerce/ProtocolV1Checkout";
 import { coffeeCheckoutItems, cartLineKey, cartInventoryKey } from "@/lib/commerceCart";
 import StoreSelector from "@/components/commerce/StoreSelector";
 import {
@@ -37,7 +38,13 @@ function getOrCreateIdempotencyKey() {
 }
 
 export default function CheckoutPage() {
-  return <CommerceCheckoutBoundary><CoffeeCheckout /></CommerceCheckoutBoundary>;
+  return <CommerceCheckoutBoundary><CheckoutFlow /></CommerceCheckoutBoundary>;
+}
+
+function CheckoutFlow() {
+  const { items, recoverableProtocolV1Attempt } = useCart();
+  if (recoverableProtocolV1Attempt || items.some(item => item.domain === "store")) return <ProtocolV1Checkout />;
+  return <CoffeeCheckout />;
 }
 
 function CoffeeCheckout() {

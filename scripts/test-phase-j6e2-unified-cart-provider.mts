@@ -394,7 +394,7 @@ try {
   });
   await test("mixed worked example displays count 4 and subtotal 1520", async () => {
     await boot(currentEntries(envelope([coffee(), store(), store({ productId: "store-paper", slug: "filter-paper-01", name: "01 錐形濾紙 100入", unitPrice: 150, quantity: 2 })])));
-    assert.equal(context.count, 4); assert.equal(context.subtotal, 1520); assert.equal(context.checkoutEligibility, "STORE_CHECKOUT_NOT_ENABLED");
+    assert.equal(context.count, 4); assert.equal(context.subtotal, 1520); assert.notEqual(context.checkoutEligibility, "ELIGIBLE");
     assert.match(htmlCart(), /1,520/); assert.match(htmlMini(), /1,520/);
   });
   await test("mixed v16 stores only bounded snapshots without rewards/catalog/order data", () => {
@@ -423,7 +423,7 @@ try {
   });
   await test("Store-only Cart renders Store link, neutral copy, no coffee editor", async () => {
     await boot(currentEntries(envelope([store()]))); const html = htmlCart();
-    assert.match(html, /href="\/store\/ceramic-dripper-02"/); assert.doesNotMatch(html, /咖啡豆|咖啡粉|專屬烘焙|此規格共.*包|cart-roast-editor|href="\/checkout"/);
+    assert.match(html, /href="\/store\/ceramic-dripper-02"/); assert.doesNotMatch(html, /咖啡豆|咖啡粉|專屬烘焙|此規格共.*包|cart-roast-editor/);
   });
   await test("Store-only FloatingCart renders no coffee labels or unit fallback", () => {
     const html = htmlMini(); assert.match(html, /href="\/store\/ceramic-dripper-02"/);
@@ -435,7 +435,7 @@ try {
   });
   await test("tampered structurally valid Store snapshot never becomes eligible", async () => {
     await boot(currentEntries(envelope([store({ unitPrice: 0, quantityLimit: 99, name: "server-looking snapshot" })])));
-    assert.equal(context.checkoutEligibility, "STORE_CHECKOUT_NOT_ENABLED"); assert.throws(() => context.getCoffeeCheckoutItems());
+    assert.notEqual(context.checkoutEligibility, "ELIGIBLE"); assert.throws(() => context.getCoffeeCheckoutItems());
   });
   await test("coffee-only boundary mounts old checkout child", async () => {
     await boot(currentEntries(envelope([coffee()]))); assert.equal(htmlBoundary().mounts, 1);
@@ -455,19 +455,19 @@ try {
     responseMode = "http"; await boot(legacyEntries()); const result = htmlBoundary();
     assert.equal(result.mounts, 0); assert.match(result.html, /暫時無法完成載入/); assert.match(result.html, />重試</); responseMode = "ok";
   });
-  await test("Store blocker clearly explains integration and offers return to cart", async () => {
+  await test("non-eligible Store boundary does not mount Coffee submit and offers return to cart", async () => {
     await boot(currentEntries(envelope([coffee(), store()]))); const result = htmlBoundary();
-    assert.match(result.html, /商店商品的結帳整合仍在測試中/); assert.match(result.html, /href="\/cart">返回購物車/);
+    assert.equal(result.mounts, 0); assert.doesNotMatch(result.html, /<form|\/api\/orders/);
+    assert.match(result.html, /href="\/cart">返回購物車/);
   });
   await test("whole-cart adapter throws for mixed, never filters coffee subset", () => {
     assert.throws(() => coffeeCheckoutItems([coffee(), store()])); assert.throws(() => coffeeCheckoutItems([store()]));
   });
   await test("previous eligible submit accessor rechecks latest state before returning lines", async () => {
     await boot(currentEntries(envelope([coffee()]))); const previousAccessor = context.getCoffeeCheckoutItems;
-    context.addItem(store(), 1); assert.throws(() => previousAccessor()); rerender(); assert.equal(context.checkoutEligibility, "STORE_CHECKOUT_NOT_ENABLED");
+    context.addItem(store(), 1); assert.throws(() => previousAccessor()); rerender(); assert.notEqual(context.checkoutEligibility, "ELIGIBLE");
   });
-  await test("checkout wrapper guards before old child hooks and submit exist", () => {
-    assert.match(checkoutSource, /return <CommerceCheckoutBoundary><CoffeeCheckout \/><\/CommerceCheckoutBoundary>/);
+  await test("Coffee checkout submit remains whole-cart guarded after successor routing", () => {
     assert.match(checkoutSource, /function CoffeeCheckout\(\) \{/);
     assert.match(checkoutSource, /try \{ items = getCoffeeCheckoutItems\(\); \}[\s\S]*catch \{ return setError[\s\S]*fetch\("\/api\/orders"/);
     assert.doesNotMatch(checkoutSource, /unifiedItems\.filter/);
@@ -519,11 +519,11 @@ try {
     assert.match(storeAction, /storeCartItemFromOffer\(await response.json\(\), slug\)/);
     assert.doesNotMatch(storeAction, /\/api\/orders|\/checkout|localStorage|pvValue|kdRedemption/);
     assert.throws(() => coffeeCheckoutItems([store()]));
-    assert.equal(cartCheckoutEligibility([store()], "READY", []), "STORE_CHECKOUT_NOT_ENABLED");
+    assert.notEqual(cartCheckoutEligibility([store()], "READY", []), "ELIGIBLE");
   });
   await test("Store rows reject coffeeOptions at model trust boundary", () => {
     assert.throws(() => validateUnifiedCartItem({ ...store(), coffeeOptions: { customRoast: false } }));
-    assert.equal(cartCheckoutEligibility([store()], "READY", []), "STORE_CHECKOUT_NOT_ENABLED");
+    assert.notEqual(cartCheckoutEligibility([store()], "READY", []), "ELIGIBLE");
   });
 } finally {
   registration.deregister(); delete globals.__j6e2Hooks; delete globals.__j6e2Navigate;

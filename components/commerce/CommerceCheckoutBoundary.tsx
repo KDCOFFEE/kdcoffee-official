@@ -23,15 +23,15 @@ export function CartRecoveryNotice() {
     </section> : null}
   </>;
 }
-/** Block before mounting coffee checkout hooks/effects/submit handlers. */
+/** Fresh guards stay closed; persisted dispatched attempts may mount same-attempt recovery. */
 export default function CommerceCheckoutBoundary({ children }: { children: React.ReactNode }) {
-  const { checkoutEligibility } = useCart();
-  if (checkoutEligibility === "ELIGIBLE") return <>{children}</>;
+  const { checkoutEligibility, recoverableProtocolV1Attempt } = useCart();
+  if (recoverableProtocolV1Attempt || checkoutEligibility === "ELIGIBLE") return <>{children}</>;
   return <main className="commerce-page">
     <header className="commerce-topbar"><Link href="/">KD COFFEE</Link><span>結帳</span><Link href="/cart">返回購物車</Link></header>
     <section className="commerce-shell">
       <h1>{checkoutEligibility === "EMPTY" ? "購物車目前是空的" : "請先確認購物車"}</h1>
-      <p role={checkoutEligibility === "MIGRATION_PENDING" ? "status" : "alert"}>{checkoutEligibilityMessage(checkoutEligibility)}</p>
+      <p role={(checkoutEligibility === "MIGRATION_PENDING" || checkoutEligibility === "STORE_CHECKOUT_CHECKING") ? "status" : "alert"}>{checkoutEligibilityMessage(checkoutEligibility)}</p>
       <CartRecoveryNotice />
       <Link href="/cart">返回購物車</Link>
       {checkoutEligibility === "EMPTY" ? <p><Link href="/works">選購咖啡</Link> · <Link href="/store">逛逛商店</Link></p> : null}

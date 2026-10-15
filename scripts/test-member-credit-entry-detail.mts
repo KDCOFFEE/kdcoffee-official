@@ -57,7 +57,7 @@ class HookFixture {
   }
   useRef<T>(value: T) { return this.useState({ current: value })[0]; }
   useId() { return this.useState("fixture-title")[0]; }
-  useContext() { return {}; }
+  useContext() { return { overrides: {} }; }
   useEffect(effect: () => void, deps: unknown[]) {
     const index = this.cursor++, previous = this.slots[index] as unknown[] | undefined;
     if (!previous || deps.some((value, position) => value !== previous[position])) this.effects.push(effect);
@@ -162,11 +162,11 @@ try {
     assert.equal((listHtml.match(/class="entryAction"/g) ?? []).length, 4);
     assert.deepEqual(ownPage.entries.map(e => e.balanceAfter), [160, 165, 65, 40, 20, 5]);
   });
-  const overrides: Record<string, string> = { "member.rewards.storeCredit.title": "測試咖啡金", "member.dashboard.label.622f3c5acb": "枚", "member.rewards.kdPoints.title": "咖啡點",
+  const overrides: Record<string, string> = { "member.rewards.storeCredit.title": "測試咖啡金", "member.dashboard.label.622f3c5acb": "枚",
     "credit.passbook.entryDetails": "看這一筆", "credit.passbook.detail.creditAmount": "本笔{creditName}", "credit.passbook.detail.status": "驗收狀態" };
   check("shared names units point names and explicit copy keys apply to detail", () => {
     const html = render(createElement(Detail, { entry: row, onDismiss() {}, pointDisplayName: "PV" }), overrides);
-    for (const value of ["本笔測試咖啡金", "+5 枚", "+5 咖啡點", "驗收狀態", "餘額 5 枚"]) assert.ok(html.includes(value), value);
+    for (const value of ["本笔測試咖啡金", "+5 枚", "+5 PV", "驗收狀態", "餘額 5 枚"]) assert.ok(html.includes(value), value);
     assert.ok(render(createElement(Ledger, { initialPage: ownPage }), overrides).includes("看這一筆"));
   });
   await copyStore.saveMemberCenterCopy({ expectedRevision: 0, overrides });

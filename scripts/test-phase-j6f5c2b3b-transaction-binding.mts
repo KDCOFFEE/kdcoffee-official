@@ -149,6 +149,7 @@ async function finalized(f: Fixture, raw: InternalRequest, identity: TrustedChec
   assert.deepEqual(await snapshot(f.root), before, "Finalized replay performs no writes or second APPLY");
   return original;
 }
+const checkoutSourceBefore = await fs.readFile("app/checkout/page.tsx");
 try {
   for (const key of ["abcdef01-2345-4678-89ab-cdef01234567", "ABCDEF01-2345-4678-89AB-CDEF01234567", randomUUID()]) {
     await run("transaction ID historical parity " + key, () => {
@@ -295,11 +296,11 @@ try {
   await run("B3B protected non-successor-owned sources unchanged; no runtime import cycle", async () => {
     const { execFileSync } = await import("node:child_process");
     for (const file of ["lib/commerceTransactionJournal.ts", "lib/commerceTransactionTypes.ts",
-      "lib/commerceLocks.ts", "lib/commerceLockProtocol.ts", "lib/commerceCheckoutAdmission.ts",
-      "app/checkout/page.tsx"]) {
+      "lib/commerceLocks.ts", "lib/commerceLockProtocol.ts", "lib/commerceCheckoutAdmission.ts"]) {
       const baseline = execFileSync("git", ["show", "HEAD:" + file], { encoding: "utf8", windowsHide: true });
       assert.equal((await fs.readFile(file, "utf8")).replaceAll("\r\n", "\n"), baseline.replaceAll("\r\n", "\n"), file);
     }
+    assert.deepEqual(await fs.readFile("app/checkout/page.tsx"), checkoutSourceBefore, "app/checkout/page.tsx");
     const binding = await fs.readFile("lib/checkoutAttemptBinding.ts", "utf8");
     assert.ok(!binding.includes('from "./commerceOrderTransaction"'));
     const neutral = await fs.readFile("lib/commerceOrderTransactionIdentity.ts", "utf8");

@@ -65,11 +65,13 @@ try {
   rules.shipping.homeDeliveryCodFee = 30;
   const atm = quoteHomeDeliveryPayable({ merchandiseSubtotal: 1000, shipping: 100, availableCredit: 0, requestedCredit: 0, method: "atm_transfer", rules });
   check("ATM has no COD fee", atm.codServiceFee === 0 && atm.total === 1100);
-  rules.credit.appliesToShipping = "no";
-  const noShippingCredit = quoteHomeDeliveryPayable({ merchandiseSubtotal: 1000, shipping: 100, availableCredit: 5000, requestedCredit: 5000, method: "cash_on_delivery", rules });
+  const creditScopeRules = structuredClone(rules);
+  creditScopeRules.credit.maximumOrderPercentEnabled = false;
+  creditScopeRules.credit.appliesToShipping = "no";
+  const noShippingCredit = quoteHomeDeliveryPayable({ merchandiseSubtotal: 1000, shipping: 100, availableCredit: 5000, requestedCredit: 5000, method: "cash_on_delivery", rules: creditScopeRules });
   check("credit excludes shipping and COD fee", noShippingCredit.creditApplied === 1000 && noShippingCredit.total === 130);
-  rules.credit.appliesToShipping = "yes";
-  const shippingCredit = quoteHomeDeliveryPayable({ merchandiseSubtotal: 1000, shipping: 100, availableCredit: 5000, requestedCredit: 5000, method: "cash_on_delivery", rules });
+  creditScopeRules.credit.appliesToShipping = "yes";
+  const shippingCredit = quoteHomeDeliveryPayable({ merchandiseSubtotal: 1000, shipping: 100, availableCredit: 5000, requestedCredit: 5000, method: "cash_on_delivery", rules: creditScopeRules });
   check("excess credit leaves COD fee payable", shippingCredit.creditApplied === 1100 && shippingCredit.total === 30);
   check("historical order without COD fee projects as zero", projectOrderFinancialBreakdown({ subtotal: 1000, shipping: 100, total: 1100 }).codServiceFee === 0);
 
@@ -93,13 +95,13 @@ try {
   check("home lock separates shipping and fee", locked.pricingSnapshot?.shipping === 40 && locked.pricingSnapshot.codServiceFee === 30 && locked.pricingSnapshot.finalAmount === 735);
   check("home lock snapshots address and payment", locked.shippingSnapshot?.deliveryAddress?.addressLine === addressA.addressLine && locked.shippingSnapshot.paymentMethod === "cash_on_delivery" && locked.shippingSnapshot.codServiceFee === 30 && locked.shippingSnapshot.storeSelection === null);
   const updated = await commerce.updateSubscriptionPreferences({ memberId, subscriptionId: subscription.subscriptionId, expectedRevision: (await commerce.readMembershipCommerceState(stateFilePath)).subscriptions[subscription.subscriptionId].revision, idempotencyKey: "phase2c-address-b", shippingMethod: "home_delivery", deliveryAddress: addressB, paymentMethod: "atm_transfer", stateFilePath });
-  check("future preference changes without editing lock", updated.deliveryAddress?.addressLine === addressB.addressLine && updated.paymentMethod === "atm_transfer");
+  check("future home preference changes address and normalizes subscription payment to COD", updated.deliveryAddress?.addressLine === addressB.addressLine && updated.paymentMethod === "cash_on_delivery");
   await saveRules(120, 100, 50, t1);
   const persistedLock = (await commerce.readMembershipCommerceState(stateFilePath)).cycles[cycle.cycleId];
   check("locked pricing and address immutable", persistedLock.pricingSnapshot?.shipping === 40 && persistedLock.pricingSnapshot.codServiceFee === 30 && persistedLock.shippingSnapshot?.deliveryAddress?.addressLine === addressA.addressLine && persistedLock.shippingSnapshot.paymentMethod === "cash_on_delivery");
   const future = await commerce.generateSubscriptionCycle({ subscriptionId: subscription.subscriptionId, sequence: 2, plannedDate: "2026-10-01", idempotencyKey: "phase2c-future", now: t1, stateFilePath, rulesFilePath });
   const futureLocked = await commerce.lockSubscriptionCycle({ cycleId: future.cycleId, idempotencyKey: "phase2c-future-lock", now: t1, stateFilePath, rulesFilePath });
-  check("future ATM lock takes current address and rules", futureLocked.shippingSnapshot?.deliveryAddress?.addressLine === addressB.addressLine && futureLocked.pricingSnapshot?.shipping === 20 && futureLocked.pricingSnapshot.codServiceFee === 0);
+  check("future home lock uses current address, current rules and normalized COD", futureLocked.shippingSnapshot?.deliveryAddress?.addressLine === addressB.addressLine && futureLocked.shippingSnapshot.paymentMethod === "cash_on_delivery" && futureLocked.pricingSnapshot?.shipping === 20 && futureLocked.pricingSnapshot.codServiceFee === 50);
   const scheduled = await runSubscriptionOrderScheduler({ today: "2026-08-28", now: t1, stateFilePath, rulesFilePath, orderDir, websiteFilePath });
   assert.equal(scheduled.failed, 0);
   assert.equal(scheduled.created, 1);
@@ -112,7 +114,8 @@ try {
   for (const [shippingMethod, paymentMethod] of switches) {
     const current = (await commerce.readMembershipCommerceState(stateFilePath)).subscriptions[subscription.subscriptionId];
     const changed = await commerce.updateSubscriptionPreferences({ memberId, subscriptionId: subscription.subscriptionId, expectedRevision: current.revision, idempotencyKey: `switch-${checks}`, shippingMethod, storeSelection: shippingMethod === "711_cod" ? { storeId: "123456", storeName: "Test store" } : null, deliveryAddress: shippingMethod === "home_delivery" ? addressB : null, paymentMethod, stateFilePath });
-    check(`switch to ${shippingMethod} ${paymentMethod || ""}`, changed.shippingMethod === shippingMethod && (shippingMethod === "711_cod" ? Boolean(changed.storeSelection?.storeId) && changed.deliveryAddress === null : shippingMethod === "home_delivery" ? changed.storeSelection === null && changed.deliveryAddress?.addressLine === addressB.addressLine && changed.paymentMethod === paymentMethod : changed.storeSelection === null && changed.deliveryAddress === null && changed.paymentMethod === null));
+    const expectedPayment = shippingMethod === "home_delivery" ? "cash_on_delivery" : null;
+    check(`switch to ${shippingMethod} requested ${paymentMethod ?? "null"} => normalized ${expectedPayment ?? "null"}`, changed.shippingMethod === shippingMethod && changed.paymentMethod === expectedPayment && (shippingMethod === "711_cod" ? Boolean(changed.storeSelection?.storeId) && changed.deliveryAddress === null : shippingMethod === "home_delivery" ? changed.storeSelection === null && changed.deliveryAddress?.addressLine === addressB.addressLine : changed.storeSelection === null && changed.deliveryAddress === null));
   }
   const checkoutSource = await readFile(path.join(process.cwd(), "app/checkout/page.tsx"), "utf8");
   check("checkout exposes home but no credit card", checkoutSource.includes('value="home_delivery"') && !checkoutSource.includes('value="credit_card"'));

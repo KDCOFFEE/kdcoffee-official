@@ -6,7 +6,8 @@ import {
   mergeCartLines, coffeeRoastEligible, isCoffeeRoastSku, validateCoffeeOptions,
   cartCheckoutEligibility, coffeeCheckoutItems, isCartRecord, assertCartFields,
 } from "@/lib/commerceCart";
-import type { UnifiedCartItem, CoffeeCheckoutItem, CheckoutEligibility, CartMigrationState, MigrationIssue, MigrationNotice } from "@/lib/commerceCart";
+import type { UnifiedCartItem, CoffeeCheckoutItem, CheckoutEligibility, CartMigrationState, MigrationIssue, MigrationNotice, StoreCheckoutAvailability } from "@/lib/commerceCart";
+import { checkStoreCheckoutAvailability, hasRecoverableProtocolV1Attempt, PROTOCOL_V1_ATTEMPT_EVENT } from "@/lib/publicCommerceCheckoutClient";
 import { readCartStorage, validateCartEnvelope, writeCartEnvelope } from "@/lib/commerceCartStorage";
 import type { CartEnvelope } from "@/lib/commerceCartStorage";
 
@@ -27,6 +28,9 @@ export type CartContextValue = {
   retryMigration: () => Promise<void>;
   discardUnresolved: () => void;
   getCoffeeCheckoutItems: () => CoffeeCheckoutItem[];
+  getProtocolV1CheckoutItems: () => UnifiedCartItem[];
+  storeCheckoutAvailability: StoreCheckoutAvailability;
+  recoverableProtocolV1Attempt: boolean;
 };
 const CartContext = createContext<CartContextValue | null>(null);
 // Compatibility names now reference the foundation functions, never slug-based keys.
@@ -43,6 +47,46 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     envelope: emptyEnvelope(), migrationState: "PENDING", persistenceWarning: false,
   });
   const current = useRef(state);
+  const [storeCheck, setStoreCheck] = useState<{ signature: string; status: StoreCheckoutAvailability }>({
+    signature: "", status: "NOT_REQUIRED",
+  });
+  const offerChecks = useRef(new Map<string, StoreCheckoutAvailability>());
+  const storeCheckCurrent = useRef(storeCheck);
+  storeCheckCurrent.current = storeCheck;
+  const [recoverableProtocolV1Attempt, setRecoverableProtocolV1Attempt] = useState(false);
+  const cartSignature = JSON.stringify(state.envelope.items);
+  function availabilityFor(items: readonly UnifiedCartItem[]): StoreCheckoutAvailability {
+    if (!items.some(item => item.domain === "store")) return "NOT_REQUIRED";
+    return storeCheckCurrent.current.signature === JSON.stringify(items) ? storeCheckCurrent.current.status : "CHECKING";
+  }
+  useEffect(() => {
+    const refresh = () => {
+      try { setRecoverableProtocolV1Attempt(hasRecoverableProtocolV1Attempt(window.sessionStorage)); }
+      catch { setRecoverableProtocolV1Attempt(false); }
+    };
+    refresh();
+    window.addEventListener?.(PROTOCOL_V1_ATTEMPT_EVENT, refresh);
+    return () => window.removeEventListener?.(PROTOCOL_V1_ATTEMPT_EVENT, refresh);
+  }, []);
+  useEffect(() => {
+    const controller = new AbortController();
+    const items = state.envelope.items;
+    if (state.migrationState !== "READY" || !items.some(item => item.domain === "store")) return;
+    const publishCheck = (status: StoreCheckoutAvailability) => {
+      const next = { signature: cartSignature, status };
+      storeCheckCurrent.current = next; setStoreCheck(next);
+    };
+    const cached = offerChecks.current.get(cartSignature);
+    if (cached) { publishCheck(cached); return; }
+    // At most eight signatures per provider lifetime; an interrupted run fails closed.
+    if (offerChecks.current.size >= 8) offerChecks.current.delete(offerChecks.current.keys().next().value!);
+    offerChecks.current.set(cartSignature, "UNAVAILABLE");
+    publishCheck("CHECKING");
+    void checkStoreCheckoutAvailability(items, fetch, controller.signal).then(status => {
+      if (!controller.signal.aborted) { offerChecks.current.set(cartSignature, status); publishCheck(status); }
+    });
+    return () => controller.abort();
+  }, [state.migrationState, cartSignature]);
   const epoch = useRef(0);
   const controller = useRef<AbortController | null>(null);
   // A failed write/readback retries this same resolved envelope, never an unverified storage value.
@@ -121,7 +165,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const value = useMemo<CartContextValue>(() => {
     const items = state.envelope.items;
     const eligibility = () => cartCheckoutEligibility(current.current.envelope.items,
-      current.current.migrationState, current.current.envelope.migration.unresolved, current.current.persistenceWarning);
+      current.current.migrationState, current.current.envelope.migration.unresolved, current.current.persistenceWarning,
+      availabilityFor(current.current.envelope.items));
     return {
       items, ready: state.migrationState === "READY",
       count: items.reduce((sum, item) => sum + item.quantity, 0),
@@ -129,13 +174,21 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       migrationState: state.migrationState, unresolved: state.envelope.migration.unresolved,
       notices: state.envelope.migration.notices, persistenceWarning: state.persistenceWarning,
       checkoutEligibility: cartCheckoutEligibility(items, state.migrationState,
-        state.envelope.migration.unresolved, state.persistenceWarning),
+        state.envelope.migration.unresolved, state.persistenceWarning, availabilityFor(items)),
+      storeCheckoutAvailability: availabilityFor(items), recoverableProtocolV1Attempt,
       retryMigration: hydrate,
       discardUnresolved: () => commit({ ...current.current.envelope,
         migration: { ...current.current.envelope.migration, unresolved: [] } }),
       getCoffeeCheckoutItems: () => {
         if (eligibility() !== "ELIGIBLE") throw new Error("Cart is not eligible for coffee checkout");
         return coffeeCheckoutItems(current.current.envelope.items);
+      },
+      getProtocolV1CheckoutItems: () => {
+        const items = current.current.envelope.items;
+        if (eligibility() !== "ELIGIBLE" || !items.some(item => item.domain === "store")) {
+          throw new Error("Cart is not eligible for Protocol V1 checkout");
+        }
+        return items.map(validateUnifiedCartItem);
       },
       addItem: (raw, quantity = 1) => {
         if (current.current.migrationState !== "READY") return 0;
@@ -191,7 +244,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       clearCart: () => commit({ ...current.current.envelope, items: [],
         migration: { ...current.current.envelope.migration, unresolved: [], notices: [] } }),
     };
-  }, [state, hydrate]);
+  }, [state, hydrate, storeCheck, recoverableProtocolV1Attempt]);
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
 }

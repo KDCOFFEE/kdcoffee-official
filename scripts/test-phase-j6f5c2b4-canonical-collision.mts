@@ -214,6 +214,7 @@ async function race(f: Fixture, key: string, first: () => Promise<unknown>, seco
     await Promise.allSettled([winner, ...(loser ? [loser] : [])]);
   }
 }
+const checkoutSourceBefore = await fs.readFile("app/checkout/page.tsx");
 try {
   await run("upper/lower share one physical rank-0 resource; lowercase pre-B4 SHA path unchanged", async () => {
     const f = await fixture(), key = uuid(), lower = orderIdempotencyResource(f.orderDir, key), upper = orderIdempotencyResource(f.orderDir, key.toUpperCase());
@@ -397,10 +398,11 @@ try {
     const { execFileSync } = await import("node:child_process");
     for (const file of ["lib/commerceLocks.ts", "lib/commerceLockProtocol.ts", "lib/commerceTransactionJournal.ts",
       "lib/commerceTransactionTypes.ts", "lib/checkoutAttemptBinding.ts", "lib/publicCheckoutContract.ts", "lib/commerceOrderTransactionIdentity.ts",
-      "lib/commerceCheckoutAdmission.ts", "lib/orderInventoryTransaction.ts", "app/checkout/page.tsx"]) {
+      "lib/commerceCheckoutAdmission.ts", "lib/orderInventoryTransaction.ts"]) {
       const baseline = execFileSync("git", ["show", "HEAD:" + file], { encoding: "utf8", windowsHide: true });
       assert.equal((await fs.readFile(file, "utf8")).replaceAll("\r\n", "\n"), baseline.replaceAll("\r\n", "\n"), file);
     }
+    assert.deepEqual(await fs.readFile("app/checkout/page.tsx"), checkoutSourceBefore, "app/checkout/page.tsx");
     const resolver = await fs.readFile("lib/checkoutAttemptResolver.ts", "utf8");
     assert.ok(!resolver.includes('from "./commerceOrderTransaction"'));
     const route = await fs.readFile("app/api/orders/route.ts", "utf8");

@@ -225,25 +225,29 @@ export function mergeCartLines(items: readonly UnifiedCartItem[]): UnifiedCartIt
   return [...lines.values()];
 }
 export type CartMigrationState = "PENDING" | "READY" | "FAILED";
+export type StoreCheckoutAvailability = "NOT_REQUIRED" | "CHECKING" | "AVAILABLE" | "UNAVAILABLE";
 export type CheckoutEligibility = "ELIGIBLE" | "EMPTY" | "MIGRATION_PENDING" | "MIGRATION_FAILED"
-  | "UNRESOLVED_LEGACY_ITEMS" | "STORE_CHECKOUT_NOT_ENABLED" | "PERSISTENCE_FAILED" | "CART_UNAVAILABLE";
+  | "UNRESOLVED_LEGACY_ITEMS" | "STORE_CHECKOUT_CHECKING" | "STORE_CHECKOUT_NOT_ENABLED" | "PERSISTENCE_FAILED" | "CART_UNAVAILABLE";
 export function cartCheckoutEligibility(
   items: readonly UnifiedCartItem[], migration: CartMigrationState,
   unresolved: readonly MigrationIssue[], persistenceWarning = false,
+  storeAvailability: StoreCheckoutAvailability = "UNAVAILABLE",
 ): CheckoutEligibility {
   if (migration === "PENDING") return "MIGRATION_PENDING";
   if (migration === "FAILED") return "MIGRATION_FAILED";
   if (unresolved.length) return "UNRESOLVED_LEGACY_ITEMS";
-  if (items.some(item => item.domain === "store")) return "STORE_CHECKOUT_NOT_ENABLED";
+  const hasStore = items.some(item => item.domain === "store");
+  if (hasStore && storeAvailability === "CHECKING") return "STORE_CHECKOUT_CHECKING";
+  if (hasStore && storeAvailability !== "AVAILABLE") return "STORE_CHECKOUT_NOT_ENABLED";
   if (persistenceWarning) return "PERSISTENCE_FAILED";
   if (!items.length) return "EMPTY";
   try {
-    const legacy = coffeeCheckoutItems(items);
-    if (items.some(item => cartInventoryDemand(items, item) > cartInventoryLimit(items, item))) return "CART_UNAVAILABLE";
-    for (const [index, item] of legacy.entries()) {
-      if (!item.customRoast) continue;
-      const canonical = items[index];
-      const total = items.reduce((sum, entry) => sum + (
+    if (!hasStore) coffeeCheckoutItems(items); // Preserve the legacy whole-cart projection.
+    const checked = hasStore ? items.map(validateUnifiedCartItem) : items;
+    if (checked.some(item => cartInventoryDemand(checked, item) > cartInventoryLimit(checked, item))) return "CART_UNAVAILABLE";
+    for (const canonical of checked) {
+      if (canonical.domain !== "coffee" || !canonical.coffeeOptions.customRoast) continue;
+      const total = checked.reduce((sum, entry) => sum + (
         entry.domain === "coffee" && entry.productId === canonical.productId && entry.coffeeOptions.customRoast
           ? entry.quantity : 0), 0);
       if (!isCoffeeRoastSku(canonical) || total < CUSTOM_ROAST_MIN_QUANTITY) return "CART_UNAVAILABLE";
@@ -272,7 +276,8 @@ export function checkoutEligibilityMessage(status: CheckoutEligibility): string 
     case "MIGRATION_PENDING": return "購物車資料正在更新，請稍候。";
     case "MIGRATION_FAILED": return "購物車資料正在更新，暫時無法完成載入。";
     case "UNRESOLVED_LEGACY_ITEMS": return "部分舊購物項目已無法辨識，需要重新選購。";
-    case "STORE_CHECKOUT_NOT_ENABLED": return "商店商品的結帳整合仍在測試中，目前請先返回購物車。";
+    case "STORE_CHECKOUT_CHECKING": return "正在確認商店商品是否可結帳…";
+    case "STORE_CHECKOUT_NOT_ENABLED": return "商店結帳目前尚未開放，或商品資訊已更新，請重新整理或重新加入商品。";
     case "PERSISTENCE_FAILED": return "購物車尚未成功儲存，請重試後再結帳。";
     case "CART_UNAVAILABLE": return "部分商品數量或專屬烘焙需求需要確認，請返回購物車調整。";
     case "EMPTY": return "購物車目前是空的";

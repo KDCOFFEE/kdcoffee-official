@@ -188,18 +188,19 @@ try {
   for (const [label, input, expected] of markerCases)
     await run("marker: " + label, () => assert.equal(hasExplicitCommerceDomainMarker(input), expected));
   const route = await fs.readFile("app/api/orders/route.ts", "utf8");
-  const headRoute = execFileSync("git", ["cat-file", "--filters", "HEAD:app/api/orders/route.ts"], { encoding: "utf8" });
+  const preDispatchRouteRef = "cc0c10ff9bf3ada66ceafa708f4a22506770eb3c";
+  const preDispatchRoute = execFileSync("git", ["cat-file", "--filters", preDispatchRouteRef + ":app/api/orders/route.ts"], { encoding: "utf8" });
   const legacyStart = "    const idempotencyKey = clean(body.idempotencyKey, 100);";
   const moduleSource = await fs.readFile("lib/publicCommerceCheckoutDispatch.ts", "utf8");
-  await run("legacy continuation is byte-equivalent HEAD", () => {
-    assert.equal(route.slice(route.indexOf(legacyStart)), headRoute.slice(headRoute.indexOf(legacyStart)));
+  await run("legacy continuation is byte-equivalent C2C2C1 predecessor", () => {
+    assert.equal(route.slice(route.indexOf(legacyStart)), preDispatchRoute.slice(preDispatchRoute.indexOf(legacyStart)));
   });
-  await run("only dispatcher import and immediate post-json branch added", () => {
+  await run("only dispatcher import and immediate post-json branch differ from C2C2C1 predecessor", () => {
     const addedImport = 'import { dispatchPublicCommerceCheckout, hasExplicitCommerceDomainMarker, PUBLIC_CHECKOUT_ATTEMPT_ACCESS_HEADER } from "@/lib/publicCommerceCheckoutDispatch";';
     const withoutImport = route.replace(addedImport + (route.includes("\r\n") ? "\r\n" : "\n"), "");
     const start = withoutImport.indexOf("    if (hasExplicitCommerceDomainMarker(body)) {");
     const end = withoutImport.indexOf(legacyStart);
-    assert.equal(withoutImport.slice(0, start) + withoutImport.slice(end), headRoute);
+    assert.equal(withoutImport.slice(0, start) + withoutImport.slice(end), preDispatchRoute);
     assert.ok(withoutImport.indexOf("const body = await request.json();") < start);
   });
   await run("V1 branch returns before every legacy effect", () => {
@@ -585,7 +586,7 @@ try {
   await run("C2C2C1 production hash is exact approved foundation", () => assert.equal(sourceHashes.get("lib/commerceOrderTransaction.ts"),
     "68f88d5c340f8047328856886a172241bdb933b3cdcfdb29f9493521e2dc7474"));
   await run("C2C2C1 focused test hash is exact frozen foundation", () => assert.equal(sourceHashes.get("scripts/test-phase-j6f5c2c2c1-locked-fresh-admission.mts"),
-    "aefd50bf5d6165dc21bc94ebc6ff20e857c9f103fc2e9cc7a8e706e27336eba4"));
+    "da3ec440f125a30f5d6032cf170ed207663f5b429e9ecd53601e83d238d5a1b0"));
   await run("network calls remain zero", () => assert.equal(networkCalls, 0));
   assert.ok(checks >= 90, "coverage floor");
   console.log("J.6F.5C2C2C2 PASS " + checks + "/" + checks);

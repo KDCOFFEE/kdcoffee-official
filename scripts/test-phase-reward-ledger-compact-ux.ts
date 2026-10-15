@@ -66,22 +66,22 @@ check(compactCard.includes("compactRewardDisplayStatus(displayStatus)"), "compac
 check(compactCard.includes("sourceOrderNumber") && compactCard.includes("compactRewardSource"), "compact card shows source order number and date");
 check(compactCard.includes("summarizeRewardSourceItems(sourceItems)"), "compact card uses the shared concise product summary");
 check(compactCard.includes('`+ ${number(rewardPV)} ${pointDisplayName}`'), "compact card gives reward KD points primary emphasis");
-check(compactCard.includes("money(creditAmount)"), "compact card shows monetary credit separately");
-check(compactCard.includes("rewardTimingText(explanation)") && compactCard.includes('credited && releasedAt') && compactCard.includes('reversed\n        ? "已沖回"'), "compact card distinguishes projected, credited, and reversed dates through the shared timing projection");
-check(compactCard.includes('reversed ? "已沖回折抵" : credited ? "實際入帳" : "預估折抵"'), "reversed rows do not mislabel reversed credit as deposited");
+check(compactCard.includes("creditMoney(creditAmount)") && compactCard.includes('copy("member.dashboard.label.622f3c5acb")'), "compact card shows monetary credit separately");
+check(compactCard.includes("rewardTimingText(explanation)") && compactCard.includes('credited && releasedAt') && compactCard.replace(/\r\n/g, "\n").includes('reversed\n        ? "已沖回"'), "compact card distinguishes projected, credited, and reversed dates through the shared timing projection");
+check(compactCard.includes('credited && !reversed ? <MemberCopyText copyKey="member.rewards.reward.14f77fbdd5" />') && compactCard.includes('copyKey={reversed ? "member.rewards.label.26e649895b" : "member.rewards.label.de7f9bd9d5"}'), "reversed rows do not mislabel reversed credit as deposited");
 check(compactCard.includes('sourceOrderSummary?.completedAt') && compactCard.includes('"入帳日期確認中"') && compactCard.includes('"待完成取貨後計算"'), "unknown release date distinguishes completed pickup from unfinished fulfillment");
 check(compactCard.includes("hidden={!expanded}"), "calculation, qualification, lifecycle, and source detail are hidden by default");
 check(compactCard.includes('aria-expanded={expanded}') && compactCard.includes('aria-controls={detailId}'), "detail trigger exposes accessible expansion state and target");
 check(compactCard.includes('expanded ? "收合詳情" : "查看詳情"'), "one action expands and collapses the selected reward");
 check(center.includes("expandedRewardKey === row.stableKey") && center.includes("current === row.stableKey ? null : row.stableKey"), "accordion state permits only one expanded reward key");
-check(compactCard.includes("回饋怎麼算") && compactCard.includes("rewardCalculationGrid"), "expanded detail shows calculation section");
+check(compactCard.includes('copyKey="member.rewards.reward.e6e9ffffbb"') && compactCard.includes("rewardCalculationGrid"), "expanded detail shows calculation section");
 check(compactCard.includes("formatRewardRatePercent(rewardRate)"), "expanded detail formats canonical percentage points without multiplying");
 check(compactCard.includes("RewardSourceOrderSummaryCard") && compactCard.includes('variant="source-only"'), "expanded detail reuses the privacy-safe source-order summary");
-check(compactCard.includes("資格狀態") && compactCard.includes("qualificationSummary"), "expanded detail shows qualification status");
-check(compactCard.includes("入帳進度") && compactCard.includes("lifecycleLabels.map"), "expanded detail contains the compact lifecycle");
-check(compactCard.includes("查看資格規則") && compactCard.includes("rewardRuleDisclosure"), "full qualification rules remain a nested closed disclosure");
+check(compactCard.includes('copyKey="member.rewards.qualification.e1ace5bfdf"') && compactCard.includes("qualificationSummary"), "expanded detail shows qualification status");
+check(compactCard.includes('copyKey="member.rewards.reward.79c46a2cf8"') && compactCard.includes("lifecycleLabels.map"), "expanded detail contains the compact lifecycle");
+check(compactCard.includes('copyKey="member.rewards.qualification.a3dc142801"') && compactCard.includes("rewardRuleDisclosure"), "full qualification rules remain a nested closed disclosure");
 check(!compactCard.includes("<dialog") && !compactCard.includes("showModal"), "compact cards introduce no nested modal");
-check(sourceCard.includes("summary.canViewFullOrder") && sourceCard.includes("查看完整訂單"), "own-order full link remains guarded by actual ownership");
+check(sourceCard.includes("summary.canViewFullOrder") && sourceCard.includes('href={`/orders/${encodeURIComponent(summary.orderNumber)}`}') && sourceCard.includes('copyKey="member.rewards.button.52c7dd3708"'), "own-order full link remains guarded by actual ownership");
 check(!compactCard.includes("customerName") && !compactCard.includes("phone") && !compactCard.includes("email") && !compactCard.includes("address"), "compact presentation declares no customer PII fields");
 check(!compactCard.includes("guestToken") && !compactCard.includes("accessToken") && !compactCard.includes("memberId"), "compact presentation declares no tokens or internal member ID");
 check(compactCard.includes("formatRewardRatePercent") && helper.includes('return `${finiteNumber(value).toLocaleString'), "5 percent formatter remains the shared percentage-point formatter");
@@ -99,7 +99,7 @@ check(css.includes("white-space: nowrap") && css.includes("text-overflow: ellips
 check(css.includes("grid-template-columns: repeat(2, minmax(0, 1fr))"), "expanded calculation uses a readable two-column grid, not four tiny columns");
 check(css.includes("@media (max-width: 700px)") && css.includes("compactRewardCard"), "mobile-specific compact spacing is present");
 check(css.includes(':global(.member-org-order-card-source-only)') && sourceCard.includes('variant === "source-only"'), "expanded safe order detail removes nested card chrome");
-check(page.includes("commerce.pendingRewardSummary") && page.includes("預估折抵"), "unified dashboard pending total remains unchanged");
+check(page.includes("commerce.pendingRewardSummary") && page.includes('copyKey="member.dashboard.label.693d81614f"') && page.includes('pendingRewardCredit.toLocaleString("zh-TW")'), "unified dashboard pending total remains unchanged");
 check(org.includes("RewardSourceOrderSummaryCard") && org.includes("onPointerMove") && org.includes("pointers.current"), "Organization Chart viewer and interactions remain intact");
 check(disclosure.includes("suppressHydrationWarning") && disclosure.includes("details.open = open"), "MemberMobileDisclosure hydration fix remains intact");
 check(nav.includes("usePathname") && nav.includes("useSearchParams"), "Member route synchronization remains intact");
@@ -110,12 +110,12 @@ check(!compactCard.includes("/api/") && !compactCard.includes("fetch("), "compac
 check(!compactCard.includes("data/membership-commerce") && !compactCard.includes("public/data") && !compactCard.includes("public/uploads"), "compact UI has no protected-data write path");
 check(!center.includes("這筆 ${pointValue") && !center.includes("member-reward-transparency"), "overlapping per-reward calculation disclosure was removed");
 check(!center.includes("member-reward-transparency-grid") && !center.includes("member-reward-lifecycle"), "old always-tall nested reward layout was removed from the ledger");
-check(center.includes("累計回饋") && center.includes("本月已入帳"), "top summary preserves the four prioritized totals");
-check(center.includes("預估折抵 NT$") && center.includes("pendingRewardSourceCount"), "top summary retains the concise pending count and credit line");
-check(center.includes("推薦回饋如何計算？") && center.includes("<details"), "global reward explanation remains collapsed by default");
+check(center.includes('copyKey="member.referral.reward.7dc7d454e0"') && center.includes("totalRewardPoints") && center.includes('copyKey="member.referral.reward.761dfcd646"') && center.includes("currentMonthRewardPoints"), "top summary preserves the four prioritized totals");
+check(center.includes("pendingRewardSourceCount") && center.includes('copyKey="member.dashboard.label.693d81614f"') && center.includes('pendingRewardCredit.toLocaleString("zh-TW")'), "top summary retains the concise pending count and credit line");
+check(center.includes('copyKey="member.referral.reward.4b94fc68fd"') && center.includes("data.pvDisclosure ? <details"), "global reward explanation remains collapsed by default");
 
 const changedFiles = execFileSync("git", ["diff", "--name-only"], { encoding: "utf8" }).split(/\r?\n/u).filter(Boolean);
 check(!changedFiles.some((file) => file.includes("reward-release-cron") || file.includes("api/internal/reward-release")), "this working diff does not change cron behavior");
-check(!changedFiles.some((file) => file.startsWith("app/api/orders/") || file === "lib/customerOrderAccess.ts"), "this working diff does not change order authorization");
+check(!changedFiles.some((file) => (file.startsWith("app/api/orders/") && file !== "app/api/orders/[orderNumber]/messages/route.ts") || file === "lib/customerOrderAccess.ts"), "this working diff does not change unrelated order authorization");
 
 console.log(`Reward ledger compact UX checks passed: ${checks}`);

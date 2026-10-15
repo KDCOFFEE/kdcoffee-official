@@ -112,8 +112,8 @@ check(
 );
 
 check(
-  ui.includes(
-    "本筆已由有效推薦資格涵蓋 ✓",
+  /hasQualificationCoverage\s*\?\s*<p><MemberCopyText copyKey="member\.referral\.qualification\.b0a2ab4719" \/><\/p>/u.test(
+    ui,
   ),
   "member sees qualification coverage explanation",
 );

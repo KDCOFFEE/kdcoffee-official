@@ -8,13 +8,14 @@ import { cartProductHref, cartSpecification, coffeeRoastEligible, cartInventoryL
 import { ALLOWED_ROAST_LEVELS } from "@/lib/checkoutRules";
 
 export default function CartPage() {
-  const { items, subtotal, updateQuantity, removeItem, updateCustomRoast, ready, unresolved, persistenceWarning, checkoutEligibility } = useCart();
+  const { items, subtotal, updateQuantity, removeItem, updateCustomRoast, ready, unresolved, persistenceWarning, checkoutEligibility, storeCheckoutAvailability, recoverableProtocolV1Attempt } = useCart();
   const [draftNotes, setDraftNotes] = useState<Record<string, string>>({});
   return <main className="commerce-page">
     <header className="commerce-topbar"><Link href="/">KD COFFEE</Link><span>購物車</span><Link href="/works">繼續選購</Link></header>
     <section className="commerce-shell">
       <div className="commerce-title"><p className="eyebrow dark">YOUR SELECTION</p><h1>購物車</h1><p>確認商品、規格與數量後，再前往填寫取貨資料。</p></div>
       <CartRecoveryNotice />
+      {recoverableProtocolV1Attempt ? <p role="status"><Link href="/checkout">繼續確認此筆訂單</Link></p> : null}
       {ready && items.length === 0 && !unresolved.length && !persistenceWarning ? <div className="empty-cart">
         <h2>購物車目前是空的</h2><p>選一杯咖啡，或逛逛日常器物。</p>
         <Link href="/works">選購咖啡</Link> · <Link href="/store">逛逛商店</Link>
@@ -44,7 +45,7 @@ export default function CartPage() {
                 </div> : null}
               </section> : null}
               {stockLimit === 0 ? <small role="status">目前無法購買</small> : item.domain === "coffee" && item.quantityLimit !== undefined ? <small>現貨購買上限：此規格共 {stockLimit} 包{atStockLimit ? "（已達上限）" : ""}</small> : null}
-              {item.domain === "store" ? <small>商店結帳整合尚未開放</small> : null}
+              {item.domain === "store" && storeCheckoutAvailability !== "AVAILABLE" ? <small role="status">{storeCheckoutAvailability === "CHECKING" ? "正在確認商店商品是否可結帳…" : "商店結帳目前尚未開放，或商品資訊需要重新確認。"}</small> : null}
               <button className="cart-remove-button" type="button" onClick={() => removeItem(key)}>刪除此商品</button>
             </div>
             <div className="quantity-control">

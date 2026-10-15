@@ -305,11 +305,10 @@ export default function OrderConversation({ orderNumber }: { orderNumber: string
     try {
       const response = await fetch(`/api/orders/${encodeURIComponent(orderNumber)}/messages`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(token.current ? { "X-Order-Access-Token": token.current } : {}) },
         body: JSON.stringify({
           actionId: actionId.current,
           message,
-          token: token.current || undefined,
         }),
       });
       const result = await response.json().catch(() => ({}));

@@ -187,7 +187,7 @@ try {
   const custom = Object.fromEntries(passbookKeys.map((item) => [item.key, "編輯：" + item.defaultText]));
   const stored = await copyStore.saveMemberCenterCopy({ expectedRevision: 0, overrides: {
     ...custom, "member.rewards.storeCredit.title": "測試咖啡金", "member.dashboard.label.622f3c5acb": "枚",
-    "member.referral.label.5b29dc001e": "KD弊", "member.rewards.kdPoints.title": "測試點",
+    "member.referral.label.5b29dc001e": "KD弊",
   } });
   const reread = await copyStore.readMemberCenterCopy();
   check("every passbook/status key is editable and survives existing persistent copy storage", () => {
