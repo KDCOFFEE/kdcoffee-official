@@ -1,3 +1,4 @@
+import { dispatchPublicCommerceCheckout, hasExplicitCommerceDomainMarker, PUBLIC_CHECKOUT_ATTEMPT_ACCESS_HEADER } from "@/lib/publicCommerceCheckoutDispatch";
 import { applyOrderCredit } from "@/lib/orderCredit";
 import { readCreditDisplayCopy, creditSystemMessage } from "@/lib/creditDisplayCopy";
 import { validateSubscriptionCreditPreference } from "@/lib/subscriptionCreditPreference";
@@ -67,6 +68,12 @@ async function ensureCheckoutSubscription(memberId: string, order: Record<string
 export async function POST(request: Request) {
   try {
     const body = await request.json();
+    if (hasExplicitCommerceDomainMarker(body)) {
+      const result = await dispatchPublicCommerceCheckout({
+        body, guestAttemptAccessToken: request.headers.get(PUBLIC_CHECKOUT_ATTEMPT_ACCESS_HEADER),
+      });
+      return NextResponse.json(result.body, { status: result.status, headers: { "Cache-Control": "no-store" } });
+    }
     const idempotencyKey = clean(body.idempotencyKey, 100);
     if (!isValidIdempotencyKey(idempotencyKey)) throw new Error("結帳識別碼無效，請重新整理結帳頁後再試。");
     const member = await getCurrentMember();

@@ -233,7 +233,7 @@ try {
   globalThis.fetch = oldFetch;
   for (const [name, value] of Object.entries(savedEnv)) { if (value === undefined) delete process.env[name]; else process.env[name] = value; }
 }
-const successorOwnedCommittedBoundaryFiles = new Set(["lib/commerceOrderTransaction.ts"]);
+const successorOwnedCommittedBoundaryFiles = new Set(["lib/commerceOrderTransaction.ts", "app/api/orders/route.ts"]);
 await check("protected source bytes unchanged and non-successor committed boundaries unchanged", async () => {
   for (const [index, file] of protectedFiles.entries()) {
     assert.deepEqual(await fs.readFile(file), before[index], file);

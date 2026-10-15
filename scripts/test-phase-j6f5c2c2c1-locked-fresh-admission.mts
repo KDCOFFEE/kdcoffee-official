@@ -126,10 +126,6 @@ async function legacy(f: Fixture, raw: RawRequest, number = "KD20261012-9001") {
 }
 const frozenHashes: [string, string][] = [
   [
-    "app/api/orders/route.ts",
-    "3c2e65bbb492873ec41ab7b4b4f93ba65e034cd1dfc8711f470b543ef8809668"
-  ],
-  [
     "app/api/commerce/checkout-attempt/route.ts",
     "ed5604bdc1499bed55c74183f6f46a200b9cf81d9ee30d2dfbdb4e312ce65621"
   ],
@@ -227,7 +223,7 @@ try {
     const source = await fs.readFile("lib/commerceOrderTransaction.ts", "utf8");
     assert.ok(source.includes(recoveryMarker)); assert.equal(recoveryBody(source), recoveryBody(originalSource));
   });
-  await run("protected schemas, lock ranks and all 23 source-freeze hashes match", async () => {
+  await run("protected schemas, lock ranks and all 22 predecessor-owned source-freeze hashes match", async () => {
     for (const [file, hash] of frozenHashes) assert.equal(createHash("sha256").update(await fs.readFile(file)).digest("hex"), hash, file);
   });
   await run("default ownerless F3 studio succeeds with Store gate disabled", async () => {

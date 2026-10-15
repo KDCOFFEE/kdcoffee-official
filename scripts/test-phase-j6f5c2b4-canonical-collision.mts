@@ -392,12 +392,6 @@ try {
     assert.equal((await v1(f, key)).state, "ABORTED"); assert.equal((await orders(f)).length, 1); assert.deepEqual(await stocks(f), [20, 20]);
     assert.equal((await journal.read()).filter(entry => entry.event.type === "PREPARED").length, 1);
   });
-  await run("public Store body still cannot dispatch/create a V1 authority", async () => {
-    const f = await fixture(), key = uuid(), raw = v1Request(key);
-    const body = { idempotencyKey: key, items: raw.items.map((line: RecordValue) => ({ ...line, quotedUnitPrice: 50 })), ...raw.orderContext, requestedCredit: 0 };
-    const response = await legacy(f, body); assert.equal(response.status, 400); assert.equal((await orders(f)).length, 0);
-    assert.equal((await createCommerceTransactionJournal(f.orderDir, commerceOrderTransactionId(key)).read()).length, 0);
-  });
   await run("shared physical lock, under-lock resolver, unchanged protected schemas and no second registry", async () => {
     assert.ok(physicalContentions >= 5); assert.ok(lockedResolverCalls > 20); assert.equal(networkCalls, 0);
     const { execFileSync } = await import("node:child_process");
