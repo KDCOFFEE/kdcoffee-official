@@ -25,7 +25,7 @@ import { createCheckoutAttemptBindingSnapshot, validateCheckoutAttemptBindingSna
   compareCheckoutAttemptBinding, compareHistoricalV1CheckoutAttempt, type CheckoutAttemptBindingSnapshot } from "./checkoutAttemptBinding";
 
 export type CommerceOrderTransactionErrorCode = "INVALID_REQUEST" | "IDEMPOTENCY_CONFLICT"
-  | "MIXED_CREDIT_ALLOCATION_UNRESOLVED" | "SUBSCRIPTION_NOT_SUPPORTED" | "REVIEW_REQUIRED" | "STORAGE_UNAVAILABLE" | AdmissionReason;
+  | "MIXED_CREDIT_ALLOCATION_UNRESOLVED" | "SUBSCRIPTION_NOT_SUPPORTED" | "REVIEW_REQUIRED" | "STORAGE_UNAVAILABLE" | "ATTEMPT_BECAME_DURABLE" | "FRESH_AUTHORITY_INVALID" | AdmissionReason;
 export class CommerceOrderTransactionError extends Error {
   readonly code: CommerceOrderTransactionErrorCode;
   constructor(code: CommerceOrderTransactionErrorCode) { super(code); this.name = "CommerceOrderTransactionError"; this.code = code; }
@@ -84,6 +84,17 @@ export function createCommerceOrderTransactionService(options: {
   generateOrderNumber?: typeof makeOrderNumber;
   /** Trusted server/test scheduling only; never accepted in request JSON. */
   beforeRecoveryLocks?: () => Promise<void>;
+  /** Fresh-only server dependency, never request/persisted data. Runs inside the
+   * complete sealed plan after authoritative resolution/financial derivation.
+   * Must not acquire locks, append journals, mutate inventory, write orders,
+   * call coordinator/create/recoverExisting, or perform nested transactions.
+   * May read the Store gate, fresh credentials and captured quote assertions.
+   */
+  publicFresh?: {
+    validateLocked(input: {
+      canonicalAttemptKey: string; resolution: CommerceOrderResolution; intent: TransactionIntent;
+    }): Promise<void>;
+  };
 } = {}) {
   const now = options.now ?? (() => new Date()), generateOrderNumber = options.generateOrderNumber ?? makeOrderNumber;
   const storage = getStorageRootContract();
@@ -153,6 +164,20 @@ export function createCommerceOrderTransactionService(options: {
       if (!events.length) return null;
       const first = events[0].event;
       if (first.type !== "PREPARED" || first.intent.transactionId !== transactionId) return fail("REVIEW_REQUIRED");
+      if (options.publicFresh) {
+        // Durable handoff precedes current owner/selection comparison. The future
+        // dispatcher must re-authenticate against durable authority before recovery.
+        const durable = first.intent;
+        if (!isCartRecord(durable.order)) return fail("REVIEW_REQUIRED");
+        if (Object.hasOwn(durable.order, "checkoutAttemptBinding")) {
+          const snapshot = validateCheckoutAttemptBindingSnapshot(durable.order.checkoutAttemptBinding);
+          if (snapshot.canonicalAttemptKey !== input.idempotencyKey
+            || durable.requestHash !== snapshot.selectedFactsFingerprint
+            || durable.order.idempotencyKey !== snapshot.canonicalAttemptKey
+            || (Object.hasOwn(durable.order, "idempotencyRequestHash") && durable.order.idempotencyRequestHash !== durable.requestHash)) return fail("REVIEW_REQUIRED");
+        }
+        return durable;
+      }
       if (binding) {
         const durable = first.intent;
         if (!isCartRecord(durable.order)) return fail("REVIEW_REQUIRED");
@@ -180,6 +205,12 @@ export function createCommerceOrderTransactionService(options: {
     try {
       sameStorage();
       let intent = await readIntent();
+      if (options.publicFresh && intent) {
+        const evidence = await resolveCheckoutAttemptEvidence({ orderDir, canonicalAttemptKey: input.idempotencyKey });
+        if (evidence.kind !== "PROTOCOL_V1_ATTEMPT" || evidence.transactionId !== transactionId
+          || evidence.orderNumber !== intent.orderNumber) return fail("REVIEW_REQUIRED");
+        return fail("ATTEMPT_BECAME_DURABLE");
+      }
       if (!intent) {
         // Collision authorization is deferred to the canonical under-lock B2 gate.
         const resolution = await resolveCommerceOrderItems(input.items);
@@ -202,6 +233,7 @@ export function createCommerceOrderTransactionService(options: {
           if (evidence.kind === "NONE" && prepared) return fail("REVIEW_REQUIRED");
           if (evidence.kind === "PROTOCOL_V1_ATTEMPT"
             && (!prepared || evidence.transactionId !== transactionId || evidence.orderNumber !== prepared.orderNumber)) return fail("REVIEW_REQUIRED");
+          if (options.publicFresh && prepared) return fail("ATTEMPT_BECAME_DURABLE");
           if (prepared && prepared.orderNumber !== plannedIntent.orderNumber) return { replan: prepared };
           let canonical = prepared;
           if (!canonical) {
@@ -218,6 +250,7 @@ export function createCommerceOrderTransactionService(options: {
             const resolution = await resolveCommerceOrderItems(input.items);
             sameStorage();
             canonical = await intentFor(input, hash, plannedIntent.orderNumber, resolution, owner, binding);
+            await options.publicFresh?.validateLocked({ canonicalAttemptKey: input.idempotencyKey, resolution, intent: canonical });
           }
           // Durable PREPARED intent binds this attempt's locked authoritative price.
           // Recovery retains that admitted price; later Admin repricing does not create a new attempt.
