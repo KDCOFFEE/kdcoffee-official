@@ -4,9 +4,13 @@ import type { CmsLinkValue } from "./cmsLinks.ts";
 import { isMediaAsset } from "./media.ts";
 import type { VisualColorValue } from "./pageBuilderVisualStyle.ts";
 // @ts-expect-error -- explicit extension keeps Node's type-stripping regression runner compatible.
-import { resolveVisualColor } from "./pageBuilderVisualStyle.ts";
+import { resolveVisualColor, VISUAL_ALIGNMENT_PRESETS, VISUAL_COLOR_PRESETS, VISUAL_WEIGHT_PRESETS } from "./pageBuilderVisualStyle.ts";
 // @ts-expect-error -- explicit extension keeps Node's type-stripping regression runner compatible.
 import { validateCmsLinkValue } from "./cmsLinks.ts";
+
+import type { HomepagePresentationV3 } from "./homepagePresentation.ts";
+// @ts-expect-error -- explicit extension keeps the Node regression runner compatible.
+import { HOMEPAGE_BACKGROUND_MODES, HOMEPAGE_PRESENTATION_NUMBER_RULES, HOMEPAGE_PRESENTATION_PRESETS, HOMEPAGE_PRESENTATION_SECTION_KEYS, HOMEPAGE_TEXT_SLOTS } from "./homepagePresentation.ts";
 
 export const LEGACY_HOME002_CLOSING_TEXT = "你買到的不只是咖啡，還有每一個我們願意多花時間完成的細節。";
 
@@ -492,9 +496,92 @@ function validateHomepageNavigation(value: unknown) {
   });
 }
 
+// H3.2 validation stays at the CMS boundary. The resolver module has only a
+// type dependency on this file, avoiding a runtime import cycle.
+function presentationObject(value: unknown, label: string, keys: readonly string[]): Record<string, unknown> {
+  if (!isRecord(value) || (Object.getPrototypeOf(value) !== Object.prototype && Object.getPrototypeOf(value) !== null)) {
+    throw new Error(`${label}格式不正確。`);
+  }
+  const unknown = Object.keys(value).find((key) => !keys.includes(key));
+  if (unknown !== undefined) throw new Error(`${label}包含不支援的欄位：${unknown}。`);
+  return value;
+}
+
+function presentationEnum(value: unknown, label: string, choices: readonly string[]) {
+  if (value !== undefined && (typeof value !== "string" || !choices.includes(value))) {
+    throw new Error(`${label}選項不支援。`);
+  }
+}
+
+function presentationNumber(value: unknown, key: keyof typeof HOMEPAGE_PRESENTATION_NUMBER_RULES, label: string) {
+  if (value === undefined) return;
+  const rule = HOMEPAGE_PRESENTATION_NUMBER_RULES[key];
+  if (typeof value !== "number" || !Number.isFinite(value) || value < rule.min || value > rule.max || ("step" in rule && !Number.isInteger(value / rule.step))) {
+    throw new Error(`${label}.${key}設定超出安全範圍。`);
+  }
+}
+
+function presentationColor(value: unknown, label: string) {
+  if (value !== undefined && (typeof value !== "string" || (!(VISUAL_COLOR_PRESETS as readonly string[]).includes(value) && !/^#[0-9a-f]{6}$/iu.test(value)))) {
+    throw new Error(`${label}顏色不安全。`);
+  }
+}
+
+function validateHomepagePresentationPatch(value: unknown, label: string) {
+  if (value === undefined) return;
+  const patch = presentationObject(value, label, ["text", "layout", "background", "visible", "animation"]);
+  validateBoolean(patch.visible, `${label}.visible`);
+  if (patch.text !== undefined) {
+    const slots = presentationObject(patch.text, `${label}.text`, HOMEPAGE_TEXT_SLOTS);
+    for (const [slot, raw] of Object.entries(slots)) {
+      if (raw === undefined) continue;
+      const text = presentationObject(raw, `${label}.text.${slot}`, ["fontSizePx", "fontWeight", "color", "lineHeight", "letterSpacingEm", "alignment", "maxWidthCh"]);
+      for (const key of ["fontSizePx", "lineHeight", "letterSpacingEm", "maxWidthCh"] as const) presentationNumber(text[key], key, `${label}.text.${slot}`);
+      presentationEnum(text.fontWeight, `${label}.text.${slot}.fontWeight`, VISUAL_WEIGHT_PRESETS);
+      presentationEnum(text.alignment, `${label}.text.${slot}.alignment`, VISUAL_ALIGNMENT_PRESETS);
+      presentationColor(text.color, `${label}.text.${slot}.color`);
+    }
+  }
+  if (patch.layout !== undefined) {
+    const layout = presentationObject(patch.layout, `${label}.layout`, ["contentMaxWidthPx", "paddingTopPx", "paddingBottomPx"]);
+    for (const key of ["contentMaxWidthPx", "paddingTopPx", "paddingBottomPx"] as const) presentationNumber(layout[key], key, `${label}.layout`);
+  }
+  if (patch.background !== undefined) {
+    const background = presentationObject(patch.background, `${label}.background`, ["mode", "color"]);
+    presentationEnum(background.mode, `${label}.background.mode`, HOMEPAGE_BACKGROUND_MODES);
+    presentationColor(background.color, `${label}.background.color`);
+  }
+  if (patch.animation !== undefined) {
+    const motion = presentationObject(patch.animation, `${label}.animation`, ["enabled", "preset", "delayMs", "durationMs", "distancePx", "staggerMs"]);
+    validateBoolean(motion.enabled, `${label}.animation.enabled`);
+    presentationEnum(motion.preset, `${label}.animation.preset`, HOMEPAGE_MOTION_PRESETS);
+    for (const key of ["delayMs", "durationMs", "distancePx", "staggerMs"] as const) presentationNumber(motion[key], key, `${label}.animation`);
+  }
+}
+
+export function validateHomepagePresentation(value: unknown): asserts value is HomepagePresentationV3 | undefined {
+  if (value === undefined) return;
+  const root = presentationObject(value, "首頁呈現設定", ["schemaVersion", "sections"]);
+  if (root.schemaVersion !== 3) throw new Error("首頁呈現設定 schemaVersion 必須為 3。");
+  if (root.sections === undefined) return;
+  const sections = presentationObject(root.sections, "首頁呈現區塊", HOMEPAGE_PRESENTATION_SECTION_KEYS);
+  for (const [key, raw] of Object.entries(sections)) {
+    if (raw === undefined) continue;
+    const section = presentationObject(raw, `首頁呈現區塊.${key}`, ["preset", "base", "mobile"]);
+    presentationEnum(section.preset, `首頁呈現區塊.${key}.preset`, HOMEPAGE_PRESENTATION_PRESETS);
+    validateHomepagePresentationPatch(section.base, `首頁呈現區塊.${key}.base`);
+    if (section.mobile !== undefined) {
+      const mobile = presentationObject(section.mobile, `首頁呈現區塊.${key}.mobile`, ["overrideEnabled", "overrides"]);
+      if (typeof mobile.overrideEnabled !== "boolean") throw new Error(`首頁呈現區塊.${key}.mobile.overrideEnabled 必須為布林值。`);
+      validateHomepagePresentationPatch(mobile.overrides, `首頁呈現區塊.${key}.mobile.overrides`);
+    }
+  }
+}
+
 export function validateHomepageCms(homepage: unknown) {
   if (!isRecord(homepage) || !isRecord(homepage.hero)) throw new Error("首頁資料格式不完整。");
   const hero = homepage.hero;
+  validateHomepagePresentation(homepage.presentation);
   validateHomepageVisual(homepage.visual);
   validateHomepageSeo(homepage.seo);
   validateHomepageNavigation(homepage.navigation);

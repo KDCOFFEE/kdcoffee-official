@@ -3,6 +3,7 @@ import { promises as fs } from "fs";
 import { getHomepageDataFile } from "@/lib/storagePaths";
 import type { MediaAsset } from "@/lib/media";
 import type { CmsLinkValue } from "@/lib/cmsLinks";
+import type { HomepagePresentationV3 } from "@/lib/homepagePresentation";
 import {
   PREMIUM_HERO_TIMING,
   resolveHeroTiming,
@@ -108,6 +109,7 @@ export type HomepageData = {
 
   navigation?: HomepageNavigationItem[];
   sectionOrder?: HomepageSectionOrderItem[];
+  presentation?: HomepagePresentationV3;
 
   campaignSection: {
     enabled?: boolean;
