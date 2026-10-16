@@ -1,12 +1,16 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import {
+  LEGACY_HOME002_CLOSING_TEXT,
   HOMEPAGE_MOTION_PRESETS,
   HOMEPAGE_SECTION_MOTION_DEFAULTS,
   PREMIUM_HERO_TIMING,
   homepageMotionCssVariables,
   orderedEnabledItems,
   primaryEnabledIndex,
+  resolveHome002ClosingText,
+  resolveHomepageNavigation,
+  resolveHomepageSectionOrder,
   resolveHeroTiming,
   resolveHomepageMotion,
   resolveSectionMotion,
@@ -119,4 +123,43 @@ const singleMediaFixture = structuredClone(production);
 singleMediaFixture.home005.steps[0].mediaItems = [{ id: "SINGLE-MEDIA", enabled: true, primary: true, order: 0, alt: "Single fixture", media: { type: "image", provider: "local", url: "/images/single-fixture.webp" } }];
 assert.equal(validateHomepageCms(singleMediaFixture), true, "HOME005 accepts one media");
 
-console.log("Homepage CMS fixture assertions: PASS");
+// H3.1: resolve legacy and CMS closing copy without changing persisted data.
+const legacyClosingFixture = structuredClone(production);
+delete legacyClosingFixture.home002.closingText;
+delete legacyClosingFixture.home002.closingEnabled;
+assert.equal(LEGACY_HOME002_CLOSING_TEXT, "你買到的不只是咖啡，還有每一個我們願意多花時間完成的細節。");
+assert.equal(resolveHome002ClosingText(legacyClosingFixture.home002), LEGACY_HOME002_CLOSING_TEXT, "legacy HOME002 retains the original sentence");
+assert.equal(resolveHome002ClosingText(), LEGACY_HOME002_CLOSING_TEXT, "missing closing settings retain the legacy sentence");
+const closingNavigation = resolveHomepageNavigation(production.navigation);
+const closingOrder = resolveHomepageSectionOrder(production.sectionOrder);
+for (const [settings, expected] of [
+  [{ closingText: "這是首頁管理中設定的結尾。" }, "這是首頁管理中設定的結尾。"],
+  [{ closingEnabled: true }, LEGACY_HOME002_CLOSING_TEXT],
+  [{ closingEnabled: false }, null],
+  [{ closingText: "自訂結尾", closingEnabled: false }, null],
+  [{ closingText: "" }, ""],
+  [{ closingText: "", closingEnabled: true }, ""],
+  [{ closingText: " \n " }, " \n "],
+  [{ closingText: "字".repeat(2000) }, "字".repeat(2000)],
+] as const) {
+  const fixture = structuredClone(production);
+  fixture.home002 = { ...fixture.home002, ...settings };
+  assert.equal(resolveHome002ClosingText(fixture.home002), expected, "closing copy respects explicit content and visibility");
+  assert.equal(validateHomepageCms(fixture), true, "optional closing fields preserve the existing homepage schema");
+  assert.deepEqual(resolveHomepageNavigation(fixture.navigation), closingNavigation, "closing changes do not affect navigation");
+  assert.deepEqual(resolveHomepageSectionOrder(fixture.sectionOrder), closingOrder, "closing changes do not affect section order");
+}
+for (const invalid of [123, false, {}, [], "字".repeat(2001)]) {
+  const fixture = structuredClone(production);
+  fixture.home002.closingText = invalid;
+  assert.throws(() => validateHomepageCms(fixture), /品牌價值結尾文字/u, "invalid or oversized closing text is rejected");
+}
+for (const invalid of ["false", 0, null, {}]) {
+  const fixture = structuredClone(production);
+  fixture.home002.closingEnabled = invalid;
+  assert.throws(() => validateHomepageCms(fixture), /品牌價值結尾文字顯示設定/u, "closing visibility must be boolean");
+}
+assert.equal(validateHomepageCms(legacyClosingFixture), true, "legacy homepage remains valid without closing fields");
+assert.deepEqual(legacyClosingFixture.home002.closingText, undefined, "resolving legacy copy does not insert a content default");
+
+console.log("Homepage CMS fixture assertions (including H3.1 closing copy): PASS");

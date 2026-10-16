@@ -8,7 +8,7 @@ import MediaUploader from "@/components/admin/MediaUploader";
 import SmartLinkPicker, { SmartLinkEditingProvider } from "@/components/admin/SmartLinkPicker";
 import { validateHomepageCampaigns } from "@/lib/homepageCampaignValidation";
 import { home004IneligibilityReasons, resolveHome004Recommendations } from "@/lib/home004Recommendations";
-import { HOMEPAGE_CARD_PRESENTATION_PRESETS, HOMEPAGE_COLLECTION_LIMIT, HOMEPAGE_HERO_OVERLAY_PRESETS, HOMEPAGE_NAVIGATION_LIMIT, HOMEPAGE_MOTION_PRESETS, HOMEPAGE_PRODUCT_LIMIT, HOMEPAGE_SECTION_MOTION_DEFAULTS, PREMIUM_HERO_TIMING, homepageMotionCssVariables, resolveHeroTiming, resolveHomepageMotion, resolveHomepageNavigation, resolveHomepageSectionOrder, validateHomepageCms, type HeroTiming, type HomepageMediaReference, type HomepageMotionSectionKey, type HomepageNavigationItem, type HomepageSectionMotion, type HomepageVisualConfig } from "@/lib/homepageCms";
+import { LEGACY_HOME002_CLOSING_TEXT, HOMEPAGE_CARD_PRESENTATION_PRESETS, HOMEPAGE_COLLECTION_LIMIT, HOMEPAGE_HERO_OVERLAY_PRESETS, HOMEPAGE_NAVIGATION_LIMIT, HOMEPAGE_MOTION_PRESETS, HOMEPAGE_PRODUCT_LIMIT, HOMEPAGE_SECTION_MOTION_DEFAULTS, PREMIUM_HERO_TIMING, homepageMotionCssVariables, resolveHeroTiming, resolveHomepageMotion, resolveHomepageNavigation, resolveHomepageSectionOrder, validateHomepageCms, type HeroTiming, type HomepageHome002ClosingCopy, type HomepageMediaReference, type HomepageMotionSectionKey, type HomepageNavigationItem, type HomepageSectionMotion, type HomepageVisualConfig } from "@/lib/homepageCms";
 import type { AssetRecord } from "@/lib/assets";
 import { VISUAL_COLOR_PRESETS, visualColorHex, type VisualColorValue } from "@/lib/pageBuilderVisualStyle";
 import { localImageMedia, resolveMediaAsset, youtubeMedia, type MediaAsset } from "@/lib/media";
@@ -438,6 +438,15 @@ function CampaignEditor({ section, campaigns, products, setPath, uploadImage }: 
   </Panel>;
 }
 
+function Home002ClosingEditor({ value, setPath }: { value: HomepageHome002ClosingCopy; setPath: SetPath }) {
+  return <section className="cms-item-card">
+    <h3>區塊結尾文字</h3>
+    <Visibility checked={value.closingEnabled !== false} onChange={(checked) => setPath(["home002", "closingEnabled"], checked)} label="顯示結尾文字" />
+    <label>結尾文字<textarea maxLength={2000} value={value.closingText ?? LEGACY_HOME002_CLOSING_TEXT} onChange={(event) => setPath(["home002", "closingText"], event.target.value)} /></label>
+    {value.closingText === undefined ? <p className="cms-help">目前沿用既有結尾文字；修改後按「儲存全部」即可更新首頁。</p> : null}
+  </section>;
+}
+
 function ContentSectionEditor({ sectionKey, value, collectionKey, products = [], setPath, uploadImage, assets }: { sectionKey: string; value: any; collectionKey: "cards" | "steps"; products?: ProductOption[]; setPath: SetPath; uploadImage: UploadImage; assets: AssetOption[] }) {
   const items: any[] = Array.isArray(value[collectionKey]) ? value[collectionKey] : [];
   const add = () => {
@@ -449,6 +458,7 @@ function ContentSectionEditor({ sectionKey, value, collectionKey, products = [],
   };
   return <Panel title={`${sectionKey.toUpperCase()}｜${sectionNames[sectionKey]}`} description={value.purpose || "管理區塊內容與項目。"} controls={<Visibility checked={value.enabled !== false} onChange={(checked) => setPath([sectionKey, "enabled"], checked)} />}>
     <div className="cms-grid two"><label>區塊標題<input value={value.title || ""} onChange={(event) => setPath([sectionKey, "title"], event.target.value)} /></label><label>區塊說明<textarea value={value.intro ?? value.text ?? ""} onChange={(event) => setPath([sectionKey, value.intro !== undefined ? "intro" : "text"], event.target.value)} /></label></div>
+    {sectionKey === "home002" ? <Home002ClosingEditor value={value} setPath={setPath} /> : null}
     <div className="cms-collection-head"><strong>{items.length} 個項目</strong><button type="button" className="cms-secondary-button" onClick={add}>＋ 新增項目</button></div>
     <div className="cms-item-list">{items.map((item, index) => <article className="cms-item-card" key={item.id}>
       <div className="cms-item-toolbar"><b>{String(index + 1).padStart(2, "0")}</b><ItemActions visible={item.enabled !== false} onVisibleChange={(checked) => setPath([sectionKey, collectionKey, index, "enabled"], checked)} onMoveUp={() => setPath([sectionKey, collectionKey], moveItem(items, index, -1))} onMoveDown={() => setPath([sectionKey, collectionKey], moveItem(items, index, 1))} disableUp={index === 0} disableDown={index === items.length - 1} onRemove={() => confirmRemoval() && setPath([sectionKey, collectionKey], items.filter((_, itemIndex) => itemIndex !== index))} /></div>

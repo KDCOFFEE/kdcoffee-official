@@ -7,6 +7,7 @@ import {
   PREMIUM_HERO_TIMING,
   resolveHeroTiming,
   type HeroTiming,
+  type HomepageHome002ClosingCopy,
   type HomepageNavigationItem,
   type HomepageSectionOrderItem,
 } from "@/lib/homepageCms";
@@ -124,7 +125,7 @@ export type HomepageData = {
     footerBackground?: string;
   };
 
-  home002?: { cards?: HomepageMediaItem[]; [key: string]: unknown };
+  home002?: HomepageHome002ClosingCopy & { cards?: HomepageMediaItem[]; [key: string]: unknown };
   home003?: { cards?: HomepageMediaItem[]; [key: string]: unknown };
   home004?: Record<string, unknown>;
   home005?: { steps?: HomepageMediaItem[]; [key: string]: unknown };

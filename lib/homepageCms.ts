@@ -8,6 +8,18 @@ import { resolveVisualColor } from "./pageBuilderVisualStyle.ts";
 // @ts-expect-error -- explicit extension keeps Node's type-stripping regression runner compatible.
 import { validateCmsLinkValue } from "./cmsLinks.ts";
 
+export const LEGACY_HOME002_CLOSING_TEXT = "你買到的不只是咖啡，還有每一個我們願意多花時間完成的細節。";
+
+export type HomepageHome002ClosingCopy = {
+  closingText?: string;
+  closingEnabled?: boolean;
+};
+
+export function resolveHome002ClosingText(value: HomepageHome002ClosingCopy = {}): string | null {
+  if (value.closingEnabled === false) return null;
+  return value.closingText ?? LEGACY_HOME002_CLOSING_TEXT;
+}
+
 export const HOMEPAGE_COLLECTION_LIMIT = 50;
 export const HOMEPAGE_PRODUCT_LIMIT = 12;
 export const HERO_TIMING_MAX_MS = 10_000;
@@ -550,6 +562,10 @@ export function validateHomepageCms(homepage: unknown) {
     validateBoolean(section.enabled, `${label}區塊顯示設定`);
     validateText(section.title, `${label}標題`, 200);
     validateText(section.intro ?? section.text, `${label}說明`, 2000);
+    if (sectionKey === "home002") {
+      validateText(section.closingText, "品牌價值結尾文字", 2000);
+      validateBoolean(section.closingEnabled, "品牌價值結尾文字顯示設定");
+    }
     validateContentCollection(section[collectionKey], label);
   }
 

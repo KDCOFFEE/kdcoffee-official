@@ -14,7 +14,7 @@ import MonthlyCampaign from "@/components/home/MonthlyCampaign";
 import Home004ProductMedia from "@/components/home/Home004ProductMedia";
 import KdMedia from "@/components/media/KdMedia";
 import { resolveMediaAsset, type MediaAsset } from "@/lib/media";
-import { homepageMotionCssVariables, homepageSectionOrderMap, orderedEnabledItems, resolveHeroTiming, resolveHomepageMotion, sectionIsEnabled, type HomepageMotionSectionKey } from "@/lib/homepageCms";
+import { homepageMotionCssVariables, homepageSectionOrderMap, orderedEnabledItems, resolveHome002ClosingText, resolveHeroTiming, resolveHomepageMotion, sectionIsEnabled, type HomepageMotionSectionKey } from "@/lib/homepageCms";
 import type { CmsLinkValue, PublishedCmsPage } from "@/lib/cmsLinks";
 
 import {
@@ -207,6 +207,7 @@ export default function HomepageV3({
   const selected =
     home004Resolution
       .recommendations;
+  const whyClosingText = resolveHome002ClosingText(why);
   const whyCards = orderedEnabledItems<HomepageContentItem>(why.cards);
   const entryCards = orderedEnabledItems<HomepageContentItem>(entries.cards);
   const processSteps = orderedEnabledItems<HomepageContentItem>(process.steps);
@@ -422,9 +423,9 @@ export default function HomepageV3({
           )}
         </div>
 
-        <p className="v3-why-closing">
-          你買到的不只是咖啡，還有每一個我們願意多花時間完成的細節。
-        </p>
+        {whyClosingText !== null ? <p className="v3-why-closing">
+          {whyClosingText}
+        </p> : null}
       </section> : null}
 
       {/**
