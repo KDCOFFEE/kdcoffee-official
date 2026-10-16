@@ -2,6 +2,9 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { useEffect, useMemo, useState } from "react";
+import { HomepagePresentationEditor, HomepagePresentationProvider } from "@/components/admin/HomepagePresentationEditor";
+import { updateHomepageBasePresentation, type HomepageBasePresentationEdit } from "@/lib/homepagePresentationAdmin";
+import type { HomepagePresentationKey } from "@/lib/homepagePresentation";
 import ImageLibraryPicker from "@/components/admin/ImageLibraryPicker";
 import HeroMediaLibraryPicker from "@/components/admin/HeroMediaLibraryPicker";
 import MediaUploader from "@/components/admin/MediaUploader";
@@ -37,6 +40,7 @@ export default function HomepageManager() {
   const [baseline, setBaseline] = useState("");
   const [message, setMessage] = useState("讀取中…");
   const [saving, setSaving] = useState(false);
+  const [presentationInvalid, setPresentationInvalid] = useState(false);
   const [activeTab, setActiveTab] = useState<"content" | "sections" | "navigation" | "visual" | "seo">("content");
   const [seoPickerOpen, setSeoPickerOpen] = useState(false);
   const [heroPicker, setHeroPicker] = useState<"desktop" | "mobile" | null>(null);
@@ -68,6 +72,12 @@ export default function HomepageManager() {
     target[path[path.length - 1]] = value; return next;
   });
 
+  const editPresentation = (sectionKey: HomepagePresentationKey, edit: HomepageBasePresentationEdit) => setData((current) => {
+    if (!current) return current;
+    const homepage = updateHomepageBasePresentation(current.homepage, sectionKey, edit);
+    return homepage === current.homepage ? current : { ...current, homepage };
+  });
+
   const uploadImage: UploadImage = async (file, path, assetId, seoName, assetGroup) => {
     setMessage(`上傳 ${assetId}…`); const form = new FormData();
     form.append("file", file); form.append("desiredName", seoName || `kd-coffee-${assetId.toLowerCase()}`); form.append("artworkSlug", "homepage"); form.append("assetType", assetId.toLowerCase());
@@ -87,6 +97,7 @@ export default function HomepageManager() {
 
   async function save() {
     if (!data) return;
+    if (presentationInvalid) { setMessage("請先完成呈現設定的輸入，或選擇沿用目前設計。"); return; }
     try {
       validateHomepageCms(data.homepage);
       const campaignError = validateHomepageCampaigns(data.homepage.campaigns); if (campaignError) throw new Error(campaignError);
@@ -101,8 +112,8 @@ export default function HomepageManager() {
 
   if (!data) return <p>{message}</p>;
   const h = data.homepage;
-  return <SmartLinkEditingProvider pages={data.publishedPages}><div className="homepage-manager v3-admin">
-    <div className="cms-toolbar"><div><p className="eyebrow dark">HOMEPAGE CMS 2.0</p><h1>管理我的首頁</h1><p>文字、順序與媒體都可視化管理；移除首頁引用不會刪除素材。</p></div><div className="cms-toolbar-actions"><a href="/" target="_blank">預覽首頁 ↗</a><button onClick={save} disabled={saving || !dirty}>{saving ? "儲存中…" : "儲存全部"}</button></div></div>
+  return <SmartLinkEditingProvider pages={data.publishedPages}><HomepagePresentationProvider presentation={h.presentation} onEdit={editPresentation} onValidityChange={setPresentationInvalid}><div className="homepage-manager v3-admin">
+    <div className="cms-toolbar"><div><p className="eyebrow dark">HOMEPAGE CMS 2.0</p><h1>管理我的首頁</h1><p>文字、順序與媒體都可視化管理；移除首頁引用不會刪除素材。</p></div><div className="cms-toolbar-actions"><a href="/" target="_blank">預覽首頁 ↗</a><button onClick={save} disabled={saving || !dirty || presentationInvalid}>{saving ? "儲存中…" : "儲存全部"}</button></div></div>
     {dirty ? <div className="cms-unsaved" role="status">有尚未儲存的變更</div> : null}{message ? <div className="cms-message" role="status">{message}</div> : null}
     <div className="cms-toolbar-actions homepage-admin-tabs" role="tablist" aria-label="首頁管理分類">
       <button type="button" role="tab" aria-selected={activeTab === "content"} onClick={() => setActiveTab("content")}>內容</button>
@@ -133,7 +144,7 @@ export default function HomepageManager() {
     {activeTab === "seo" ? <HomepageSeoEditor value={h.seo} assets={data.assets} setPath={setPath} onOpenPicker={() => setSeoPickerOpen(true)} /> : null}
     {seoPickerOpen ? <ImageLibraryPicker assets={data.assets} title="選擇首頁 SEO 分享圖片" onClose={() => setSeoPickerOpen(false)} onChoose={(asset) => { setPath(["seo", "shareImage"], { media: localImageMedia(asset.path), alt: asset.alt || asset.name }); setSeoPickerOpen(false); }} /> : null}
     {heroPicker ? <HeroMediaLibraryPicker assets={data.assets} title={heroPicker === "desktop" ? "選擇桌機 Hero 素材" : "選擇手機 Hero 素材"} onClose={() => setHeroPicker(null)} onChoose={(media) => { setPath(["hero", heroPicker === "desktop" ? "desktopMedia" : "mobileMedia"], media); setHeroPicker(null); }} /> : null}
-  </div></SmartLinkEditingProvider>;
+  </div></HomepagePresentationProvider></SmartLinkEditingProvider>;
 }
 
 function HomepageSectionOrderEditor({ homepage, setPath }: { homepage: Record<string, any>; setPath: SetPath }) {
@@ -371,8 +382,8 @@ function HomepageSeoEditor({ value, assets, setPath, onOpenPicker }: { value: an
   </Panel>;
 }
 
-function Panel({ title, description, children, open = false, controls }: { title: string; description: string; children: React.ReactNode; open?: boolean; controls?: React.ReactNode }) {
-  return <details className="cms-panel cms-collapsible" open={open}><summary><div><h2>{title}</h2><p>{description}</p></div><span>展開／收合</span></summary>{controls ? <div className="cms-panel-controls">{controls}</div> : null}<div className="cms-panel-body">{children}</div></details>;
+function Panel({ title, description, children, open = false, controls, presentationKey }: { title: string; description: string; children: React.ReactNode; open?: boolean; controls?: React.ReactNode; presentationKey?: HomepagePresentationKey }) {
+  return <details className="cms-panel cms-collapsible" open={open}><summary><div><h2>{title}</h2><p>{description}</p></div><span>展開／收合</span></summary>{controls ? <div className="cms-panel-controls">{controls}</div> : null}<div className="cms-panel-body">{children}{presentationKey ? <HomepagePresentationEditor sectionKey={presentationKey} /> : null}</div></details>;
 }
 function Visibility({ checked, onChange, label = "顯示此區塊" }: { checked: boolean; onChange: (checked: boolean) => void; label?: string }) { return <label className="cms-switch"><input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} />{label}</label>; }
 
@@ -415,7 +426,7 @@ function HeroEditor({ value, products, setPath, uploadHeroImage, onOpenLibrary }
   const updateTiming = (key: keyof HeroTiming, seconds: number) => setPath(["hero", "timing"], resolveHeroTiming({ ...timing, [key]: Math.round(Math.max(0, Math.min(10, Number.isFinite(seconds) ? seconds : 0)) * 10) * 100 }));
   const desktopMedia = resolveMediaAsset(value.desktopMedia) || resolveMediaAsset(value.media, value.poster);
   const mobileMedia = resolveMediaAsset(value.mobileMedia);
-  return <Panel title="HOME001｜主視覺" description="桌機與手機可分別設定主視覺；手機未設定時會自動使用桌機／既有 Hero。" open controls={<Visibility checked={value.enabled !== false} onChange={(checked) => setPath(["hero", "enabled"], checked)} />}>
+  return <Panel presentationKey="hero" title="HOME001｜主視覺" description="桌機與手機可分別設定主視覺；手機未設定時會自動使用桌機／既有 Hero。" open controls={<Visibility checked={value.enabled !== false} onChange={(checked) => setPath(["hero", "enabled"], checked)} />}>
     <div className="cms-grid two"><label>品牌小標<input value={value.eyebrow || ""} onChange={(event) => setPath(["hero", "eyebrow"], event.target.value)} /></label><label>主要按鈕文字<input value={value.buttonLabel || ""} onChange={(event) => setPath(["hero", "buttonLabel"], event.target.value)} /></label><label>標題第一行<input value={value.titleLines?.[0] || ""} onChange={(event) => setPath(["hero", "titleLines"], [event.target.value, value.titleLines?.[1] || ""])} /></label><label>標題第二行<input value={value.titleLines?.[1] || ""} onChange={(event) => setPath(["hero", "titleLines"], [value.titleLines?.[0] || "", event.target.value])} /></label><label className="span-two">核心文案<textarea value={value.lead || ""} onChange={(event) => setPath(["hero", "lead"], event.target.value)} /></label><label>次要按鈕文字<input value={value.secondaryLabel || ""} onChange={(event) => setPath(["hero", "secondaryLabel"], event.target.value)} /></label><SmartLinkPicker editorId="hero-primary" label="主要按鈕" buttonText={value.buttonLabel} value={value.buttonHref} products={products} onChange={(link) => setPath(["hero", "buttonHref"], link)} /><SmartLinkPicker editorId="hero-secondary" label="次要按鈕" buttonText={value.secondaryLabel} value={value.secondaryHref} products={products} onChange={(link) => setPath(["hero", "secondaryHref"], link)} /><label className="span-two">信任資訊（每行一項）<textarea value={(value.trustCues || ["不用登入即可購買", "7-ELEVEN 取貨付款", "工作室自取"]).join("\n")} onChange={(event) => setPath(["hero", "trustCues"], event.target.value.split(/\r?\n/u).filter(Boolean))} /></label></div>
     <div className="cms-grid two hero-responsive-media-editor">
       <section className="cms-item-card"><div className="cms-subsection-head"><div><p className="eyebrow dark">DESKTOP HERO</p><h3>桌機 Hero 素材</h3><p>{value.desktopMedia ? "目前使用獨立桌機素材。" : "目前沿用既有 Hero 素材；不設定也不會讓原本 Hero 消失。"}</p></div></div><MediaUploader label="桌機 Hero 圖片／影片" usage="hero" value={desktopMedia} onImageUpload={(file) => uploadHeroImage(file, "IMG0001-DESKTOP")} onChange={(media) => setPath(["hero", "desktopMedia"], media)} onRemove={value.desktopMedia ? () => setPath(["hero", "desktopMedia"], undefined) : undefined} /><div className="cms-toolbar-actions"><button type="button" className="cms-secondary-button" onClick={() => onOpenLibrary("desktop")}>從素材庫選擇</button>{value.desktopMedia ? <button type="button" className="cms-secondary-button" onClick={() => setPath(["hero", "desktopMedia"], undefined)}>恢復原本 Hero</button> : null}</div></section>
@@ -427,7 +438,7 @@ function HeroEditor({ value, products, setPath, uploadHeroImage, onOpenLibrary }
 
 function CampaignEditor({ section, campaigns, products, setPath, uploadImage }: { section: any; campaigns: any[]; products: ProductOption[]; setPath: SetPath; uploadImage: UploadImage }) {
   const add = () => setPath(["campaigns"], [...campaigns, { id: stableId("CAMPAIGN"), adminName: "新活動", enabled: false, sort: campaigns.length + 1, eyebrow: "LATEST AT KD COFFEE", title: "新活動", description: "", details: [], ctaLabel: "了解更多", ctaHref: "/works", startDate: "", endDate: "", placements: ["frontend_campaign_section", "product_pages"] }]);
-  return <Panel title="Campaign｜本月活動" description="直接管理既有 canonical Campaign 實體，不建立第二份活動資料。" controls={<Visibility checked={section.enabled !== false} onChange={(checked) => setPath(["campaignSection", "enabled"], checked)} />}>
+  return <Panel presentationKey="campaignSection" title="Campaign｜本月活動" description="直接管理既有 canonical Campaign 實體，不建立第二份活動資料。" controls={<Visibility checked={section.enabled !== false} onChange={(checked) => setPath(["campaignSection", "enabled"], checked)} />}>
     <div className="cms-grid two"><label>區塊小標<input value={section.eyebrow || ""} onChange={(event) => setPath(["campaignSection", "eyebrow"], event.target.value)} /></label><label>區塊標題<input value={section.title || ""} onChange={(event) => setPath(["campaignSection", "title"], event.target.value)} /></label><label className="span-two">區塊說明<textarea value={section.intro || ""} onChange={(event) => setPath(["campaignSection", "intro"], event.target.value)} /></label><label>顯示數量上限<input type="number" min="0" max="20" value={section.displayLimit || 0} onChange={(event) => setPath(["campaignSection", "displayLimit"], Math.max(0, Number(event.target.value)))} /></label></div>
     <div className="cms-collection-head"><strong>{campaigns.length} 個活動</strong><button type="button" className="cms-secondary-button" onClick={add}>＋ 建立活動</button></div>
     <div className="cms-item-list">{campaigns.map((campaign, index) => <article className="cms-item-card" key={campaign.id}>
@@ -447,7 +458,7 @@ function Home002ClosingEditor({ value, setPath }: { value: HomepageHome002Closin
   </section>;
 }
 
-function ContentSectionEditor({ sectionKey, value, collectionKey, products = [], setPath, uploadImage, assets }: { sectionKey: string; value: any; collectionKey: "cards" | "steps"; products?: ProductOption[]; setPath: SetPath; uploadImage: UploadImage; assets: AssetOption[] }) {
+function ContentSectionEditor({ sectionKey, value, collectionKey, products = [], setPath, uploadImage, assets }: { sectionKey: HomepagePresentationKey; value: any; collectionKey: "cards" | "steps"; products?: ProductOption[]; setPath: SetPath; uploadImage: UploadImage; assets: AssetOption[] }) {
   const items: any[] = Array.isArray(value[collectionKey]) ? value[collectionKey] : [];
   const add = () => {
     if (items.length >= HOMEPAGE_COLLECTION_LIMIT) return;
@@ -456,7 +467,7 @@ function ContentSectionEditor({ sectionKey, value, collectionKey, products = [],
     if (sectionKey === "home003") Object.assign(item, { eyebrow: "", button: "開始", href: "/works" });
     setPath([sectionKey, collectionKey], [...items, item]);
   };
-  return <Panel title={`${sectionKey.toUpperCase()}｜${sectionNames[sectionKey]}`} description={value.purpose || "管理區塊內容與項目。"} controls={<Visibility checked={value.enabled !== false} onChange={(checked) => setPath([sectionKey, "enabled"], checked)} />}>
+  return <Panel presentationKey={sectionKey} title={`${sectionKey.toUpperCase()}｜${sectionNames[sectionKey]}`} description={value.purpose || "管理區塊內容與項目。"} controls={<Visibility checked={value.enabled !== false} onChange={(checked) => setPath([sectionKey, "enabled"], checked)} />}>
     <div className="cms-grid two"><label>區塊標題<input value={value.title || ""} onChange={(event) => setPath([sectionKey, "title"], event.target.value)} /></label><label>區塊說明<textarea value={value.intro ?? value.text ?? ""} onChange={(event) => setPath([sectionKey, value.intro !== undefined ? "intro" : "text"], event.target.value)} /></label></div>
     {sectionKey === "home002" ? <Home002ClosingEditor value={value} setPath={setPath} /> : null}
     <div className="cms-collection-head"><strong>{items.length} 個項目</strong><button type="button" className="cms-secondary-button" onClick={add}>＋ 新增項目</button></div>
@@ -503,7 +514,7 @@ function YouTubeField({ value, onChange }: { value?: MediaAsset; onChange: (medi
 
 function Home004Editor({ value, products, setPath }: { value: any; products: ProductOption[]; setPath: SetPath }) {
   const slugs: string[] = Array.isArray(value.productSlugs) ? value.productSlugs : []; const resolution = resolveHome004Recommendations(slugs, products); const selected = new Set(slugs);
-  return <Panel title="HOME004｜推薦作品" description="只儲存商品引用；名稱、價格、庫存與媒體仍由商品系統提供。" controls={<Visibility checked={value.enabled !== false} onChange={(checked) => setPath(["home004", "enabled"], checked)} />}>
+  return <Panel presentationKey="home004" title="HOME004｜推薦作品" description="只儲存商品引用；名稱、價格、庫存與媒體仍由商品系統提供。" controls={<Visibility checked={value.enabled !== false} onChange={(checked) => setPath(["home004", "enabled"], checked)} />}>
     <div className="cms-grid two"><label>區塊標題<input value={value.title || ""} onChange={(event) => setPath(["home004", "title"], event.target.value)} /></label><label>區塊說明<textarea value={value.intro || ""} onChange={(event) => setPath(["home004", "intro"], event.target.value)} /></label></div>
     {!resolution.valid ? <div className="cms-message" role="alert">{resolution.errors.join(" ")}</div> : null}
     <div className="cms-item-list">{slugs.map((slug, index) => <div className="cms-product-reference" key={`${slug}-${index}`}><b>{String(index + 1).padStart(2, "0")}</b><select value={slug} onChange={(event) => setPath(["home004", "productSlugs"], slugs.map((item, itemIndex) => itemIndex === index ? event.target.value : item))}>{products.map((product) => { const reasons = home004IneligibilityReasons(product); return <option key={product.slug} value={product.slug} disabled={(reasons.length > 0 || (selected.has(product.slug) && product.slug !== slug))}>{product.name}{reasons.length ? `｜${reasons.join("、")}` : ""}</option>; })}</select><button type="button" onClick={() => setPath(["home004", "productSlugs"], moveItem(slugs, index, -1))} disabled={index === 0}>↑</button><button type="button" onClick={() => setPath(["home004", "productSlugs"], moveItem(slugs, index, 1))} disabled={index === slugs.length - 1}>↓</button><button type="button" className="danger-link" onClick={() => confirmRemoval("確定要從首頁推薦移除此作品嗎？\n商品資料本身不會被刪除。") && setPath(["home004", "productSlugs"], slugs.filter((_, itemIndex) => itemIndex !== index))}>移除</button></div>)}</div>
@@ -513,19 +524,19 @@ function Home004Editor({ value, products, setPath }: { value: any; products: Pro
 }
 
 function Home006Editor({ value, products, setPath, uploadImage, assets }: { value: any; products: ProductOption[]; setPath: SetPath; uploadImage: UploadImage; assets: AssetOption[] }) {
-  return <Panel title="HOME006｜專屬烘焙" description="管理既有服務說明；不改變商業規則。" controls={<Visibility checked={value.enabled !== false} onChange={(checked) => setPath(["home006", "enabled"], checked)} />}><div className="cms-grid two"><label>標題<input value={value.title || ""} onChange={(event) => setPath(["home006", "title"], event.target.value)} /></label><label>按鈕文字<input value={value.button || ""} onChange={(event) => setPath(["home006", "button"], event.target.value)} /></label><label className="span-two">說明<textarea value={value.text || ""} onChange={(event) => setPath(["home006", "text"], event.target.value)} /></label><label className="span-two">適用條件（每行一項）<textarea value={(value.points || []).join("\n")} onChange={(event) => setPath(["home006", "points"], event.target.value.split(/\r?\n/u).filter(Boolean))} /></label><SmartLinkPicker editorId="home006-cta" label="服務按鈕" buttonText={value.button} value={value.href} products={products} onChange={(link) => setPath(["home006", "href"], link)} /></div><NestedMediaEditor owner={value} path={["home006"]} setPath={setPath} uploadImage={uploadImage} assets={assets} label="專屬烘焙" /><SectionMotionEditor sectionKey="home006" value={value.motion} setPath={setPath} /></Panel>;
+  return <Panel presentationKey="home006" title="HOME006｜專屬烘焙" description="管理既有服務說明；不改變商業規則。" controls={<Visibility checked={value.enabled !== false} onChange={(checked) => setPath(["home006", "enabled"], checked)} />}><div className="cms-grid two"><label>標題<input value={value.title || ""} onChange={(event) => setPath(["home006", "title"], event.target.value)} /></label><label>按鈕文字<input value={value.button || ""} onChange={(event) => setPath(["home006", "button"], event.target.value)} /></label><label className="span-two">說明<textarea value={value.text || ""} onChange={(event) => setPath(["home006", "text"], event.target.value)} /></label><label className="span-two">適用條件（每行一項）<textarea value={(value.points || []).join("\n")} onChange={(event) => setPath(["home006", "points"], event.target.value.split(/\r?\n/u).filter(Boolean))} /></label><SmartLinkPicker editorId="home006-cta" label="服務按鈕" buttonText={value.button} value={value.href} products={products} onChange={(link) => setPath(["home006", "href"], link)} /></div><NestedMediaEditor owner={value} path={["home006"]} setPath={setPath} uploadImage={uploadImage} assets={assets} label="專屬烘焙" /><SectionMotionEditor sectionKey="home006" value={value.motion} setPath={setPath} /></Panel>;
 }
 
 function Home008Editor({ value, setPath, uploadImage, assets }: { value: any; setPath: SetPath; uploadImage: UploadImage; assets: AssetOption[] }) {
   const key = Array.isArray(value.mediaItems) ? "mediaItems" : "images"; const items: HomepageMediaReference[] = Array.isArray(value[key]) ? value[key] : [];
-  return <Panel title="HOME008｜工作室媒體收藏" description="Stage + Film Strip 可安全管理大量圖片、影片與 YouTube。" controls={<Visibility checked={value.enabled !== false} onChange={(checked) => setPath(["home008", "enabled"], checked)} />}><div className="cms-grid two"><label>標題<input value={value.title || ""} onChange={(event) => setPath(["home008", "title"], event.target.value)} /></label><label>說明<textarea value={value.text || ""} onChange={(event) => setPath(["home008", "text"], event.target.value)} /></label></div><MediaReferenceEditor items={items} path={["home008", key]} setPath={setPath} uploadImage={uploadImage} assets={assets} label="工作室" /><SectionMotionEditor sectionKey="home008" value={value.motion} setPath={setPath} /></Panel>;
+  return <Panel presentationKey="home008" title="HOME008｜工作室媒體收藏" description="Stage + Film Strip 可安全管理大量圖片、影片與 YouTube。" controls={<Visibility checked={value.enabled !== false} onChange={(checked) => setPath(["home008", "enabled"], checked)} />}><div className="cms-grid two"><label>標題<input value={value.title || ""} onChange={(event) => setPath(["home008", "title"], event.target.value)} /></label><label>說明<textarea value={value.text || ""} onChange={(event) => setPath(["home008", "text"], event.target.value)} /></label></div><MediaReferenceEditor items={items} path={["home008", key]} setPath={setPath} uploadImage={uploadImage} assets={assets} label="工作室" /><SectionMotionEditor sectionKey="home008" value={value.motion} setPath={setPath} /></Panel>;
 }
 
 function ReviewsEditor({ value, setPath }: { value: any; setPath: SetPath }) {
   const items: any[] = Array.isArray(value.items) ? value.items : [];
-  return <Panel title="HOME009｜真實評價" description="只有姓名、內容與來源都完整的真實評價才會顯示。" controls={<Visibility checked={value.enabled !== false} onChange={(checked) => setPath(["home009", "enabled"], checked)} />}><div className="cms-grid two"><label>標題<input value={value.title || ""} onChange={(event) => setPath(["home009", "title"], event.target.value)} /></label><label>說明<input value={value.intro || ""} onChange={(event) => setPath(["home009", "intro"], event.target.value)} /></label></div><div className="cms-item-list">{items.map((item, index) => <article className="cms-item-card" key={item.id}><div className="cms-grid two"><label>姓名<input value={item.name || ""} onChange={(event) => setPath(["home009", "items", index, "name"], event.target.value)} /></label><label>來源<input value={item.source || ""} onChange={(event) => setPath(["home009", "items", index, "source"], event.target.value)} /></label><label className="span-two">評價內容<textarea value={item.text || ""} onChange={(event) => setPath(["home009", "items", index, "text"], event.target.value)} /></label></div><ItemActions onMoveUp={() => setPath(["home009", "items"], moveItem(items, index, -1))} onMoveDown={() => setPath(["home009", "items"], moveItem(items, index, 1))} disableUp={index === 0} disableDown={index === items.length - 1} onRemove={() => confirmRemoval() && setPath(["home009", "items"], items.filter((_, itemIndex) => itemIndex !== index))} /></article>)}</div><button type="button" className="cms-secondary-button" onClick={() => setPath(["home009", "items"], [...items, { id: stableId("REVIEW"), text: "", name: "", source: "" }])}>＋ 新增已驗證評價</button><SectionMotionEditor sectionKey="home009" value={value.motion} setPath={setPath} /></Panel>;
+  return <Panel presentationKey="home009" title="HOME009｜真實評價" description="只有姓名、內容與來源都完整的真實評價才會顯示。" controls={<Visibility checked={value.enabled !== false} onChange={(checked) => setPath(["home009", "enabled"], checked)} />}><div className="cms-grid two"><label>標題<input value={value.title || ""} onChange={(event) => setPath(["home009", "title"], event.target.value)} /></label><label>說明<input value={value.intro || ""} onChange={(event) => setPath(["home009", "intro"], event.target.value)} /></label></div><div className="cms-item-list">{items.map((item, index) => <article className="cms-item-card" key={item.id}><div className="cms-grid two"><label>姓名<input value={item.name || ""} onChange={(event) => setPath(["home009", "items", index, "name"], event.target.value)} /></label><label>來源<input value={item.source || ""} onChange={(event) => setPath(["home009", "items", index, "source"], event.target.value)} /></label><label className="span-two">評價內容<textarea value={item.text || ""} onChange={(event) => setPath(["home009", "items", index, "text"], event.target.value)} /></label></div><ItemActions onMoveUp={() => setPath(["home009", "items"], moveItem(items, index, -1))} onMoveDown={() => setPath(["home009", "items"], moveItem(items, index, 1))} disableUp={index === 0} disableDown={index === items.length - 1} onRemove={() => confirmRemoval() && setPath(["home009", "items"], items.filter((_, itemIndex) => itemIndex !== index))} /></article>)}</div><button type="button" className="cms-secondary-button" onClick={() => setPath(["home009", "items"], [...items, { id: stableId("REVIEW"), text: "", name: "", source: "" }])}>＋ 新增已驗證評價</button><SectionMotionEditor sectionKey="home009" value={value.motion} setPath={setPath} /></Panel>;
 }
 
 function Home010Editor({ value, products, setPath }: { value: any; products: ProductOption[]; setPath: SetPath }) {
-  return <Panel title="HOME010｜最後購買引導" description="管理首頁結尾的購買行動。" controls={<Visibility checked={value.enabled !== false} onChange={(checked) => setPath(["home010", "enabled"], checked)} />}><div className="cms-grid two"><label>標題<input value={value.title || ""} onChange={(event) => setPath(["home010", "title"], event.target.value)} /></label><label>按鈕文字<input value={value.button || ""} onChange={(event) => setPath(["home010", "button"], event.target.value)} /></label><label className="span-two">說明<textarea value={value.text || ""} onChange={(event) => setPath(["home010", "text"], event.target.value)} /></label><SmartLinkPicker editorId="home010-cta" label="最後行動按鈕" buttonText={value.button} value={value.href} products={products} onChange={(link) => setPath(["home010", "href"], link)} /></div><SectionMotionEditor sectionKey="home010" value={value.motion} setPath={setPath} /></Panel>;
+  return <Panel presentationKey="home010" title="HOME010｜最後購買引導" description="管理首頁結尾的購買行動。" controls={<Visibility checked={value.enabled !== false} onChange={(checked) => setPath(["home010", "enabled"], checked)} />}><div className="cms-grid two"><label>標題<input value={value.title || ""} onChange={(event) => setPath(["home010", "title"], event.target.value)} /></label><label>按鈕文字<input value={value.button || ""} onChange={(event) => setPath(["home010", "button"], event.target.value)} /></label><label className="span-two">說明<textarea value={value.text || ""} onChange={(event) => setPath(["home010", "text"], event.target.value)} /></label><SmartLinkPicker editorId="home010-cta" label="最後行動按鈕" buttonText={value.button} value={value.href} products={products} onChange={(link) => setPath(["home010", "href"], link)} /></div><SectionMotionEditor sectionKey="home010" value={value.motion} setPath={setPath} /></Panel>;
 }
