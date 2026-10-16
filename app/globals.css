@@ -246,7 +246,7 @@
 @media(max-width:600px){.contact-section{padding:95px 7vw 88px}.contact-copy h2{font-size:49px}.contact-shell{gap:52px}.contact-link-card{grid-template-columns:30px 1fr auto;padding:23px 0}.contact-link-text strong{font-size:21px}.v2-footer{padding:68px 7vw 30px;grid-template-columns:1fr;gap:42px}.footer-main{grid-column:auto}.footer-bottom{grid-column:auto;align-items:flex-start;flex-direction:column;gap:18px;margin-top:16px}}
 
 /* Homepage density correction — compact, production-ready */
-.monthly-campaign{padding:82px 6vw!important}
+.monthly-campaign{padding:var(--homepage-section-padding-top,82px) 6vw var(--homepage-section-padding-bottom,82px)!important}
 .campaign-shell{min-height:440px!important;max-width:1180px!important}
 .campaign-copy{padding:52px 54px!important}
 .campaign-copy h2{font-size:clamp(38px,4.2vw,62px)!important;margin:18px 0!important}
@@ -289,7 +289,7 @@
 
 .work-page{background:#eee6da;color:#251b16;min-height:100vh}.work-topbar{height:72px;padding:0 5vw;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;border-bottom:1px solid #cbbdab;font-size:11px;letter-spacing:.08em}.work-topbar>a:last-child{text-align:right}.work-stage{min-height:calc(100vh - 72px);display:grid;place-items:center;padding:48px 5vw 62px}.work-stage>img,.work-poster-placeholder{width:min(700px,90vw);box-shadow:0 22px 70px rgba(41,30,22,.18)}.work-stage>img{height:auto;display:block}.work-poster-placeholder{aspect-ratio:4/5;background:linear-gradient(150deg,#f5efe6,#d8c9b7);padding:7%;display:flex;flex-direction:column}.work-poster-placeholder>p:first-child{font-size:9px;letter-spacing:.2em}.work-placeholder-art{flex:1;min-height:260px;background:linear-gradient(145deg,#181410,#4c392c);position:relative;margin:6% 0;overflow:hidden}.work-placeholder-art:before,.work-placeholder-art:after{content:"";position:absolute;border:1px solid rgba(225,190,138,.4);border-radius:50%}.work-placeholder-art:before{width:55%;aspect-ratio:1;right:-12%;top:6%}.work-placeholder-art:after{width:34%;aspect-ratio:1;right:13%;top:24%}.work-poster-placeholder small{font-size:10px;color:#776757}.work-poster-placeholder h1{font-family:Georgia,"Noto Serif TC",serif;font-size:clamp(42px,6vw,70px);font-weight:400;margin:10px 0}.work-poster-placeholder>p:not(:first-child){font-size:13px;line-height:1.8;color:#66584e}.work-poster-placeholder>span{font-size:9px;letter-spacing:.12em;margin-top:auto;padding-top:18px;border-top:1px solid #b7a894;color:#7b6b5b}.work-action{background:#181310;color:#f2ece4;padding:70px 8vw;display:flex;justify-content:space-between;align-items:end;gap:50px}.work-action h2{font-family:Georgia,"Noto Serif TC",serif;font-size:clamp(30px,3.6vw,52px);font-weight:400;max-width:760px;margin-top:16px}.work-action>a{border:1px solid rgba(255,255,255,.28);padding:16px 22px;font-size:12px;white-space:nowrap}.work-action>a span{margin-left:18px;color:var(--gold)}
 
-@media(max-width:760px){.monthly-campaign{padding:58px 0!important}.campaign-shell{min-height:auto!important}.campaign-copy{padding:42px 7vw!important}.campaign-visual{min-height:330px!important}.compact-artworks{padding:68px 0 62px!important}.compact-artworks .monthly-menu-shell{width:86vw!important}.compact-head{grid-template-columns:1fr!important;gap:18px!important}.artwork-rail{grid-auto-columns:72vw}.why-kd{padding:68px 0!important}.why-kd-card{min-height:245px!important}.work-topbar{grid-template-columns:1fr auto}.work-topbar .brand{display:none}.work-action{align-items:flex-start;flex-direction:column;padding:55px 7vw}.work-stage{padding:30px 4vw 45px}}
+@media(max-width:760px){.monthly-campaign{padding:var(--homepage-section-padding-top,58px) 0 var(--homepage-section-padding-bottom,58px)!important}.campaign-shell{min-height:auto!important}.campaign-copy{padding:42px 7vw!important}.campaign-visual{min-height:330px!important}.compact-artworks{padding:68px 0 62px!important}.compact-artworks .monthly-menu-shell{width:86vw!important}.compact-head{grid-template-columns:1fr!important;gap:18px!important}.artwork-rail{grid-auto-columns:72vw}.why-kd{padding:68px 0!important}.why-kd-card{min-height:245px!important}.work-topbar{grid-template-columns:1fr auto}.work-topbar .brand{display:none}.work-action{align-items:flex-start;flex-direction:column;padding:55px 7vw}.work-stage{padding:30px 4vw 45px}}
 
 /* =========================================================
    KD Coffee production refinement v4
@@ -331,7 +331,7 @@
 .all-works-button i{font-style:normal;font-size:17px}
 
 /* The monthly feature is a compact editorial banner, not a full page. */
-.monthly-campaign{padding:72px 6vw!important}
+.monthly-campaign{padding:var(--homepage-section-padding-top,72px) 6vw var(--homepage-section-padding-bottom,72px)!important}
 .campaign-shell{min-height:360px!important;grid-template-columns:1.05fr .95fr!important}
 .campaign-copy{padding:42px 48px!important}
 .campaign-copy h2{font-size:clamp(36px,3.8vw,56px)!important}
@@ -407,7 +407,7 @@ html[data-works-motion-capable="true"] .works-page [data-works-motion-state="pre
 }
 @media(max-width:700px){
   .v2-header{height:66px;padding:0 6vw}.v2-header .brand span{font-size:22px}.v2-header .header-cta{padding:9px 13px;font-size:10px}
-  .monthly-campaign{padding:54px 0!important}.campaign-shell{display:block!important}.campaign-copy{padding:38px 7vw!important}.campaign-visual{min-height:300px!important}
+  .monthly-campaign{padding:var(--homepage-section-padding-top,54px) 0 var(--homepage-section-padding-bottom,54px)!important}.campaign-shell{display:block!important}.campaign-copy{padding:38px 7vw!important}.campaign-visual{min-height:300px!important}
   .home-works{padding:70px 0}.home-works-shell{width:100%}.home-works-head,.all-works-button{margin-left:7vw;margin-right:7vw}.home-works-head{grid-template-columns:1fr;gap:20px}.home-works-grid{display:flex;gap:12px;overflow-x:auto;padding:28px 7vw 16px;scroll-snap-type:x mandatory;scroll-padding-left:7vw;scrollbar-width:none}.home-works-grid::-webkit-scrollbar{display:none}.home-work-card{flex:0 0 68vw;scroll-snap-align:start}.home-work-copy h3{font-size:19px}.home-work-copy p{font-size:9px}.home-work-copy>span{display:none}
   .works-hero{min-height:58vh;padding:130px 7vw 60px}.works-catalog{padding:58px 0 82px}.works-catalog-head{margin:0 7vw}.works-grid{display:flex;gap:12px;overflow-x:auto;padding:28px 7vw 18px;scroll-snap-type:x mandatory;scroll-padding-left:7vw;scrollbar-width:none}.works-grid::-webkit-scrollbar{display:none}.catalog-card{flex:0 0 68vw;scroll-snap-align:start}.catalog-copy h2{font-size:19px}.catalog-copy p{font-size:9px}.catalog-copy>span{font-size:8px;line-height:1.5}
   .work-detail-nav{grid-template-columns:1fr auto;padding:0 6vw}.work-detail-nav .brand{display:none}.work-detail-copy{padding:110px 7vw 70px;min-height:560px}.work-detail-copy h1{font-size:58px}.work-detail-visual{min-height:590px}.poster-title strong{font-size:44px}
@@ -1459,7 +1459,7 @@ body{overflow-x:clip;overflow-y:visible}
 .v3-why-heading{max-width:1180px;margin:0 auto 50px;border-top:1px solid rgba(68,49,39,.18);padding-top:22px}
 .v3-section-code{margin:0 0 26px;color:#9b7c63;font-size:.72rem;letter-spacing:.22em;font-weight:700}
 .v3-why-title-row{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(320px,.95fr);gap:72px;align-items:end}
-.v3-why-title-row h2{margin:0;color:#251b16!important;font-size:clamp(2.5rem,5vw,5.2rem);line-height:1.02;letter-spacing:-.05em;font-weight:500}
+.v3-why-title-row h2{margin:0;color:var(--homepage-text-color,#251b16)!important;font-size:clamp(2.5rem,5vw,5.2rem);line-height:1.02;letter-spacing:-.05em;font-weight:500}
 .v3-why-title-row>p{margin:0;color:#655a52;font-size:clamp(1.05rem,1.45vw,1.28rem);line-height:1.85;max-width:620px}
 .v3-why .v3-value-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:22px;max-width:1180px;margin:0 auto}
 .v3-why .v3-value-card{display:grid;grid-template-columns:46% 54%;min-height:330px;background:#fbf8f3;border:1px solid rgba(72,52,40,.12);box-shadow:none;overflow:hidden}
@@ -2867,7 +2867,7 @@ body.roasted-bean-viewer-open .mobile-purchase-return{opacity:0!important;visibi
 .v3-process-journey p{margin:0;color:var(--home-light-secondary)}
 
 .v3-roast-service{padding-block:var(--home-section-space-related);background:#211713}
-.v3-roast-service>.v3-media,.v3-roast-service>[data-home-reveal="media"]>.v3-media{min-height:380px;aspect-ratio:4/3}
+.v3-roast-service>.v3-media,.v3-roast-service>[data-home-reveal="media"]>.v3-media,.v3-roast-service>.homepage-base-content-grid>[data-home-reveal="media"]>.v3-media{min-height:380px;aspect-ratio:4/3}
 .v3-roast-facts{display:grid;grid-template-columns:1fr 1fr;gap:10px 18px;margin:24px 0;padding:0;list-style:none}
 .v3-roast-facts li{position:relative;padding-left:15px;color:var(--home-dark-secondary);font-size:.875rem;line-height:1.55}
 .v3-roast-facts li::before{content:"";position:absolute;top:.62em;left:0;width:5px;height:5px;border-radius:50%;background:var(--home-dark-metadata)}
@@ -2922,7 +2922,7 @@ body.roasted-bean-viewer-open .mobile-purchase-return{opacity:0!important;visibi
   .v3-roast-copy>div{font-size:.9375rem;line-height:1.65}
   .v3-roast-facts{grid-template-columns:1fr;gap:8px;margin:18px 0}
   .v3-roast-facts li{font-size:.8125rem}
-  .v3-roast-service>[data-home-reveal="media"]>.v3-media{min-height:0;aspect-ratio:1/1}
+  .v3-roast-service>[data-home-reveal="media"]>.v3-media,.v3-roast-service>.homepage-base-content-grid>[data-home-reveal="media"]>.v3-media{min-height:0;aspect-ratio:1/1}
   .v3-roast-copy .v3-button{width:100%;margin-top:2px}
 
   .v3-art-gallery article,.v3-art-gallery article:first-child{display:block;flex:0 0 80vw;width:80vw;scroll-snap-align:start;scroll-snap-stop:normal}
@@ -8088,3 +8088,27 @@ button.member-lifecycle-action:disabled,
 .credit-help-dialog{width:min(640px,calc(100vw - 32px));max-height:85vh;overflow:auto;border:1px solid #d7cbbc;border-radius:16px;padding:24px;color:#30281e;background:#fffaf4}.credit-help-dialog::backdrop{background:rgba(25,20,15,.55)}.credit-help-dialog h2{margin:0 0 16px}.credit-help-dialog p{line-height:1.8;white-space:pre-line}.credit-help-dialog button{min-height:44px;padding:8px 16px}
 .credit-preference-fields,.credit-preference-fields>label{min-width:0}.credit-preference-fields>label select,.credit-preference-fields>label input{width:100%;min-width:0;max-width:100%}.credit-help-trigger{min-height:44px;padding:8px 0;background:transparent;border:0;text-align:left;text-decoration:underline;cursor:pointer}
 @media(max-width:700px){.credit-preference-fields{grid-template-columns:minmax(0,1fr)}}
+
+/* H3.3A.1 responsive-ready bindings: tokens activate explicit Base fields only.
+ * H3.4 can add Mobile tokens/variables and media-query consumers on these same
+ * elements. No token means no declaration: every legacy breakpoint keeps its
+ * original cascade. Specificity covers existing Homepage semantic selectors. */
+.v3-hero{--homepage-visible-display:flex}
+.v3-roast-service{--homepage-visible-display:grid}
+.v3-roast-service>.homepage-base-content-grid{display:contents}
+:is(.v3-hero,.v3-section,.v3-final,.campaign-multi-section) [data-homepage-text-base][data-homepage-text-base~="font-size"]{--homepage-text-font-size:var(--homepage-text-font-size-base);font-size:var(--homepage-text-font-size)}
+:is(.v3-hero,.v3-section,.v3-final,.campaign-multi-section) [data-homepage-text-base][data-homepage-text-base~="font-weight"]{--homepage-text-font-weight:var(--homepage-text-font-weight-base);font-weight:var(--homepage-text-font-weight)}
+:is(.v3-hero,.v3-section,.v3-final,.campaign-multi-section) [data-homepage-text-base][data-homepage-text-base~="color"]{--homepage-text-color:var(--homepage-text-color-base);color:var(--homepage-text-color)}
+:is(.v3-hero,.v3-section,.v3-final,.campaign-multi-section) [data-homepage-text-base][data-homepage-text-base~="line-height"]{--homepage-text-line-height:var(--homepage-text-line-height-base);line-height:var(--homepage-text-line-height)}
+:is(.v3-hero,.v3-section,.v3-final,.campaign-multi-section) [data-homepage-text-base][data-homepage-text-base~="letter-spacing"]{--homepage-text-letter-spacing:var(--homepage-text-letter-spacing-base);letter-spacing:var(--homepage-text-letter-spacing)}
+:is(.v3-hero,.v3-section,.v3-final,.campaign-multi-section) [data-homepage-text-base][data-homepage-text-base~="alignment"]{--homepage-text-alignment:var(--homepage-text-alignment-base);text-align:var(--homepage-text-alignment)}
+:is(.v3-hero,.v3-section,.v3-final,.campaign-multi-section) [data-homepage-text-base][data-homepage-text-base~="max-width"]{--homepage-text-max-width:var(--homepage-text-max-width-base);max-width:var(--homepage-text-max-width)}
+:is(.v3-hero,.v3-section,.v3-final,.campaign-multi-section)[data-homepage-section-base][data-homepage-section-base~="padding-top"]{--homepage-section-padding-top:var(--homepage-section-padding-top-base);padding-top:var(--homepage-section-padding-top)}
+:is(.v3-hero,.v3-section,.v3-final,.campaign-multi-section)[data-homepage-section-base][data-homepage-section-base~="padding-bottom"]{--homepage-section-padding-bottom:var(--homepage-section-padding-bottom-base);padding-bottom:var(--homepage-section-padding-bottom)}
+:is(.v3-hero,.v3-section,.v3-final,.campaign-multi-section)[data-homepage-section-base][data-homepage-section-base~="background"]{--homepage-section-background:var(--homepage-section-background-base);background:var(--homepage-section-background)}
+:is(.v3-hero,.v3-section,.v3-final,.campaign-multi-section)[data-homepage-section-base][data-homepage-section-base~="visibility"]{--homepage-section-visibility:var(--homepage-section-visibility-base);display:var(--homepage-section-visibility)}
+:is(.v3-hero,.v3-section,.v3-final,.campaign-multi-section) [data-homepage-content-base][data-homepage-content-base~="width"]{--homepage-content-width:var(--homepage-content-width-base);max-width:min(var(--homepage-content-width),var(--homepage-text-max-width,var(--homepage-content-width)))}
+.v3-roast-service>.homepage-base-content-grid[data-homepage-content-base~="width"]{display:grid;grid-template-columns:inherit;gap:inherit;align-items:inherit;grid-column:1 / -1;width:100%;margin-inline:auto}
+.v3-roast-service>.homepage-base-content-grid[data-homepage-content-base~="width"]>*{min-width:0}
+.v3-roast-service>.homepage-base-content-grid[data-homepage-content-base~="width"]>[data-home-reveal="media"]>.v3-media{width:100%;min-width:0;max-width:100%}
+/* End H3.3A.1 responsive-ready bindings. */

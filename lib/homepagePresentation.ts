@@ -113,3 +113,19 @@ export function resolveHomepageSectionPresentation(
   if (visible !== undefined) resolved.visible = visible;
   return resolved;
 }
+
+// H3.3A: actual semantic targets in HomepageV3 / MonthlyCampaign.
+// A global schema slot is not automatically a supported target in every section.
+export const HOMEPAGE_SECTION_CAPABILITIES = {
+  hero: ["eyebrow", "title", "intro", "cta", "metadata"],
+  campaignSection: ["eyebrow", "title", "intro", "body", "cardTitle", "cardBody", "cta", "metadata"],
+  home002: ["title", "intro", "cardTitle", "cardBody", "closing", "metadata"],
+  home003: ["title", "intro", "eyebrow", "cardTitle", "cardBody", "cta"],
+  home004: ["title", "intro", "cardTitle", "cardBody", "cta"],
+  home005: ["title", "intro", "cardTitle", "cardBody", "metadata"],
+  home006: ["title", "body", "cta", "metadata"],
+  home007: ["title", "body", "cardTitle", "cardBody"],
+  home008: ["title", "body"],
+  home009: ["title", "intro", "cardBody", "metadata"],
+  home010: ["title", "body", "cta"],
+} as const satisfies Record<HomepagePresentationKey, readonly HomepageTextSlot[]>;

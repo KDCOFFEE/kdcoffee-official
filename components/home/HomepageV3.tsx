@@ -5,6 +5,8 @@ import type {
   HomepageData,
 } from "@/data/homepageData";
 
+import HomepageContentWidth from "@/components/home/HomepageContentWidth";
+import { createHomepagePresentationBindings, homepagePresentationProps, mergeHomepageStyles } from "@/lib/homepagePresentationBindings";
 import HomepageSceneMedia from "@/components/home/HomepageSceneMedia";
 import CmsLink from "@/components/CmsLink";
 import HomepageMotion from "@/components/home/HomepageMotion";
@@ -85,12 +87,15 @@ type HomepageReviewItem = {
 
 type MotionOwner = { motion?: unknown };
 
-function sectionMotionProps(owner: MotionOwner, sectionKey: HomepageMotionSectionKey, order?: number) {
-  if (!("motion" in owner) || owner.motion === undefined) return order === undefined ? {} : { style: { order } as CSSProperties };
+function sectionMotionProps(owner: MotionOwner, sectionKey: HomepageMotionSectionKey, order?: number, presentationStyle?: CSSProperties) {
+  if (!("motion" in owner) || owner.motion === undefined) {
+    const style = mergeHomepageStyles(order === undefined ? undefined : { order }, presentationStyle);
+    return homepagePresentationProps(style);
+  }
   const motion = resolveHomepageMotion(owner.motion, sectionKey);
   return {
     "data-home-motion": motion.activePreset,
-    style: { ...homepageMotionCssVariables(motion), ...(order === undefined ? {} : { order }) } as CSSProperties,
+    ...homepagePresentationProps({ ...homepageMotionCssVariables(motion), ...(order === undefined ? {} : { order }), ...presentationStyle } as CSSProperties),
   };
 }
 
@@ -166,6 +171,19 @@ export default function HomepageV3({
   pages: PublishedCmsPage[];
 }) {
   const h = homepageData;
+  const bindPresentation = createHomepagePresentationBindings(h.presentation);
+  const presentation = {
+    hero: bindPresentation("hero"),
+    home002: bindPresentation("home002"),
+    home003: bindPresentation("home003"),
+    home004: bindPresentation("home004"),
+    home005: bindPresentation("home005"),
+    home006: bindPresentation("home006"),
+    home007: bindPresentation("home007"),
+    home008: bindPresentation("home008"),
+    home009: bindPresentation("home009"),
+    home010: bindPresentation("home010"),
+  };
   const sectionOrder = homepageSectionOrderMap((h as HomepageViewData & { sectionOrder?: unknown }).sectionOrder);
 
   const hero =
@@ -256,7 +274,7 @@ export default function HomepageV3({
         id="top"
         className="v3-hero home-surface-dark home-surface-media"
         data-hero-motion={hero.motionEnabled === false ? "off" : "on"}
-        style={heroStyle}
+        {...homepagePresentationProps(mergeHomepageStyles(heroStyle, presentation.hero.sectionStyle))}
       >
         {desktopHeroMedia ? (
           <KdMedia
@@ -286,12 +304,12 @@ export default function HomepageV3({
 
         <div className="v3-hero-shade" />
 
-        <div className="v3-hero-content" data-home-hero>
-          <p className="v3-eyebrow">
+        <div className="v3-hero-content" data-home-hero {...homepagePresentationProps(presentation.hero.contentStyle())}>
+          <p className="v3-eyebrow" {...homepagePresentationProps(presentation.hero.textStyle("eyebrow"))}>
             {hero.eyebrow}
           </p>
 
-          <h1>
+          <h1 {...homepagePresentationProps(presentation.hero.textStyle("title"))}>
             {(
               hero.titleLines ||
               []
@@ -307,13 +325,14 @@ export default function HomepageV3({
             )}
           </h1>
 
-          <p className="v3-hero-lead">
+          <p className="v3-hero-lead" {...homepagePresentationProps(presentation.hero.textStyle("intro"))}>
             {hero.lead}
           </p>
 
           <div className="v3-actions">
             {hero.primaryCtaEnabled !== false ? <CmsLink
               className="v3-button primary v3-hero-primary-action"
+              {...homepagePresentationProps(presentation.hero.textStyle("cta"))}
               value={
                 hero.buttonHref ||
                 "#home003"
@@ -326,6 +345,7 @@ export default function HomepageV3({
 
             {hero.secondaryCtaEnabled !== false ? <CmsLink
               className="v3-button ghost v3-hero-secondary-action"
+              {...homepagePresentationProps(presentation.hero.textStyle("cta"))}
               value={
                 hero.secondaryHref ||
                 "#home004"
@@ -338,7 +358,7 @@ export default function HomepageV3({
           </div>
 
           <div className="v3-trust">
-            {(hero.trustCues || ["不用登入即可購買", "7-ELEVEN 取貨付款", "工作室自取"]).map((cue: string) => <span key={cue}>{cue}</span>)}
+            {(hero.trustCues || ["不用登入即可購買", "7-ELEVEN 取貨付款", "工作室自取"]).map((cue: string) => <span key={cue} {...homepagePresentationProps(presentation.hero.textStyle("metadata"))}>{cue}</span>)}
           </div>
         </div>
       </section> : null}
@@ -357,22 +377,22 @@ export default function HomepageV3({
       {sectionIsEnabled(why) && whyCards.length ? <section
         id="home002"
         className="v3-section v3-why home-surface-light"
-        {...sectionMotionProps(why, "home002", sectionOrder.home002)}
+        {...sectionMotionProps(why, "home002", sectionOrder.home002, presentation.home002.sectionStyle)}
       >
-        <div className="v3-why-heading" data-home-reveal="content" data-home-motion-part style={motionItemStyle(0)}>
+        <div className="v3-why-heading" data-home-reveal="content" data-home-motion-part {...homepagePresentationProps(presentation.home002.contentStyle(motionItemStyle(0)))}>
           <div className="v3-why-title-row">
-            <h2>
+            <h2 {...homepagePresentationProps(presentation.home002.textStyle("title"))}>
               {why.title}
             </h2>
 
-            <p>
+            <p {...homepagePresentationProps(presentation.home002.textStyle("intro"))}>
               {why.intro}
             </p>
           </div>
         </div>
 
         <div
-          className="v3-value-grid home-mobile-rail"
+          className="v3-value-grid home-mobile-rail" {...homepagePresentationProps(presentation.home002.contentStyle())}
           data-home-reveal="media"
           tabIndex={0}
           aria-label="KD Coffee 四項特色，可左右滑動瀏覽"
@@ -400,7 +420,7 @@ export default function HomepageV3({
                 ) : null}
 
                 <div className="v3-card-copy">
-                  <div className="v3-card-number">
+                  <div className="v3-card-number" {...homepagePresentationProps(presentation.home002.textStyle("metadata"))}>
                     {String(
                       index + 1,
                     ).padStart(
@@ -409,11 +429,11 @@ export default function HomepageV3({
                     )}
                   </div>
 
-                  <h3>
+                  <h3 {...homepagePresentationProps(presentation.home002.textStyle("cardTitle"))}>
                     {c.title}
                   </h3>
 
-                  <p>
+                  <p {...homepagePresentationProps(presentation.home002.textStyle("cardBody"))}>
                     {c.text}
                   </p>
                 </div>
@@ -423,7 +443,7 @@ export default function HomepageV3({
           )}
         </div>
 
-        {whyClosingText !== null ? <p className="v3-why-closing">
+        {whyClosingText !== null ? <p className="v3-why-closing" {...homepagePresentationProps(presentation.home002.contentStyle(presentation.home002.textStyle("closing")))}>
           {whyClosingText}
         </p> : null}
       </section> : null}
@@ -439,20 +459,20 @@ export default function HomepageV3({
       {sectionIsEnabled(entries) && entryCards.length ? <section
         id="home003"
         className="v3-section v3-entry v3-scenes home-surface-dark"
-        {...sectionMotionProps(entries, "home003", sectionOrder.home003)}
+        {...sectionMotionProps(entries, "home003", sectionOrder.home003, presentation.home003.sectionStyle)}
       >
-        <header className="v3-section-head centered" data-home-reveal="content" data-home-motion-part style={motionItemStyle(0)}>
-          <h2>
+        <header className="v3-section-head centered" data-home-reveal="content" data-home-motion-part {...homepagePresentationProps(presentation.home003.contentStyle(motionItemStyle(0)))}>
+          <h2 {...homepagePresentationProps(presentation.home003.textStyle("title"))}>
             {entries.title}
           </h2>
 
-          <div>
+          <div {...homepagePresentationProps(presentation.home003.textStyle("intro"))}>
             {entries.intro}
           </div>
         </header>
 
         <div
-          className="v3-scene-grid home-mobile-rail"
+          className="v3-scene-grid home-mobile-rail" {...homepagePresentationProps(presentation.home003.contentStyle())}
           data-home-reveal="media"
           tabIndex={0}
           aria-label="四種咖啡時刻，可左右滑動選擇"
@@ -503,19 +523,19 @@ export default function HomepageV3({
                 {c.ctaEnabled !== false ? <CmsLink className="v3-scene-navigation" value={c.href || "/works"} registry={{ products, pages }}>
                   {sceneMedia?.media.type === "video" || sceneMedia?.media.type === "youtube" ? null : <span className="v3-scene-hitarea" aria-hidden="true" />}
                   <div className="v3-scene-copy">
-                  <small>
+                  <small {...homepagePresentationProps(presentation.home003.textStyle("eyebrow"))}>
                     {c.eyebrow || ""}
                   </small>
 
-                  <h3>
+                  <h3 {...homepagePresentationProps(presentation.home003.textStyle("cardTitle"))}>
                     {c.title}
                   </h3>
 
-                  <p>
+                  <p {...homepagePresentationProps(presentation.home003.textStyle("cardBody"))}>
                     {c.text}
                   </p>
 
-                  <b>
+                  <b {...homepagePresentationProps(presentation.home003.textStyle("cta"))}>
                     {c.button ||
                       "開始"}
 
@@ -524,7 +544,7 @@ export default function HomepageV3({
                     </span>
                   </b>
                   </div>
-                </CmsLink> : <div className="v3-scene-navigation is-disabled"><div className="v3-scene-copy"><small>{c.eyebrow || ""}</small><h3>{c.title}</h3><p>{c.text}</p></div></div>}
+                </CmsLink> : <div className="v3-scene-navigation is-disabled"><div className="v3-scene-copy"><small {...homepagePresentationProps(presentation.home003.textStyle("eyebrow"))}>{c.eyebrow || ""}</small><h3 {...homepagePresentationProps(presentation.home003.textStyle("cardTitle"))}>{c.title}</h3><p {...homepagePresentationProps(presentation.home003.textStyle("cardBody"))}>{c.text}</p></div></div>}
               </article>;
             },
           )}
@@ -557,20 +577,20 @@ export default function HomepageV3({
       {sectionIsEnabled(starter) && selected.length ? <section
         id="home004"
         className="v3-section v3-starter home-surface-light"
-        {...sectionMotionProps(starter, "home004", sectionOrder.home004)}
+        {...sectionMotionProps(starter, "home004", sectionOrder.home004, presentation.home004.sectionStyle)}
       >
-        <header className="v3-section-head" data-home-reveal="content" data-home-motion-part style={motionItemStyle(0)}>
-          <h2>
+        <header className="v3-section-head" data-home-reveal="content" data-home-motion-part {...homepagePresentationProps(presentation.home004.contentStyle(motionItemStyle(0)))}>
+          <h2 {...homepagePresentationProps(presentation.home004.textStyle("title"))}>
             {starter.title}
           </h2>
 
-          <div>
+          <div {...homepagePresentationProps(presentation.home004.textStyle("intro"))}>
             {starter.intro}
           </div>
         </header>
 
         <div
-          className="v3-product-grid home-mobile-rail"
+          className="v3-product-grid home-mobile-rail" {...homepagePresentationProps(presentation.home004.contentStyle())}
           data-home-reveal="media"
           tabIndex={0}
           aria-label="三款入門咖啡，可左右滑動比較"
@@ -616,11 +636,11 @@ export default function HomepageV3({
                       </span>
                     ) : null}
 
-                    <h3>
+                    <h3 {...homepagePresentationProps(presentation.home004.textStyle("cardTitle"))}>
                       {p.name}
                     </h3>
 
-                    <p>
+                    <p {...homepagePresentationProps(presentation.home004.textStyle("cardBody"))}>
                       {p.shortCopy ||
                         p.subtitle}
                     </p>
@@ -658,6 +678,7 @@ export default function HomepageV3({
 
                     <Link
                       className="v3-text-link"
+                      {...homepagePresentationProps(presentation.home004.textStyle("cta"))}
                       href={`/works/${p.slug}`}
                     >
                       查看作品與規格 →
@@ -676,29 +697,29 @@ export default function HomepageV3({
       {sectionIsEnabled(process) && processSteps.length ? <section
         id="home005"
         className="v3-section v3-process home-surface-light"
-        {...sectionMotionProps(process, "home005", sectionOrder.home005)}
+        {...sectionMotionProps(process, "home005", sectionOrder.home005, presentation.home005.sectionStyle)}
       >
-        <header className="v3-section-head centered" data-home-reveal="editorial" data-home-motion-part style={motionItemStyle(0)}>
-          <h2>
+        <header className="v3-section-head centered" data-home-reveal="editorial" data-home-motion-part {...homepagePresentationProps(presentation.home005.contentStyle(motionItemStyle(0)))}>
+          <h2 {...homepagePresentationProps(presentation.home005.textStyle("title"))}>
             {process.title}
           </h2>
 
-          <div>
+          <div {...homepagePresentationProps(presentation.home005.textStyle("intro"))}>
             {process.intro}
           </div>
         </header>
 
-        {processSteps.length ? <div className="v3-process-progress" data-home-reveal="editorial-detail" data-home-motion-part style={motionItemStyle(1)} aria-label={`共 ${processSteps.length} 個咖啡製作步驟`}>
+        {processSteps.length ? <div className="v3-process-progress" data-home-reveal="editorial-detail" data-home-motion-part {...homepagePresentationProps(presentation.home005.contentStyle(motionItemStyle(1)))} aria-label={`共 ${processSteps.length} 個咖啡製作步驟`}>
           <span aria-hidden="true" />
-          <b>01 / {String(processSteps.length).padStart(2, "0")}</b>
+          <b {...homepagePresentationProps(presentation.home005.textStyle("metadata"))}>01 / {String(processSteps.length).padStart(2, "0")}</b>
         </div> : null}
 
-        <div className="v3-process-grid v3-process-journey home-mobile-rail" data-home-reveal="editorial-media" tabIndex={processSteps.length > 1 ? 0 : undefined} aria-label="KD Coffee 咖啡製作旅程，可左右滑動瀏覽">
+        <div className="v3-process-grid v3-process-journey home-mobile-rail" {...homepagePresentationProps(presentation.home005.contentStyle())} data-home-reveal="editorial-media" tabIndex={processSteps.length > 1 ? 0 : undefined} aria-label="KD Coffee 咖啡製作旅程，可左右滑動瀏覽">
           {processSteps.map((s: HomepageContentItem, i: number) => {
             const hasMedia = resolveHomepageMediaCollection({ alt: s.alt || s.title, media: s.media, mediaItems: s.mediaItems, src: s.image }).length > 0;
             return <article key={s.id} className={hasMedia ? "" : "is-text-led"} data-home-motion-item style={motionItemStyle(i + 2)}>
               {hasMedia ? <Media src={s.image} media={s.media} mediaItems={s.mediaItems} alt={s.alt || s.title} id={s.imageId} /> : null}
-              <div className="v3-process-copy"><span>{String(i + 1).padStart(2, "0")}</span><h3>{s.title}</h3><p>{s.text}</p></div>
+              <div className="v3-process-copy"><span {...homepagePresentationProps(presentation.home005.textStyle("metadata"))}>{String(i + 1).padStart(2, "0")}</span><h3 {...homepagePresentationProps(presentation.home005.textStyle("cardTitle"))}>{s.title}</h3><p {...homepagePresentationProps(presentation.home005.textStyle("cardBody"))}>{s.text}</p></div>
             </article>;
           })}
         </div>
@@ -710,14 +731,15 @@ export default function HomepageV3({
       {sectionIsEnabled(roast) ? <section
         id="home006"
         className="v3-section v3-roast-service home-surface-dark"
-        {...sectionMotionProps(roast, "home006", sectionOrder.home006)}
+        {...sectionMotionProps(roast, "home006", sectionOrder.home006, presentation.home006.sectionStyle)}
       >
+        <HomepageContentWidth style={presentation.home006.contentStyle()}>
         <div className="v3-roast-copy" data-home-reveal="content" data-home-motion-part style={motionItemStyle(0)}>
-          <h2>
+          <h2 {...homepagePresentationProps(presentation.home006.textStyle("title"))}>
             {roast.title}
           </h2>
 
-          <div>
+          <div {...homepagePresentationProps(presentation.home006.textStyle("body"))}>
             {roast.text}
           </div>
 
@@ -727,7 +749,7 @@ export default function HomepageV3({
               []
             ).map(
               (x: string) => (
-                <li key={x}>
+                <li key={x} {...homepagePresentationProps(presentation.home006.textStyle("metadata"))}>
                   {x}
                 </li>
               ),
@@ -736,6 +758,7 @@ export default function HomepageV3({
 
           {roast.ctaEnabled !== false ? <CmsLink
             className="v3-button primary"
+            {...homepagePresentationProps(presentation.home006.textStyle("cta"))}
             value={
               roast.href ||
               "/works"
@@ -750,6 +773,7 @@ export default function HomepageV3({
         <div data-home-reveal="media" data-home-motion-part style={motionItemStyle(1)}>
           <Media src={roast.image} media={roast.media} mediaItems={roast.mediaItems} alt={roast.alt || roast.title} id={roast.imageId || "IMG0601"} />
         </div>
+        </HomepageContentWidth>
       </section> : null}
 
       {/**
@@ -758,19 +782,19 @@ export default function HomepageV3({
       {sectionIsEnabled(art) && artCards.length ? <section
         id="home007"
         className="v3-section v3-art home-surface-light"
-        {...sectionMotionProps(art, "home007", sectionOrder.home007)}
+        {...sectionMotionProps(art, "home007", sectionOrder.home007, presentation.home007.sectionStyle)}
       >
-        <header className="v3-section-head" data-home-reveal="editorial" data-home-motion-part style={motionItemStyle(0)}>
-          <h2>
+        <header className="v3-section-head" data-home-reveal="editorial" data-home-motion-part {...homepagePresentationProps(presentation.home007.contentStyle(motionItemStyle(0)))}>
+          <h2 {...homepagePresentationProps(presentation.home007.textStyle("title"))}>
             {art.title}
           </h2>
 
-          <div>
+          <div {...homepagePresentationProps(presentation.home007.textStyle("body"))}>
             {art.text}
           </div>
         </header>
 
-        <div className="v3-art-strip v3-art-gallery home-mobile-rail" data-home-reveal="editorial-media" tabIndex={artCards.length > 1 ? 0 : undefined} aria-label="KD Coffee 咖啡作品藝廊，可左右滑動瀏覽">
+        <div className="v3-art-strip v3-art-gallery home-mobile-rail" {...homepagePresentationProps(presentation.home007.contentStyle())} data-home-reveal="editorial-media" tabIndex={artCards.length > 1 ? 0 : undefined} aria-label="KD Coffee 咖啡作品藝廊，可左右滑動瀏覽">
           {artCards.map(
             (c: HomepageContentItem, index: number) => (
               <article
@@ -791,11 +815,11 @@ export default function HomepageV3({
                   }
                 />
 
-                <h3>
+                <h3 {...homepagePresentationProps(presentation.home007.textStyle("cardTitle"))}>
                   {c.title}
                 </h3>
 
-                <p>
+                <p {...homepagePresentationProps(presentation.home007.textStyle("cardBody"))}>
                   {c.text}
                 </p>
               </article>
@@ -810,19 +834,19 @@ export default function HomepageV3({
       {sectionIsEnabled(studio) && studioMedia.length ? <section
         id="home008"
         className="v3-section v3-studio home-surface-light"
-        {...sectionMotionProps(studio, "home008", sectionOrder.home008)}
+        {...sectionMotionProps(studio, "home008", sectionOrder.home008, presentation.home008.sectionStyle)}
       >
-        <div data-home-reveal="editorial" data-home-motion-part style={motionItemStyle(0)}>
-          <h2>
+        <div data-home-reveal="editorial" data-home-motion-part {...homepagePresentationProps(presentation.home008.contentStyle(motionItemStyle(0)))}>
+          <h2 {...homepagePresentationProps(presentation.home008.textStyle("title"))}>
             {studio.title}
           </h2>
 
-          <div>
+          <div {...homepagePresentationProps(presentation.home008.textStyle("body"))}>
             {studio.text}
           </div>
         </div>
 
-        <div data-home-reveal="editorial-media" data-home-motion-part style={motionItemStyle(1)}>
+        <div data-home-reveal="editorial-media" data-home-motion-part {...homepagePresentationProps(presentation.home008.contentStyle(motionItemStyle(1)))}>
           <HomepageStudioGallery items={studioMedia} />
         </div>
       </section> : null}
@@ -832,19 +856,19 @@ export default function HomepageV3({
         <section
           id="home009"
           className="v3-section v3-reviews home-surface-light"
-          {...sectionMotionProps(reviews, "home009", sectionOrder.home009)}
+          {...sectionMotionProps(reviews, "home009", sectionOrder.home009, presentation.home009.sectionStyle)}
         >
-          <header className="v3-section-head centered" data-home-motion-part style={motionItemStyle(0)}>
-            <h2>
+          <header className="v3-section-head centered" data-home-motion-part {...homepagePresentationProps(presentation.home009.contentStyle(motionItemStyle(0)))}>
+            <h2 {...homepagePresentationProps(presentation.home009.textStyle("title"))}>
               {reviews.title}
             </h2>
 
-            <div>
+            <div {...homepagePresentationProps(presentation.home009.textStyle("intro"))}>
               {reviews.intro}
             </div>
           </header>
 
-          <div className="v3-review-grid">
+          <div className="v3-review-grid" {...homepagePresentationProps(presentation.home009.contentStyle())}>
             {(reviews.items || []).filter((review) => review.text?.trim() && review.name?.trim() && review.source?.trim()).map(
               (r: HomepageReviewItem, index: number) => (
                 <blockquote
@@ -852,14 +876,14 @@ export default function HomepageV3({
                   data-home-motion-item
                   style={motionItemStyle(index + 1)}
                 >
-                  <p>
+                  <p {...homepagePresentationProps(presentation.home009.textStyle("cardBody"))}>
                     「{r.text}」
                   </p>
 
-                  <footer>
+                  <footer {...homepagePresentationProps(presentation.home009.textStyle("metadata"))}>
                     {r.name}
 
-                    <span>
+                    <span {...homepagePresentationProps(presentation.home009.textStyle("metadata"))}>
                       {r.source}
                     </span>
                   </footer>
@@ -873,13 +897,13 @@ export default function HomepageV3({
       {sectionIsEnabled(cta) ? <section
         id="home010"
         className="v3-final home-surface-dark"
-        {...sectionMotionProps(cta, "home010", sectionOrder.home010)}
+        {...sectionMotionProps(cta, "home010", sectionOrder.home010, presentation.home010.sectionStyle)}
       >
-        <h2 data-home-reveal="content" data-home-motion-part style={motionItemStyle(0)}>
+        <h2 data-home-reveal="content" data-home-motion-part {...homepagePresentationProps(presentation.home010.contentStyle(mergeHomepageStyles(motionItemStyle(0), presentation.home010.textStyle("title"))))}>
           {cta.title}
         </h2>
 
-        <div data-home-reveal="content" data-home-motion-part style={motionItemStyle(1)}>
+        <div data-home-reveal="content" data-home-motion-part {...homepagePresentationProps(presentation.home010.contentStyle(mergeHomepageStyles(motionItemStyle(1), presentation.home010.textStyle("body"))))}>
           {cta.text}
         </div>
 
@@ -887,7 +911,7 @@ export default function HomepageV3({
           className="v3-button light"
           data-home-reveal="media"
           data-home-motion-part
-          style={motionItemStyle(2)}
+          {...homepagePresentationProps(presentation.home010.contentStyle(mergeHomepageStyles(motionItemStyle(2), presentation.home010.textStyle("cta"))))}
           value={
             cta.href ||
             "/works"
