@@ -3,7 +3,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { HomepagePresentationEditor, HomepagePresentationProvider } from "@/components/admin/HomepagePresentationEditor";
-import { updateHomepageBasePresentation, type HomepageBasePresentationEdit } from "@/lib/homepagePresentationAdmin";
+import { updateHomepageBasePresentation, updateHomepageMobileEnabled, updateHomepageMobilePresentation, type HomepageBasePresentationEdit } from "@/lib/homepagePresentationAdmin";
 import type { HomepagePresentationKey } from "@/lib/homepagePresentation";
 import ImageLibraryPicker from "@/components/admin/ImageLibraryPicker";
 import HeroMediaLibraryPicker from "@/components/admin/HeroMediaLibraryPicker";
@@ -78,6 +78,18 @@ export default function HomepageManager() {
     return homepage === current.homepage ? current : { ...current, homepage };
   });
 
+  const editMobilePresentation = (sectionKey: HomepagePresentationKey, edit: HomepageBasePresentationEdit) => setData((current) => {
+    if (!current) return current;
+    const homepage = updateHomepageMobilePresentation(current.homepage, sectionKey, edit);
+    return homepage === current.homepage ? current : { ...current, homepage };
+  });
+
+  const toggleMobilePresentation = (sectionKey: HomepagePresentationKey, enabled: boolean) => setData((current) => {
+    if (!current) return current;
+    const homepage = updateHomepageMobileEnabled(current.homepage, sectionKey, enabled);
+    return homepage === current.homepage ? current : { ...current, homepage };
+  });
+
   const uploadImage: UploadImage = async (file, path, assetId, seoName, assetGroup) => {
     setMessage(`上傳 ${assetId}…`); const form = new FormData();
     form.append("file", file); form.append("desiredName", seoName || `kd-coffee-${assetId.toLowerCase()}`); form.append("artworkSlug", "homepage"); form.append("assetType", assetId.toLowerCase());
@@ -112,7 +124,7 @@ export default function HomepageManager() {
 
   if (!data) return <p>{message}</p>;
   const h = data.homepage;
-  return <SmartLinkEditingProvider pages={data.publishedPages}><HomepagePresentationProvider presentation={h.presentation} onEdit={editPresentation} onValidityChange={setPresentationInvalid}><div className="homepage-manager v3-admin">
+  return <SmartLinkEditingProvider pages={data.publishedPages}><HomepagePresentationProvider presentation={h.presentation} onEdit={editPresentation} onMobileEdit={editMobilePresentation} onMobileToggle={toggleMobilePresentation} onValidityChange={setPresentationInvalid}><div className="homepage-manager v3-admin">
     <div className="cms-toolbar"><div><p className="eyebrow dark">HOMEPAGE CMS 2.0</p><h1>管理我的首頁</h1><p>文字、順序與媒體都可視化管理；移除首頁引用不會刪除素材。</p></div><div className="cms-toolbar-actions"><a href="/" target="_blank">預覽首頁 ↗</a><button onClick={save} disabled={saving || !dirty || presentationInvalid}>{saving ? "儲存中…" : "儲存全部"}</button></div></div>
     {dirty ? <div className="cms-unsaved" role="status">有尚未儲存的變更</div> : null}{message ? <div className="cms-message" role="status">{message}</div> : null}
     <div className="cms-toolbar-actions homepage-admin-tabs" role="tablist" aria-label="首頁管理分類">

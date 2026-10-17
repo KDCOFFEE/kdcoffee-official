@@ -61,3 +61,56 @@ export function updateHomepageBasePresentation<T extends { presentation?: Homepa
   if (nextPresentation === undefined) delete next.presentation; else next.presentation = nextPresentation;
   return next;
 }
+
+// Mobile editing reuses Base leaf/capability validation against an isolated
+// patch, then writes only the Mobile branch of the original Homepage.
+function hasSettings(value: unknown): boolean {
+  if (value === undefined) return false;
+  return value !== null && typeof value === "object"
+    ? Object.values(value).some(hasSettings) : true;
+}
+
+function writeMobile<T extends { presentation?: HomepagePresentationV3 }>(
+  homepage: T, sectionKey: HomepagePresentationKey,
+  mobile: NonNullable<NonNullable<HomepagePresentationV3["sections"]>[HomepagePresentationKey]>["mobile"],
+): T {
+  const presentation = editPath(homepage.presentation as Record<string, unknown> | undefined, ["sections", sectionKey, "mobile"], mobile);
+  const nextPresentation = presentation?.sections === undefined ? undefined : { ...presentation, schemaVersion: 3 };
+  validateHomepagePresentation(nextPresentation);
+  if (JSON.stringify(homepage.presentation) === JSON.stringify(nextPresentation)) return homepage;
+  const next = { ...homepage };
+  if (nextPresentation === undefined) delete next.presentation; else next.presentation = nextPresentation;
+  return next;
+}
+
+function validateMobileInput(homepage: { presentation?: HomepagePresentationV3 }, sectionKey: HomepagePresentationKey) {
+  if (!(HOMEPAGE_PRESENTATION_SECTION_KEYS as readonly string[]).includes(sectionKey)) throw new Error("不支援的首頁區塊。");
+  validateHomepagePresentation(homepage.presentation);
+}
+
+/** OFF preserves stored values. Empty OFF states carry no owner setting. */
+export function updateHomepageMobileEnabled<T extends { presentation?: HomepagePresentationV3 }>(homepage: T, sectionKey: HomepagePresentationKey, enabled: boolean): T {
+  validateMobileInput(homepage, sectionKey);
+  if (typeof enabled !== "boolean") throw new Error("手機自訂開關必須為布林值。");
+  const previous = homepage.presentation?.sections?.[sectionKey]?.mobile;
+  const mobile = enabled ? { ...previous, overrideEnabled: true }
+    : hasSettings(previous?.overrides) ? { ...previous, overrideEnabled: false } : undefined;
+  return writeMobile(homepage, sectionKey, mobile);
+}
+
+/** New edits enable a missing Mobile branch; edits to an existing disabled
+ * draft keep it disabled. Reset never enables Mobile or copies Base values. */
+export function updateHomepageMobilePresentation<T extends { presentation?: HomepagePresentationV3 }>(homepage: T, sectionKey: HomepagePresentationKey, edit: HomepageBasePresentationEdit): T {
+  validateMobileInput(homepage, sectionKey);
+  const previous = homepage.presentation?.sections?.[sectionKey]?.mobile;
+  const isolated: { presentation?: HomepagePresentationV3 } = previous?.overrides === undefined ? {} : {
+    presentation: { schemaVersion: 3, sections: { [sectionKey]: { base: previous.overrides } } },
+  };
+  const patched = updateHomepageBasePresentation(isolated, sectionKey, edit);
+  const overrides = patched.presentation?.sections?.[sectionKey]?.base;
+  const hasOverrides = hasSettings(overrides);
+  const overrideEnabled = previous?.overrideEnabled ?? hasOverrides;
+  const mobile = overrideEnabled || hasOverrides
+    ? { overrideEnabled, ...(hasOverrides ? { overrides } : {}) } : undefined;
+  return writeMobile(homepage, sectionKey, mobile);
+}
