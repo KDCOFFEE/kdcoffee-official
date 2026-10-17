@@ -130,7 +130,7 @@ function SectionPresentationEditor({ sectionKey, context }: { sectionKey: Homepa
       <section className="cms-item-card" style={{ marginTop: 24 }} aria-label="手機版呈現設定">
         <h3>手機版</h3>
         <label className="cms-switch"><input type="checkbox" checked={enabled} disabled={!context.onMobileToggle} onChange={(event) => context.onMobileToggle?.(sectionKey, event.currentTarget.checked)} />啟用手機自訂</label>
-        <p className="cms-help">此階段僅儲存手機設定，尚未套用至公開首頁。</p>
+        <p className="cms-help">儲存後，手機版設定會在螢幕寬度 600px 以下套用至公開首頁；未設定的欄位會沿用 Desktop／共用設定。</p>
         {enabled
           ? <PresentationFields sectionKey={sectionKey} context={context} mode="mobile" patch={mobile?.overrides} base={base} />
           : <p className="cms-help">目前沿用 Desktop／共用設定。{mobile?.overrides ? "已儲存的手機自訂內容會保留，重新啟用即可繼續編輯。" : ""}</p>}
