@@ -186,10 +186,11 @@ check("legacy/configured motion stays intact and presentation animation/presets 
     assert.equal(render(data), expected);
   }
 });
-check("enabled Mobile overrides are not consumed", () => {
+check("enabled Mobile adds only scoped CSS bindings while preserving content", () => {
   const data = fixture();
   data.presentation = { schemaVersion: 3, sections: Object.fromEntries(HOMEPAGE_PRESENTATION_SECTION_KEYS.map((key) => [key, { mobile: { overrideEnabled: true, overrides: { visible: false, text: { title: { fontSizePx: 90 } }, layout: { paddingTopPx: 0 } } } }])) };
-  assert.equal(render(data), render(fixture(), LegacyHome));
+  assert.equal(noStyles(render(data)), noStyles(render(fixture(), LegacyHome)));
+  assert.ok(render(data).includes("data-homepage-section-mobile"));
 });
 check("Hero legacy and desktop/mobile media branches preserve SSR", () => {
   for (const settings of [{}, { desktopMedia: { type: "image", provider: "local", url: "/images/desktop.webp" }, mobileMedia: { type: "image", provider: "local", url: "/images/mobile.webp" } }, { media: { type: "image", provider: "local", url: "/images/legacy.webp" } }]) {
@@ -229,8 +230,8 @@ check("content caps preserve legacy horizontal margin/padding declarations", () 
   for (const key of HOMEPAGE_PRESENTATION_SECTION_KEYS) assert.deepEqual(createHomepagePresentationBindings(configured(key, { layout: { contentMaxWidthPx: 640 } }).presentation)(key).contentStyle(), { "--homepage-content-width-base": "640px" });
 });
 const helperSource = await readFile(path.join(root, "lib/homepagePresentationBindings.ts"), "utf8");
-check("helper has no viewport detection/Mobile read/animation or preset expansion", () => {
-  assert.doesNotMatch(helperSource, /window\.|document\.|matchMedia|useEffect|\.mobile\b|resolved\.animation|resolved\.preset/u);
+check("helper has no viewport detection/merged Mobile resolution/animation or preset expansion", () => {
+  assert.doesNotMatch(helperSource, /window\.|document\.|matchMedia|useEffect|sectionKey, "mobile"|resolved\.animation|resolved\.preset/u);
   assert.match(helperSource, /sectionKey, "desktop"/u);
 });
 assert.equal(passed, 59, "Retain all 59 H3.3A regression scenarios, adapting mechanism assertions to H3.3A.1.");
@@ -268,10 +269,11 @@ check("visibility true restores each section's native layout display", () => {
   assert.ok(bindingCss.includes(".v3-hero{--homepage-visible-display:flex}") && bindingCss.includes(".v3-roast-service{--homepage-visible-display:grid}"));
   assert.equal(value(createHomepagePresentationBindings(configured("home006", { visible: true }).presentation)("home006").sectionStyle, "--homepage-section-visibility-base"), "var(--homepage-visible-display, block)");
 });
-check("Base absent and ignored Mobile-only width share the identical stable frame DOM", () => {
+check("Base absent and Mobile-only width share the same stable frame DOM", () => {
   const data = fixture();
   data.presentation = { schemaVersion: 3, sections: { home006: { mobile: { overrideEnabled: true, overrides: { layout: { contentMaxWidthPx: 300 } } } } } };
-  assert.equal(renderRaw(data), renderRaw(fixture()));
+  assert.equal(noStyles(renderRaw(data)), noStyles(renderRaw(fixture())));
+  assert.ok(renderRaw(data).includes('data-homepage-content-mobile="width"'));
   assert.ok(section(renderRaw(data), "home006").includes('class="homepage-base-content-grid"'));
 });
 check("frame has no conditional markup and is layout-transparent without width", () => {
@@ -280,7 +282,8 @@ check("frame has no conditional markup and is layout-transparent without width",
 });
 check("legacy Desktop and all Mobile media queries remain in order", () => {
   const queries = (source: string) => [...source.matchAll(/@media[^{]+/gu)].map((match) => match[0]);
-  assert.deepEqual(queries(css), queries(oldCss));
+  assert.deepEqual(queries(css.slice(0, css.indexOf("/* H3.4B CMS Presentation only:"))), queries(oldCss));
+  assert.deepEqual(queries(css.slice(css.indexOf("/* H3.4B CMS Presentation only:"))), ["@media (max-width: 600px)"]);
 });
 check("no important escalation was introduced", () => {
   assert.equal((css.match(/!important/gu) ?? []).length, (oldCss.match(/!important/gu) ?? []).length);

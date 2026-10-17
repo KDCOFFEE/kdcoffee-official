@@ -1,6 +1,10 @@
 import type { HomepageSectionMotion } from "./homepageCms.ts";
 import type { VisualAlignmentPreset, VisualColorValue, VisualWeightPreset } from "./pageBuilderVisualStyle.ts";
 
+/** CMS Presentation only; legacy layout/media boundaries remain independent.
+ * Keep app/globals.css H3.4B media query synchronized via the runtime tests. */
+export const HOMEPAGE_PRESENTATION_MOBILE_MAX_PX = 600 as const;
+
 export const HOMEPAGE_PRESENTATION_SECTION_KEYS = ["hero", "campaignSection", "home002", "home003", "home004", "home005", "home006", "home007", "home008", "home009", "home010"] as const;
 export const HOMEPAGE_TEXT_SLOTS = ["eyebrow", "title", "intro", "body", "closing", "cta", "cardTitle", "cardBody", "metadata"] as const;
 export const HOMEPAGE_PRESENTATION_PRESETS = ["legacy", "compact", "comfortable", "editorial"] as const;

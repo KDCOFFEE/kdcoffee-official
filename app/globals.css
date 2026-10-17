@@ -8112,3 +8112,26 @@ button.member-lifecycle-action:disabled,
 .v3-roast-service>.homepage-base-content-grid[data-homepage-content-base~="width"]>*{min-width:0}
 .v3-roast-service>.homepage-base-content-grid[data-homepage-content-base~="width"]>[data-home-reveal="media"]>.v3-media{width:100%;min-width:0;max-width:100%}
 /* End H3.3A.1 responsive-ready bindings. */
+
+/* H3.4B CMS Presentation only: HOMEPAGE_PRESENTATION_MOBILE_MAX_PX = 600.
+ * Sparse tokens add consumers only for explicit enabled Mobile leaves.
+ * All legacy layout/media breakpoints and absent-leaf fallbacks remain intact. */
+@media (max-width: 600px){
+:is(.v3-hero,.v3-section,.v3-final,.campaign-multi-section) [data-homepage-text-mobile][data-homepage-text-mobile~="font-size"]{--homepage-text-font-size:var(--homepage-text-font-size-mobile);font-size:var(--homepage-text-font-size)}
+:is(.v3-hero,.v3-section,.v3-final,.campaign-multi-section) [data-homepage-text-mobile][data-homepage-text-mobile~="font-weight"]{--homepage-text-font-weight:var(--homepage-text-font-weight-mobile);font-weight:var(--homepage-text-font-weight)}
+:is(.v3-hero,.v3-section,.v3-final,.campaign-multi-section) [data-homepage-text-mobile][data-homepage-text-mobile~="color"]{--homepage-text-color:var(--homepage-text-color-mobile);color:var(--homepage-text-color)}
+:is(.v3-hero,.v3-section,.v3-final,.campaign-multi-section) [data-homepage-text-mobile][data-homepage-text-mobile~="line-height"]{--homepage-text-line-height:var(--homepage-text-line-height-mobile);line-height:var(--homepage-text-line-height)}
+:is(.v3-hero,.v3-section,.v3-final,.campaign-multi-section) [data-homepage-text-mobile][data-homepage-text-mobile~="letter-spacing"]{--homepage-text-letter-spacing:var(--homepage-text-letter-spacing-mobile);letter-spacing:var(--homepage-text-letter-spacing)}
+:is(.v3-hero,.v3-section,.v3-final,.campaign-multi-section) [data-homepage-text-mobile][data-homepage-text-mobile~="alignment"]{--homepage-text-alignment:var(--homepage-text-alignment-mobile);text-align:var(--homepage-text-alignment)}
+:is(.v3-hero,.v3-section,.v3-final,.campaign-multi-section) [data-homepage-text-mobile][data-homepage-text-mobile~="max-width"]{--homepage-text-max-width:var(--homepage-text-max-width-mobile);max-width:var(--homepage-text-max-width)}
+:is(.v3-hero,.v3-section,.v3-final,.campaign-multi-section)[data-homepage-section-mobile][data-homepage-section-mobile~="padding-top"]{--homepage-section-padding-top:var(--homepage-section-padding-top-mobile);padding-top:var(--homepage-section-padding-top)}
+:is(.v3-hero,.v3-section,.v3-final,.campaign-multi-section)[data-homepage-section-mobile][data-homepage-section-mobile~="padding-bottom"]{--homepage-section-padding-bottom:var(--homepage-section-padding-bottom-mobile);padding-bottom:var(--homepage-section-padding-bottom)}
+:is(.v3-hero,.v3-section,.v3-final,.campaign-multi-section)[data-homepage-section-mobile][data-homepage-section-mobile~="background"]{--homepage-section-background:var(--homepage-section-background-mobile);background:var(--homepage-section-background)}
+:is(.v3-hero,.v3-section,.v3-final,.campaign-multi-section)[data-homepage-section-mobile][data-homepage-section-mobile~="visibility"]{--homepage-section-visibility:var(--homepage-section-visibility-mobile);display:var(--homepage-section-visibility)}
+:is(.v3-hero,.v3-section,.v3-final,.campaign-multi-section) [data-homepage-content-mobile][data-homepage-content-mobile~="width"]{--homepage-content-width:var(--homepage-content-width-mobile);max-width:min(var(--homepage-content-width),var(--homepage-text-max-width,var(--homepage-content-width)))}
+.v3-roast-service>.homepage-base-content-grid[data-homepage-content-mobile~="width"]{display:grid;grid-template-columns:inherit;gap:inherit;align-items:inherit;grid-column:1 / -1;width:100%;margin-inline:auto}
+.v3-roast-service>.homepage-base-content-grid[data-homepage-content-mobile~="width"]>*{min-width:0}
+.v3-roast-service>.homepage-base-content-grid[data-homepage-content-mobile~="width"]>[data-home-reveal="media"]>.v3-media{width:100%;min-width:0;max-width:100%}
+:is(.v3-hero,.v3-section,.v3-final,.campaign-multi-section) [data-homepage-content-base~="width"][data-homepage-text-mobile~="max-width"]{max-width:min(var(--homepage-content-width),var(--homepage-text-max-width,var(--homepage-content-width)))}
+}
+/* End H3.4B Mobile presentation bindings. */
