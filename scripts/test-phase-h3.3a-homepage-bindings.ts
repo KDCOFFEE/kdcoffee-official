@@ -32,10 +32,13 @@ function legacyComponent(file: string, overrides: Record<string, unknown> = {}) 
 const oldCampaign = legacyComponent("components/home/MonthlyCampaign.tsx");
 const LegacyHome = legacyComponent("components/home/HomepageV3.tsx", { "@/components/home/MonthlyCampaign": { __esModule: true, default: oldCampaign } }) as ComponentType<HomeProps>;
 const stored = await readFile(path.join(root, "public/data/homepage.json"), "utf8");
+// Presentation parity uses accepted valid-CTA content, independent of Owner QA
+// edits. Explicit CTA clearing is covered by test-homepage-cta-empty.ts.
+const acceptedStored = execFileSync("git", ["show", "42e79db:public/data/homepage.json"], { cwd: root, encoding: "utf8" });
 const seed = await readFile(path.join(root, "bootstrap/store/homepage.json"), "utf8");
 const products: HomeProps["products"] = [1, 2, 3].map((n) => ({ slug: `h33a-${n}`, name: `作品${n}`, subtitle: `說明${n}`, active: true, status: "active", purchasable: true, inMonthlyMenu: true, skus: [{ enabled: true, stock: n }], purchase: [{ label: "半磅", detail: "fixture", price: 300 + n }] }));
 function fixture(): HomepageViewData {
-  const data: HomepageViewData = JSON.parse(stored);
+  const data: HomepageViewData = JSON.parse(acceptedStored);
   for (const key of HOMEPAGE_PRESENTATION_SECTION_KEYS) data[key].enabled = true;
   data.home004.productSlugs = products.map((p) => p.slug);
   data.home009.items = [{ id: "REVIEW-H33A", text: "真實回饋", name: "測試者", source: "Google" }];
@@ -69,8 +72,8 @@ const value = (style: Parameters<typeof homepagePresentationProps>[0], name: str
 let passed = 0;
 function check(name: string, run: () => void) { run(); passed += 1; console.log("PASS " + name); }
 
-check("legacy stored data validates and matches accepted SSR after transparent-frame normalization", () => {
-  const data: HomepageViewData = JSON.parse(stored);
+check("accepted legacy data validates and matches accepted SSR after transparent-frame normalization", () => {
+  const data: HomepageViewData = JSON.parse(acceptedStored);
   assert.equal(validateHomepageCms(data), true);
   assert.equal(render(data), render(data, LegacyHome));
 });

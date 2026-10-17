@@ -9,6 +9,7 @@ import HomepageContentWidth from "@/components/home/HomepageContentWidth";
 import { createHomepagePresentationBindings, homepagePresentationProps, mergeHomepageStyles } from "@/lib/homepagePresentationBindings";
 import HomepageSceneMedia from "@/components/home/HomepageSceneMedia";
 import CmsLink from "@/components/CmsLink";
+import { resolveHomepageCta } from "@/lib/homepageCta";
 import HomepageMotion from "@/components/home/HomepageMotion";
 import HomepageMediaCollection, { resolveHomepageMediaCollection } from "@/components/home/HomepageMediaCollection";
 import HomepageStudioGallery from "@/components/home/HomepageStudioGallery";
@@ -216,6 +217,12 @@ export default function HomepageV3({
   const cta =
     h.home010 || {};
 
+  const ctaRegistry = { products, pages };
+  const heroPrimaryCta = resolveHomepageCta({ label: hero.buttonLabel, href: hero.buttonHref, enabled: hero.primaryCtaEnabled, legacyLabel: "開始挑咖啡" }, ctaRegistry);
+  const heroSecondaryCta = resolveHomepageCta({ label: hero.secondaryLabel, href: hero.secondaryHref, enabled: hero.secondaryCtaEnabled, legacyLabel: "本月作品" }, ctaRegistry);
+  const roastCta = resolveHomepageCta({ label: roast.button, href: roast.href, enabled: roast.ctaEnabled, legacyLabel: "查看適用作品" }, ctaRegistry);
+  const finalCta = resolveHomepageCta({ label: cta.button, href: cta.href, enabled: cta.ctaEnabled, legacyLabel: "開始挑咖啡" }, ctaRegistry);
+
   const home004Resolution =
     resolveHome004Recommendations(
       starter.productSlugs,
@@ -329,33 +336,25 @@ export default function HomepageV3({
             {hero.lead}
           </p>
 
-          <div className="v3-actions">
-            {hero.primaryCtaEnabled !== false ? <CmsLink
+          {heroPrimaryCta || heroSecondaryCta ? <div className="v3-actions">
+            {heroPrimaryCta ? <CmsLink
               className="v3-button primary v3-hero-primary-action"
               {...homepagePresentationProps(presentation.hero.textStyle("cta"))}
-              value={
-                hero.buttonHref ||
-                "#home003"
-              }
+              value={heroPrimaryCta.value}
               registry={{ products, pages }}
             >
-              {hero.buttonLabel ||
-                "開始挑咖啡"}
+              {heroPrimaryCta.label}
             </CmsLink> : null}
 
-            {hero.secondaryCtaEnabled !== false ? <CmsLink
+            {heroSecondaryCta ? <CmsLink
               className="v3-button ghost v3-hero-secondary-action"
               {...homepagePresentationProps(presentation.hero.textStyle("cta"))}
-              value={
-                hero.secondaryHref ||
-                "#home004"
-              }
+              value={heroSecondaryCta.value}
               registry={{ products, pages }}
             >
-              {hero.secondaryLabel ||
-                "本月作品"}
+              {heroSecondaryCta.label}
             </CmsLink> : null}
-          </div>
+          </div> : null}
 
           <div className="v3-trust">
             {(hero.trustCues || ["不用登入即可購買", "7-ELEVEN 取貨付款", "工作室自取"]).map((cue: string) => <span key={cue} {...homepagePresentationProps(presentation.hero.textStyle("metadata"))}>{cue}</span>)}
@@ -484,6 +483,7 @@ export default function HomepageV3({
               c: HomepageContentItem,
               index: number,
             ) => {
+              const sceneCta = resolveHomepageCta({ label: c.button, href: c.href, enabled: c.ctaEnabled, legacyLabel: "開始" }, ctaRegistry);
               const sceneMediaItems = resolveHomepageMediaCollection({ alt: c.alt || c.title, media: c.media, mediaItems: c.mediaItems, src: c.image });
               const sceneMedia = sceneMediaItems.find((item) => item.primary) || sceneMediaItems[0];
               return <article
@@ -520,7 +520,7 @@ export default function HomepageV3({
                   }
                 />
 
-                {c.ctaEnabled !== false ? <CmsLink className="v3-scene-navigation" value={c.href || "/works"} registry={{ products, pages }}>
+                {sceneCta ? <CmsLink className="v3-scene-navigation" value={sceneCta.value} registry={{ products, pages }}>
                   {sceneMedia?.media.type === "video" || sceneMedia?.media.type === "youtube" ? null : <span className="v3-scene-hitarea" aria-hidden="true" />}
                   <div className="v3-scene-copy">
                   <small {...homepagePresentationProps(presentation.home003.textStyle("eyebrow"))}>
@@ -536,15 +536,14 @@ export default function HomepageV3({
                   </p>
 
                   <b {...homepagePresentationProps(presentation.home003.textStyle("cta"))}>
-                    {c.button ||
-                      "開始"}
+                    {sceneCta.label}
 
                     <span>
                       →
                     </span>
                   </b>
                   </div>
-                </CmsLink> : <div className="v3-scene-navigation is-disabled"><div className="v3-scene-copy"><small {...homepagePresentationProps(presentation.home003.textStyle("eyebrow"))}>{c.eyebrow || ""}</small><h3 {...homepagePresentationProps(presentation.home003.textStyle("cardTitle"))}>{c.title}</h3><p {...homepagePresentationProps(presentation.home003.textStyle("cardBody"))}>{c.text}</p></div></div>}
+                </CmsLink> : <div className="v3-scene-navigation is-disabled"><div className="v3-scene-copy"><small {...homepagePresentationProps(presentation.home003.textStyle("eyebrow"))}>{c.eyebrow || ""}</small><h3 {...homepagePresentationProps(presentation.home003.textStyle("cardTitle"))}>{c.title}</h3><p {...homepagePresentationProps(mergeHomepageStyles(presentation.home003.textStyle("cardBody"), { marginBottom: 0 }))}>{c.text}</p></div></div>}
               </article>;
             },
           )}
@@ -756,17 +755,13 @@ export default function HomepageV3({
             )}
           </ul>
 
-          {roast.ctaEnabled !== false ? <CmsLink
+          {roastCta ? <CmsLink
             className="v3-button primary"
             {...homepagePresentationProps(presentation.home006.textStyle("cta"))}
-            value={
-              roast.href ||
-              "/works"
-            }
+            value={roastCta.value}
             registry={{ products, pages }}
           >
-            {roast.button ||
-              "查看適用作品"}
+            {roastCta.label}
           </CmsLink> : null}
         </div>
 
@@ -907,19 +902,15 @@ export default function HomepageV3({
           {cta.text}
         </div>
 
-        {cta.ctaEnabled !== false ? <CmsLink
+        {finalCta ? <CmsLink
           className="v3-button light"
           data-home-reveal="media"
           data-home-motion-part
           {...homepagePresentationProps(presentation.home010.contentStyle(mergeHomepageStyles(motionItemStyle(2), presentation.home010.textStyle("cta"))))}
-          value={
-            cta.href ||
-            "/works"
-          }
+          value={finalCta.value}
           registry={{ products, pages }}
         >
-          {cta.button ||
-            "開始挑咖啡"}
+          {finalCta.label}
         </CmsLink> : null}
       </section> : null}
       </div>
