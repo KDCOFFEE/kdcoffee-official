@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
-import { execFileSync } from "node:child_process";
 import path from "node:path";
 import { createElement, type ComponentProps, type ComponentType } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -111,18 +110,42 @@ check("API only adds public copy; auth and existing summary remain", () => {
   const get = api.slice(api.indexOf("export async function GET()"), api.indexOf("export async function PUT"));
   assert.ok(get.includes("isAdminAuthenticated()")); assert.ok(get.includes("...homepageProductCopy(product)")); assert.doesNotMatch(get, /\.\.\.product\b|history:|skus:|pvValue:|shortCopy:\s*product/u);
 });
-check("public campaign selector was extracted without behavior changes", () => {
-  const old = execFileSync("git", ["show", "HEAD:data/homepageData.ts"], { encoding: "utf8" }).replace(/\r\n/g, "\n");
-  const helperStart = old.indexOf("function campaignIsActive("), helperEnd = old.indexOf("export function resolveProductCampaigns(");
-  const oldBody = old.slice(helperStart, helperEnd);
-  // File read below keeps this check synchronous with the captured source.
-  assert.ok(oldBody.includes("activeHomepageCampaigns"));
+const campaignHelpers = await jiti.import<typeof import("../lib/homepageCampaigns")>(path.join(process.cwd(), "lib/homepageCampaigns.ts"));
+const publicData = await jiti.import<typeof import("../data/homepageData")>(path.join(process.cwd(), "data/homepageData.ts"));
+const publicDataSource = await readFile("data/homepageData.ts", "utf8");
+const contentModel = await jiti.import<typeof import("../lib/homepageContent")>(path.join(process.cwd(), "lib/homepageContent.ts"));
+check("public data and content descriptions use the canonical campaign selector", () => {
+  assert.equal(typeof publicData.activeHomepageCampaigns, "function");
+  assert.equal(typeof campaignHelpers.activeHomepageCampaigns, "function");
+  assert.match(publicDataSource, /export \{ activeHomepageCampaigns \} from "@\/lib\/homepageCampaigns"/u);
+  assert.match(model, /import \{ activeHomepageCampaigns \} from "\.\/homepageCampaigns\.ts"/u);
+  assert.match(model, /activeHomepageCampaigns\(/u);
 });
-const helper = await readFile("lib/homepageCampaigns.ts", "utf8");
-const oldData = execFileSync("git", ["show", "HEAD:data/homepageData.ts"], { encoding: "utf8" }).replace(/\r\n/g, "\n");
-check("shared campaign selection implementation remains byte-equivalent", () => {
-  const actual = helper.slice(helper.indexOf("export function campaignIsActive(")).replace("export function campaignIsActive(", "function campaignIsActive(").replace("export function campaignSupportsPlacement(", "function campaignSupportsPlacement(");
-  assert.equal(actual.trimEnd(), oldData.slice(oldData.indexOf("function campaignIsActive("), oldData.indexOf("export function resolveProductCampaigns(")).trimEnd());
+check("campaign selection and descriptions preserve deterministic public behavior", () => {
+  const h = fixture();
+  const campaign = { id: "base", eyebrow: "活動標籤", title: "基礎活動", description: "活動內容", details: ["活動細節"], ctaLabel: "查看活動", ctaHref: "/works", note: "活動註記", sort: 2 };
+  h.campaignSection = { enabled: true, eyebrow: "活動區標籤", title: "活動區", intro: "說明", displayLimit: 2 };
+  h.campaigns = [
+    { ...campaign, id: "later", title: "排序較後", sort: 2 },
+    { ...campaign, id: "first", title: "第一個", sort: 1, startDate: "2031-04-15", endDate: "2031-04-15" },
+    { ...campaign, id: "tie", title: "同序第二個", sort: 1 },
+    { ...campaign, id: "disabled", enabled: false, sort: -5 },
+    { ...campaign, id: "future", startDate: "2031-04-16", sort: -4 },
+    { ...campaign, id: "expired", endDate: "2031-04-14", sort: -3 },
+    { ...campaign, id: "product-only", placements: ["product_pages"], sort: -2 },
+  ];
+  const now = new Date("2031-04-15T12:00:00");
+  const before = structuredClone(h);
+  const selected = publicData.activeHomepageCampaigns(h, now);
+  assert.deepEqual(selected.map(item => item.id), ["first", "tie"]);
+  assert.deepEqual(campaignHelpers.activeHomepageCampaigns(h, now).map(item => item.id), ["first", "tie"]);
+  assert.equal(selected[0], h.campaigns[1]);
+  const descriptions = contentModel.describeHomepageContent(h, "campaignSection", products, [], now);
+  assert.deepEqual(descriptions.cardTitle!.examples.map(item => item.text), ["第一個", "同序第二個"]);
+  assert.deepEqual(descriptions.eyebrow!.examples.map(item => item.role), ["活動區標籤", "活動卡標籤", "活動卡標籤"]);
+  assert.deepEqual(descriptions.metadata!.examples.filter(item => item.source === "system_computed").map(item => item.text), ["01", "02"]);
+  assert.deepEqual(descriptions.metadata!.sources, ["system_computed", "homepage_content"]);
+  assert.deepEqual(h, before);
 });
 assert.equal(await readFile("public/data/homepage.json", "utf8"), stored);
 assert.equal(await readFile("public/data/website-data.json", "utf8"), website);
