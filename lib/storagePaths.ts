@@ -449,3 +449,25 @@ export function getOrderNotificationUploadsDir() {
     ? joinPersistentRoot(root, "uploads", "order-notifications")
     : path.join(process.cwd(), "public", "uploads", "order-notifications");
 }
+
+/** LINE presentation settings and bounded event claims; never product or member truth. */
+export function getLineAutoReplyDir() {
+  assertProductionStorageRootConfigured();
+  const override = configuredValue(process.env.LINE_AUTO_REPLY_DATA_DIR);
+  if (override) {
+    if (override.split(/[\\/]/u).some(part => part === ".." || part === ".")) {
+      throw new StorageConfigurationError("LINE_AUTO_REPLY_DATA_DIR must not contain path traversal");
+    }
+    const normalized = normalizeExplicitRoot(override, "LINE_AUTO_REPLY_DATA_DIR");
+    const contract = getStorageRootContract();
+    const railwayRuntime = Boolean(process.env.RAILWAY_PROJECT_ID || process.env.RAILWAY_ENVIRONMENT_ID || process.env.RAILWAY_SERVICE_ID || process.env.RAILWAY_VOLUME_NAME);
+    if (process.env.NODE_ENV === "production" && (contract.railwayMountPath || railwayRuntime) && !rootIsWithinMount(normalized, contract.railwayMountPath || contract.root)) {
+      throw new StorageConfigurationError("LINE_AUTO_REPLY_DATA_DIR must stay inside the Railway persistent root");
+    }
+    return normalized;
+  }
+  const root = getPersistentDataRoot();
+  return root
+    ? joinPersistentRoot(root, "line-auto-reply")
+    : path.join(process.cwd(), "data", "line-auto-reply");
+}

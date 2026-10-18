@@ -48,6 +48,7 @@ export default async function AdminPage() {
       <Link href="/admin/store"><strong>商店工作區 / Store</strong><span>Owner 專用・銷售專區、商品分類與一般零售商品 →</span></Link>
       <Link className="admin-logo-entry" href="/admin/logo"><strong>上傳與管理 Logo</strong><span>Header、Footer、方形標誌與分享圖 →</span></Link>
       <Link href="/admin/homepage"><strong>首頁內容與照片</strong><span>Hero、多活動、推薦作品圖片 →</span></Link>
+      <Link href="/admin/line-auto-reply"><strong>LINE 顧客導覽與自動回覆</strong><span>Owner 專用・常見問題、關鍵字、回覆內容與測試 →</span></Link>
       <Link href="/admin/pages"><strong>網站頁面管理</strong><span>建立、預覽與發布活動／專題頁 →</span></Link>
       <Link href="/admin/works"><strong>全部咖啡 / Works</strong><span>編輯全部咖啡頁面的內容與呈現設定 →</span></Link>
       <Link href="/admin/assets"><strong>品牌資產與 Logo</strong><span>圖片編號、尺寸、用途與 SEO 自動命名 →</span></Link>
