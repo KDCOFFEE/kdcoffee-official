@@ -6,6 +6,7 @@ import { atomicWriteJson, withFileLock } from "@/lib/jsonFileStore";
 import { validateHomepageCampaigns } from "@/lib/homepageCampaignValidation";
 import { verifyHomepageMedia } from "@/lib/homepageMedia";
 import { validateHomepageCms } from "@/lib/homepageCms";
+import { homepageProductCopy } from "@/lib/homepageContent";
 import {
   hasAvailableHome004Sku,
   resolveHome004Recommendations,
@@ -119,6 +120,8 @@ export async function GET() {
             typeof product.name === "string"
               ? product.name
               : "",
+
+          ...homepageProductCopy(product),
 
           active:
             typeof product.active === "boolean"

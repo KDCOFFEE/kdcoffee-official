@@ -2,13 +2,13 @@
 
 import { createContext, useCallback, useContext, useEffect, useId, useState, type ReactNode } from "react";
 import { HOMEPAGE_PRESENTATION_NUMBER_RULES, HOMEPAGE_SECTION_CAPABILITIES, type HomepagePresentationKey, type HomepagePresentationPatch, type HomepagePresentationV3, type HomepageTextSlot } from "@/lib/homepagePresentation";
+import { describeHomepageContent, HOMEPAGE_CONTENT_SOURCES, HOMEPAGE_CONTENT_SLOT_LABELS, type HomepageContentDescription, type HomepageContentExample, type HomepageContentInput, type HomepageContentProduct } from "@/lib/homepageContent";
+import type { CmsLinkRegistryInput } from "@/lib/cmsLinks";
 import type { HomepageBasePresentationEdit } from "@/lib/homepagePresentationAdmin";
 import { VISUAL_ALIGNMENT_PRESETS, VISUAL_COLOR_PRESETS, VISUAL_WEIGHT_PRESETS, resolveVisualColor, visualColorHex, type VisualColorValue } from "@/lib/pageBuilderVisualStyle";
 
-export const HOMEPAGE_TEXT_SLOT_LABELS: Record<HomepageTextSlot, string> = {
-  eyebrow: "前導小標", title: "主標題", intro: "引言／說明文字", body: "內文", closing: "結尾文字",
-  cta: "按鈕文字", cardTitle: "卡片標題", cardBody: "卡片內文", metadata: "輔助資訊",
-};
+export const HOMEPAGE_TEXT_SLOT_LABELS = HOMEPAGE_CONTENT_SLOT_LABELS;
+type ContentContext = { homepage: HomepageContentInput; products: HomepageContentProduct[]; pages?: CmsLinkRegistryInput["pages"]; draft?: boolean };
 const weightLabels = { light: "細", regular: "一般", semibold: "中粗", bold: "粗" };
 const alignmentLabels = { left: "靠左", center: "置中", right: "靠右" };
 const colorLabels = { ink: "墨黑", coffee: "深咖啡", "warm-gray": "暖灰", ivory: "米白", gold: "KD 金", white: "柔白" };
@@ -19,6 +19,7 @@ const numericLabels: Record<NumericField, [string, string]> = {
   contentMaxWidthPx: ["內容最大寬度", "px"], paddingTopPx: ["上方留白", "px"], paddingBottomPx: ["下方留白", "px"],
 };
 type PresentationContextValue = {
+  content?: ContentContext;
   presentation?: HomepagePresentationV3;
   onEdit: (section: HomepagePresentationKey, edit: HomepageBasePresentationEdit) => void;
   onMobileEdit?: (section: HomepagePresentationKey, edit: HomepageBasePresentationEdit) => void;
@@ -29,8 +30,9 @@ type PresentationContextValue = {
 const PresentationContext = createContext<PresentationContextValue | null>(null);
 
 /** Draft-only UI state. Opening/expanding controls never initializes CMS data. */
-export function HomepagePresentationProvider({ presentation, onEdit, onMobileEdit, onMobileToggle, onValidityChange, children }: {
+export function HomepagePresentationProvider({ presentation, content, onEdit, onMobileEdit, onMobileToggle, onValidityChange, children }: {
   presentation?: HomepagePresentationV3;
+  content?: ContentContext;
   onEdit: PresentationContextValue["onEdit"];
   onMobileEdit?: PresentationContextValue["onMobileEdit"];
   onMobileToggle?: PresentationContextValue["onMobileToggle"];
@@ -46,7 +48,7 @@ export function HomepagePresentationProvider({ presentation, onEdit, onMobileEdi
   }), []);
   const invalid = Object.keys(issues).length > 0;
   useEffect(() => onValidityChange(invalid), [invalid, onValidityChange]);
-  return <PresentationContext.Provider value={{ presentation, onEdit, onMobileEdit, onMobileToggle, reportIssue, issues }}>
+  return <PresentationContext.Provider value={{ presentation, content, onEdit, onMobileEdit, onMobileToggle, reportIssue, issues }}>
     {invalid ? <p className="cms-message" role="alert">呈現設定尚有未完成的輸入，請修正或選擇「沿用目前設計」後再儲存。</p> : null}
     {children}
   </PresentationContext.Provider>;
@@ -122,11 +124,13 @@ function SectionPresentationEditor({ sectionKey, context }: { sectionKey: Homepa
   const base = section?.base;
   const mobile = section?.mobile;
   const enabled = mobile?.overrideEnabled === true;
+  const descriptions = context.content ? describeHomepageContent(context.content.homepage, sectionKey, context.content.products, context.content.pages) : undefined;
   const hasIssue = Object.keys(context.issues).some((key) => key.startsWith(`${sectionKey}.`));
   return <details className="cms-panel cms-collapsible homepage-base-presentation">
     <summary><div><h3>呈現設定</h3><p>{hasIssue ? "請完成輸入後再儲存" : enabled ? "已啟用手機自訂" : base && Object.keys(base).some((key) => key !== "animation") ? "已自訂共用樣式" : "沿用目前設計"}</p></div><span>展開／收合</span></summary>
     <div className="cms-panel-body">
-      <PresentationFields sectionKey={sectionKey} context={context} mode="base" patch={base} />
+      {context.content ? <p className="cms-help">{context.content.draft ? "以下為目前未儲存草稿的內容摘要。" : "以下為目前已讀取資料的內容摘要。"}僅說明內容與啟用條件；尚未量測實際字級、色彩或桌機／手機顯示結果。下方數值為自訂設定。</p> : null}
+      <PresentationFields sectionKey={sectionKey} context={context} mode="base" patch={base} descriptions={descriptions} />
       <section className="cms-item-card" style={{ marginTop: 24 }} aria-label="手機版呈現設定">
         <h3>手機版</h3>
         <label className="cms-switch"><input type="checkbox" checked={enabled} disabled={!context.onMobileToggle} onChange={(event) => context.onMobileToggle?.(sectionKey, event.currentTarget.checked)} />啟用手機自訂</label>
@@ -139,11 +143,33 @@ function SectionPresentationEditor({ sectionKey, context }: { sectionKey: Homepa
   </details>;
 }
 
+function CurrentContent({ description }: { description: HomepageContentDescription }) {
+  const renderExample = (item: HomepageContentExample, index: number) => <li key={index} style={{ marginBottom: 10 }}>
+    {item.role ? <small>{item.role}</small> : null}
+    <div style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>
+      {item.text.trim() ? item.text.length > 240 ? <details><summary>{item.text.slice(0, 160)}…（展開完整內容）</summary><p style={{ whiteSpace: "pre-wrap" }}>{item.text}</p></details> : item.text : "目前沒有內容"}
+    </div>
+    <small>內容來源：{HOMEPAGE_CONTENT_SOURCES[item.source]} · 內容編輯：{item.editableWhere}</small>
+    {item.reason && item.reason !== description.reason ? <p className="cms-help">{item.reason}</p> : null}
+  </li>;
+  return <section className="cms-item-card" aria-label={`${description.label}目前內容`} data-homepage-content-description>
+    <p><strong>{description.label}</strong></p>
+    <p>目前內容{description.total > 1 ? `（共 ${description.total} 項）` : ""}</p>
+    {description.reason ? <p className="cms-help">{description.reason}</p> : null}
+    {description.total ? <ul style={{ margin: 0, paddingLeft: 20 }}>
+      {description.examples.slice(0, 3).map(renderExample)}
+    </ul> : <><p>目前沒有內容</p><small>內容來源：{description.sources.map(source => HOMEPAGE_CONTENT_SOURCES[source]).join("／")} · 內容編輯：{description.editableWhere}</small></>}
+    {description.total > 3 ? <details><summary>查看其餘 {description.total - 3} 項</summary><ul style={{ paddingLeft: 20 }}>{description.examples.slice(3).map(renderExample)}</ul></details> : null}
+    <p className="cms-help">影響範圍：{description.impact}</p>
+  </section>;
+}
+
 /** The same controls serve Base and sparse Mobile; inherited hints never enter
  * the input values or mutation payloads. Only the edited leaf is submitted. */
-function PresentationFields({ sectionKey, context, mode, patch, base }: {
+function PresentationFields({ sectionKey, context, mode, patch, base, descriptions }: {
   sectionKey: HomepagePresentationKey; context: PresentationContextValue; mode: "base" | "mobile";
   patch?: HomepagePresentationPatch; base?: HomepagePresentationPatch;
+  descriptions?: Partial<Record<HomepageTextSlot, HomepageContentDescription>>;
 }) {
   const { onEdit, onMobileEdit, reportIssue } = context;
   const slots = HOMEPAGE_SECTION_CAPABILITIES[sectionKey];
@@ -178,6 +204,7 @@ function PresentationFields({ sectionKey, context, mode, patch, base }: {
         const inherited = base?.text?.[slot];
         return <details className="cms-item-card" key={slot}>
           <summary style={{ cursor: "pointer" }}><strong>{HOMEPAGE_TEXT_SLOT_LABELS[slot]}</strong> · {text && Object.keys(text).length ? isMobile ? "手機自訂" : "已自訂" : inheritLabel}</summary>
+          {!isMobile && descriptions?.[slot] ? <CurrentContent description={descriptions[slot]!} /> : null}
           <div className="cms-grid two" style={{ marginTop: 16, alignItems: "start" }}>
             {number("fontSizePx", slot)}
             <label>字重<select style={selectStyle} value={text?.fontWeight ?? ""} onChange={(event) => edit({ group: "text", slot, field: "fontWeight", value: event.currentTarget.value || undefined })}><option value="">{inheritLabel}</option>{VISUAL_WEIGHT_PRESETS.map((weight) => <option key={weight} value={weight}>{weightLabels[weight]}</option>)}</select>{hint(text?.fontWeight, inherited?.fontWeight)}</label>

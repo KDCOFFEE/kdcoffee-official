@@ -17,7 +17,7 @@ import { VISUAL_COLOR_PRESETS, visualColorHex, type VisualColorValue } from "@/l
 import { localImageMedia, resolveMediaAsset, youtubeMedia, type MediaAsset } from "@/lib/media";
 import { parseYouTubeUrl, youtubeWatchUrl } from "@/lib/youtubeMedia";
 
-type ProductOption = { slug: string; name: string; active?: boolean; status?: string; purchasable: boolean; inMonthlyMenu: boolean; hasAvailableSku: boolean };
+type ProductOption = { slug: string; name: string; subtitle?: string; shortCopy?: string; active?: boolean; status?: string; purchasable: boolean; inMonthlyMenu: boolean; hasAvailableSku: boolean };
 type AssetOption = AssetRecord;
 type Payload = { homepage: Record<string, any>; products: ProductOption[]; assets: AssetOption[]; publishedPages: import("@/lib/cmsLinks").PublishedCmsPage[] };
 type Path = Array<string | number>;
@@ -124,7 +124,7 @@ export default function HomepageManager() {
 
   if (!data) return <p>{message}</p>;
   const h = data.homepage;
-  return <SmartLinkEditingProvider pages={data.publishedPages}><HomepagePresentationProvider presentation={h.presentation} onEdit={editPresentation} onMobileEdit={editMobilePresentation} onMobileToggle={toggleMobilePresentation} onValidityChange={setPresentationInvalid}><div className="homepage-manager v3-admin">
+  return <SmartLinkEditingProvider pages={data.publishedPages}><HomepagePresentationProvider presentation={h.presentation} content={{ homepage: h, products: data.products, pages: data.publishedPages, draft: dirty }} onEdit={editPresentation} onMobileEdit={editMobilePresentation} onMobileToggle={toggleMobilePresentation} onValidityChange={setPresentationInvalid}><div className="homepage-manager v3-admin">
     <div className="cms-toolbar"><div><p className="eyebrow dark">HOMEPAGE CMS 2.0</p><h1>管理我的首頁</h1><p>文字、順序與媒體都可視化管理；移除首頁引用不會刪除素材。</p></div><div className="cms-toolbar-actions"><a href="/" target="_blank">預覽首頁 ↗</a><button onClick={save} disabled={saving || !dirty || presentationInvalid}>{saving ? "儲存中…" : "儲存全部"}</button></div></div>
     {dirty ? <div className="cms-unsaved" role="status">有尚未儲存的變更</div> : null}{message ? <div className="cms-message" role="status">{message}</div> : null}
     <div className="cms-toolbar-actions homepage-admin-tabs" role="tablist" aria-label="首頁管理分類">
