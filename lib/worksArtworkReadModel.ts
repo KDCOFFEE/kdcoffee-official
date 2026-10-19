@@ -76,3 +76,68 @@ export function projectWorksArtwork(input: { readonly product: unknown; readonly
     systemInfo: { productId: worksReference(productId) ? productId : null, artworkSku: worksReference(artworkSku) ? artworkSku : null, slug: worksReference(slug) ? slug : null, sectionIds, worksRevision: resolved.value.revision },
   } };
 }
+
+
+/** W3.2A-2 Owner DISPLAY model. Never a save snapshot or a write command.
+ * The W3.1A projectWorksArtwork API above retains its foundation semantics. */
+export type OwnerSectionId = "overview" | "pageContent" | "productFacts" | "purchase" | "media" | "relatedWorks" | "presentation" | "animation" | "searchAndShare" | "systemInfo";
+export type OwnerBinding = "CURRENT_PUBLIC_PARITY_VERIFIED" | "MODEL_ONLY" | "FUTURE_CANDIDATE" | "UNAVAILABLE";
+export type OwnerFieldState = "legacy" | "explicit" | "explicit-blank" | "inherited" | "missing" | "disabled" | "invalid" | "suppressed";
+export type OwnerImpact = "ARTWORK_DETAIL" | "WORKS_LIST" | "PRODUCT_REFERENCES" | "COMMERCE" | "SEARCH_SHARE" | "SHARED_SITE" | "SYSTEM_ONLY";
+export type OwnerAuthority = "PRODUCT" | "WORKS" | "MEDIA" | "COMMERCE" | "SYSTEM" | "DERIVED";
+export type OwnerDestinationKind = "WORKS_FUTURE" | "PRODUCT_ADMIN" | "COMMERCE_ADMIN" | "MEDIA_ADMIN" | "SYSTEM_ONLY" | "NO_CURRENT_EDITOR";
+export interface OwnerEditDestination { readonly kind: OwnerDestinationKind; readonly href: "/admin/products" | null; readonly label: string }
+export interface OwnerFieldDefinition {
+  readonly fieldId: string; readonly label: string; readonly section: OwnerSectionId;
+  readonly displayLocations: readonly string[]; readonly impactScope: readonly OwnerImpact[];
+  readonly ownership: OwnerAuthority; readonly editCapability: "EXTERNAL_EDITOR" | "WRITE_NOT_CONNECTED" | "SYSTEM_ONLY" | "UNAVAILABLE";
+  readonly editDestination: OwnerEditDestination; readonly optional: boolean;
+  readonly completenessRole: "REQUIRED" | "OPTIONAL" | "STATUS_ONLY" | "EXCLUDED";
+}
+export interface OwnerFieldWarning { readonly fieldId: string; readonly code: string; readonly label: string }
+export interface OwnerReadField {
+  readonly id: string; readonly label: string; readonly section: OwnerSectionId;
+  readonly value: import("./worksArtworkSourceTrace.ts").TraceJson; readonly hasValue: boolean;
+  readonly state: OwnerFieldState; readonly statusLabel: string; readonly ownership: OwnerAuthority;
+  readonly source: {
+    readonly owner: import("./worksArtworkSourceTrace.ts").TraceOwner | "SYSTEM";
+    readonly key: string; readonly label: string; readonly binding: OwnerBinding; readonly bindingLabel: string;
+    readonly trace: import("./worksArtworkSourceTrace.ts").EffectiveSourceTrace | null;
+  };
+  readonly display: { readonly locations: readonly string[]; readonly visibility: "visible" | "empty" | "disabled" | "suppressed" | "unknown"; readonly reason: string };
+  readonly impact: readonly OwnerImpact[];
+  readonly editing: { readonly editableHere: false; readonly capability: OwnerFieldDefinition["editCapability"]; readonly destination: OwnerEditDestination };
+  readonly optional: boolean; readonly completenessRole: OwnerFieldDefinition["completenessRole"];
+  readonly warning: OwnerFieldWarning | null;
+}
+export interface OwnerPublicState {
+  readonly state: "YES" | "NO" | "UNKNOWN";
+  readonly basis: "CALLER_DERIVED" | "NOT_PROVIDED" | "INVALID_INPUT";
+}
+export interface OwnerCommerceDisplay {
+  readonly priceText: string | null; readonly availability: "available" | "sold_out" | "unavailable" | "unknown";
+  readonly variantLabels: readonly string[]; readonly availableChoiceCount: number | null;
+}
+export interface OwnerCompleteness {
+  readonly category: "productFacts" | "pageContent" | "media" | "searchAndShare" | "purchase";
+  readonly state: "COMPLETE" | "NEEDS_ATTENTION" | "OPTIONAL" | "NOT_APPLICABLE" | "READ_ONLY_ISSUE";
+  readonly completed: number; readonly required: number; readonly needsAttention: number;
+  readonly fieldIds: readonly string[];
+}
+export interface WorksArtworkOwnerProjection {
+  readonly schemaVersion: 1; readonly capability: "READ_ONLY"; readonly contract: "DISPLAY_ONLY_NOT_WRITE_PAYLOAD";
+  readonly overview: { readonly fieldIds: readonly string[] };
+  readonly sections: readonly { readonly id: OwnerSectionId; readonly label: string; readonly fieldIds: readonly string[]; readonly collapsedByDefault: boolean }[];
+  readonly fields: readonly OwnerReadField[];
+  /** Never substitutes for fields' current legacy/parity values. */
+  readonly futureCandidates: readonly OwnerReadField[];
+  readonly publicStates: { readonly detailPage: OwnerPublicState; readonly worksList: OwnerPublicState; readonly purchase: OwnerPublicState };
+  readonly commerceSummary: OwnerCommerceDisplay;
+  readonly relatedWorks: { readonly mode: "MANUAL" | "AUTO_LEGACY" | "UNAVAILABLE"; readonly configuredCount: number | null; readonly effectiveCount: number; readonly excludedCount: number; readonly ordering: "MANUAL_ORDER" | "CATALOG_ORDER" | "UNKNOWN"; readonly items: readonly { readonly ref: string; readonly name: string | null }[]; readonly exclusionReasons: readonly string[] };
+  readonly completeness: readonly OwnerCompleteness[];
+  readonly systemInfo: { readonly collapsedByDefault: true; readonly namespace: "LEGACY_UNMANAGED" | "WORKS_CANDIDATE"; readonly contractVersion: number | null; readonly worksRevision: number | null };
+  readonly warnings: readonly OwnerFieldWarning[];
+}
+export type WorksOwnerProjectionResult =
+  | { readonly ok: true; readonly value: WorksArtworkOwnerProjection }
+  | { readonly ok: false; readonly errors: readonly { readonly code: "INVALID_INPUT" | "INVALID_IDENTITY" | "INVALID_WORKS_CONTRACT" | "UNSAFE_PROJECTION"; readonly label: string }[] };
