@@ -262,6 +262,50 @@ export function projectWorksArtworkOwner(input: WorksOwnerProjectionInput): Work
       }
       if (!safe) throw new ProjectionInputError(); return value;
     };
+    /** Batch independent text values through the SAME A-1 output boundary.
+     * flavorTags retains each nonblank raw string separately, unlike joining
+     * strings (which could hide a bare "/" or change token boundaries).
+     * Budgeting keeps normal batches below A-2's per-trace JSON limits.
+     * Known failures are bisected and memoized per string, never per family.
+     * Unexpected/malformed A-1 results still propagate as fatal contracts. */
+    const primeStrings = (values: readonly unknown[], maximum = 4000): void => {
+      const pending = [...new Set(values.filter((v): v is string => typeof v === "string" && v.length <= maximum && !safeStrings.has(v)))];
+      const inspect = (batch: readonly string[]): void => {
+        if (!batch.length) return;
+        if (batch.length === 1) {
+          try { safeString(batch[0], maximum); }
+          catch (error) { if (!(error instanceof ProjectionInputError)) throw error; safeStrings.set(batch[0], false); }
+          return;
+        }
+        let safe = false;
+        try { safe = checkedArtworkTrace({ flavors: [...batch] }).ok; }
+        catch (error) { if (!(error instanceof ProjectionInputError)) throw error; }
+        if (safe) { for (const value of batch) safeStrings.set(value, true); return; }
+        const middle = Math.floor(batch.length / 2);
+        inspect(batch.slice(0, middle)); inspect(batch.slice(middle));
+      };
+      let batch: string[] = [], bytes = 2;
+      for (const value of pending) {
+        if (/(?:^|\n)\s*at\s+(?:\S+\s+\(|file:|node:)/u.test(value)) { safeStrings.set(value, false); continue; }
+        // Only detached primitive strings are serialized, never caller objects.
+        const size = new TextEncoder().encode(JSON.stringify(value)).length + 1;
+        if (batch.length >= 128 || bytes + size > 32768) { inspect(batch); batch = []; bytes = 2; }
+        if (size > 32768) { inspect([value]); continue; }
+        batch.push(value); bytes += size;
+      }
+      inspect(batch);
+    };
+    // Peek only own enumerable DATA descriptors. Existing field/family reads
+    // retain responsibility for rejecting missing/invalid/accessor sources.
+    const primeDataStrings = (source: unknown, keys: readonly string[], maximum = 4000): void => {
+      if (!worksRecord(source)) return;
+      const values: unknown[] = [];
+      for (const key of keys) {
+        const d = Object.getOwnPropertyDescriptor(source, key);
+        if (d?.enumerable && has(d, "value")) values.push(d.value);
+      }
+      primeStrings(values, maximum);
+    };
     let name: string;
     try { name = safeString(get(product, "name"), 200); if (!name.trim()) return failure("INVALID_IDENTITY"); }
     catch (error) { if (!(error instanceof ProjectionInputError)) throw error; return failure("INVALID_IDENTITY"); }
@@ -271,6 +315,10 @@ export function projectWorksArtworkOwner(input: WorksOwnerProjectionInput): Work
       catch (error) { if (!(error instanceof ProjectionInputError)) throw error; return failure("INVALID_WORKS_CONTRACT"); }
       if (!worksState.ok) return failure("INVALID_WORKS_CONTRACT");
     }
+    primeDataStrings(product, ["nameEn", "artist", "tag", "origin", "process", "roast", "variety", "altitude", "shortCopy", "subtitle", "mood"]);
+    primeStrings(["hero", "productPhoto", "mainVisual", "artworkCover"], 128);
+    const layoutDescriptor = Object.getOwnPropertyDescriptor(product, "pageLayout");
+    if (layoutDescriptor?.enumerable && has(layoutDescriptor, "value")) primeDataStrings(layoutDescriptor.value, ["heroAsset", "productAsset", "listAsset"], 128);
     const fields = new Map<string, OwnerReadField>();
     for (const id of Object.keys(WORKS_OWNER_FIELD_REGISTRY)) fields.set(id, field(id));
     const set = (f: OwnerReadField) => { fields.set(f.id, f); };
@@ -285,6 +333,7 @@ export function projectWorksArtworkOwner(input: WorksOwnerProjectionInput): Work
     attempt("facts.flavors", () => {
       const raw = get(product, "flavors"); const values = raw === undefined ? [] : copy(raw);
       if (!Array.isArray(values) || values.length > 64) throw new ProjectionInputError();
+      primeStrings(values, 200);
       const flavors = values.map(v => safeString(v, 200));
       return snapshotField("facts.flavors", flavors, "product.flavors", flavors.some(v => v.trim()));
     });
@@ -352,12 +401,24 @@ export function projectWorksArtworkOwner(input: WorksOwnerProjectionInput): Work
       const ids = worksRecord(raw) ? get(raw, "productIds") : undefined;
       const configuredCount = t.relatedWorks.selectionMode === "MANUAL" ? Array.isArray(ids) ? ids.length : 0 : null;
       const selectedSteps = t.relatedWorks.steps.filter(s => s.disposition === "selected");
-      const items = refs.map((ref, position) => {
-        let index = selectedSteps[position]?.index ?? -1;
-        if (t.relatedWorks.selectionMode === "MANUAL") {
-          index = -1;
-          for (let i = catalog.length - 1; i >= 0; i--) if (get(catalog[i], "slug") === ref) { index = i; break; }
+      const selectedIndexes = refs.map((ref, position) => {
+        if (t.relatedWorks.selectionMode !== "MANUAL") return selectedSteps[position]?.index ?? -1;
+        for (let i = catalog.length - 1; i >= 0; i--) if (get(catalog[i], "slug") === ref) return i;
+        return -1;
+      });
+      // Only selected labels participate; unrelated catalog names cannot
+      // contaminate this rule or expand its work.
+      const selectedNames: unknown[] = [];
+      for (const index of selectedIndexes) {
+        const row = index < 0 ? undefined : catalogInput[index];
+        if (worksRecord(row)) {
+          const d = Object.getOwnPropertyDescriptor(row, "name");
+          if (d?.enumerable && has(d, "value")) selectedNames.push(d.value);
         }
+      }
+      primeStrings(selectedNames, 200);
+      const items = refs.map((ref, position) => {
+        const index = selectedIndexes[position];
         let title: string | null = null;
         try { const rawName = index < 0 ? undefined : get(catalogInput[index], "name"); if (rawName !== undefined) title = safeString(rawName, 200); }
         catch (error) { if (!(error instanceof ProjectionInputError)) throw error; f = { ...f, warning: warning(f.id, "RELATED_LABEL_NEEDS_ATTENTION") }; set(f); }
@@ -375,6 +436,7 @@ export function projectWorksArtworkOwner(input: WorksOwnerProjectionInput): Work
         if (availability !== undefined && (typeof availability !== "string" || !["available", "sold_out", "unavailable", "unknown"].includes(availability))) throw new ProjectionInputError();
         const list = labels === undefined ? [] : copy(labels);
         if (!Array.isArray(list) || list.length > 20 || count !== undefined && (typeof count !== "number" || !Number.isSafeInteger(count) || count < 0 || count > 10000)) throw new ProjectionInputError();
+        primeStrings([price, ...list], 120);
         commerce = { priceText: price === undefined || price === null ? null : safeString(price, 120),
           availability: availability as OwnerCommerceDisplay["availability"] || "unknown", variantLabels: list.map(v => safeString(v, 120)), availableChoiceCount: count === undefined ? null : count as number };
       }
@@ -440,18 +502,22 @@ export function projectWorksArtworkOwner(input: WorksOwnerProjectionInput): Work
       warnings: [...outputFields, ...futureCandidates].flatMap(f => f.warning ? [f.warning] : []),
     };
     let nodes = 0, characters = 0;
+    const outputStrings = new Set<string>();
     const finalGuard = (v: unknown, key = "", depth = 0): void => {
       if (++nodes > 30000 || depth > 40) throw new ProjectionInputError();
       if (typeof v === "string") {
         characters += v.length; if (characters > 1000000) throw new ProjectionInputError();
         if ((key === "href" || key === "editDestination") && v === "/admin/products") return;
-        safeString(v, 100000); return;
+        outputStrings.add(v); return;
       }
       if (v === null || typeof v === "boolean" || typeof v === "number" && Number.isFinite(v)) return;
       if (Array.isArray(v)) { for (const item of v) finalGuard(item, "", depth + 1); return; }
       if (!worksRecord(v)) throw new ProjectionInputError();
       for (const [k, item] of Object.entries(v)) finalGuard(item, k, depth + 1);
     };
-    finalGuard(value); return { ok: true, value };
+    finalGuard(value);
+    primeStrings([...outputStrings], 100000);
+    for (const text of outputStrings) safeString(text, 100000);
+    return { ok: true, value };
   } catch { return failure("UNSAFE_PROJECTION"); }
 }
