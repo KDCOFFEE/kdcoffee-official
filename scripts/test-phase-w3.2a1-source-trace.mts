@@ -8,7 +8,7 @@ import type { EffectiveSourceTrace, TraceResult } from "../lib/worksArtworkSourc
 // In-memory CommonJS loader: existing pure helpers use extensionless/@ imports.
 // No temp files, resolver changes, application stores, React rendering or network.
 const allowed = new Set([
-  "lib/worksArtworkSourceTrace.ts", "lib/productPageContent.ts", "lib/productPageContentValidation.ts",
+  "lib/worksArtworkResolver.ts", "lib/worksArtworkSourceTrace.ts", "lib/productPageContent.ts", "lib/productPageContentValidation.ts",
   "lib/productPageSections.ts", "lib/productVisualAssets.ts", "lib/cleanRoastingMedia.ts", "lib/media.ts",
   "lib/worksArtworkValidation.ts", "lib/worksArtworkContract.ts",
 ]);

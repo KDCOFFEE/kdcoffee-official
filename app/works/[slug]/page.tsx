@@ -41,7 +41,7 @@ import {
   CLEAN_ROASTING_LEGACY_CONFIG,
   normalizeCleanRoastingMedia,
 } from "@/lib/cleanRoastingMedia";
-import { resolveProductPageContent } from "@/lib/productPageContent";
+import { resolveWorksProductPageContent } from "@/lib/productPageContent";
 import { resolveProductCustomSections } from "@/lib/productCustomSectionsValidation";
 import { getActiveMembershipRules } from "@/lib/membershipBusinessRules";
 
@@ -139,7 +139,7 @@ export default async function WorkPage({ params }: { params: Promise<{ slug: str
   const [live, homepageData, membershipRules] = await Promise.all([getLiveWebsiteData(), getHomepageData(), getActiveMembershipRules()]);
   const product: any = live.menu.products.find((item: any) => item.slug === slug);
   if (!product || product.status === "hidden") notFound();
-  const pageContent = resolveProductPageContent(product);
+  const pageContent = resolveWorksProductPageContent(product);
   const customSections = resolveProductCustomSections(product.productCustomSections);
   const heroContent = pageContent["product-hero"];
   const purchaseContent = pageContent["select-your-coffee"];

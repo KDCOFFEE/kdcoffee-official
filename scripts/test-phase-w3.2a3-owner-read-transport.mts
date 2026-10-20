@@ -9,7 +9,7 @@ import type { WorksArtworkOwnerProjection } from "../lib/worksArtworkReadModel.t
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 const routeId = "app/api/admin/works/[slug]/owner-read/route.ts";
-const allowed = new Set(["worksArtworkOwnerReadService","worksArtworkOwnerProjection","worksArtworkFieldRegistry","worksArtworkReadModel","worksArtworkSourceTrace","worksArtworkContract","worksArtworkValidation","productVisualAssets","productPageContent","productPageContentValidation","productPageSections","cleanRoastingMedia","media","productListing","storagePaths","adminAuth","adminAuthorization"].map(n => "lib/" + n + ".ts").concat(routeId));
+const allowed = new Set(["worksArtworkOwnerReadService","worksArtworkOwnerProjection","worksArtworkFieldRegistry","worksArtworkReadModel","worksArtworkSourceTrace","worksArtworkResolver","worksArtworkContract","worksArtworkValidation","productVisualAssets","productPageContent","productPageContentValidation","productPageSections","cleanRoastingMedia","media","productListing","storagePaths","adminAuth","adminAuthorization"].map(n => "lib/" + n + ".ts").concat(routeId));
 const modules = new Map<string, { exports: any }>();
 const jar = new Map<string, string>();
 const marker = "W32A3_PRIVATE_INTERNAL_MARKER";
@@ -71,6 +71,27 @@ function freeze<T>(v: T): T {
 }
 function good(r: WorksArtworkOwnerReadResult): WorksArtworkOwnerProjection { assert.ok(r.ok); return r.data; }
 function field(r: WorksArtworkOwnerProjection, id: string) { const f = r.fields.find(f => f.id === id); assert.ok(f); return f; }
+
+/** Service-only transport metadata, independently checked rather than rebuilt
+ * with the production token algorithm. All fixtures here have NO worksPage.
+ * The exact two-key whitelist + number/hash values exclude raw Product,
+ * worksPage/source JSON, paths, Commerce/SKU, session/cookie/credentials,
+ * stack/debug objects and environment data.
+ */
+function assertWritePreparation(value: WorksArtworkOwnerProjection["writePreparation"]) {
+  assert.ok(value && typeof value === "object" && !Array.isArray(value));
+  assert.equal(Object.getPrototypeOf(value), Object.prototype);
+  assert.equal(Object.getOwnPropertySymbols(value).length, 0);
+  assert.deepEqual(Object.getOwnPropertyNames(value).sort(), ["editToken", "worksRevision"]);
+  assert.ok(Number.isSafeInteger(value.worksRevision));
+  assert.equal(value.worksRevision, 0);
+  assert.equal(typeof value.editToken, "string");
+  assert.ok(value.editToken.length > 0);
+  assert.match(value.editToken, /^w3e1\.[a-f0-9]{64}$/);
+  const serialized=JSON.stringify(value);
+  assert.doesNotMatch(serialized, /rawProduct|worksPage|website-data|price|stock|sku|commerce|session|cookie|credential|environment|process\.env|stack|debug|[\\/]/iu);
+  return value;
+}
 
 try {
   const route = load(routeId) as typeof import("../app/api/admin/works/[slug]/owner-read/route.ts");
@@ -189,6 +210,10 @@ try {
     assert.ok(r.fields.every(f=>f.editing.editableHere===false&&(f.source.binding as string)!=="PRODUCTION_BOUND"));assert.equal(field(r,"media.hero").source.binding,"MODEL_ONLY");
     assert.equal(JSON.stringify(product),inputCopy);assert.equal(r.publicStates.worksList.state,listing.isProductListedInWorks(product)?"YES":"NO");assert.equal(r.publicStates.worksList.basis,"CALLER_DERIVED");
     assert.equal(r.publicStates.detailPage.state,"UNKNOWN");assert.equal(r.publicStates.purchase.state,"UNKNOWN");assert.equal(r.commerceSummary.availability,"unknown");
+    const preparation=assertWritePreparation(r.writePreparation);
+    const repeated=good(await service.readWorksArtworkOwnerModel(product.slug));
+    assert.equal(assertWritePreparation(repeated.writePreparation).editToken,preparation.editToken);
+    assert.equal(writes,0);
   });
   await check("Canonical 25","no Product initialization / runtime file mutation",()=>{
     assert.equal(JSON.stringify(canonical),inputBefore);assert.deepEqual(readFileSync(path.join(root,"public/data/website-data.json")),canonicalBytes);assert.deepEqual(readFileSync(path.join(root,"public/data/homepage.json")),ownerBytes);assert.equal(writes,0);
@@ -201,7 +226,30 @@ try {
   });
   for(const related of [undefined,{productIds:[]},{productIds:["b","a"],title:"Related title"}]) await check("Semantics","Related manual/auto "+JSON.stringify(related),async()=>{
     const other=[{name:"A",slug:"a",inMonthlyMenu:true},{name:"B",slug:"b",inMonthlyMenu:true}];const product={...base,...(related===undefined?{}:{relatedProducts:related})},catalog=[product,...other];
-    reset({menu:{products:catalog}});const result=good(await service.readWorksArtworkOwnerModel(base.slug));const expected=originalProjection({product,catalog,publicStates:{worksList:"YES"}});assert.ok(expected.ok);assert.deepEqual(result,expected.value);
+    reset({menu:{products:catalog}});const result=good(await service.readWorksArtworkOwnerModel(base.slug));const expected=originalProjection({product,catalog,publicStates:{worksList:"YES"}});assert.ok(expected.ok);
+    // Separate ONLY the approved service-level property. Any other DTO delta fails.
+    const {writePreparation,...baseOwnerDto}=result;
+    assert.deepEqual(baseOwnerDto,expected.value);
+    const preparation=assertWritePreparation(writePreparation);
+    const repeated=good(await service.readWorksArtworkOwnerModel(base.slug));
+    assert.equal(assertWritePreparation(repeated.writePreparation).editToken,preparation.editToken);
+    assert.equal(writes,0);
+    if(related===undefined){
+      assert.equal(result.relatedWorks.mode,"AUTO_LEGACY");
+      assert.equal(result.relatedWorks.ordering,"CATALOG_ORDER");
+      assert.deepEqual(result.relatedWorks.items.map(item=>item.ref),["a","b"]);
+    }else{
+      assert.equal(result.relatedWorks.mode,"MANUAL");
+      assert.equal(result.relatedWorks.ordering,"MANUAL_ORDER");
+      assert.deepEqual(result.relatedWorks.items.map(item=>item.ref),related.productIds);
+      if(related.productIds.length===0){
+        assert.equal(result.relatedWorks.configuredCount,0);
+        assert.equal(result.relatedWorks.effectiveCount,0);
+        assert.deepEqual(result.relatedWorks.items,[]);
+      }else{
+        assert.equal(field(result,"related.title").value,related.title);
+      }
+    }
   });
   await check("Semantics","Commerce remains unknown despite raw SKU/stock/publish fields",async()=>{
     reset({menu:{products:[{...base,stock:100,purchasable:true,publish:{website:true},skus:[{price:700,stock:100}],purchase:[{price:500}],commerceSummary:{priceText:"Invented"}}]}});const r=good(await service.readWorksArtworkOwnerModel(base.slug));

@@ -6,6 +6,7 @@ import type { MonthlyMenuBackground } from "@/lib/monthlyMenuBackground";
 import type { ProductSectionPlacement } from "@/lib/productPageSections";
 import type { ProductPageAnimations } from "@/lib/productPageAnimations";
 import type { CleanRoastingMediaConfig } from "@/lib/cleanRoastingMedia";
+import type { WorksState } from "@/lib/worksArtworkContract";
 import type { ProductPageContent } from "@/lib/productPageContentValidation";
 import type { ProductCustomSection } from "@/lib/productCustomSections";
 
@@ -32,6 +33,7 @@ export type PurchaseOption = {
  * 不負責修改商品、SKU、價格或庫存邏輯。
  */
 export type CoffeeArtwork = {
+  worksPage?: WorksState;
   id?: string;
   active?: boolean;
   slug: string;

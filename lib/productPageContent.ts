@@ -4,6 +4,8 @@ import {
   type ProductPageContent,
 } from "./productPageContentValidation";
 
+import { resolveWorksEditorialText } from "./worksArtworkResolver";
+
 type ProductLike = Record<string, any>;
 
 export const LEGACY_CLEAN_ROASTING_PROOFS = [
@@ -22,16 +24,33 @@ function nonEmpty(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
-function storedContent(product: ProductLike): ProductPageContent {
+function contentSnapshot(product: ProductLike): { content: ProductPageContent; valid: boolean } {
   try {
-    return normalizeProductPageContent(product.productPageContent);
+    return { content: normalizeProductPageContent(product.productPageContent), valid: true };
   } catch {
-    return {};
+    return { content: {}, valid: false };
   }
 }
 
+/** Exact legacy dependencies for the three-field edit token.
+ * Unrelated content contributes only its effect on whole-content validity.
+ * Missing/null/blank legacy prose all follow the SAME existing nonEmpty rule.
+ */
+export function getWorksEditorialLegacyDependencies(product: ProductLike) {
+  const snapshot = contentSnapshot(product);
+  return {
+    shortCopy: nonEmpty(product.shortCopy) ?? null,
+    mood: nonEmpty(product.mood) ?? null,
+    subtitle: nonEmpty(product.subtitle) ?? null,
+    flavor: {
+      contentValid: snapshot.valid,
+      description: snapshot.content["flavor-notes"]?.description ?? "",
+    },
+  };
+}
+
 export function resolveProductPageContent(product: ProductLike) {
-  const content = storedContent(product);
+  const content = contentSnapshot(product).content;
   const hero = content["product-hero"] || {};
   const purchase = content["select-your-coffee"] || {};
   const flavor = content["flavor-notes"] || {};
@@ -50,7 +69,7 @@ export function resolveProductPageContent(product: ProductLike) {
       : "想探索不同風味的人";
   const hasManagedRoastingMedia = Boolean(product.cleanRoastingMedia && typeof product.cleanRoastingMedia === "object");
 
-  return {
+  const resolved = {
     raw: content,
     "product-hero": {
       title: nonEmpty(product.name) || "咖啡作品",
@@ -116,6 +135,21 @@ export function resolveProductPageContent(product: ProductLike) {
       lockedFaqs: LOCKED_PURCHASE_FAQS.map((faq) => ({ ...faq })),
     },
   };
+  return resolved;
+}
+
+/** Public Works opt-in. Product editors stay on resolveProductPageContent. */
+export function resolveWorksProductPageContent(product: ProductLike) {
+  // Resolve legacy first: overriding story must not recompute its supplement.
+  const resolved = resolveProductPageContent(product);
+  const heroOverride = resolveWorksEditorialText("hero.supportingCopy", resolved["product-hero"].lead, product);
+  const storyOverride = resolveWorksEditorialText("story.body", resolved["product-hero"].storyLead, product);
+  const flavorOverride = resolveWorksEditorialText("flavor.narrative", resolved["flavor-notes"].description, product);
+  if (!heroOverride.ok || !storyOverride.ok || !flavorOverride.ok) throw new Error("Works editorial content is invalid.");
+  resolved["product-hero"].lead = heroOverride.value.value as string;
+  resolved["product-hero"].storyLead = storyOverride.value.value as string;
+  resolved["flavor-notes"].description = flavorOverride.value.value as string;
+  return resolved;
 }
 
 export type ResolvedProductPageContent = ReturnType<typeof resolveProductPageContent>;

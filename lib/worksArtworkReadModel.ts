@@ -102,6 +102,8 @@ export interface OwnerReadField {
   readonly source: {
     readonly owner: import("./worksArtworkSourceTrace.ts").TraceOwner | "SYSTEM";
     readonly key: string; readonly label: string; readonly binding: OwnerBinding; readonly bindingLabel: string;
+    /** Only the three explicitly connected Works fields may set this marker. */
+    readonly connected?: true;
     readonly trace: import("./worksArtworkSourceTrace.ts").EffectiveSourceTrace | null;
   };
   readonly display: { readonly locations: readonly string[]; readonly visibility: "visible" | "empty" | "disabled" | "suppressed" | "unknown"; readonly reason: string };
@@ -125,6 +127,7 @@ export interface OwnerCompleteness {
   readonly fieldIds: readonly string[];
 }
 export interface WorksArtworkOwnerProjection {
+  readonly writePreparation?: { readonly worksRevision: number; readonly editToken: string };
   readonly schemaVersion: 1; readonly capability: "READ_ONLY"; readonly contract: "DISPLAY_ONLY_NOT_WRITE_PAYLOAD";
   readonly overview: { readonly fieldIds: readonly string[] };
   readonly sections: readonly { readonly id: OwnerSectionId; readonly label: string; readonly fieldIds: readonly string[]; readonly collapsedByDefault: boolean }[];
@@ -135,7 +138,7 @@ export interface WorksArtworkOwnerProjection {
   readonly commerceSummary: OwnerCommerceDisplay;
   readonly relatedWorks: { readonly mode: "MANUAL" | "AUTO_LEGACY" | "UNAVAILABLE"; readonly configuredCount: number | null; readonly effectiveCount: number; readonly excludedCount: number; readonly ordering: "MANUAL_ORDER" | "CATALOG_ORDER" | "UNKNOWN"; readonly items: readonly { readonly ref: string; readonly name: string | null }[]; readonly exclusionReasons: readonly string[] };
   readonly completeness: readonly OwnerCompleteness[];
-  readonly systemInfo: { readonly collapsedByDefault: true; readonly namespace: "LEGACY_UNMANAGED" | "WORKS_CANDIDATE"; readonly contractVersion: number | null; readonly worksRevision: number | null };
+  readonly systemInfo: { readonly collapsedByDefault: true; readonly namespace: "LEGACY_UNMANAGED" | "WORKS_CANDIDATE" | "WORKS_CONNECTED"; readonly connectedFieldIds?: readonly string[]; readonly contractVersion: number | null; readonly worksRevision: number | null };
   readonly warnings: readonly OwnerFieldWarning[];
 }
 export type WorksOwnerProjectionResult =

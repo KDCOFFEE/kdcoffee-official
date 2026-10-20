@@ -11,7 +11,7 @@ const root = fileURLToPath(new URL("../", import.meta.url));
 const workspaceId = "components/admin/works/WorksArtworkWorkspace.tsx";
 const pageId = "app/admin/works/[slug]/page.tsx";
 const allowed = new Set([workspaceId, pageId, ...["adminAuth", "storagePaths", "productListing", "worksArtworkOwnerProjection",
-  "worksArtworkFieldRegistry", "worksArtworkReadModel", "worksArtworkSourceTrace", "worksArtworkContract", "worksArtworkValidation",
+  "worksArtworkFieldRegistry", "worksArtworkReadModel", "worksArtworkSourceTrace", "worksArtworkResolver","worksArtworkContract", "worksArtworkValidation",
   "productVisualAssets", "productPageContent", "productPageContentValidation", "productPageSections", "cleanRoastingMedia", "media"].map(n => "lib/" + n + ".ts")]);
 const modules = new Map<string, { exports: any }>();
 const jar = new Map<string, string>();

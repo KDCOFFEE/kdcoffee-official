@@ -1,3 +1,5 @@
+// @ts-expect-error -- Explicit extensions follow the repository strip-types convention.
+import { WORKS_FIRST_EDIT_FIELDS, resolveWorksEditorialText } from "./worksArtworkResolver.ts";
 // @ts-expect-error -- Explicit extensions follow the repository's strip-types convention.
 import { worksRecord, worksReference } from "./worksArtworkContract.ts";
 // @ts-expect-error -- Explicit extensions follow the repository's strip-types convention.
@@ -13,6 +15,8 @@ import type { OwnerBinding, OwnerCommerceDisplay, OwnerCompleteness, OwnerFieldS
 
 type Data = Record<string, unknown>;
 export interface WorksOwnerProjectionInput {
+  /** Trusted read service opt-in; default retains the A-2 candidate model. */
+  readonly editorialBinding?: "CURRENT_PUBLIC";
   readonly product: unknown; readonly catalog?: readonly unknown[];
   /** Already-derived display data from a future trusted commerce adapter. */
   readonly commerceSummary?: unknown;
@@ -471,11 +475,35 @@ export function projectWorksArtworkOwner(input: WorksOwnerProjectionInput): Work
       const raw = get(product, key); if (raw !== undefined && !worksReference(raw)) throw new ProjectionInputError();
       return snapshotField(id, raw === undefined ? null : raw as string, "product." + key, raw !== undefined);
     });
+    // Three explicit overrides are public; all other candidates stay model-only.
+    if (input.editorialBinding === "CURRENT_PUBLIC") for (const key of WORKS_FIRST_EDIT_FIELDS) {
+      if (!worksState?.ok || !has(worksState.value.fields, key)) continue;
+      const id = candidateFields[key];
+      attempt(id, () => {
+        const previous = fields.get(id)!;
+        const selected = resolveWorksEditorialText(key, typeof previous.value === "string" ? previous.value : "", product);
+        if (!selected.ok || selected.value.semantic !== "explicit") throw new ProjectionInputError();
+        const value = safeString(selected.value.value, 4000);
+        const blank = value === "";
+        // Content authority is independent from the existing visibility evidence.
+        // In particular an unsafe/unknown legacy family is not proof of visibility.
+        const invalid = previous.state === "invalid";
+        return { ...previous, value, hasValue: true, state: invalid ? "invalid" : blank ? "explicit-blank" : "explicit",
+          statusLabel: invalid ? previous.statusLabel : blank ? "本作品刻意留白" : "本作品自訂內容",
+          source: { owner: "WORKS", key: 'product.worksPage.fields["' + key + '"]',
+            label: "作品頁自訂內容", binding: "CURRENT_PUBLIC_PARITY_VERIFIED", bindingLabel: "已連接目前公開作品頁", connected: true, trace: null },
+          display: { ...previous.display },
+          impact: ["ARTWORK_DETAIL"],
+          editing: { editableHere: false, capability: "WRITE_NOT_CONNECTED", destination: { ...OWNER_EDIT_DESTINATIONS.WORKS_FUTURE } },
+          warning: previous.warning };
+      });
+    }
     const managed = worksState !== null && worksState.ok ? worksState.value : null;
     set(snapshotField("system.contractVersion", managed?.contractVersion ?? null, "product.worksPage.contractVersion", managed !== null));
     set(snapshotField("system.revision", managed?.revision ?? null, "product.worksPage.revision", managed !== null));
     const futureCandidates: OwnerReadField[] = [];
     if (managed) for (const [key, state] of Object.entries(managed.fields)) {
+      if (input.editorialBinding === "CURRENT_PUBLIC" && (WORKS_FIRST_EDIT_FIELDS as readonly string[]).includes(key) && state.mode === "value") continue;
       const id = candidateFields[key]; if (!id) return failure("INVALID_WORKS_CONTRACT");
       try {
         const providers = get(input, "inheritProviders");
@@ -490,6 +518,9 @@ export function projectWorksArtworkOwner(input: WorksOwnerProjectionInput): Work
           editing: { editableHere: false, capability: "WRITE_NOT_CONNECTED", destination: { ...OWNER_EDIT_DESTINATIONS.WORKS_FUTURE } } });
       }
     }
+    const connectedFieldIds = input.editorialBinding === "CURRENT_PUBLIC"
+      ? WORKS_FIRST_EDIT_FIELDS.filter(key => fields.get(candidateFields[key])?.source.connected === true)
+      : [];
     const outputFields = [...fields.values()];
     const sections = (Object.keys(OWNER_SECTION_LABELS) as OwnerSectionId[]).map(id => ({
       id, label: OWNER_SECTION_LABELS[id], fieldIds: outputFields.filter(f => f.section === id).map(f => f.id), collapsedByDefault: id !== "overview" && id !== "pageContent",
@@ -498,7 +529,8 @@ export function projectWorksArtworkOwner(input: WorksOwnerProjectionInput): Work
       schemaVersion: 1, capability: "READ_ONLY", contract: "DISPLAY_ONLY_NOT_WRITE_PAYLOAD",
       overview: { fieldIds: outputFields.filter(f => f.section === "overview").map(f => f.id) }, sections, fields: outputFields, futureCandidates,
       publicStates, commerceSummary: commerce, relatedWorks: related, completeness: completeness(outputFields, commerce),
-      systemInfo: { collapsedByDefault: true, namespace: managed ? "WORKS_CANDIDATE" : "LEGACY_UNMANAGED", contractVersion: managed?.contractVersion ?? null, worksRevision: managed?.revision ?? null },
+      systemInfo: { collapsedByDefault: true, namespace: managed ? connectedFieldIds.length ? "WORKS_CONNECTED" : "WORKS_CANDIDATE" : "LEGACY_UNMANAGED",
+        ...(connectedFieldIds.length ? { connectedFieldIds } : {}), contractVersion: managed?.contractVersion ?? null, worksRevision: managed?.revision ?? null },
       warnings: [...outputFields, ...futureCandidates].flatMap(f => f.warning ? [f.warning] : []),
     };
     let nodes = 0, characters = 0;

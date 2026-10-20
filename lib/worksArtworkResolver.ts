@@ -53,3 +53,27 @@ export function resolveWorksFields(input: { readonly legacyValues?: WorksLegacyV
   }
   return { ok: true, value: { revision: state === undefined ? 0 : state.revision, fields } };
 }
+
+// W3.4B: only these fields are connected to current public content.
+export const WORKS_FIRST_EDIT_FIELDS = Object.freeze(["hero.supportingCopy", "story.body", "flavor.narrative"] as const);
+export type WorksFirstEditField = typeof WORKS_FIRST_EDIT_FIELDS[number];
+export function isWorksFirstEditField(field: string): field is WorksFirstEditField {
+  return (WORKS_FIRST_EDIT_FIELDS as readonly string[]).includes(field);
+}
+export function isWorksEditorialText(value: unknown): value is string {
+  return typeof value === "string" && Array.from(value).length <= 2000 &&
+    (value === "" || value.trim() !== "") &&
+    !/[<>\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f\uD800-\uDFFF]/u.test(value);
+}
+/** ALREADY resolved legacy input; never rebuilds legacy fallbacks. */
+export function resolveWorksEditorialText(field: WorksFirstEditField, legacy: string, product: unknown): WorksResult<WorksResolvedField> {
+  if (!worksRecord(product) || !worksOwn(product, "worksPage")) return resolveWorksField({ field, legacyValue: legacy });
+  const checked = validateWorksState(product.worksPage);
+  if (!checked.ok) return checked;
+  const state = checked.value.fields[field];
+  if (state === undefined) return resolveWorksField({ field, legacyValue: legacy });
+  if (state.mode !== "value" || !isWorksEditorialText(state.value)) return {
+    ok: false, errors: [worksIssue("INVALID_EDITORIAL_STATE", field, "This public field requires explicit valid text.")]
+  };
+  return resolveWorksField({ field, legacyValue: legacy, state });
+}
