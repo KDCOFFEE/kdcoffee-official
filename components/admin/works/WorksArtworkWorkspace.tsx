@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import type { OwnerReadField, OwnerSectionId, WorksArtworkOwnerProjection } from "@/lib/worksArtworkReadModel";
 import styles from "./WorksArtworkWorkspace.module.css";
+import { WorkspaceEditSession, baselineText, canSave, dirtyIds, hasWritePreparation, installDraftUnloadGuard, isEditField, textProblem, type EditSnapshot } from "./WorksWorkspaceEditSession";
 
 type Model = WorksArtworkOwnerProjection;
 type ProblemStatus = 400 | 401 | 403 | 404 | 500;
@@ -45,7 +46,7 @@ const text = (v: unknown): string => typeof v === "string" ? v : "";
 const field = (model: Model, id: string) => model.fields.find(item => item.id === id);
 
 // Check the transport boundary, never reconstruct fields or their source decisions.
-function ownerDto(value: unknown): value is Model {
+export function isOwnerWorkspaceModel(value: unknown): value is Model {
   if (!record(value) || value.schemaVersion !== 1 || value.capability !== "READ_ONLY" || value.contract !== "DISPLAY_ONLY_NOT_WRITE_PAYLOAD") return false;
   if (!Array.isArray(value.fields) || value.fields.length !== 52 || !Array.isArray(value.sections) || value.sections.length !== 10 ||
       !Array.isArray(value.completeness) || !Array.isArray(value.futureCandidates) || !Array.isArray(value.warnings) ||
@@ -70,7 +71,7 @@ export async function readOwnerWorkspace(slug: string, signal?: AbortSignal, fet
     });
     if (!response.ok) return { ok: false, status: [400, 401, 403, 404].includes(response.status) ? response.status as ProblemStatus : 500 };
     const body: unknown = await response.json();
-    if (!record(body) || body.ok !== true || !ownerDto(body.data) || field(body.data, "system.slug")?.value !== slug) return { ok: false, status: 500 };
+    if (!record(body) || body.ok !== true || !isOwnerWorkspaceModel(body.data) || field(body.data, "system.slug")?.value !== slug) return { ok: false, status: 500 };
     return { ok: true, data: body.data };
   } catch { return { ok: false, status: 500 }; }
 }
@@ -194,7 +195,10 @@ function FieldValue({ item, model }: { item: OwnerReadField; model: Model }) {
   return <CopyValue value={item.value} />;
 }
 
-export function WorkspaceField({ item, model }: { item: OwnerReadField; model: Model }) {
+type Editing = { session: WorkspaceEditSession; state: EditSnapshot };
+
+export function WorkspaceField({ item, model, editing }: { item: OwnerReadField; model: Model; editing?: Editing }) {
+  const editable = !!editing && isEditField(item.id) && baselineText(model, item.id) !== null;
   const trace = item.source.trace;
   return <article className={styles.fieldCard} data-owner-field={item.id}>
     <header className={styles.fieldHead}><h3>{item.label}</h3><span className={styles.state}>{item.statusLabel}</span></header>
@@ -214,8 +218,48 @@ export function WorkspaceField({ item, model }: { item: OwnerReadField; model: M
     </details>
     {item.source.binding === "MODEL_ONLY" && <p className={styles.bindingNote}>{bindingLabels.MODEL_ONLY}</p>}
     {item.source.binding === "FUTURE_CANDIDATE" && <p className={styles.bindingNote}>{bindingLabels.FUTURE_CANDIDATE}</p>}
-    <footer className={styles.editLocation}><span>目前修改方式</span><EditLocation item={item} /></footer>
+    <footer className={styles.editLocation}><span>目前修改方式</span>{editable ? <span>作品頁自訂文字 · 在此編輯</span> : <EditLocation item={item} />}</footer>
+    {editable && editing && <WorkspaceTextEditor item={item} editing={editing} />}
   </article>;
+}
+
+
+export function WorkspaceTextEditor({ item, editing: { session, state } }: { item: OwnerReadField; editing: Editing }) {
+  if (!isEditField(item.id) || baselineText(state.model, item.id) === null) return null;
+  const id = item.id, open = state.editor === id, dirty = Object.hasOwn(state.drafts, id);
+  const value = state.drafts[id] ?? baselineText(state.model, id)!;
+  const problem = textProblem(value), inputId = "edit-" + id, hintId = inputId + "-hint", errorId = inputId + "-error";
+  return <div className={styles.editArea}>
+    <div className={styles.editActions}><button type="button" disabled={state.busy} aria-expanded={open} aria-controls={inputId + "-panel"}
+      aria-label={(open ? "收合編輯 " : "編輯 ") + item.label} onClick={() => session.open(id)}>{open ? "收合編輯" : "編輯"}</button>
+      {dirty && <span className={styles.draftLabel}>尚未儲存{problem ? " · 內容需要確認" : ""}</span>}</div>
+    {open && <div className={styles.editor} id={inputId + "-panel"} key={id}>
+      <label htmlFor={inputId}>{item.label} · 編輯草稿</label>
+      <textarea id={inputId} value={value} rows={7} disabled={state.busy} autoFocus
+        aria-invalid={!!problem} aria-describedby={hintId + (problem ? " " + errorId : "")}
+        onChange={event => session.change(id, event.target.value)} />
+      <p id={hintId} className={styles.muted}>{Array.from(value).length} / 2000 字元 · 清空會明確留白，不會恢復預設內容。</p>
+      {problem && <p id={errorId} className={styles.validation} role="alert">{problem}</p>}
+      <button type="button" disabled={state.busy} onClick={() => session.clear(id)}>清空</button>
+    </div>}
+  </div>;
+}
+
+export function WorkspaceSaveBar({ session, state }: Editing) {
+  const count = dirtyIds(state).length;
+  return <aside className={styles.saveBar} aria-label="作品內容儲存" aria-busy={state.busy}>
+    <div><strong>{count ? "未儲存變更：" + count + " 項" : "沒有未儲存變更"}</strong>
+      <p className={styles.muted}>僅儲存作品頁的三項文字內容。</p>
+      <p role="status" aria-live="polite">{state.message}</p>
+      {!hasWritePreparation(state.model) && <p role="alert">無法取得安全儲存版本，請重新載入作品。</p>}
+    </div>
+    <div className={styles.saveActions}>
+      {state.blocked && <button type="button" disabled={state.busy} onClick={() => { void session.reload(); }}>重新載入最新版本</button>}
+      {state.blocked === "review" && <button type="button" disabled={state.busy} onClick={() => session.reviewDrafts()}>已核對最新內容，保留我的草稿</button>}
+      <button type="button" disabled={!count || state.busy} onClick={() => session.discard()}>取消變更</button>
+      <button type="button" className={styles.savePrimary} disabled={!canSave(state)} onClick={() => { void session.save(); }}>{state.busy ? "處理中…" : "儲存變更"}</button>
+    </div>
+  </aside>;
 }
 
 export function Completeness({ model }: { model: Model }) {
@@ -241,18 +285,18 @@ function Related({ model }: { model: Model }) {
   </section>;
 }
 
-export function WorkspaceSection({ model, section }: { model: Model; section: OwnerSectionId }) {
+export function WorkspaceSection({ model, section, editing }: { model: Model; section: OwnerSectionId; editing?: Editing }) {
   const config = model.sections.find(s => s.id === section);
   if (!config) return null;
   const items = config.fieldIds.map(id => field(model, id)).filter((f): f is OwnerReadField => f !== undefined);
   const future = items.filter(f => f.completenessRole === "EXCLUDED" && f.editing.capability === "WRITE_NOT_CONNECTED");
   const current = items.filter(f => !future.includes(f));
-  const cards = <div className={styles.cards}>{current.map(item => <WorkspaceField key={item.id} item={item} model={model} />)}</div>;
+  const cards = <div className={styles.cards}>{current.map(item => <WorkspaceField key={item.id} item={item} model={model} editing={editing} />)}</div>;
   return <>
     {section === "overview" && <Completeness model={model} />}
     {section === "relatedWorks" && <Related model={model} />}
     {section === "systemInfo" ? <details className={styles.systemInfo}><summary>展開系統資訊</summary>
-      <p className={styles.muted}>本頁只讀取既有資料，不會建立內容版本或寫入憑證。</p>{cards}
+      <p className={styles.muted}>載入只讀取既有資料；僅在明確儲存三項文字變更時更新作品內容版本。</p>{cards}
       <dl><dt>讀取契約</dt><dd><code>{model.contract}</code></dd><dt>命名空間</dt><dd><code>{model.systemInfo.namespace}</code></dd>
         <dt>作品內容版本</dt><dd>{model.systemInfo.worksRevision === null ? "尚未建立" : model.systemInfo.worksRevision}</dd></dl></details> : cards}
     {future.length > 0 && <details className={styles.future}><summary>後續可擴充項目 · {future.length} 項</summary>
@@ -263,7 +307,14 @@ export function WorkspaceSection({ model, section }: { model: Model; section: Ow
   </>;
 }
 
-export function OwnerWorkspaceView({ model, slug }: { model: Model; slug: string }) {
+export function OwnerWorkspaceView({ model: initialModel, slug }: { model: Model; slug: string }) {
+  const [session] = useState(() => new WorkspaceEditSession(initialModel, slug, readOwnerWorkspace, isOwnerWorkspaceModel));
+  const editState = useSyncExternalStore(session.subscribe, session.snapshot, session.snapshot);
+  const model = editState.model;
+  const dirty = dirtyIds(editState).length > 0;
+  useEffect(() => { session.activate(); return () => session.deactivate(); }, [session]);
+  useEffect(() => installDraftUnloadGuard(window, dirty), [dirty]);
+
   const [selected, setSelected] = useState<OwnerSectionId>("overview");
   const [navOpen, setNavOpen] = useState(false);
   const heading = useRef<HTMLHeadingElement>(null);
@@ -275,13 +326,13 @@ export function OwnerWorkspaceView({ model, slug }: { model: Model; slug: string
   const tag = text(field(model, "identity.tag")?.value);
   const thumbnail = field(model, "identity.thumbnail")?.value;
   const section = model.sections.find(s => s.id === selected)!;
-  return <main className={styles.shell}><Breadcrumb />
+  return <main className={styles.shell + " " + styles.editingShell}><Breadcrumb />
     <header className={styles.context}><div className={styles.identity}>
       <div className={styles.identityImage}>{record(thumbnail) && localPreview(thumbnail.path) ? <Thumbnail path={thumbnail.path} label={name + "作品縮圖"} compact /> : <span aria-hidden="true">作</span>}</div>
       <div className={styles.identityCopy}><p className={styles.eyebrow}>作品管理</p><h1>{name}</h1>
         {english && <p className={styles.english}>{english}</p>}<p className={styles.artist}>{artist}{artist && tag ? " · " : ""}{tag}</p>
         <small className={styles.slug}>/works/{slug}</small></div></div>
-      <div className={styles.contextActions}><span className={styles.readOnly}>目前為唯讀檢視</span>
+      <div className={styles.contextActions}><span className={styles.readOnly}>三項文字可編輯</span>
         <a className={styles.publicLink} href={"/works/" + encodeURIComponent(slug)} target="_blank" rel="noopener noreferrer">查看公開頁 <span aria-hidden="true">↗</span><span className={styles.srOnly}>（另開分頁）</span></a></div>
     </header>
     <div className={styles.workspace}>
@@ -296,9 +347,10 @@ export function OwnerWorkspaceView({ model, slug }: { model: Model; slug: string
         </nav>
       </aside>
       <section className={styles.content} aria-labelledby="artwork-section-title"><header className={styles.sectionHeader}>
-        <p className={styles.eyebrow}>唯讀內容檢視</p><h2 id="artwork-section-title" tabIndex={-1} ref={heading}>{section.label}</h2><p>{sectionIntro[selected]}</p>
-      </header><WorkspaceSection key={selected} model={model} section={selected} /></section>
+        <p className={styles.eyebrow}>作品內容檢視</p><h2 id="artwork-section-title" tabIndex={-1} ref={heading}>{section.label}</h2><p>{sectionIntro[selected]}</p>
+      </header><WorkspaceSection key={selected} model={model} section={selected} editing={{ session, state: editState }} /></section>
     </div>
+    <WorkspaceSaveBar session={session} state={editState} />
   </main>;
 }
 
