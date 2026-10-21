@@ -61,13 +61,62 @@ check("product image authority remains resolveListAsset and ProductVisualMedia",
 check("product listing authority remains the shared canonical helper", source.includes("resolveWorksProductListing(live.menu.products)"));
 check("default current preset adds no CSS override", source.includes("works-card-preset-${presentation.cardPreset}") && !css.includes(".works-card-preset-current{"));
 check("safe minimal and bordered presets use bounded classes only", css.includes(".works-card-preset-minimal{") && css.includes(".works-card-preset-bordered{") && !source.includes("style={works.catalog"));
-check("SEO remains disconnected while motion is presentation-only", !source.includes("works.seo") && source.includes("resolveWorksPublicMotionBindings"));
+// J1F3 was an incremental catalog patch. The same dd13a327 checkpoint later
+// connected SEO in J1F6; keep catalog/motion ownership separate from metadata,
+// rather than requiring SEO to remain permanently disconnected.
+const metadataStart = source.indexOf("export async function generateMetadata");
+const catalogStart = source.indexOf("export default async function WorksPage");
+const metadataSource = source.slice(metadataStart, catalogStart);
+const catalogSource = source.slice(catalogStart);
+check("catalog and motion presentation stay separate from Works SEO metadata",
+  metadataStart >= 0 && catalogStart > metadataStart && metadataSource.includes("works.seo") &&
+  !metadataSource.includes("works.catalog") && !metadataSource.includes("works.motion") &&
+  !catalogSource.includes("works.seo") && catalogSource.includes("resolveWorksPublicMotionBindings"));
+const ownedSeo = { title: "獨立 SEO 標題", description: "獨立 SEO 說明" };
+const seoOnly = resolveWorksPageCms({ schemaVersion: 1, seo: ownedSeo }, { monthLabel: "九月", intro: "豆單" });
+const catalogAndSeo = resolveWorksPageCms({ schemaVersion: 1, seo: ownedSeo, catalog: { presentation: { showCommerceSummary: false, cardPreset: "minimal" } } }, { monthLabel: "九月", intro: "豆單" });
+check("catalog settings cannot overwrite the separately owned SEO values",
+  catalogAndSeo.seo.title === ownedSeo.title && catalogAndSeo.seo.description === ownedSeo.description &&
+  JSON.stringify(catalogAndSeo.seo) === JSON.stringify(seoOnly.seo));
 
 const website = JSON.parse(await readFile(files.website, "utf8"));
-const products = resolveWorksProductListing(website.menu.products as Array<Record<string, unknown>>);
-const expectedOrder = ["giotto-awakening", "davinci-feast", "monet-floral", "turner-sunset", "vandyck-knight", "degas-melody", "raphael-kiss", "vangogh-enchantment"];
-check("current canonical product count remains eight", products.length === 8);
-check("current canonical product order remains unchanged", products.map((product) => String(product.slug)).join("|") === expectedOrder.join("|"));
+// Catalog size and slugs are Owner data, not permanent presentation invariants.
+// Derive the eligible identity set from canonical fields; check ordering and
+// input immutability independently of resolveWorksProductListing's output.
+const canonical = website.menu.products as Array<Record<string, unknown>>;
+const canonicalBefore = JSON.stringify(canonical);
+const products = resolveWorksProductListing(canonical);
+const expectedCandidates = canonical.filter(product =>
+  product.inMonthlyMenu === true && product.status !== "hidden" &&
+  product.status !== "discontinued" &&
+  !(product.status === "sold_out" && product.showWhenSoldOut === false));
+check("current Works candidates match the canonical eligibility set exactly",
+  products.length === expectedCandidates.length &&
+  products.every(product => expectedCandidates.includes(product)) &&
+  expectedCandidates.every(product => products.includes(product)));
+check("current canonical ordering follows numeric sort with stable source-order ties",
+  products.every((product, index) => {
+    if (index === 0) return true;
+    const previous = products[index - 1];
+    const difference = Number(product.sort || 0) - Number(previous.sort || 0);
+    return difference > 0 || (difference === 0 && canonical.indexOf(previous) < canonical.indexOf(product));
+  }));
+check("listing resolution never rewrites or reorders canonical Product input",
+  JSON.stringify(canonical) === canonicalBefore);
+const listingFixture = [
+  { slug: "active", inMonthlyMenu: true, status: "active", sort: 30 },
+  { slug: "hidden", inMonthlyMenu: true, status: "hidden", sort: 0 },
+  { slug: "discontinued", inMonthlyMenu: true, status: "discontinued", sort: 0 },
+  { slug: "not-monthly", inMonthlyMenu: false, status: "active", sort: 0 },
+  { slug: "sold-hidden", inMonthlyMenu: true, status: "sold_out", showWhenSoldOut: false, sort: 0 },
+  { slug: "sold-default", inMonthlyMenu: true, status: "sold_out", sort: 10 },
+  { slug: "available-not-purchasable", inMonthlyMenu: true, status: "active", purchasable: false, sort: 10 },
+  { slug: "sold-shown", inMonthlyMenu: true, status: "sold_out", showWhenSoldOut: true, sort: 20 },
+];
+check("listing respects monthly/status/sold-out filtering and stable order without a fixed catalog size",
+  resolveWorksProductListing(listingFixture).map(product => product.slug).join("|") ===
+  "sold-default|available-not-purchasable|sold-shown|active");
+console.log(`Canonical catalog: ${canonical.length} Products / ${products.length} current Works candidates`);
 check("all current product list images still use canonical resolution", products.every((product) => Boolean(resolveListAsset(product)?.path)));
 
 const protectedAfter = Object.fromEntries(await Promise.all(protectedKeys.map(async (key) => [key, hash(await readFile(files[key]))]))) as Record<string, string>;
