@@ -221,7 +221,9 @@ check("invalid visibility, weight, background and animation primitives fail", ()
   assert.throws(() => validateHomepagePresentation({ schemaVersion: 3, sections: { home002: { preset: "freeform" } } }), /不支援/u);
 });
 check("all supported section keys, text slots and canonical animation presets validate", () => {
-  assert.deepEqual(HOMEPAGE_PRESENTATION_SECTION_KEYS, ["hero", "campaignSection", ...HOMEPAGE_SECTION_KEYS]);
+  // Ordering now includes Campaign; presentation membership remains unique and order-independent.
+  assert.equal(new Set(HOMEPAGE_PRESENTATION_SECTION_KEYS).size, HOMEPAGE_PRESENTATION_SECTION_KEYS.length);
+  assert.deepEqual([...HOMEPAGE_PRESENTATION_SECTION_KEYS].sort(), ["hero", ...HOMEPAGE_SECTION_KEYS].sort());
   for (const section of HOMEPAGE_PRESENTATION_SECTION_KEYS) {
     const value: HomepagePresentationV3 = { schemaVersion: 3, sections: { [section]: { base: { visible: false } } } };
     validateHomepagePresentation(value);

@@ -560,7 +560,7 @@ export default function HomepageV3({
         }
         products={products}
         pages={pages}
-        order={sectionOrder.home003 + 0.5}
+        order={sectionOrder.campaignSection}
       />
 
       {/**

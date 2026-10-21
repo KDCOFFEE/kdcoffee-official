@@ -62,7 +62,14 @@ function withoutTransparentFrame(html: string) {
   }
   throw new Error("Unbalanced HOME006 frame");
 }
-const render = (data: HomepageViewData, component = Home) => withoutTransparentFrame(renderRaw(data, component));
+// Campaign now has a canonical integer flex rank instead of HOME003 + 0.5.
+// Presentation parity ignores ONLY that root declaration; actual ordering is
+// exercised independently by test-homepage-campaign-ordering.mts.
+function withoutCampaignRank(html: string) {
+  return html.replace(/<section\b(?=[^>]*\bid="monthly-campaign")[^>]*>/gu,
+    tag => tag.replace(/((?:style="|;)order:)[-\d.]+/u, "$1CAMPAIGN_ORDER"));
+}
+const render = (data: HomepageViewData, component = Home) => withoutCampaignRank(withoutTransparentFrame(renderRaw(data, component)));
 const ids: Record<HomepagePresentationKey, string> = { hero: "top", campaignSection: "monthly-campaign", home002: "home002", home003: "home003", home004: "home004", home005: "home005", home006: "home006", home007: "home007", home008: "home008", home009: "home009", home010: "home010" };
 function section(html: string, key: HomepagePresentationKey) { return html.match(new RegExp('<section\\b(?=[^>]*\\bid="' + ids[key] + '")[^>]*>[\\s\\S]*?</section>'))?.[0] ?? ""; }
 function configured(key: HomepagePresentationKey, base: HomepagePresentationPatch) { const data = fixture(); data.presentation = { schemaVersion: 3, sections: { [key]: { base } } }; return data; }

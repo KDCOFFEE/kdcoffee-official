@@ -122,7 +122,10 @@ check("HOME004 commerce content stays byte-identical after presentation attribut
 });
 const css = await readFile("app/globals.css", "utf8");
 const marker = "/* H3.4B CMS Presentation only:";
-const mobileCss = css.slice(css.indexOf(marker));
+const mobileStart = css.indexOf(marker);
+const mobileEnd = css.indexOf("/* End H3.4B Mobile presentation bindings. */", mobileStart);
+assert.ok(mobileStart >= 0 && mobileEnd > mobileStart, "Mobile CSS scope markers must exist");
+const mobileCss = css.slice(mobileStart, mobileEnd);
 const oldCss = execFileSync("git", ["show", "29f06b6:app/globals.css"], { encoding: "utf8" });
 check("legacy CSS and all original breakpoints unchanged byte-for-byte", () => { assert.equal(css.slice(0, css.indexOf(marker)).replaceAll("\r\n", "\n").trimEnd(), oldCss.replaceAll("\r\n", "\n").trimEnd()); });
 check("canonical constant and sole CMS media query cannot drift", () => {

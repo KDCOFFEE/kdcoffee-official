@@ -32,7 +32,7 @@ export const HOMEPAGE_HERO_OVERLAY_PRESETS = ["current", "soft", "strong", "none
 export const HOMEPAGE_CARD_PRESENTATION_PRESETS = ["current", "minimal", "bordered"] as const;
 export const HOMEPAGE_NAVIGATION_LIMIT = 8;
 
-export const HOMEPAGE_SECTION_KEYS = ["home002", "home003", "home004", "home005", "home006", "home007", "home008", "home009", "home010"] as const;
+export const HOMEPAGE_SECTION_KEYS = ["home002", "home003", "campaignSection", "home004", "home005", "home006", "home007", "home008", "home009", "home010"] as const;
 export type HomepageSectionKey = (typeof HOMEPAGE_SECTION_KEYS)[number];
 export type HomepageSectionOrderItem = { key: HomepageSectionKey; order: number };
 
@@ -49,8 +49,16 @@ export function resolveHomepageSectionOrder(value: unknown): HomepageSectionOrde
     seen.add(key);
     resolved.push({ key, order: Number.isFinite(item.order) ? Number(item.order) : index });
   });
-  HOMEPAGE_SECTION_KEYS.forEach((key) => { if (!seen.has(key)) resolved.push({ key, order: resolved.length }); });
-  return resolved.sort((a, b) => a.order - b.order).map((item, order) => ({ ...item, order }));
+  HOMEPAGE_SECTION_KEYS.forEach((key) => {
+    if (key !== "campaignSection" && !seen.has(key)) resolved.push({ key, order: resolved.length });
+  });
+  resolved.sort((a, b) => a.order - b.order);
+  // Legacy Campaign followed HOME003. Preserve that position without saving a migration.
+  if (!seen.has("campaignSection")) {
+    const anchor = resolved.findIndex((item) => item.key === "home003");
+    resolved.splice(anchor + 1, 0, { key: "campaignSection", order: 0 });
+  }
+  return resolved.map((item, order) => ({ ...item, order }));
 }
 
 export function homepageSectionOrderMap(value: unknown): Record<HomepageSectionKey, number> {
@@ -586,7 +594,10 @@ export function validateHomepageCms(homepage: unknown) {
   validateHomepageSeo(homepage.seo);
   validateHomepageNavigation(homepage.navigation);
   if (homepage.sectionOrder !== undefined) {
-    if (!Array.isArray(homepage.sectionOrder) || homepage.sectionOrder.length !== HOMEPAGE_SECTION_KEYS.length) throw new Error("首頁區塊排序格式不正確。");
+    const legacyOrder = Array.isArray(homepage.sectionOrder)
+      && homepage.sectionOrder.length === HOMEPAGE_SECTION_KEYS.length - 1
+      && !homepage.sectionOrder.some((item) => isRecord(item) && item.key === "campaignSection");
+    if (!Array.isArray(homepage.sectionOrder) || (!legacyOrder && homepage.sectionOrder.length !== HOMEPAGE_SECTION_KEYS.length)) throw new Error("首頁區塊排序格式不正確。");
     const resolvedSectionOrder = resolveHomepageSectionOrder(homepage.sectionOrder);
     if (resolvedSectionOrder.length !== HOMEPAGE_SECTION_KEYS.length || new Set(resolvedSectionOrder.map((item) => item.key)).size !== HOMEPAGE_SECTION_KEYS.length) throw new Error("首頁區塊排序不可重複或缺少區塊。");
   }

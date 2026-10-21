@@ -24,7 +24,7 @@ type Path = Array<string | number>;
 type SetPath = (path: Path, value: unknown) => void;
 type UploadImage = (file: File, path: Path, assetId: string, seoName?: string, assetGroup?: string) => Promise<MediaAsset>;
 
-const sectionNames: Record<string, string> = { home002: "品牌價值", home003: "咖啡時刻", home004: "推薦作品", home005: "咖啡製程", home006: "專屬烘焙", home007: "咖啡藝術", home008: "真實工作室", home009: "真實評價", home010: "最後購買引導" };
+const sectionNames: Record<string, string> = { home002: "品牌價值", home003: "咖啡時刻", campaignSection: "本月活動", home004: "推薦作品", home005: "咖啡製程", home006: "專屬烘焙", home007: "咖啡藝術", home008: "真實工作室", home009: "真實評價", home010: "最後購買引導" };
 
 function stableId(prefix: string) { return `${prefix}-${globalThis.crypto.randomUUID().replaceAll("-", "").slice(0, 12).toUpperCase()}`; }
 function moveItem<T>(items: T[], index: number, direction: -1 | 1): T[] {
@@ -173,7 +173,7 @@ function HomepageSectionOrderEditor({ homepage, setPath }: { homepage: Record<st
     <div className="homepage-section-order-guide">
       <div><b>怎麼用</b><span>拖曳左側把手，或按右側 ↑ ↓ 調整位置。</span></div>
       <div><b>套用方式</b><span>確認順序後，按右上角「儲存全部」。</span></div>
-      <div><b>固定規則</b><span>Hero 不參與排序；本月活動固定跟在 HOME003 後方。</span></div>
+      <div><b>固定規則</b><span>Hero 不參與排序；本月活動預設跟在 HOME003 後方，可在此調整。</span></div>
     </div>
 
     <div className="homepage-section-order-table" role="table" aria-label="首頁區塊排序">

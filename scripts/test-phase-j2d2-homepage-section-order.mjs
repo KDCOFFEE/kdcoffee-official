@@ -1,8 +1,11 @@
 import fs from "node:fs";
+import { resolveHomepageSectionOrder } from "../lib/homepageCms.ts";
 const read=(p)=>fs.readFileSync(new URL(`../${p}`,import.meta.url),"utf8");
 const cms=read("lib/homepageCms.ts"), data=read("data/homepageData.ts"), admin=read("components/admin/HomepageManager.tsx"), home=read("components/home/HomepageV3.tsx"), campaign=read("components/home/MonthlyCampaign.tsx"), css=read("app/globals.css");
 let pass=0; const check=(name,ok)=>{if(!ok) throw new Error(`FAIL ${name}`); console.log(`PASS ${name}`); pass++;};
-check("legacy default order", cms.includes('HOMEPAGE_SECTION_KEYS = ["home002", "home003", "home004", "home005", "home006", "home007", "home008", "home009", "home010"]'));
+const legacyKeys = ["home002", "home003", "home004", "home005", "home006", "home007", "home008", "home009", "home010"];
+const normalized = resolveHomepageSectionOrder(legacyKeys.map((key, order) => ({ key, order })));
+check("legacy section order preserved with one canonical Campaign entry", JSON.stringify(normalized.filter(item => item.key !== "campaignSection").map(item => item.key)) === JSON.stringify(legacyKeys) && normalized.filter(item => item.key === "campaignSection").length === 1);
 check("section order resolver", cms.includes("resolveHomepageSectionOrder") && cms.includes("homepageSectionOrderMap"));
 check("section order validation", cms.includes("首頁區塊排序格式不正確"));
 check("section order optional data", data.includes("sectionOrder?: HomepageSectionOrderItem[]"));
@@ -13,6 +16,6 @@ check("mobile order fallback", admin.includes("homepage-section-order-mobile") &
 check("visibility reuse", admin.includes('setPath([item.key, "enabled"], checked)'));
 check("public order wrapper", home.includes('className="v3-home-section-order"'));
 check("public section order binding", home.includes('sectionOrder.home002') && home.includes('sectionOrder.home010'));
-check("campaign follows home003", home.includes('order={sectionOrder.home003 + 0.5}') && campaign.includes("order?: number"));
+check("Campaign defaults after HOME003 but uses independent canonical order", normalized.findIndex(item => item.key === "campaignSection") === normalized.findIndex(item => item.key === "home003") + 1 && home.includes("order={sectionOrder.campaignSection}") && !home.includes("sectionOrder.home003 + 0.5") && campaign.includes("order?: number"));
 check("order layout css", css.includes(".v3-home-section-order{display:flex;flex-direction:column"));
 console.log(`PHASE J.2D.2 Homepage section ordering assertions: ${pass} PASS`);
