@@ -1,5 +1,10 @@
 const PUBLIC_SITE_ORIGIN = "https://www.kdcoffee1962.com";
 
+/** Existing official origin for request-independent public discovery documents. */
+export function getCanonicalPublicSiteOrigin(): string {
+  return PUBLIC_SITE_ORIGIN;
+}
+
 function developmentPublicOrigin() {
   const value = process.env.DEV_PUBLIC_ORIGIN?.trim();
   // Validate the original text as well as URL components: URL normalizes dot

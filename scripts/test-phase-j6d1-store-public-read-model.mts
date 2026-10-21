@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import ts from "typescript";
 
 import { findPublicStoreProductBySlug, paginatePublicStoreProducts, selectPublicStoreIndex } from "../lib/storePublicSelectors";
 import type { StoreCatalog, StoreCategory, StoreMediaReference, StoreProduct, StoreSection } from "../lib/storeTypes";
@@ -444,7 +445,34 @@ async function main() {
     await test("Server read model contains only read calls and no commerce or mutation wiring", async () => {
       const source = await fs.readFile("lib/storePublicReadModel.ts", "utf8");
       assert.match(source, /import "server-only"/);
-      assert.equal((source.match(/createStoreRepository\(\)\.read\(\)/g) ?? []).length, 2);
+      // Reader count is not an architecture contract. Inspect actual syntax so
+      // comments cannot supply reads and repository instances cannot escape to
+      // aliases, computed methods, or non-read operations.
+      const ast = ts.createSourceFile("storePublicReadModel.ts", source, ts.ScriptTarget.Latest, true);
+      let approvedReads = 0;
+      function inspect(node: ts.Node) {
+        if (ts.isIdentifier(node) && node.text === "createStoreRepository") {
+          const parent = node.parent;
+          const declaration = ts.isImportSpecifier(parent) && parent.name === node && !parent.propertyName;
+          const invocation = ts.isCallExpression(parent) && parent.expression === node;
+          assert.ok(declaration || invocation, "Repository factory must not be aliased or escape direct read calls");
+          if (invocation) {
+            assert.equal(parent.arguments.length, 0, "Use the canonical repository");
+            const access = parent.parent;
+            assert.ok(ts.isPropertyAccessExpression(access) && access.expression === parent,
+              "Repository operation must be a direct named method");
+            assert.equal(access.name.text, "read", "Only repository.read() is approved");
+            const operation = access.parent;
+            assert.ok(ts.isCallExpression(operation) && operation.expression === access,
+              "Repository read method must be invoked directly");
+            assert.equal(operation.arguments.length, 0);
+            approvedReads++;
+          }
+        }
+        ts.forEachChild(node, inspect);
+      }
+      inspect(ast);
+      assert.ok(approvedReads > 0, "At least one approved repository read is required");
       assert.doesNotMatch(source, /\.initialize\(|\.create(?:Product|Section|Category)\(|\.update|\.archive|withCatalogLock|atomicWrite|writeFile|fetch\(|catch\s*\(/);
       assert.doesNotMatch(source, /AddToCart|CartProvider|checkout|\/api\/orders|membershipCommerce|referral|reward|cloudinary/i);
       const dependencies = [...source.matchAll(/(?:from\s+|import\s+)["']([^"']+)["']/g)].map(match => match[1]);

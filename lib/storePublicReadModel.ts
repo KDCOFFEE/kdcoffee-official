@@ -34,3 +34,13 @@ export async function readPublicStoreProductBySlug(slug: string): Promise<Public
     },
   };
 }
+/** Enumerate the same canonical public index across all pages from one snapshot. */
+export async function readPublicStoreSitemapProducts(): Promise<{ slug: string }[]> {
+  const catalog = await createStoreRepository().read();
+  const first = selectPublicStoreIndex(catalog).products;
+  const products = first.items.map(({ slug }) => ({ slug }));
+  for (let page = 2; page <= first.totalPages; page += 1) {
+    products.push(...selectPublicStoreIndex(catalog, { page }).products.items.map(({ slug }) => ({ slug })));
+  }
+  return products;
+}

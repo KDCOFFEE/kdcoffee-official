@@ -7,7 +7,9 @@ import { isStoreCommerceEnabled } from "@/lib/storeCommerceCapability";
 import StoreProductGallery from "@/components/store/StoreProductGallery";
 import styles from "@/components/store/StoreProductDetail.module.css";
 import { readPublicStoreProductBySlug } from "@/lib/storePublicReadModel";
-import { isStoreProductSlug, storeBrowseHref, storeProductMetadata } from "@/lib/storePublicMetadata";
+import { isStoreProductSlug, storeBrowseHref } from "@/lib/storePublicMetadata";
+
+import { storeProductMetadata } from "@/lib/storeSeoPublication";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
