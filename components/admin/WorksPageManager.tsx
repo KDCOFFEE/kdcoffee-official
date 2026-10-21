@@ -6,6 +6,9 @@ import ImageLibraryPicker from "@/components/admin/ImageLibraryPicker";
 import MediaUploader from "@/components/admin/MediaUploader";
 import SmartLinkPicker, { SmartLinkEditingProvider } from "@/components/admin/SmartLinkPicker";
 import WorksMotionStudio, { type WorksMotionPreviewTarget } from "@/components/admin/WorksMotionStudio";
+import WorksSoldOutSettings from "@/components/admin/WorksSoldOutSettings";
+import WorksCardMarkerStudio, { type WorksMarkerCatalogEntry } from "@/components/admin/WorksCardMarkerStudio";
+import { type WorksMarketingMarkerType, validateWorksCardMarkers } from "@/lib/worksPageCms";
 import WorksPagePreview from "@/components/admin/WorksPagePreview";
 import WorksVisualStylePanel from "@/components/admin/WorksVisualStylePanel";
 import type { AssetRecord } from "@/lib/assets";
@@ -16,6 +19,8 @@ import {
   DEFAULT_WORKS_PAGE_CMS_CONFIG,
   resolveWorksPageCms,
   validateWorksPageCms,
+  validateWorksSoldOutPresentation,
+  type WorksSoldOutPresentation,
   type ResolvedWorksPageCms,
   type WorksContentSource,
   type WorksHeroOverlayPreset,
@@ -33,6 +38,7 @@ type Payload = {
   assets: AssetRecord[];
   products: CmsLinkProduct[];
   previewProducts: WorksPreviewProduct[];
+  markerProducts: WorksMarkerCatalogEntry[];
   publishedPages: PublishedCmsPage[];
 };
 
@@ -63,11 +69,11 @@ type EditorCatalog = NonNullable<WorksPageCmsConfig["catalog"]> & {
     cardPreset: "current" | "minimal" | "bordered";
   };
 };
-type EditorDraft = Omit<WorksPageCmsConfig, "hero" | "catalog"> & { hero: EditorHero; catalog: EditorCatalog };
+type EditorDraft = Omit<WorksPageCmsConfig, "hero" | "catalog" | "soldOutPresentation"> & { hero: EditorHero; catalog: EditorCatalog; soldOutPresentation: WorksSoldOutPresentation };
 type MediaSlot = "desktopMedia" | "mobileMedia";
 type PickerTarget = MediaSlot | "seoShareImage";
 type EditorTab = "content" | "media" | "visual" | "motion" | "seo" | "preview";
-type ContentSection = "hero" | "cta" | "catalog" | "cards";
+type ContentSection = "hero" | "cta" | "catalog" | "cards" | "soldOut" | "markers";
 
 function editorDraft(payload: Pick<Payload, "savedConfig" | "resolved">): EditorDraft {
   const saved = structuredClone(payload.savedConfig || { schemaVersion: 1 }) as WorksPageCmsConfig;
@@ -75,6 +81,7 @@ function editorDraft(payload: Pick<Payload, "savedConfig" | "resolved">): Editor
   return {
     ...saved,
     schemaVersion: 1,
+    soldOutPresentation: { ...resolved.soldOutPresentation },
     hero: {
       ...(saved.hero || {}),
       enabled: saved.hero?.enabled ?? resolved.hero.enabled,
@@ -130,6 +137,7 @@ export default function WorksPageManager() {
   const [contentSection, setContentSection] = useState<ContentSection>("hero");
   const [motionPreviewTarget, setMotionPreviewTarget] = useState<WorksMotionPreviewTarget>("hero");
   const [replayKey, setReplayKey] = useState(0);
+  const [markerPreset, setMarkerPreset] = useState<WorksMarketingMarkerType>("NEW");
   const dirty = Boolean(draft) && JSON.stringify(draft) !== baseline;
 
   useEffect(() => {
@@ -190,7 +198,7 @@ export default function WorksPageManager() {
   async function save() {
     if (!payload || !draft || !dirty) return;
     try {
-      validateWorksPageCms(draft); setSaving(true); setMessage("儲存中…");
+      validateWorksPageCms(draft); validateWorksSoldOutPresentation(draft.soldOutPresentation); validateWorksCardMarkers(draft.cardMarkers); setSaving(true); setMessage("儲存中…");
       const response = await fetch("/api/admin/works-page", {
         method: "PUT", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ version: payload.version, works: draft }),
@@ -215,7 +223,7 @@ export default function WorksPageManager() {
   if (!payload || !draft || !preview) return <p className="cms-message" role="status">{message}</p>;
 
   const tabs: Array<[EditorTab, string]> = [["content", "內容"], ["media", "素材"], ["visual", "視覺"], ["motion", "動畫"], ["seo", "SEO"], ["preview", "預覽"]];
-  const contentTabs: Array<[ContentSection, string]> = [["hero", "首屏內容"], ["cta", "按鈕"], ["catalog", "作品列表"], ["cards", "商品卡顯示"]];
+  const contentTabs: Array<[ContentSection, string]> = [["hero", "首屏內容"], ["cta", "按鈕"], ["catalog", "作品列表"], ["cards", "商品卡顯示"], ["soldOut", "作品缺貨顯示"], ["markers", "作品卡標示"]];
 
   return <SmartLinkEditingProvider pages={payload.publishedPages}>
     <div className="homepage-manager v3-admin">
@@ -236,6 +244,8 @@ export default function WorksPageManager() {
             {contentSection === "hero" ? <section className={styles.contentCard}><header><div><h3>首屏內容</h3><p>編輯頁面開場文字與顯示狀態。</p></div><VisibilityToggle label="顯示首屏內容" enabled={draft.hero.enabled} onChange={(enabled) => patchHero({ enabled })} /></header><div className={`cms-grid two ${styles.compactFields}`}><SourceField label="月份小標" value={draft.hero.eyebrowSource} onChange={(eyebrowSource) => patchHero({ eyebrowSource })} />{draft.hero.eyebrowSource === "custom" ? <label>自訂小標<input maxLength={120} value={draft.hero.customEyebrow} onChange={(event) => patchHero({ customEyebrow: event.target.value })} /></label> : <ReadOnlyLiveValue label="目前本月小標" value={payload.live.monthLabel} />}<label>主標題第一行<input maxLength={180} value={draft.hero.headlineLines[0]} onChange={(event) => patchHero({ headlineLines: [event.target.value, draft.hero.headlineLines[1]] })} /></label><label>主標題第二行<input maxLength={180} value={draft.hero.headlineLines[1]} onChange={(event) => patchHero({ headlineLines: [draft.hero.headlineLines[0], event.target.value] })} /></label><SourceField label="首屏說明" value={draft.hero.descriptionSource} onChange={(descriptionSource) => patchHero({ descriptionSource })} />{draft.hero.descriptionSource === "custom" ? <label className="span-two">自訂說明<textarea maxLength={1200} value={draft.hero.customDescription} onChange={(event) => patchHero({ customDescription: event.target.value })} /></label> : <ReadOnlyLiveValue label="目前本月說明" value={payload.live.intro} wide />}</div></section> : null}
             {contentSection === "cta" ? <div className="page-section-list"><CtaCard title="主要按鈕" value={draft.hero.primaryCta} products={payload.products} pages={payload.publishedPages} editorId="works-primary-cta" onChange={(next) => patchCta("primaryCta", next)} /><CtaCard title="次要按鈕" value={draft.hero.secondaryCta} products={payload.products} pages={payload.publishedPages} editorId="works-secondary-cta" onChange={(next) => patchCta("secondaryCta", next)} /></div> : null}
             {contentSection === "catalog" ? <section className={styles.contentCard}><header><div><h3>作品列表內容</h3><p>作品數量由系統自動計算。</p></div><VisibilityToggle label="顯示列表說明" enabled={draft.catalog.introEnabled} onChange={(introEnabled) => patchCatalog({ introEnabled })} /></header><div className={`cms-grid two ${styles.compactFields}`}><label>數量文字前綴<input maxLength={80} value={draft.catalog.countPrefix} onChange={(event) => patchCatalog({ countPrefix: event.target.value })} /></label><label>數量文字後綴<input maxLength={80} value={draft.catalog.countSuffix} onChange={(event) => patchCatalog({ countSuffix: event.target.value })} /></label><label className="span-two">列表說明文字<textarea maxLength={500} value={draft.catalog.helperText} onChange={(event) => patchCatalog({ helperText: event.target.value })} /></label><label className="span-two">沒有可顯示作品時的文字<textarea maxLength={500} value={draft.catalog.emptyStateText} onChange={(event) => patchCatalog({ emptyStateText: event.target.value })} /></label></div><div className={styles.authorityNote}><span>商品內容、排序、價格、庫存與卡片圖片由另一個管理區負責。</span><a href="/admin/products">前往作品與本月豆單 →</a></div></section> : null}
+            {contentSection === "markers" ? <WorksCardMarkerStudio selected={markerPreset} onSelect={setMarkerPreset} value={draft.cardMarkers} products={payload.markerProducts || []} uploadImage={uploadImage} onEditSystem={() => setContentSection("soldOut")} onChange={cardMarkers => change({ ...draft, cardMarkers })} /> : null}
+            {contentSection === "soldOut" ? <WorksSoldOutSettings uploadImage={uploadImage} value={draft.soldOutPresentation} onChange={(soldOutPresentation) => change({ ...draft, soldOutPresentation })} /> : null}
             {contentSection === "cards" ? <section className={styles.contentCard}><header><div><h3>商品卡顯示</h3><p>只控制顯示資訊，不改變商品內容或商務資料。</p></div></header><div className="owner-status-grid"><PresentationToggle label="作品編號" enabled={draft.catalog.presentation.showIndex} onChange={(showIndex) => patchPresentation({ showIndex })} /><PresentationToggle label="創作者" enabled={draft.catalog.presentation.showArtist} onChange={(showArtist) => patchPresentation({ showArtist })} /><PresentationToggle label="分類標籤" enabled={draft.catalog.presentation.showTag} onChange={(showTag) => patchPresentation({ showTag })} /><PresentationToggle label="風味" enabled={draft.catalog.presentation.showFlavors} onChange={(showFlavors) => patchPresentation({ showFlavors })} /><PresentationToggle label="作品資訊" enabled={draft.catalog.presentation.showFacts} onChange={(showFacts) => patchPresentation({ showFacts })} /><PresentationToggle label="價格與供應狀態" enabled={draft.catalog.presentation.showCommerceSummary} onChange={(showCommerceSummary) => patchPresentation({ showCommerceSummary })} /></div><label>卡片呈現<select value={draft.catalog.presentation.cardPreset} onChange={(event) => patchPresentation({ cardPreset: event.target.value as EditorCatalog["presentation"]["cardPreset"] })}><option value="current">目前版面</option><option value="minimal">簡潔版面</option><option value="bordered">框線版面</option></select></label></section> : null}
           </section> : null}
 

@@ -9,7 +9,9 @@ import { resolveWorksProductListing } from "./productListing";
 import { resolveListAsset } from "./productVisualAssets";
 import { getPagesDataFile, getWebsiteDataFile } from "./storagePaths";
 import type { WorksPageCmsConfig } from "./worksPageCms";
-import { resolveWorksPageCms, validateWorksPageCms } from "./worksPageCms";
+import { resolveWorksPageCms, validateWorksPageCms, validateWorksSoldOutPresentation } from "./worksPageCms";
+import { assertWorksMarkerCatalog, isWorksCardSoldOut } from "./worksCardMarker";
+import { validateWorksCardMarkers } from "./worksPageCms";
 import { getCurrentMonthlyMenuPeriod } from "./monthlyMenuPeriod";
 
 export class WorksPageVersionConflictError extends Error {
@@ -22,7 +24,9 @@ export class WorksPageVersionConflictError extends Error {
 async function readLiveWorksData() {
   const website = JSON.parse(await fs.readFile(getWebsiteDataFile(), "utf8")) as WebsiteData;
   const products = Array.isArray(website.menu?.products) ? website.menu.products : [];
+  assertWorksMarkerCatalog(products);
   return {
+    markerProducts: products.map(product => ({ slug: product.slug, name: product.name, ...(product.tag ? { tag: product.tag } : {}), soldOut: isWorksCardSoldOut(product) })),
     live: {
       monthLabel: getCurrentMonthlyMenuPeriod().selectionLabel,
       intro: typeof website.menu?.intro === "string" ? website.menu.intro : "",
@@ -70,6 +74,7 @@ export async function readWorksPageAdminState() {
     resolved: resolveWorksPageCms(savedConfig, liveData.live),
     live: liveData.live,
     products: liveData.products,
+    markerProducts: liveData.markerProducts,
     previewProducts: liveData.previewProducts,
     publishedPages: publishedPageRegistry(store),
     assets: assetLibrary.assets.filter((asset) => asset.status === "active" && Boolean(asset.path)),
@@ -83,6 +88,8 @@ export async function saveWorksPageAdminState(input: {
 }) {
   if (!Number.isInteger(input.version) || input.version < 0) throw new Error("頁面版本格式不正確。");
   validateWorksPageCms(input.works);
+  validateWorksSoldOutPresentation(input.works.soldOutPresentation);
+  validateWorksCardMarkers(input.works.cardMarkers);
   const { live } = await readLiveWorksData();
   const pagesPath = getPagesDataFile();
   const saved = await withFileLock(pagesPath, async () => {

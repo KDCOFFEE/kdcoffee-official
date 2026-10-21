@@ -8135,3 +8135,16 @@ button.member-lifecycle-action:disabled,
 :is(.v3-hero,.v3-section,.v3-final,.campaign-multi-section) [data-homepage-content-base~="width"][data-homepage-text-mobile~="max-width"]{max-width:min(var(--homepage-content-width),var(--homepage-text-max-width,var(--homepage-content-width)))}
 }
 /* End H3.4B Mobile presentation bindings. */
+
+/* Global Works sold-out presentation: plain content above a horizontal band. */
+[data-works-sold-out-presentation]{position:absolute;inset:0;display:block;background:transparent;z-index:8;pointer-events:none}
+.works-sold-out-anchor{position:absolute;max-width:calc(100% - 32px);z-index:1}
+.works-sold-out-anchor--top{left:50%;top:42px;transform:translateX(-50%)}
+.works-sold-out-anchor--center{left:50%;top:50%;transform:translate(-50%,-50%)}
+.works-sold-out-anchor--bottom{left:50%;top:auto;bottom:16px;transform:translateX(-50%)}
+[data-has-tag="true"] .works-sold-out-anchor--bottom{bottom:56px}
+.works-sold-out-text{display:block;padding:0;border:0;border-radius:0;background:transparent;box-shadow:none;text-shadow:none;font-weight:500;line-height:1.45;letter-spacing:.08em;text-align:center;overflow-wrap:anywhere;pointer-events:none}
+.works-sold-out-image{display:block;width:100%;height:auto;max-height:160px;object-fit:contain;background:transparent;border:0;box-shadow:none;pointer-events:none}
+.works-sold-out-dim{position:absolute;pointer-events:none;background:rgb(25,20,17)}
+.works-sold-out-dim--band{left:0;right:0}
+.works-sold-out-dim--full{inset:0}

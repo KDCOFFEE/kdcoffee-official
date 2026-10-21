@@ -17,6 +17,151 @@ export const WORKS_HERO_OVERLAY_PRESETS = ["current-gradient", "soft", "strong",
 export const WORKS_CARD_PRESENTATION_PRESETS = ["current", "minimal", "bordered"] as const;
 export const WORKS_CARD_HOVER_PRESETS = ["current-scale", "none"] as const;
 
+
+export const WORKS_SOLD_OUT_MODES = ["text", "image"] as const;
+export const WORKS_SOLD_OUT_POSITIONS = ["top", "center", "bottom"] as const;
+export const WORKS_SOLD_OUT_DIM_MODES = ["none", "band", "full"] as const;
+// Read compatibility only: old settings normalize to the new plain/band design.
+const LEGACY_SOLD_OUT_OPTIONS = {
+  style: ["center-badge", "bottom-strip", "top-left-badge"],
+  dimLevel: ["none", "light", "medium"],
+  dimArea: ["label-area", "top", "center", "bottom", "full", "none"],
+  dimSize: ["small", "medium", "large"],
+} as const;
+export type WorksSoldOutPresentation = {
+  mode: (typeof WORKS_SOLD_OUT_MODES)[number];
+  text: string;
+  imageAsset?: WorksPageMediaReference;
+  textFontSize: number;
+  textColor: string;
+  textPosition: (typeof WORKS_SOLD_OUT_POSITIONS)[number];
+  dimMode: (typeof WORKS_SOLD_OUT_DIM_MODES)[number];
+  dimStrength: number;
+  bandPosition: (typeof WORKS_SOLD_OUT_POSITIONS)[number];
+  bandSize: number;
+  imageSize?: number;
+  bandFeather?: number;
+};
+export const DEFAULT_WORKS_SOLD_OUT_PRESENTATION: Readonly<WorksSoldOutPresentation> = {
+  mode: "text", text: "暫時完售", textFontSize: 20, textColor: "#f5eee3",
+  textPosition: "center", dimMode: "band", dimStrength: 35, bandPosition: "center", bandSize: 30,
+};
+export function isWorksSoldOutText(value: unknown): value is string {
+  if (typeof value !== "string") return false;
+  const points = Array.from(value);
+  return points.length > 0 && points.length <= 40 && /[^\p{White_Space}\p{Cf}]/u.test(value) &&
+    !/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/u.test(value) &&
+    points.every(point => { const cp = point.codePointAt(0)!; return cp < 0xd800 || cp > 0xdfff; });
+}
+function soldOutInteger(value: unknown, min: number, max: number): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value >= min && value <= max;
+}
+function soldOutImage(value: unknown): WorksPageMediaReference | undefined {
+  const ref = resolveMediaReference(value, true);
+  // Use the existing local asset pipeline; no arbitrary external embeds or paths.
+  if (!ref || !/^\/uploads\/assets\/[a-zA-Z0-9_-]+\/[a-zA-Z0-9_-]+\.(?:png|webp)$/i.test(ref.media.url) ||
+      (ref.media.provider !== undefined && ref.media.provider !== "local")) return undefined;
+  return ref;
+}
+export function resolveWorksSoldOutPresentation(value: unknown): WorksSoldOutPresentation {
+  const raw = isRecord(value) ? value : {};
+  const defaults = DEFAULT_WORKS_SOLD_OUT_PRESENTATION;
+  const legacyPosition = raw.style === "top-left-badge" ? "top" : raw.style === "bottom-strip" ? "bottom" : defaults.textPosition;
+  const legacyMode = raw.dimLevel === "none" || raw.dimArea === "none" ? "none" : raw.dimArea === "full" ? "full" : defaults.dimMode;
+  const legacyBand = oneOf(raw.dimArea, WORKS_SOLD_OUT_POSITIONS, raw.dimArea === "label-area" ? legacyPosition : defaults.bandPosition);
+  const imageAsset = soldOutImage(raw.imageAsset);
+  return {
+    mode: oneOf(raw.mode, WORKS_SOLD_OUT_MODES, defaults.mode),
+    text: isWorksSoldOutText(raw.text) ? raw.text : defaults.text,
+    ...(imageAsset ? { imageAsset } : {}),
+    textFontSize: soldOutInteger(raw.textFontSize, 12, 48) ? raw.textFontSize : defaults.textFontSize,
+    textColor: typeof raw.textColor === "string" && /^#[0-9a-fA-F]{6}$/.test(raw.textColor) ? raw.textColor : defaults.textColor,
+    textPosition: oneOf(raw.textPosition, WORKS_SOLD_OUT_POSITIONS, legacyPosition),
+    dimMode: oneOf(raw.dimMode, WORKS_SOLD_OUT_DIM_MODES, legacyMode),
+    dimStrength: soldOutInteger(raw.dimStrength, 0, 100) ? raw.dimStrength : raw.dimLevel === "medium" ? 50 : defaults.dimStrength,
+    bandPosition: oneOf(raw.bandPosition, WORKS_SOLD_OUT_POSITIONS, legacyBand),
+    bandSize: soldOutInteger(raw.bandSize, 10, 60) ? raw.bandSize : raw.dimSize === "small" ? 20 : raw.dimSize === "large" ? 50 : defaults.bandSize,
+    ...(soldOutInteger(raw.imageSize, 20, 90) ? { imageSize: raw.imageSize } : {}),
+    ...(soldOutInteger(raw.bandFeather, 0, 40) ? { bandFeather: raw.bandFeather } : {}),
+  };
+}
+/** Strict SAVE boundary; malformed stored settings remain safely readable.
+ * GET never migrates settings or writes resolved defaults into PageStore.
+ */
+export function validateWorksSoldOutPresentation(value: unknown): void {
+  if (value === undefined) return;
+  if (!isRecord(value)) throw new Error("作品缺貨顯示設定格式不正確。");
+  assertOnlyKeys(value, ["mode", "text", "imageAsset", "textFontSize", "textColor", "textPosition",
+    "dimMode", "dimStrength", "bandPosition", "bandSize", "imageSize", "bandFeather", ...Object.keys(LEGACY_SOLD_OUT_OPTIONS)], "作品缺貨顯示設定");
+  if (value.text !== undefined && !isWorksSoldOutText(value.text))
+    throw new Error("缺貨顯示文字須為 1–40 個有效字元，且不可換行。");
+  for (const [key, options] of [
+    ["mode", WORKS_SOLD_OUT_MODES], ["textPosition", WORKS_SOLD_OUT_POSITIONS],
+    ["dimMode", WORKS_SOLD_OUT_DIM_MODES], ["bandPosition", WORKS_SOLD_OUT_POSITIONS],
+    ...Object.entries(LEGACY_SOLD_OUT_OPTIONS),
+  ] as Array<[string, readonly string[]]>) {
+    if (value[key] !== undefined && !options.includes(value[key] as string))
+      throw new Error("作品缺貨顯示選項不支援。");
+  }
+  for (const [key, min, max] of [["textFontSize", 12, 48], ["dimStrength", 0, 100], ["bandSize", 10, 60], ["imageSize", 20, 90], ["bandFeather", 0, 40]] as const)
+    if (value[key] !== undefined && !soldOutInteger(value[key], min, max)) throw new Error("作品缺貨顯示數值超出範圍。");
+  if (value.textColor !== undefined && (typeof value.textColor !== "string" || !/^#[0-9a-fA-F]{6}$/.test(value.textColor)))
+    throw new Error("缺貨文字顏色須為六碼 HEX 色碼。");
+  if (value.imageAsset !== undefined) {
+    validateMediaReference(value.imageAsset, "缺貨圖片", true);
+    if (!soldOutImage(value.imageAsset)) throw new Error("缺貨圖片須使用現有圖片管線的 PNG / WebP 圖片。");
+  }
+}
+
+/** Shared presentation vocabulary; soldOutPresentation remains its compatible
+ * system-status storage slot. Marketing assignments stay exclusively Product.tag.
+ */
+export type WorksCardMarkerPresentation = WorksSoldOutPresentation;
+export const WORKS_MARKETING_MARKER_TYPES = ["NEW", "RECOMMENDED", "CAMPAIGN", "LIMITED", "FEATURED", "CUSTOM"] as const;
+export type WorksMarketingMarkerType = (typeof WORKS_MARKETING_MARKER_TYPES)[number];
+export const WORKS_MARKETING_MARKER_LABELS: Record<WorksMarketingMarkerType, string> = {
+  NEW: "新品", RECOMMENDED: "推薦", CAMPAIGN: "活動", LIMITED: "限量", FEATURED: "本月精選", CUSTOM: "自訂",
+};
+export type WorksCardMarkersConfig = {
+  contractVersion: 1;
+  marketing?: { presets?: Partial<Record<WorksMarketingMarkerType, Partial<WorksCardMarkerPresentation>>> };
+};
+export function resolveWorksMarketingPreset(config: unknown, type: WorksMarketingMarkerType): WorksCardMarkerPresentation {
+  const defaults: WorksCardMarkerPresentation = {
+    ...DEFAULT_WORKS_SOLD_OUT_PRESENTATION, text: WORKS_MARKETING_MARKER_LABELS[type],
+    dimMode: "none", imageSize: 65, bandFeather: 15,
+  };
+  const root = isRecord(config) && config.contractVersion === 1 ? config : {};
+  const marketing = isRecord(root.marketing) ? root.marketing : {};
+  const presets = isRecord(marketing.presets) ? marketing.presets : {};
+  const raw = isRecord(presets[type]) ? presets[type] : {};
+  const safe: Record<string, unknown> = {};
+  // Independent safe fallbacks; never promote arbitrary CSS/assignment fields.
+  for (const [key, value] of Object.entries(raw)) {
+    if (type === "CUSTOM" && key === "text") continue;
+    try { validateWorksSoldOutPresentation({ [key]: value }); safe[key] = value; } catch { /* use that field's preset default */ }
+  }
+  return resolveWorksSoldOutPresentation({ ...defaults, ...safe });
+}
+export function validateWorksCardMarkers(value: unknown): void {
+  if (value === undefined) return;
+  if (!isRecord(value)) throw new Error("作品卡標示格式不正確。");
+  assertOnlyKeys(value, ["contractVersion", "marketing"], "作品卡標示");
+  if (value.contractVersion !== 1) throw new Error("作品卡標示版本不支援。");
+  if (value.marketing === undefined) return;
+  if (!isRecord(value.marketing)) throw new Error("行銷標示格式不正確。");
+  // No second assignment table or Product mutation payload is accepted.
+  assertOnlyKeys(value.marketing, ["presets"], "行銷標示");
+  if (value.marketing.presets === undefined) return;
+  if (!isRecord(value.marketing.presets)) throw new Error("行銷標示預設格式不正確。");
+  assertOnlyKeys(value.marketing.presets, WORKS_MARKETING_MARKER_TYPES, "行銷標示預設");
+  for (const [type, presentation] of Object.entries(value.marketing.presets)) {
+    if (!isRecord(presentation)) throw new Error("行銷標示呈現格式不正確。");
+    if (type === "CUSTOM" && Object.hasOwn(presentation, "text")) throw new Error("自訂標示文字沿用作品標籤。");
+    validateWorksSoldOutPresentation(presentation);
+  }
+}
+
 export type WorksContentSource = (typeof WORKS_CONTENT_SOURCES)[number];
 export type WorksHeroOverlayPreset = (typeof WORKS_HERO_OVERLAY_PRESETS)[number];
 export type WorksCardPresentationPreset = (typeof WORKS_CARD_PRESENTATION_PRESETS)[number];
@@ -36,6 +181,8 @@ export type WorksPageCta = {
 
 export type WorksPageCmsConfig = {
   schemaVersion: typeof WORKS_PAGE_SCHEMA_VERSION;
+  soldOutPresentation?: Partial<WorksSoldOutPresentation>;
+  cardMarkers?: WorksCardMarkersConfig;
   hero?: {
     enabled?: boolean;
     eyebrowSource?: WorksContentSource;
@@ -99,6 +246,7 @@ export type WorksPageCmsConfig = {
 
 export type ResolvedWorksPageCms = {
   schemaVersion: typeof WORKS_PAGE_SCHEMA_VERSION;
+  soldOutPresentation: WorksSoldOutPresentation;
   hero: {
     enabled: boolean;
     eyebrowSource: WorksContentSource;
@@ -160,6 +308,7 @@ const NO_ENTRANCE_MOTION: HomepageSectionMotion = {
 
 export const DEFAULT_WORKS_PAGE_CMS_CONFIG: Readonly<WorksPageCmsConfig> = {
   schemaVersion: WORKS_PAGE_SCHEMA_VERSION,
+  soldOutPresentation: { ...DEFAULT_WORKS_SOLD_OUT_PRESENTATION },
   hero: {
     enabled: true,
     eyebrowSource: "monthly-menu",
@@ -331,6 +480,7 @@ export function resolveWorksPageCms(config: unknown, live: DynamicWorksValues): 
 
   return {
     schemaVersion: WORKS_PAGE_SCHEMA_VERSION,
+    soldOutPresentation: resolveWorksSoldOutPresentation(root.soldOutPresentation),
     hero: {
       enabled: bool(hero.enabled, defaultHero.enabled!),
       eyebrowSource,
@@ -516,9 +666,11 @@ function validateMotion(value: unknown, label: string) {
   }
 }
 
+// Structural/read validation deliberately tolerates malformed soldOutPresentation.
+// Every global Works save additionally calls validateWorksSoldOutPresentation.
 export function validateWorksPageCms(value: unknown): value is WorksPageCmsConfig {
   if (!isRecord(value)) throw new Error("Works 頁面設定格式不正確。");
-  assertOnlyKeys(value, ["schemaVersion", "hero", "catalog", "colors", "motion", "seo"], "Works 頁面設定");
+  assertOnlyKeys(value, ["schemaVersion", "hero", "catalog", "colors", "motion", "seo", "soldOutPresentation", "cardMarkers"], "Works 頁面設定");
   if (value.schemaVersion !== WORKS_PAGE_SCHEMA_VERSION) throw new Error("Works 頁面設定版本不支援。");
 
   if (value.hero !== undefined) {
