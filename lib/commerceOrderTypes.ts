@@ -39,12 +39,21 @@ export type ResolvedCoffeeOrderLine = ResolvedBase & {
 };
 export type ResolvedStoreOrderLine = ResolvedBase & {
   domain: "store"; variantId: "default"; sku: string;
+  /** Per-unit order-time PV snapshot. Absent only on legacy Store lines; contributes zero. */
+  pvValue?: number;
   coffeeOptions?: never; optionId?: never; optionLabel?: never; optionDetail?: never;
   preparationLabel?: never; customRoast?: never; roastLevel?: never; roastNote?: never;
 };
 export type ResolvedCommerceOrderLine = ResolvedCoffeeOrderLine | ResolvedStoreOrderLine;
 /** DTO only. Creating this value never writes an order. */
 export type PersistableCommerceOrderLine = ResolvedCommerceOrderLine;
+
+/** Store PV is independent of price and never inferred from a current catalog. */
+export function readStoreOrderPV(value: unknown): number {
+  if (value === undefined) return 0;
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) return invalid();
+  return value;
+}
 
 function invalid(): never { throw new CommerceOrderResolutionError("INVALID_ITEM"); }
 export function validateCommerceOrderInput(value: unknown): CommerceOrderInputItem[] {
@@ -122,7 +131,8 @@ export function readCommerceOrderLines(value: unknown): ReadableCommerceOrderLin
     const unitPrice = storedMoney(raw.unitPrice, true), lineTotal = storedMoney(raw.lineTotal, true);
     if (!Number.isSafeInteger(unitPrice * quantity) || lineTotal !== unitPrice * quantity) return invalid();
     return { domain: "store", productId, variantId: "default", slug: raw.slug,
-      name: raw.name, sku: raw.sku, quantity, unitPrice, lineTotal };
+      name: raw.name, sku: raw.sku, quantity, unitPrice, lineTotal,
+      ...(raw.pvValue !== undefined ? { pvValue: readStoreOrderPV(raw.pvValue) } : {}) };
   });
 }
 

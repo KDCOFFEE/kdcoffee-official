@@ -372,11 +372,14 @@ try {
     assert.deepEqual(toPersistableCommerceOrderLines(result.lines), result.lines);
     assert.deepEqual(readCommerceOrderLines(result.lines), result.lines);
   });
-  await check("Store resolved and persisted lines have no Coffee/PV/KD/subscription fields", async () => {
+  await check("Store lines preserve only server-owned PV snapshot, with no Coffee/KD/subscription fields", async () => {
     const line = asStore(await resolveCommerceOrderItems([store()]));
     const persisted = toPersistableCommerceOrderLines([line])[0];
+    assert.equal(line.pvValue, (await repository.read()).products[0].pvValue);
+    assert.equal(persisted.domain, "store");
+    if (persisted.domain === "store") assert.equal(persisted.pvValue, line.pvValue);
     for (const field of ["coffeeOptions", "optionId", "optionLabel", "optionDetail", "preparationLabel",
-      "customRoast", "roastLevel", "roastNote", "pvValue", "pvEnabled", "basePV", "effectivePV", "kdRedemption", "subscriptionEligible"]) {
+      "customRoast", "roastLevel", "roastNote", "pvEnabled", "basePV", "effectivePV", "kdRedemption", "subscriptionEligible"]) {
       assert.ok(!Object.hasOwn(line, field)); assert.ok(!Object.hasOwn(persisted, field));
     }
   });

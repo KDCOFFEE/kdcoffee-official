@@ -20,6 +20,7 @@ import type { TransactionIntent } from "../lib/commerceTransactionTypes";
 import { withOrderFileUpdateLock } from "../lib/orderFiles";
 import { cancelOrderCanonically, requestMemberOrderCancellation } from "../lib/orderCancellation";
 import { readOrder } from "../lib/adminOrders";
+import { resolveOrderRewardBasis } from "../lib/orderRewardBasis";
 import { readFulfillmentStore, recordAdminFulfillmentEvent } from "../lib/fulfillment";
 import { createAdminSessionValue } from "../lib/adminAuth";
 import { provisionCanonicalMember } from "../lib/memberIdentity";
@@ -278,6 +279,12 @@ if(process.argv[2]==="--worker"){
 
   for(const mode of ["coffee","store","mixed"] as const){
     const f=await setup("happy-"+mode,mode),before=(await loadOrder(f.id)).items;
+    const basis=resolveOrderRewardBasis(await loadOrder(f.id));
+    const coffeePV=mode==="store"?0:60,storePV=mode==="coffee"?0:200;
+    check(mode+" canonical order preserves separate Coffee/Store and total PV snapshots",
+      basis.coffeeEffectivePV===coffeePV&&basis.storeEligiblePV===storePV&&
+      basis.totalEffectivePV===coffeePV+storePV&&basis.totalValidConsumptionPV===coffeePV+storePV&&
+      before.filter((item:Record<string,unknown>)=>item.domain==="store").every((item:Record<string,unknown>)=>item.pvValue===100));
     await businessCalls();const result=await core(f.id);check(mode+" canonical cancellation succeeds",result.ok);
     const calls=await businessCalls();
     for(const name of ["settleCreditReservationForOrder","handleReferralQualificationOrderOutcome","cancelSubscriptionCycleForOrder"])check(mode+" "+name+" once",calls[name]===1);
@@ -521,10 +528,21 @@ if(process.argv[2]==="--worker"){
   // later checkout-coverage phases extend order context; cancellation compatibility is tested above.
   // C2C3 owns CommerceCheckoutBoundary eligibility/recovery and client dispatch;
   // successor behavior is asserted above and covered by the dedicated C2C3 regression.
-  for(const file of ["app/api/orders/route.ts",
-    "lib/commerceOrderResolver.ts","lib/commerceOrderPricing.ts","lib/orderRewardBasis.ts"]){
+  // STORE-PV-V2 legitimately extends resolver snapshots and the common PV basis.
+  // Keep the original immutable route/pricing baselines. The two extended modules
+  // are guarded by real order, qualification, historical/legacy snapshot and
+  // whole-order reversal behavior below, rather than pinning pre-PV source text.
+  for(const file of ["app/api/orders/route.ts","lib/commerceOrderPricing.ts"]){
     const actual=file==="app/api/orders/route.ts" ? execFileSync("git",["show","1e39676df206a1670d7e449069b2932dc8b3257a:"+file],{encoding:"utf8",windowsHide:true}) : await fs.readFile(path.join(process.cwd(),file),"utf8"),baseline=execFileSync("git",["show","8fe325c52d167e9c9216a767d102d94b8da1e21f:"+file],{encoding:"utf8",windowsHide:true});
     check(file+(file==="app/api/orders/route.ts" ? " protected committed baseline unchanged" : " protected baseline unchanged"),actual.replaceAll("\r\n","\n")===baseline.replaceAll("\r\n","\n"));
   }
+  const pvContract=execFileSync(process.execPath,[
+    "--experimental-strip-types","--import",pathToFileURL(bootstrap).href,
+    path.join(process.cwd(),"scripts/test-store-pv-v2.mts"),
+  ],{cwd:process.cwd(),encoding:"utf8",windowsHide:true,maxBuffer:4*1024*1024});
+  // Nonzero child exit throws: no ignored assertion or source-only substitute.
+  check("resolver/basis successor contract: Coffee, Store, mixed PV, qualification, snapshots, legacy and reversal",
+    /STORE-PV-V2: \d+ PASS \/ 0 FAIL/.test(pvContract));
+  console.log("STORE_PV_SUCCESSOR_CONTRACT "+pvContract.split(/\r?\n/).find(line=>line.startsWith("STORE-PV-V2:")));
   console.log("J.6F.4 PASS "+count+"/"+count+"; real J.6F.3 creation and isolated fixtures only");
 }

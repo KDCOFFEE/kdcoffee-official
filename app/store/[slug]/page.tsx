@@ -7,6 +7,7 @@ import { isStoreCommerceEnabled } from "@/lib/storeCommerceCapability";
 import StoreProductGallery from "@/components/store/StoreProductGallery";
 import styles from "@/components/store/StoreProductDetail.module.css";
 import { readPublicStoreProductBySlug } from "@/lib/storePublicReadModel";
+import { readPointDisplayName } from "@/lib/pointDisplayNameStore";
 import { isStoreProductSlug, storeBrowseHref } from "@/lib/storePublicMetadata";
 
 import { storeProductMetadata } from "@/lib/storeSeoPublication";
@@ -32,7 +33,8 @@ const money = new Intl.NumberFormat("zh-TW", { maximumSignificantDigits: 21 });
 
 export default async function StoreProductPage({ params }: DetailProps) {
   const { slug } = await params;
-  const { product } = await loadProduct(slug);
+  const { product, pvValue = 0 } = await loadProduct(slug);
+  const pointDisplayName = pvValue > 0 ? await readPointDisplayName() : "";
   const sectionHref = storeBrowseHref({ sectionSlug: product.section.slug });
   const categoryHref = product.category
     ? storeBrowseHref({ sectionSlug: product.section.slug, categorySlug: product.category.slug })
@@ -62,6 +64,7 @@ export default async function StoreProductPage({ params }: DetailProps) {
               <strong>NT$ {money.format(currentPrice)}</strong>
               {onSale ? <><span className={styles.srOnly}>原價：</span><del>NT$ {money.format(product.price)}</del></> : null}
             </p>
+            {pvValue > 0 ? <p className={styles.availability}>{pointDisplayName} {money.format(pvValue)}</p> : null}
             <p className={styles.availability}>{product.inStock ? "有庫存" : "目前無庫存"}</p>
             {isStoreCommerceEnabled() ? <StoreAddToCart key={product.slug} slug={product.slug} inStock={product.inStock} /> : null}
           </section>

@@ -6,7 +6,7 @@ import { resolveSkuOption } from "./orderStockValidation";
 import { createStoreRepository } from "./storeRepository";
 import { findPublicStoreProductBySlug } from "./storePublicSelectors";
 import {
-  CommerceOrderResolutionError, commerceOrderInventoryKey, validateCommerceOrderInput,
+  CommerceOrderResolutionError, commerceOrderInventoryKey, validateCommerceOrderInput, readStoreOrderPV,
   type CommerceOrderInputItem, type CoffeeOrderInputItem, type ResolvedCoffeeOrderLine,
   type ResolvedCommerceOrderLine, type PersistableCommerceOrderLine,
 } from "./commerceOrderTypes";
@@ -110,7 +110,7 @@ export async function resolveCommerceOrderItems(value: unknown): Promise<Commerc
     const unitPrice = commerceOrderMoney(product.salePrice !== undefined && product.salePrice < product.price
       ? product.salePrice : product.price);
     return { domain: "store", productId: product.id, variantId: "default", slug: product.slug,
-      name: product.name, sku: product.sku, unitPrice, quantity: item.quantity,
+      name: product.name, sku: product.sku, pvValue: readStoreOrderPV(product.pvValue), unitPrice, quantity: item.quantity,
       lineTotal: commerceOrderLineTotal(unitPrice, item.quantity) };
   });
   for (const demand of demands.values()) if (demand.quantity > demand.stock) return fail("OUT_OF_STOCK");
@@ -120,12 +120,13 @@ export async function resolveCommerceOrderItems(value: unknown): Promise<Commerc
       variantId: demand.item.variantId, quantity: demand.quantity,
     })) };
 }
-/** Future persisted DTO; no order storage and no inventory/reward metadata synthesis. */
+/** Persist only server-resolved snapshots, including Store per-unit PV. No catalog relookup. */
 export function toPersistableCommerceOrderLines(lines: readonly ResolvedCommerceOrderLine[]): PersistableCommerceOrderLine[] {
   priceResolvedCommerceOrderItems(lines);
   return lines.map(line => line.domain === "store"
     ? { domain: "store", productId: line.productId, variantId: "default", slug: line.slug, name: line.name,
-      sku: line.sku, unitPrice: line.unitPrice, quantity: line.quantity, lineTotal: line.lineTotal }
+      sku: line.sku, unitPrice: line.unitPrice, quantity: line.quantity, lineTotal: line.lineTotal,
+      ...(line.pvValue !== undefined ? { pvValue: readStoreOrderPV(line.pvValue) } : {}) }
     : { domain: "coffee", productId: line.productId, variantId: line.variantId, slug: line.slug, name: line.name,
       optionId: line.optionId, optionLabel: line.optionLabel, optionDetail: line.optionDetail,
       preparationLabel: line.preparationLabel, customRoast: line.customRoast,
