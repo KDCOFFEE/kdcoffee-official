@@ -10,6 +10,7 @@ import { useRouter } from "next/navigation";
 import { useCart } from "@/components/commerce/CartProvider";
 import CommerceCheckoutBoundary from "@/components/commerce/CommerceCheckoutBoundary";
 import ProtocolV1Checkout from "@/components/commerce/ProtocolV1Checkout";
+import { CheckoutShell, CheckoutContactNotice, CheckoutDeliveryOptions, CheckoutSummary, CheckoutCartControls, removeCheckoutItem } from "@/components/commerce/CheckoutPresentation";
 import { coffeeCheckoutItems, cartLineKey, cartInventoryKey } from "@/lib/commerceCart";
 import StoreSelector from "@/components/commerce/StoreSelector";
 import {
@@ -184,21 +185,7 @@ function CoffeeCheckout() {
   }, [member, operationalRules?.credit.automaticallyUseMaximum, shipping, subtotal]);
 
   function requestCheckoutItemRemoval(key: string) {
-    if (items.length === 1) {
-      const confirmed = window.confirm(
-        "這是訂單最後一項商品。\n\n移除後購物車會變成空的，並返回作品區重新選購。\n\n確定要移除嗎？",
-      );
-
-      if (!confirmed) {
-        return;
-      }
-
-      removeItem(key);
-      router.push("/works");
-      return;
-    }
-
-    removeItem(key);
+    removeCheckoutItem(key, items, removeItem, router);
   }
 
   async function submitOrder(event: FormEvent<HTMLFormElement>) {
@@ -267,45 +254,23 @@ function CoffeeCheckout() {
     finally { setSubmitting(false); }
   }
 
-  return <main className="commerce-page">
-    <header className="commerce-topbar"><Link href="/">KD COFFEE</Link><span>結帳</span><Link href="/cart">返回購物車</Link></header>
-    <section className="checkout-shell">
-      <div className="commerce-title"><p className="eyebrow dark">CHECKOUT</p><h1>選擇配送方式</h1><p>一般訂購可選 7-ELEVEN 取貨付款、KD Coffee 工作室自取或宅配。</p></div>
+  return <CheckoutShell>
       <form className="checkout-grid" onSubmit={submitOrder}>
         <div className="checkout-form">
           <section className="form-card">
             <div className="form-card-head"><span>01</span><h2>聯絡人資料</h2></div>
-            {memberLoaded && (member ? (
-              <div className="delivery-notice checkout-member-notice">
-                <strong>已登入會員：{member.displayName || "KD Coffee 會員"}</strong>
-                <p>已自動帶入常用聯絡資料與門市；本次修改後會同步更新會員資料。</p>
-              </div>
-            ) : (
-              <div className="checkout-auth-intro">
-                <div>
-                  <strong>登入會員，結帳更快速</strong>
-                  <p>可保存聯絡資料、常用門市與訂單紀錄。不登入也可以直接以訪客身分購買。</p>
-                </div>
-                <div className="checkout-login-options">
-                  <a className="line-login-button" href="/api/auth/line/login?returnTo=/checkout">使用 LINE 登入／註冊</a>
-                  <Link className="email-login-button" href="/member?returnTo=/checkout">Email 登入／註冊</Link>
-                </div>
-                <div className="checkout-guest-divider" aria-hidden="true"><span>或</span></div>
-                <div className="checkout-guest-intro">
-                  <strong>訪客直接購買</strong>
-                  <p>無需登入，填寫以下資料即可完成結帳。</p>
-                </div>
-              </div>
-            ))}
+            <CheckoutContactNotice member={member} memberLoaded={memberLoaded} />
             <label>姓名<input name="name" value={name} onChange={e=>setName(e.target.value)} required maxLength={20} autoComplete="name" placeholder="請填寫真實姓名" /></label>
             <label>手機號碼<input name="phone" value={phone} onChange={e=>setPhone(e.target.value.replace(/\D/g,"").slice(0,10))} required inputMode="tel" pattern="09[0-9]{8}" autoComplete="tel" placeholder="例如 0912345678" /></label>
             <label>Email <small>選填</small><input name="email" value={email} onChange={e=>setEmail(e.target.value)} type="email" autoComplete="email" placeholder="name@example.com" /><span className="field-help">用於訂單相關通知</span></label>
           </section>
-          <section className="form-card"><div className="form-card-head"><span>02</span><h2>取貨方式</h2></div><div className="delivery-mode-grid">
-            <label className={mode === "711_cod" ? "delivery-mode active" : "delivery-mode"}><input type="radio" name="orderMode" value="711_cod" checked={mode === "711_cod"} onChange={()=>setMode("711_cod")} /><b>7-ELEVEN 取貨付款</b><span>商品到店後再付款取貨</span></label>
-            <label className={mode === "studio_pickup" ? "delivery-mode active" : "delivery-mode"}><input type="radio" name="orderMode" value="studio_pickup" checked={mode === "studio_pickup"} onChange={()=>setMode("studio_pickup")} /><b>到工作室取貨</b><span>免運費，由工作室確認取貨時間</span></label>
-            <label className={mode === "home_delivery" ? "delivery-mode active" : "delivery-mode"}><input type="radio" name="orderMode" value="home_delivery" checked={mode === "home_delivery"} onChange={() => { setMode("home_delivery"); if (paymentMethod === "atm_transfer") setJoinSubscription(false); setDeliveryAddress((current) => ({ ...current, recipientName: current.recipientName || name, phone: current.phone || phone })); }} /><b>宅配</b><span>配送到指定地址</span></label>
-          </div></section>
+          <CheckoutDeliveryOptions mode={mode} onChange={(nextMode) => {
+            setMode(nextMode);
+            if (nextMode === "home_delivery") {
+              if (paymentMethod === "atm_transfer") setJoinSubscription(false);
+              setDeliveryAddress((current) => ({ ...current, recipientName: current.recipientName || name, phone: current.phone || phone }));
+            }
+          }} />
           {mode === "711_cod" && <section className="form-card"><div className="form-card-head"><span>03</span><h2>7-ELEVEN 取貨門市</h2></div><div className="delivery-notice"><strong>門市取貨付款</strong><p>選到行政區後會顯示該區所有門市，也可用路名、店名、地址或店號搜尋。</p></div><StoreSelector initialStore={member?.favoriteStore} /></section>}
           {mode === "studio_pickup" && <section className="form-card"><div className="form-card-head"><span>03</span><h2>工作室自取</h2></div><div className="delivery-notice"><strong>KD Coffee 咖啡藝術工坊自取</strong><p>{hasCustomRoast ? `本訂單含專屬烘焙，需預留製作時間，最早可於 ${earliestPickupDate} 取貨。` : `最早可於 ${earliestPickupDate} 取貨。請選擇希望日期，工作室確認後會通知你。`}</p></div><div className="store-selector-grid"><label>希望取貨日期<input type="date" name="pickupDate" min={earliestPickupDate} value={pickupDate} onChange={event=>setPickupDate(event.target.value)} required /><span className="field-help">第一版只需選日期，不需要選上午／下午時段。</span></label></div></section>}
           {mode === "home_delivery" && <section className="form-card"><div className="form-card-head"><span>03</span><h2>宅配地址與付款</h2></div><div className="store-selector-grid">
@@ -569,8 +534,7 @@ function CoffeeCheckout() {
           <label className="terms-check"><input type="checkbox" required />我已確認聯絡資料正確，並同意 KD Coffee 為處理本次訂購而聯絡我。</label>
           {error && <p className="form-error">{error}</p>}{warning && <p className="form-error">{warning}</p>}
         </div>
-        <aside className="checkout-summary">
-          <h2>訂單摘要</h2>
+        <CheckoutSummary>
 
           {items.map((item, index) => {
             const key = cartLineKey(unifiedItems[index]);
@@ -619,53 +583,13 @@ function CoffeeCheckout() {
                     </div>
                   ) : null}
 
-                  <div className="quantity-control">
-                    <button
-                      type="button"
-                      aria-label={`減少 ${item.name} 數量`}
-                      onClick={() =>
-                        item.quantity <= 1
-                          ? requestCheckoutItemRemoval(key)
-                          : updateQuantity(
-                              key,
-                              item.quantity - 1,
-                            )
-                      }
-                    >
-                      −
-                    </button>
-
-                    <span>{item.quantity}</span>
-
-                    <button
-                      type="button"
-                      aria-label={`增加 ${item.name} 數量`}
-                      disabled={atStockLimit}
-                      title={
-                        atStockLimit
-                          ? "已達現貨庫存上限"
-                          : undefined
-                      }
-                      onClick={() =>
-                        updateQuantity(
-                          key,
-                          item.quantity + 1,
-                        )
-                      }
-                    >
-                      ＋
-                    </button>
-                  </div>
-
-                  <button
-                    type="button"
-                    className="cart-remove-button"
-                    onClick={() =>
-                      requestCheckoutItemRemoval(key)
-                    }
-                  >
-                    刪除此商品
-                  </button>
+                  <CheckoutCartControls
+                    lineKey={key} cartLineCount={items.length}
+                    name={item.name} quantity={item.quantity} atStockLimit={atStockLimit}
+                    onDecrease={() => item.quantity <= 1 ? requestCheckoutItemRemoval(key) : updateQuantity(key, item.quantity - 1)}
+                    onIncrease={() => updateQuantity(key, item.quantity + 1)}
+                    onRemove={() => requestCheckoutItemRemoval(key)}
+                  />
                 </span>
 
                 <b>
@@ -674,8 +598,7 @@ function CoffeeCheckout() {
                 </b>
               </div>
             );
-          })}<div className="summary-line"><span>商品小計</span><b>NT$ {subtotal.toLocaleString("zh-TW")}</b></div><div className="summary-line"><span>{mode === "studio_pickup" ? "工作室自取" : mode === "home_delivery" ? "宅配運費" : "7-ELEVEN 運費"}</span><b>{shipping ? `NT$ ${shipping}` : "免運"}</b></div>{mode === "home_delivery" && <div className="summary-line"><span>貨到付款手續費</span><b>NT$ {codServiceFee.toLocaleString("zh-TW")}</b></div>}{requestedCredit > 0 && <div className="summary-line"><span><MemberCopyText copyKey="credit.checkout.title" /></span><b>- NT$ {requestedCredit.toLocaleString("zh-TW")}</b></div>}<div className="summary-total"><span>{mode === "711_cod" ? "取貨付款總額" : "訂單總額"}</span><strong>NT$ {Math.max(0, subtotal + shipping + codServiceFee - requestedCredit).toLocaleString("zh-TW")}</strong></div><button type="submit" disabled={submitting||!ready||!items.length}>{submitting?"資料傳送中…":"確認並傳送訂單"}</button><p>系統會先保存訂單，再傳送至 KD Coffee 的 LINE 訂單群組。</p></aside>
+          })}<div className="summary-line"><span>商品小計</span><b>NT$ {subtotal.toLocaleString("zh-TW")}</b></div><div className="summary-line"><span>{mode === "studio_pickup" ? "工作室自取" : mode === "home_delivery" ? "宅配運費" : "7-ELEVEN 運費"}</span><b>{shipping ? `NT$ ${shipping}` : "免運"}</b></div>{mode === "home_delivery" && <div className="summary-line"><span>貨到付款手續費</span><b>NT$ {codServiceFee.toLocaleString("zh-TW")}</b></div>}{requestedCredit > 0 && <div className="summary-line"><span><MemberCopyText copyKey="credit.checkout.title" /></span><b>- NT$ {requestedCredit.toLocaleString("zh-TW")}</b></div>}<div className="summary-total"><span>{mode === "711_cod" ? "取貨付款總額" : "訂單總額"}</span><strong>NT$ {Math.max(0, subtotal + shipping + codServiceFee - requestedCredit).toLocaleString("zh-TW")}</strong></div><button type="submit" disabled={submitting||!ready||!items.length}>{submitting?"資料傳送中…":"確認並傳送訂單"}</button><p>系統會先保存訂單，再傳送至 KD Coffee 的 LINE 訂單群組。</p></CheckoutSummary>
       </form>
-    </section>
-  </main>;
+  </CheckoutShell>;
 }

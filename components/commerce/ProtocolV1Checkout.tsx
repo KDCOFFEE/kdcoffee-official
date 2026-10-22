@@ -1,12 +1,13 @@
 "use client";
 
-import Link from "next/link";
+import { CheckoutShell, CheckoutContactNotice, CheckoutDeliveryOptions, CheckoutSummary, CheckoutCartControls, removeCheckoutItem, CheckoutModal } from "./CheckoutPresentation";
+import styles from "./CheckoutPresentation.module.css";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useCart } from "./CartProvider";
 import StoreSelector from "./StoreSelector";
 import AtmTransferInfoDialog from "@/components/orders/AtmTransferInfoDialog";
-import { cartSpecification } from "@/lib/commerceCart";
+import { cartSpecification, cartLineKey, cartInventoryDemand, cartInventoryLimit } from "@/lib/commerceCart";
 import { readCartStorage } from "@/lib/commerceCartStorage";
 import { generalCheckoutShipping } from "@/lib/checkoutShipping";
 import { getDateOnlyInTimeZone, isDateOnlyOnOrAfter, isValidDateOnly } from "@/lib/checkoutRules";
@@ -24,10 +25,11 @@ const addressFields = [
 const money = (amount: number) => "NT$ " + amount.toLocaleString("zh-TW");
 
 export default function ProtocolV1Checkout() {
-  const { items, getProtocolV1CheckoutItems, clearCart, recoverableProtocolV1Attempt } = useCart();
+  const { items, getProtocolV1CheckoutItems, clearCart, recoverableProtocolV1Attempt, updateQuantity, removeItem } = useCart();
   const router = useRouter();
   const client = useRef<ReturnType<typeof createProtocolV1CheckoutClient> | null>(null);
   const busy = useRef(false);
+  const storeSubscriptionDialog = useRef<HTMLDialogElement>(null);
   const [attempt, setAttempt] = useState<V1Attempt | null>(null);
   const [storageError, setStorageError] = useState(false);
   const [auth, setAuth] = useState<V1Auth>({ kind: "LOADING" });
@@ -151,10 +153,8 @@ export default function ProtocolV1Checkout() {
     } finally { busy.current = false; setSubmitting(false); }
   }
 
-  return <main className="commerce-page">
-    <header className="commerce-topbar"><Link href="/">KD COFFEE</Link><span>結帳</span><Link href="/cart">返回購物車</Link></header>
-    <section className="checkout-shell">
-      <div className="commerce-title"><p className="eyebrow dark">CHECKOUT</p><h1>{frozen ? "確認此筆結帳嘗試" : "單次訂購"}</h1></div>
+
+  return <CheckoutShell title={frozen ? "確認此筆結帳嘗試" : undefined} description={frozen ? null : undefined}>
       {result?.kind === "FINALIZED" ? <section className="form-card" role="status">
         <h2>訂單已成立</h2><p>訂單編號：{result.orderNumber}</p>
         {completion && !completion.cleanupComplete ? <p>訂單已成立，本機資料尚未完成整理；請直接前往訂單完成頁。</p> : null}
@@ -171,51 +171,89 @@ export default function ProtocolV1Checkout() {
             onClick={() => void send()}>{submitting ? "確認中…" : "重試同一筆訂單"}</button>
           {terminal ? <p>此筆狀態需要人工確認，請聯絡 KD Coffee。</p> : null}
         </section> : <form className="checkout-grid" onSubmit={send}>
-          <fieldset className="checkout-form" disabled={submitting || storageError}>
+          <fieldset className={"checkout-form " + styles.fields} disabled={submitting || storageError}>
             <section className="form-card">
               <div className="form-card-head"><span>01</span><h2>聯絡人資料</h2></div>
-              <p role="status">{auth.kind === "LOADING" ? "正在確認登入狀態…" : auth.kind === "ERROR" ? "登入狀態暫時無法確認，請重試。" : auth.kind === "MEMBER" ? "已帶入會員常用資料，請確認本次收件資訊。" : "以訪客身分單次訂購。"}</p>
-              <label>姓名<input name="name" value={customer.name} maxLength={20} required onChange={e => setCustomer(c => ({ ...c, name: e.target.value }))} /></label>
-              <label>手機<input name="phone" inputMode="numeric" pattern="09[0-9]{8}" maxLength={10} value={customer.phone} required onChange={e => setCustomer(c => ({ ...c, phone: e.target.value }))} /></label>
-              <label>Email<input name="email" type="email" maxLength={120} value={customer.email} onChange={e => setCustomer(c => ({ ...c, email: e.target.value }))} /></label>
+              <CheckoutContactNotice member={auth.kind === "MEMBER" ? auth.member : null} memberLoaded={auth.kind === "MEMBER" || auth.kind === "GUEST"} memberMessage="已帶入會員常用資料，請確認本次收件資訊。" />
+              {auth.kind === "LOADING" || auth.kind === "ERROR" ? <p role="status">{auth.kind === "LOADING" ? "正在確認登入狀態…" : "登入狀態暫時無法確認，請重試。"}</p> : null}
+              <label>姓名<input name="name" value={customer.name} maxLength={20} autoComplete="name" placeholder="請填寫真實姓名" required onChange={e => setCustomer(c => ({ ...c, name: e.target.value }))} /></label>
+              <label>手機號碼<input name="phone" inputMode="numeric" pattern="09[0-9]{8}" maxLength={10} autoComplete="tel" placeholder="例如 0912345678" value={customer.phone} required onChange={e => setCustomer(c => ({ ...c, phone: e.target.value }))} /></label>
+              <label>Email <small>選填</small><input name="email" type="email" maxLength={120} autoComplete="email" placeholder="name@example.com" value={customer.email} onChange={e => setCustomer(c => ({ ...c, email: e.target.value }))} /><span className="field-help">用於訂單相關通知</span></label>
             </section>
-            <section className="form-card">
-              <div className="form-card-head"><span>02</span><h2>配送與付款</h2></div>
-              <label>配送方式<select value={mode} onChange={e => setMode(e.target.value as V1Mode)}>
-                <option value="711_cod">7-ELEVEN 取貨付款</option><option value="studio_pickup">KD Coffee 工作室自取</option><option value="home_delivery">宅配</option>
-              </select></label>
-              {mode === "711_cod" ? <StoreSelector initialStore={auth.kind === "MEMBER" ? auth.member.favoriteStore : undefined} /> : null}
-              {mode === "studio_pickup" ? <label>希望自取日期<input type="date" name="pickupDate" min={earliest || undefined} value={pickupDate} required onChange={e => setPickupDate(e.target.value)} /></label> : null}
-              {mode === "home_delivery" ? <>
+            <CheckoutDeliveryOptions mode={mode} onChange={setMode} />
+            {mode === "711_cod" ? <section className="form-card">
+              <div className="form-card-head"><span>03</span><h2>7-ELEVEN 取貨門市</h2></div>
+              <div className="delivery-notice"><strong>門市取貨付款</strong><p>選到行政區後會顯示該區所有門市，也可用路名、店名、地址或店號搜尋。</p></div>
+              <StoreSelector initialStore={auth.kind === "MEMBER" ? auth.member.favoriteStore : undefined} />
+            </section> : null}
+            {mode === "studio_pickup" ? <section className="form-card">
+              <div className="form-card-head"><span>03</span><h2>工作室自取</h2></div>
+              <div className="delivery-notice"><strong>KD Coffee 咖啡藝術工坊自取</strong><p>{customRoast ? "本訂單含專屬烘焙，需預留製作時間，最早可於 " + (earliest || "確認可用日期後") + " 取貨。" : "最早可於 " + (earliest || "確認可用日期後") + " 取貨。請選擇希望日期，工作室確認後會通知你。"}</p></div>
+              <div className="store-selector-grid"><label>希望取貨日期<input type="date" name="pickupDate" min={earliest || undefined} value={pickupDate} required onChange={e => setPickupDate(e.target.value)} /></label></div>
+            </section> : null}
+            {mode === "home_delivery" ? <section className="form-card">
+              <div className="form-card-head"><span>03</span><h2>宅配地址與付款</h2></div>
+              <div className="store-selector-grid">
                 {addressFields.map(([key, label, maximum]) => <label key={key}>{label}<input name={key} maxLength={maximum} required value={address[key]} onChange={e => setAddress(current => ({ ...current, [key]: e.target.value }))} /></label>)}
-                <label>付款方式<select value={payment} onChange={e => setPayment(e.target.value as typeof payment)}>
-                  <option value="cash_on_delivery">貨到付款</option><option value="atm_transfer" disabled={!rules?.payment.atmTransfer.configured}>ATM 轉帳</option>
-                </select></label>
-                {payment === "atm_transfer" && rules?.payment.atmTransfer.configured ? <AtmTransferInfoDialog data={{
-                  ...rules.payment.atmTransfer, showBankbookImage: rules.payment.atmTransfer.showBankbookImageAtCheckout,
-                }} /> : null}
-              </> : null}
-            </section>
+              </div>
+              <fieldset className="member-shipping-method-options">
+                <legend>付款方式</legend>
+                <label><input type="radio" name="homePaymentMethod" value="atm_transfer" checked={payment === "atm_transfer"} disabled={!rules?.payment.atmTransfer.configured} onChange={() => setPayment("atm_transfer")} />ATM 轉帳</label>
+                <label><input type="radio" name="homePaymentMethod" value="cash_on_delivery" checked={payment === "cash_on_delivery"} onChange={() => setPayment("cash_on_delivery")} />貨到付款</label>
+              </fieldset>
+              {payment === "atm_transfer" && rules?.payment.atmTransfer.configured ? <AtmTransferInfoDialog data={{
+                ...rules.payment.atmTransfer, showBankbookImage: rules.payment.atmTransfer.showBankbookImageAtCheckout,
+              }} /> : payment === "cash_on_delivery" ? <p className="field-help">貨到付款手續費 {money(codFee)}</p> : null}
+            </section> : null}
             <section className="form-card">
-              <div className="form-card-head"><span>03</span><h2>訂單備註</h2></div>
-              <p>商店商品目前採單次訂購，本筆暫不使用會員抵用金。</p>
-              <label>備註<textarea name="note" maxLength={200} rows={3} value={customer.note} onChange={e => setCustomer(c => ({ ...c, note: e.target.value }))} /></label>
+              <div className="form-card-head"><span>04</span><h2>備註</h2></div>
+              <label>其他說明 <small>選填</small><textarea name="note" maxLength={200} rows={4} placeholder="有需要我們特別注意的事項，請寫在這裡" value={customer.note} onChange={e => setCustomer(c => ({ ...c, note: e.target.value }))} /></label>
             </section>
+            {items.some(item => item.domain === "store") ? <section className="form-card subscription-enrollment-card">
+              <div className="form-card-head"><span>05</span><h2>從這次開始定期配送</h2></div>
+              <p className={styles.unavailable} role="status">此訂單無法使用定期配送</p>
+              <button type="button" className={styles.infoAction} onClick={() => storeSubscriptionDialog.current?.showModal()}>了解原因</button>
+              <CheckoutModal dialogRef={storeSubscriptionDialog} id="store-subscription" title="關於定期配送" actions={
+                <button type="button" onClick={() => storeSubscriptionDialog.current?.close()}>我知道了</button>
+              }>
+                <p>定期配送目前適用於指定咖啡商品。</p>
+                <p>這筆訂單中包含禮盒、器具或其他一般商品，因此本次無法使用定期配送。</p>
+                {items.some(item => item.domain === "coffee") ? <section className={styles.recommendation}>
+                  <h3>想使用定期配送？</h3>
+                  <p>若將符合條件的咖啡商品另外下單，即可依原有規則選擇定期配送。</p>
+                </section> : <p>您仍可以使用目前的方式正常完成本次訂單。</p>}
+              </CheckoutModal>
+            </section> : null}
             {rulesError ? <p role="alert">配送資訊暫時無法確認，請重試。</p> : null}
             {auth.kind === "ERROR" || rulesError ? <button type="button" onClick={() => setLookup(n => n + 1)}>重試確認資料</button> : null}
-            <button type="submit" disabled={submitting || !canFreshSubmit}>{submitting ? "送出中…" : "確認單次訂購"}</button>
           </fieldset>
-          <aside className="checkout-summary form-card">
-            <h2>本次商品</h2>
-            {items.map((item, index) => <p key={index}>{item.name}{cartSpecification(item) ? " · " + cartSpecification(item) : ""} × {item.quantity}<br />{money(item.unitPrice * item.quantity)}</p>)}
-            <p>商品小計：{money(subtotal)}</p><p>運費：{rules ? money(shipping) : "確認中"}</p>
-            {codFee ? <p>貨到付款手續費：{money(codFee)}</p> : null}
-            <strong>預估合計：{rules ? money(subtotal + shipping + codFee) : "確認中"}</strong>
+          <CheckoutSummary>
+            {items.map(item => {
+              const key = cartLineKey(item);
+              const atStockLimit = cartInventoryDemand(items, item) >= cartInventoryLimit(items, item);
+              const remove = () => removeCheckoutItem(key, items, removeItem, router);
+              return <div className="summary-item" key={key}>
+                <span>{item.name}<small>{cartSpecification(item)}</small>
+                  <CheckoutCartControls
+                    lineKey={key} cartLineCount={items.length}
+                    name={item.name} quantity={item.quantity} atStockLimit={atStockLimit}
+                    disabled={submitting || storageError}
+                    onDecrease={() => item.quantity <= 1 ? remove() : updateQuantity(key, item.quantity - 1)}
+                    onIncrease={() => updateQuantity(key, item.quantity + 1)} onRemove={remove}
+                  />
+                </span>
+                <b>{money(item.unitPrice * item.quantity)}</b>
+              </div>;
+            })}
+            <div className="summary-line"><span>商品小計</span><b>{money(subtotal)}</b></div>
+            <div className="summary-line"><span>{mode === "studio_pickup" ? "工作室自取" : mode === "home_delivery" ? "宅配運費" : "7-ELEVEN 運費"}</span><b>{rules ? shipping ? money(shipping) : "免運" : "確認中"}</b></div>
+            {codFee ? <div className="summary-line"><span>貨到付款手續費</span><b>{money(codFee)}</b></div> : null}
+            <div className="summary-total"><span>{mode === "711_cod" ? "取貨付款總額" : "訂單總額"}</span><strong>{rules ? money(subtotal + shipping + codFee) : "確認中"}</strong></div>
+            <button type="submit" disabled={submitting || !canFreshSubmit}>{submitting ? "資料傳送中…" : "確認並傳送訂單"}</button>
             <p>實際金額與可用庫存由送單時確認。</p>
-          </aside>
+          </CheckoutSummary>
         </form>}
         {error ? <p className="form-error" role="alert">{error}</p> : null}
       </>}
-    </section>
-  </main>;
+  </CheckoutShell>;
 }
