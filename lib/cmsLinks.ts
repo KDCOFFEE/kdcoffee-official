@@ -54,6 +54,7 @@ export type ResolvedCmsLink = {
 };
 
 export const CMS_INTERNAL_DESTINATIONS: CmsDestination[] = [
+  { category: "internal", id: "gifts", label: "送禮", href: "/gifts", searchText: "送禮 禮盒 gifts" },
   { category: "internal", id: "home", label: "首頁", href: "/", searchText: "首頁 home" },
   { category: "internal", id: "works", label: "全部咖啡作品", href: "/works", searchText: "全部咖啡作品 商品 works" },
   { category: "internal", id: "monthly-menu", label: "本月豆單", href: "/monthly-menu", searchText: "本月豆單 monthly menu" },

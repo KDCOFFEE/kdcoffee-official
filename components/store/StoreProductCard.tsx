@@ -5,14 +5,15 @@ import styles from "./StorePublic.module.css";
 
 const money = new Intl.NumberFormat("zh-TW", { maximumSignificantDigits: 21 });
 
-export default function StoreProductCard({ product }: { product: PublicStoreProductCard }) {
+type StoreCardEditorial = { label?: string; summary?: string; cta?: string; compact?: boolean; priceText?: string; pointsText?: string };
+export default function StoreProductCard({ product, className = "", editorial, id }: { product: PublicStoreProductCard; className?: string; editorial?: StoreCardEditorial; id?: string }) {
   const media = product.heroMedia;
   const imageUrl = media?.type === "image" ? media.url : media?.type === "video" ? media.posterUrl : undefined;
   const alt = media?.alt.trim() ? media.alt : product.name;
   const onSale = product.salePrice !== undefined && product.salePrice < product.price;
   const currentPrice = product.salePrice !== undefined && product.salePrice < product.price ? product.salePrice : product.price;
   return (
-    <article className={styles.card}>
+    <article id={id} className={`${styles.card} ${className}`.trim()}>
       <div className={styles.cardMedia}>
         {imageUrl ? (
           <img src={imageUrl} alt={alt} loading="lazy" decoding="async" />
@@ -24,17 +25,19 @@ export default function StoreProductCard({ product }: { product: PublicStoreProd
         )}
       </div>
       <div className={styles.cardBody}>
-        {product.featured ? <p className={styles.featured}>精選</p> : null}
-        <p className={styles.cardContext}>{product.section.name}{product.category ? ` ／ ${product.category.name}` : ""}</p>
-        <h3><Link className={styles.textLink} href={storeProductHref(product.slug)}>{product.name}</Link></h3>
-        {product.shortDescription.trim() ? <p className={styles.cardDescription}>{product.shortDescription}</p> : null}
+        {editorial?.label ? <p className={styles.featured}>{editorial.label}</p> : product.featured ? <p className={styles.featured}>精選</p> : null}
+        {!editorial?.compact ? <p className={styles.cardContext}>{product.section.name}{product.category ? ` ／ ${product.category.name}` : ""}</p> : null}
+        <h3><Link className={styles.textLink} href={storeProductHref(product.slug)}>{editorial?.cta ? <span>{editorial.cta}</span> : null}{product.name}</Link></h3>
+        {editorial?.summary ? <p className={styles.cardContext}>{editorial.summary}</p> : null}
+        {!editorial?.compact && product.shortDescription.trim() ? <p className={styles.cardDescription}>{product.shortDescription}</p> : null}
         <div className={styles.cardBottom}>
           <p className={styles.price}>
             {onSale ? <span className={styles.srOnly}>目前售價：</span> : null}
-            <strong>NT$ {money.format(currentPrice)}</strong>
+            {editorial?.priceText ? <strong>{editorial.priceText}</strong> : <strong>NT$ {money.format(currentPrice)}</strong>}
             {onSale ? <><span className={styles.srOnly}>原價：</span><del>NT$ {money.format(product.price)}</del></> : null}
           </p>
-          <p className={styles.availability}>{product.inStock ? "有庫存" : "目前無庫存"}</p>
+          {editorial?.pointsText ? <p className={styles.availability}>{editorial.pointsText}</p> : null}
+          {!editorial?.compact ? <p className={styles.availability}>{product.inStock ? "有庫存" : "目前無庫存"}</p> : null}
         </div>
       </div>
     </article>

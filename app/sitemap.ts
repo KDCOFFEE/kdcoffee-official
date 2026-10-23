@@ -20,7 +20,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   ];
   // An unpublished Store does not even require a Store catalog read.
   if (isStoreSeoPublicEnabled()) {
-    paths.push("/store", ...(await readPublicStoreSitemapProducts()).map(product => storeProductHref(product.slug)));
+    paths.push("/store", "/gifts", ...(await readPublicStoreSitemapProducts()).map(product => storeProductHref(product.slug)));
   }
   const origin = getCanonicalPublicSiteOrigin();
   return [...new Set(paths)].map(path => ({ url: new URL(path, origin).href }));
