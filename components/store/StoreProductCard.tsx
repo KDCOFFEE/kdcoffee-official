@@ -15,6 +15,7 @@ export default function StoreProductCard({ product, className = "", editorial, i
   return (
     <article id={id} className={`${styles.card} ${className}`.trim()}>
       <div className={styles.cardMedia}>
+        <Link className={styles.cardImageLink} href={storeProductHref(product.slug)} aria-label={`查看 ${product.name}`}>
         {imageUrl ? (
           <img src={imageUrl} alt={alt} loading="lazy" decoding="async" />
         ) : (
@@ -23,6 +24,7 @@ export default function StoreProductCard({ product, className = "", editorial, i
             <span className={styles.srOnly}>商品圖片尚未提供</span>
           </>
         )}
+        </Link>
       </div>
       <div className={styles.cardBody}>
         {editorial?.label ? <p className={styles.featured}>{editorial.label}</p> : product.featured ? <p className={styles.featured}>精選</p> : null}

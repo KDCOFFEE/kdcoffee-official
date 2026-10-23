@@ -7,6 +7,8 @@ import type { PublicStoreIndexOptions, PublicStoreProductDetail } from "./storeP
 
 export type PublicStoreProductReadModel = {
   product: PublicStoreProductDetail;
+  /** Configured public point value, for server-rendered PDP presentation only. */
+  pointValue?: number;
   /** Server-side source values only; pass product, not this wrapper, to client components. */
   manualSeo: { seoTitle?: string; seoDescription?: string };
 };
@@ -28,6 +30,7 @@ export async function readPublicStoreProductBySlug(slug: string): Promise<Public
   const source = catalog.products.find(item => item.slug === slug)!;
   return {
     product,
+    pointValue: source.pvValue,
     manualSeo: {
       ...(source.seoTitle !== undefined ? { seoTitle: source.seoTitle } : {}),
       ...(source.seoDescription !== undefined ? { seoDescription: source.seoDescription } : {}),

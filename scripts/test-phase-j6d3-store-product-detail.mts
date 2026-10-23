@@ -413,14 +413,18 @@ try {
   });
   await test("Public DOM and client gallery props exclude private domain fields", async () => {
     const tree = await Page(props()); const html = renderToStaticMarkup(tree);
-    assert.doesNotMatch(html, /PRIVATE-(?:SECTION|CATEGORY|PRODUCT|SKU|MEDIA)-87432|private_spec_key|pvValue|123\.75|kdRedemption|subscriptionEligible|archivedAt|manualSeo/);
+    assert.doesNotMatch(html, /PRIVATE-(?:SECTION|CATEGORY|PRODUCT|SKU|MEDIA)-87432|private_spec_key|pvValue|kdRedemption|subscriptionEligible|archivedAt|manualSeo/);
+    assert.match(html, /class="points">可獲得 123\.75 [^<]+<\/p>/);
     const clientGallery = nodes(tree, node => node.type === Gallery)[0];
     assert.deepEqual(Object.keys(clientGallery.props).sort(), ["gallery", "heroMedia", "name"]);
     assert.doesNotMatch(JSON.stringify(clientGallery.props), /pvValue|inventory|sectionId|categoryId|subscriptionEligible|seoTitle|seoDescription/);
   });
-  await test("Public card has exactly one semantic named detail link without nested links", () => {
+  await test("Public card image and name links share one destination without nested anchors", () => {
     const html = renderToStaticMarkup(createElement(Card, { product: publicProduct() }));
-    assert.equal((html.match(/<a\b/g) ?? []).length, 1); assert.match(html, /href="\/store\/v60-dripper"/);
+    const links = [...html.matchAll(/<a\b([^>]*)>([\s\S]*?)<\/a>/g)];
+    assert.equal(links.length, 2);
+    for (const link of links) { assert.match(link[1], /href="\/store\/v60-dripper"/); assert.doesNotMatch(link[2], /<a\b/); }
+    assert.match(links[0][2], /<img/);
     assert.match(html, /V60 手沖濾杯<\/a><\/h3>/); assert.doesNotMatch(html, /<button/);
   });
   await test("Server route is dynamic Node with awaited params and real read model boundary", () => {
