@@ -74,8 +74,8 @@ export const DEFAULT_HOMEPAGE_NAVIGATION: HomepageNavigationItem[] = [
 ];
 
 export function resolveHomepageNavigation(value: unknown): HomepageNavigationItem[] {
-  if (!Array.isArray(value)) return DEFAULT_HOMEPAGE_NAVIGATION.map((item) => ({ ...item }));
-  return value
+  const configured = Array.isArray(value) ? value : DEFAULT_HOMEPAGE_NAVIGATION;
+  const items = configured
     .filter((item): item is Record<string, unknown> => isRecord(item))
     .map((item, index) => ({
       id: typeof item.id === "string" && item.id.trim() ? item.id : `NAV-${index + 1}`,
@@ -85,6 +85,15 @@ export function resolveHomepageNavigation(value: unknown): HomepageNavigationIte
       order: Number.isFinite(item.order) ? Number(item.order) : index,
     }))
     .sort((a, b) => Number(a.order ?? 0) - Number(b.order ?? 0));
+  // Upgrade only the original Gift shortcut. Custom CMS targets stay untouched.
+  const navigation = items.map(item => item.id === "NAV-GIFT" && item.href === "/#home003"
+    ? { ...item, label: "送禮", href: "/gifts" as CmsLinkValue } : item);
+  if (!navigation.some(item => item.href === "/gifts" ||
+    (isRecord(item.href) && item.href.type === "internal" && item.href.target === "gifts"))) {
+    const works = navigation.find(item => item.href === "/works");
+    navigation.push({ id: "NAV-GIFTS", label: "送禮", href: "/gifts", enabled: true, order: (works?.order ?? navigation.length) + 0.5 });
+  }
+  return navigation.sort((a, b) => Number(a.order ?? 0) - Number(b.order ?? 0));
 }
 
 
