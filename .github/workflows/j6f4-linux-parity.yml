@@ -1,0 +1,208 @@
+name: J6F4 Ubuntu Linux parity diagnostic
+
+on:
+  push:
+    branches:
+      - diag/j6f4-linux-parity-20261024
+
+permissions:
+  contents: read
+
+concurrency:
+  group: j6f4-linux-parity-diagnostic
+  cancel-in-progress: false
+
+jobs:
+  parity:
+    if: github.repository == 'KDCOFFEE/kdcoffee-official' && github.ref == 'refs/heads/diag/j6f4-linux-parity-20261024'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout exact production revision
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: e90187427430a8096d2fb7be96e81347590811ce
+          path: production
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Checkout exact integrated revision
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: be8018f405f77c8b18b092b44dc6b3c6bfeec4b0
+          path: integrated
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Setup exact native Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22.23.3'
+      - name: Execute independent revisions and retain complete evidence
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, os, pathlib, re, shutil, subprocess, sys, tempfile, traceback
+
+          workspace = pathlib.Path(os.environ['GITHUB_WORKSPACE'])
+          runner_temp = pathlib.Path(os.environ['RUNNER_TEMP'])
+          evidence = runner_temp / 'j6f4-parity-evidence'
+          evidence.mkdir(exist_ok=False)
+          assert sys.platform.startswith('linux'), sys.platform
+          assert subprocess.check_output(['node', '--version'], text=True).strip() == 'v22.23.3'
+          (evidence / 'environment.txt').write_text(subprocess.check_output(['uname', '-a'], text=True) + pathlib.Path('/etc/os-release').read_text() + '\nNode: ' + subprocess.check_output(['node', '--version'], text=True))
+          results, errors, before_lines, after_lines = [], [], [], []
+
+          def git(repo, *args):
+              return subprocess.check_output(['git', *args], cwd=repo, text=True).strip()
+
+          def fingerprint(repo):
+              names = subprocess.check_output(['git', 'ls-files', '-z', '--', 'data', 'public/data', 'public/uploads'], cwd=repo).decode().split('\0')
+              return {name: hashlib.sha256((repo / name).read_bytes()).hexdigest() for name in sorted(filter(None, names))}
+
+          def tree_hash(root):
+              return {str(p.relative_to(root)): hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(root.rglob('*')) if p.is_file()}
+
+          def execute(label, key, repo, command, env=None, expected=None, timeout=900):
+              log = evidence / (label + '-' + key + '.log')
+              with log.open('w') as stream:
+                  stream.write('REVISION=' + git(repo, 'rev-parse', 'HEAD') + '\nCOMMAND=' + json.dumps(command) + '\n')
+                  stream.flush()
+                  try:
+                      completed = subprocess.run(command, cwd=repo, env=env, stdout=stream, stderr=subprocess.STDOUT, timeout=timeout)
+                      code = completed.returncode
+                  except subprocess.TimeoutExpired:
+                      stream.write('\nDIAGNOSTIC_COMMAND_TIMEOUT\n')
+                      code = 124
+              text = log.read_text(errors='replace')
+              passes = re.findall(r'^PASS\s+(\d+)\s+([^\r\n]+)', text, re.M)
+              total = int(passes[-1][0]) if passes else 0
+              item = {'revision': label, 'test': key, 'exit': code, 'pass_count': total, 'last_pass': 'PASS ' + ' '.join(passes[-1]) if passes else None,
+                      'unexpected_pending': bool(code and re.search(r"\+\s*['\"]PENDING['\"]", text)), 'eperm': 'EPERM' in text,
+                      'assertion_details': text[text.find('AssertionError'):][-5000:] if 'AssertionError' in text else None,
+                      'warning_lines': [line for line in text.splitlines() if 'Warning' in line or 'warning' in line], 'log': log.name}
+              if expected is not None and total != expected:
+                  item['validation_error'] = 'Expected ' + str(expected) + ' checks; got ' + str(total)
+              results.append(item)
+              (evidence / 'results.json').write_text(json.dumps(results, indent=2))
+              print(json.dumps(item), flush=True)
+              return code == 0 and 'validation_error' not in item
+
+          for label, sha in [('production', 'e90187427430a8096d2fb7be96e81347590811ce'), ('integrated', 'be8018f405f77c8b18b092b44dc6b3c6bfeec4b0')]:
+              repo = workspace / label
+              before = None
+              try:
+                  assert git(repo, 'rev-parse', 'HEAD') == sha
+                  assert git(repo, 'status', '--porcelain') == ''
+                  before = fingerprint(repo)
+                  (evidence / (label + '-fingerprint-before.txt')).write_text(''.join(h + '  ' + name + '\n' for name, h in before.items()))
+                  before_lines.extend(label + '/' + name + '  ' + h for name, h in before.items())
+                  if not execute(label, 'npm-ci', repo, ['npm', 'ci']):
+                      raise RuntimeError('npm ci failed')
+                  assert git(repo, 'status', '--porcelain') == '', 'npm ci changed tracked/untracked state'
+                  canonical = 'scripts/test-phase-j6f4-mixed-cancellation-restore.mts'
+                  blob = git(repo, 'rev-parse', 'HEAD:' + canonical)
+                  expected_blob = '72b125a276acbbc1d3b60fd1e7653a2cda861d21' if label == 'production' else '325a278a27e59ab5f5a63ae9148f29dd708ce39b'
+                  assert blob == expected_blob, (blob, expected_blob)
+                  original = (repo / canonical).read_text()
+                  matches = list(re.finditer(r'calls\[name\]\s*===\s*1\b', original))
+                  assert len(matches) == 3, len(matches)
+                  bypass = 'true /* TEMP diagnostic: profiler exact-count comparison only */'
+                  transformed = re.sub(r'calls\[name\]\s*===\s*1\b', bypass, original)
+                  assert len(re.findall(r'calls\[name\]\s*===\s*1\b', transformed)) == 0
+                  guard = pathlib.Path(tempfile.mkdtemp(prefix=label + '-external-runtime-', dir=runner_temp))
+                  (guard / 'nested').mkdir()
+                  (guard / 'sentinel.json').write_text('{"purpose":"synthetic non-suite runtime safety guard"}\n')
+                  (guard / 'nested' / 'bytes.bin').write_bytes(bytes(range(256)))
+                  guard_before = tree_hash(guard)
+                  windows_literal = r'"F:\\KD_Coffee_LOCAL_RUNTIME"'
+                  replacement_count = transformed.count(windows_literal)
+                  assert replacement_count == 4, replacement_count
+                  transformed = transformed.replace(windows_literal, json.dumps(str(guard)))
+                  assert not re.search(r'[A-Za-z]:\\\\', transformed), 'Unreviewed Windows absolute path'
+                  reversed_text = transformed.replace(json.dumps(str(guard)), windows_literal)
+                  for match in matches:
+                      reversed_text = reversed_text.replace(bypass, match.group(), 1)
+                  assert reversed_text == original, 'Unexpected diagnostic modification'
+                  execution = pathlib.Path(tempfile.mkdtemp(prefix=label + '-j6f4-execution-', dir=runner_temp))
+                  (execution / 'scripts').mkdir()
+                  for directory in ['lib', 'app']:
+                      (execution / directory).symlink_to(repo / directory, target_is_directory=True)
+                  for bootstrap in ['credit-integration-test-bootstrap.mjs', 'member-auth-test-bootstrap.mjs', 'member-copy-test-bootstrap.mjs']:
+                      (execution / 'scripts' / bootstrap).symlink_to(repo / 'scripts' / bootstrap)
+                  temporary_test = execution / 'scripts' / '__diag_j6f4_linux.mts'
+                  temporary_test.write_text(transformed)
+                  proof = {'revision': sha, 'canonical_blob': blob, 'profiler_matches_before': 3, 'profiler_matches_after': 0, 'only_approved_edits': True,
+                           'path_original': windows_literal, 'path_replacement': json.dumps(str(guard)), 'path_replacements': replacement_count,
+                           'external_runtime_guard_before': guard_before, 'temporary_test': str(temporary_test)}
+                  (evidence / (label + '-transformation.json')).write_text(json.dumps(proof, indent=2))
+                  print('TEMP_TRANSFORMATION ' + json.dumps(proof), flush=True)
+
+                  def test_env(key):
+                      run_root = pathlib.Path(tempfile.mkdtemp(prefix=label + '-' + key + '-', dir=runner_temp))
+                      temp = run_root / 'temp'
+                      initial = run_root / 'initial-data'
+                      temp.mkdir()
+                      initial.mkdir()
+                      env = dict(os.environ, TMPDIR=str(temp), TEMP=str(temp), TMP=str(temp), KD_DATA_DIR=str(initial), NEXT_TELEMETRY_DISABLED='1', NODE_DISABLE_COLORS='1')
+                      for name in list(env):
+                          if name.startswith(('RAILWAY_', 'LINE_', 'GMAIL_')):
+                              del env[name]
+                      return env
+
+                  for key, extra in [('run-1', []), ('run-2', []), ('run-3', []), ('targeted-protocol', ['--targeted-protocol']), ('targeted-lock', ['--targeted-lock'])]:
+                      execute(label, key, repo, ['node', '--experimental-strip-types', '--import', './scripts/credit-integration-test-bootstrap.mjs', str(temporary_test), *extra], test_env(key))
+                      assert tree_hash(guard) == guard_before, 'External non-suite runtime guard changed'
+                      assert fingerprint(repo) == before, 'Protected data changed; stop without reset'
+                  proof['external_runtime_guard_after'] = tree_hash(guard)
+                  (evidence / (label + '-transformation.json')).write_text(json.dumps(proof, indent=2))
+                  if label == 'integrated':
+                      execute(label, 'store-pv-v2', repo, ['node', '--experimental-strip-types', '--import', './scripts/credit-integration-test-bootstrap.mjs', 'scripts/test-store-pv-v2.mts'], test_env('store-pv'), expected=56)
+                      assert fingerprint(repo) == before, 'Protected data changed; stop without reset'
+                      execute(label, 'mixed-order', repo, ['node', '--experimental-strip-types', '--import', './scripts/credit-integration-test-bootstrap.mjs', 'scripts/test-phase-j6f2-mixed-order-resolution.mts'], test_env('mixed-order'), expected=175)
+                      assert fingerprint(repo) == before, 'Protected data changed; stop without reset'
+                      execute(label, 'typescript', repo, ['node', 'node_modules/typescript/bin/tsc', '--noEmit', '--incremental', 'false'], test_env('typescript'))
+                      build_env = test_env('build')
+                      private_store = pathlib.Path(build_env['KD_DATA_DIR']) / 'store'
+                      private_store.mkdir()
+                      shutil.copyfile(repo / 'public/data/website-data.json', private_store / 'website-data.json')
+                      execute(label, 'build', repo, ['npm', 'run', 'build'], build_env, timeout=1200)
+                  execute(label, 'diff-check', repo, ['git', 'diff', '--check'])
+                  assert git(repo, 'status', '--porcelain') == '', 'Canonical checkout changed; no reset allowed'
+                  assert git(repo, 'diff', '--cached', '--name-only') == ''
+              except Exception as error:
+                  errors.append({'revision': label, 'error': str(error)})
+                  (evidence / (label + '-environment-error.log')).write_text(traceback.format_exc())
+                  print('ENVIRONMENT_OR_SAFETY_ERROR ' + label + ': ' + str(error), flush=True)
+              finally:
+                  if before is not None:
+                      after = fingerprint(repo)
+                      (evidence / (label + '-fingerprint-after.txt')).write_text(''.join(h + '  ' + name + '\n' for name, h in after.items()))
+                      after_lines.extend(label + '/' + name + '  ' + h for name, h in after.items())
+                      if before != after:
+                          errors.append({'revision': label, 'error': 'Protected data byte mutation', 'paths': [p for p in set(before) | set(after) if before.get(p) != after.get(p)]})
+                          break
+
+          (evidence / 'fingerprint-before.txt').write_text('\n'.join(before_lines) + '\n')
+          (evidence / 'fingerprint-after.txt').write_text('\n'.join(after_lines) + '\n')
+          (evidence / 'errors.json').write_text(json.dumps(errors, indent=2))
+          summary = ['J6F4 GitHub Ubuntu Linux parity', 'Node v22.23.3; native strip-types; fresh TEMP suites; no production credentials', '']
+          for result in results:
+              summary.append(json.dumps(result))
+          summary.extend(['', 'Errors: ' + json.dumps(errors), 'Protected fingerprints equal: ' + str(before_lines == after_lines)])
+          (evidence / 'summary.txt').write_text('\n'.join(summary) + '\n')
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as output:
+              output.write('## J6F4 Linux parity diagnostic\n\n')
+              for result in results:
+                  output.write('- ' + result['revision'] + ' / ' + result['test'] + ': exit ' + str(result['exit']) + ', PASS ' + str(result['pass_count']) + '\n')
+              output.write('\nProtected fingerprints equal: ' + str(before_lines == after_lines) + '\n')
+          failed = bool(errors) or len(results) != 18 or before_lines != after_lines or any(r['exit'] != 0 or 'validation_error' in r for r in results)
+          # 7 production commands + 11 integrated commands = 18; every requested gate must execute.
+          sys.exit(1 if failed else 0)
+          PY
+      - name: Upload single diagnostic evidence artifact
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: j6f4-linux-parity-${{ github.run_id }}
+          path: ${{ runner.temp }}/j6f4-parity-evidence/
+          if-no-files-found: error
+          retention-days: 14
