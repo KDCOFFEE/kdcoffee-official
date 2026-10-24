@@ -1,3 +1,5 @@
+import { readStoreProductEditorial } from "@/lib/giftCmsStore";
+import GiftEditorialSections from "@/components/gifts/GiftEditorialSections";
 import Link from "next/link";
 import { cache } from "react";
 import type { Metadata } from "next";
@@ -34,6 +36,7 @@ const money = new Intl.NumberFormat("zh-TW", { maximumSignificantDigits: 21 });
 export default async function StoreProductPage({ params }: DetailProps) {
   const { slug } = await params;
   const { product, pvValue = 0 } = await loadProduct(slug);
+  const giftEditorial = await readStoreProductEditorial(slug, product.description);
   const pointDisplayName = pvValue > 0 ? await readPointDisplayName() : "";
   const sectionHref = storeBrowseHref({ sectionSlug: product.section.slug });
   const categoryHref = product.category
@@ -79,13 +82,14 @@ export default async function StoreProductPage({ params }: DetailProps) {
             ))}</dl>
           </section>
         ) : null}
-        {paragraphs.length > 0 ? (
+        {!giftEditorial && paragraphs.length > 0 ? (
           <section className={styles.description} aria-labelledby="store-description-heading">
             <h2 id="store-description-heading">關於這件商品</h2>
             {paragraphs.map((paragraph, index) => <p key={index}>{paragraph}</p>)}
           </section>
         ) : null}
       </div>
+      {giftEditorial ? <GiftEditorialSections document={giftEditorial} label="商品介紹" /> : null}
       <nav className={styles.backLinks} aria-label="繼續瀏覽商品">
         <Link href="/store">返回商店</Link>
         <Link href={categoryHref}>瀏覽{product.category?.name || product.section.name}</Link>

@@ -1,0 +1,44 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import os from 'node:os';
+import crypto from 'node:crypto';
+import * as nodeModule from 'node:module';
+import React from 'react';
+import {renderToStaticMarkup} from 'react-dom/server';
+import './gift-frontend-test-bootstrap.mjs';
+const previousEnv={...process.env},root=await fs.mkdtemp(path.join(os.tmpdir(),'KD_Studio_CTA_'));
+process.env.KD_DATA_DIR=root;delete process.env.RAILWAY_VOLUME_MOUNT_PATH;process.env.ADMIN_SESSION_SECRET=crypto.randomBytes(48).toString('hex');
+const fixture=process.env.GIFT_TEST_FIXTURE!;const fixtureBytes=await fs.readFile(fixture),catalog=JSON.parse(fixtureBytes.toString());
+await fs.mkdir(path.join(root,'store-domain'),{recursive:true});await fs.writeFile(path.join(root,'store-domain/catalog.json'),fixtureBytes);
+if(process.env.GIFT_QA_RULES){await fs.mkdir(path.join(root,'membership-commerce'),{recursive:true});await fs.copyFile(process.env.GIFT_QA_RULES,path.join(root,'membership-commerce/business-rules.json'));}
+await fs.mkdir(path.join(root,'store'),{recursive:true});await fs.writeFile(path.join(root,'store/assets.json'),JSON.stringify({version:1,assets:[]}));
+const hooks=(nodeModule as unknown as {registerHooks:(hooks:{resolve:(s:string,c:unknown,next:(s:string,c:unknown)=>unknown)=>unknown})=>{deregister:()=>void}}).registerHooks({resolve(s,c,next){return s==='next/headers'?{url:'data:text/javascript,export async function cookies(){return {get:()=>globalThis.__ctaOwnerCookie?{value:globalThis.__ctaOwnerCookie}:undefined}}',shortCircuit:true}:next(s,c)}});
+const global=globalThis as unknown as {__ctaOwnerCookie?:string};let count=0;
+async function test(name:string,fn:()=>unknown){await fn();count++;console.log('PASS '+name)}
+try{
+ const cms=await import('../lib/giftCms'),store=await import('../lib/giftCmsStore'),auth=await import('../lib/adminAuth'),{handleGiftCms}=await import('../lib/giftCmsTransport'),{default:Editor}=await import('../components/admin/GiftCmsEditor'),{default:Editorial}=await import('../components/gifts/GiftEditorialSections');
+ assert.ok(path.resolve(store.getGiftCmsFile()).startsWith(path.resolve(root)+path.sep));global.__ctaOwnerCookie=auth.createAdminSessionValue({role:'owner'});
+ const product=catalog.products.find((p:{productType:string})=>p.productType==='gift');assert.ok(product);const slug=product.slug;
+ const request=(method='GET',body?:unknown)=>new Request('http://127.0.0.1:59996/api/admin/store/content/products/'+slug,{method,headers:{origin:'http://127.0.0.1:59996','content-type':'application/json','sec-fetch-site':'same-origin'},...(body===undefined?{}:{body:JSON.stringify(body)})});
+ const load=async()=>{const r=await handleGiftCms(request(),'storeProduct',slug);assert.equal(r.status,200);return await r.json() as import('../lib/giftCmsAdmin').GiftCmsEditorPayload};
+ const save=async(document:import('../lib/giftCms').GiftProductDocument)=>{const before=await load(),r=await handleGiftCms(request('PUT',{revision:before.revision,document}),'storeProduct',slug);assert.equal(r.status,200,await r.clone().text());return await r.json()};
+ const html=(payload:import('../lib/giftCmsAdmin').GiftCmsEditorPayload)=>renderToStaticMarkup(React.createElement(Editor,{initial:payload}));
+ const fields=(payload:import('../lib/giftCmsAdmin').GiftCmsEditorPayload,label:string,target:string)=>{const s=html(payload);assert.ok(s.includes('value="'+label+'"'),'saved CTA label must be an editable form value after Admin load');assert.ok(s.includes('value="'+target+'"'),'saved target must be an editable form value');assert.match(s,/<option value="secondary" selected="">次按鈕<\/option>/);return s};
+ const doc=cms.giftProductFallback(product),banner={...cms.newGiftEditorialSection('banner','owner-service'),cta:{label:'客服',target:'https://www.kdcoffee1962.com/',style:'secondary' as const},presentation:{desktop:{headingSize:40,alignment:'right' as const,visible:true},mobile:{headingSize:24,alignment:'center' as const,visible:false},buttonColor:'coffee' as const,buttonTextColor:'#ffffff' as const}};
+ doc.sections.push(banner);
+ await test('Save unnamed second banner through authenticated Admin PUT',async()=>{await save(doc);assert.deepEqual((await load()).document,doc)});
+ await test('Reload actual Editor opens existing CTA settings rather than first unrelated section',async()=>{fields(await load(),'客服',banner.cta.target)});
+ await test('Preview/public shared renderer retains exact accepted homepage URL and button style',()=>{const s=renderToStaticMarkup(React.createElement(Editorial,{document:doc}));assert.ok(s.includes('href="https://www.kdcoffee1962.com/"'));assert.ok(s.includes('>客服</a>'));assert.ok(s.includes('data-variant="secondary"'))});
+ await test('Edit CTA label through Admin round-trip preserves every other field',async()=>{const p=await load(),d=p.document as typeof doc;d.sections[1].cta!.label='聯絡客服';await save(d);const next=await load();fields(next,'聯絡客服',banner.cta.target);assert.deepEqual((next.document as typeof doc).sections[1].presentation,banner.presentation);assert.equal((next.document as typeof doc).sections[1].id,banner.id)});
+ await test('Homepage internal slash target round-trips via existing safe resolver',async()=>{const d=(await load()).document as typeof doc;d.sections[1].cta!.target='/';await save(d);fields(await load(),'聯絡客服','/');assert.equal(cms.giftContactHref('/'),'/')});
+ await test('Disable existing banner without losing its saved configuration',async()=>{const d=(await load()).document as typeof doc;d.sections[1].enabled=false;await save(d);const next=await load();assert.equal((next.document as typeof doc).sections[1].enabled,false);fields(next,'聯絡客服','/');assert.ok(!renderToStaticMarkup(React.createElement(Editorial,{document:next.document as typeof doc})).includes('>聯絡客服</a>'));assert.deepEqual((next.document as typeof doc).sections[1].presentation,banner.presentation)});
+ await test('Re-enable and restore original CTA through Admin round-trip',async()=>{await save(doc);fields(await load(),'客服',banner.cta.target)});
+ const image={url:'https://example.com/temp-only.jpg',alt:'TEMP image',caption:'Preserved caption'};
+ for(const type of cms.STORE_CONTENT_SECTION_TYPES)await test('No field loss including existing CTA on '+type,async()=>{const s={...cms.newGiftEditorialSection(type,'all-fields-'+type),heading:'All fields',eyebrow:'Eyebrow',body:'Body\n\nSecond paragraph',alignment:'center' as const,width:'wide' as const,background:'soft' as const,mediaPosition:'left' as const,image,images:[image],rows:[{label:'容量',value:'600ml'}],cta:structuredClone(banner.cta),presentation:structuredClone(banner.presentation)};const d={schemaVersion:1 as const,card:{label:'定位',summary:'規格'},sections:[cms.newGiftEditorialSection('rich_text','before'),s]};await save(d);const loaded=await load();fields(loaded,'客服',banner.cta.target);const bytes=await fs.readFile(store.getGiftCmsFile()),res=await save(loaded.document as typeof doc);assert.equal(res.outcome,'NO_CHANGE');assert.deepEqual(await fs.readFile(store.getGiftCmsFile()),bytes);assert.deepEqual((await load()).document,d)});
+ await test('Removing CTA from a disabled banner round-trips without resurrection',async()=>{const d=structuredClone(doc);d.sections[1].enabled=false;delete d.sections[1].cta;await save(d);const next=(await load()).document as typeof doc;assert.equal(next.sections[1].cta,undefined);assert.equal(next.sections[1].enabled,false);assert.deepEqual(next.sections[1].presentation,banner.presentation)});
+ await test('Older documents with no CTA still load and remain unchanged on no-op save',async()=>{const d=cms.giftProductFallback(product);await save(d);const p=await load();assert.deepEqual(p.document,d);assert.ok(html(p).includes('關於這件商品'));await save(p.document as typeof doc);assert.deepEqual((await load()).document,d)});
+ await test('Unsafe JavaScript destination rejected by existing server validation',async()=>{const d=structuredClone(doc);d.sections[1].cta!.target='javascript:alert(1)';const bytes=await fs.readFile(store.getGiftCmsFile());assert.throws(()=>cms.giftContactHref(d.sections[1].cta!.target));const r=await handleGiftCms(request('PUT',{revision:(await load()).revision,document:d}),'storeProduct',slug);assert.ok(r.status>=400);assert.deepEqual(await fs.readFile(store.getGiftCmsFile()),bytes)});
+ await test('No canonical Store mutation or original fixture mutation',async()=>{assert.deepEqual(await fs.readFile(path.join(root,'store-domain/catalog.json')),fixtureBytes);assert.deepEqual(await fs.readFile(fixture),fixtureBytes)});
+ console.log('STORE CONTENT CTA ROUND-TRIP: '+count+' PASS / 0 FAIL; TEMP '+root);
+}finally{hooks.deregister();delete global.__ctaOwnerCookie;for(const key of Object.keys(process.env))if(!(key in previousEnv))delete process.env[key];Object.assign(process.env,previousEnv)}

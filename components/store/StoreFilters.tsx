@@ -3,7 +3,15 @@ import type { PublicStoreIndex } from "@/lib/storePublicSelectors";
 import { storeBrowseHref } from "@/lib/storePublicMetadata";
 import styles from "./StorePublic.module.css";
 
-export default function StoreFilters({ model }: { model: PublicStoreIndex }) {
+export type StoreNavigationPresentation={sections:{slug:string;label:string;enabled:boolean}[];categories:{slug:string;label:string;enabled:boolean}[]};
+export function applyStoreNavigation(model:PublicStoreIndex,p?:StoreNavigationPresentation):PublicStoreIndex {
+ if(!p)return model;
+ function rows<T extends {slug:string;name:string}>(source:T[],values:{slug:string;label:string;enabled:boolean}[]){const ordered=values.flatMap(v=>{const row=source.find(s=>s.slug===v.slug);return row&&v.enabled?[{...row,name:v.label}]:[]});return [...ordered,...source.filter(s=>!values.some(v=>v.slug===s.slug))];}
+ const sections=rows(model.sections,p.sections),categories=rows(model.categories,p.categories);
+ return {...model,sections,categories,selectedSection:model.selectedSection?{...model.selectedSection,name:p.sections.find(s=>s.slug===model.selectedSection?.slug)?.label??model.selectedSection.name}:null,selectedCategory:model.selectedCategory?{...model.selectedCategory,name:p.categories.find(s=>s.slug===model.selectedCategory?.slug)?.label??model.selectedCategory.name}:null};
+}
+export default function StoreFilters({ model:sourceModel, presentation }: { model: PublicStoreIndex; presentation?:StoreNavigationPresentation }) {
+  const model=applyStoreNavigation(sourceModel,presentation);
   const section = model.selectedSection;
   const introduction = section ? section.shortDescription.trim() ? section.shortDescription : section.description : "";
   return (

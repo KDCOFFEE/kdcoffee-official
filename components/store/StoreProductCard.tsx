@@ -27,7 +27,7 @@ export default function StoreProductCard({ product, className = "", editorial, i
         </Link>
       </div>
       <div className={styles.cardBody}>
-        {editorial?.label ? <p className={styles.featured}>{editorial.label}</p> : product.featured ? <p className={styles.featured}>精選</p> : null}
+        {editorial?.label !== undefined ? (editorial.label ? <p className={styles.featured}>{editorial.label}</p> : null) : product.featured ? <p className={styles.featured}>精選</p> : null}
         {!editorial?.compact ? <p className={styles.cardContext}>{product.section.name}{product.category ? ` ／ ${product.category.name}` : ""}</p> : null}
         <h3><Link className={styles.textLink} href={storeProductHref(product.slug)}>{editorial?.cta ? <span>{editorial.cta}</span> : null}{product.name}</Link></h3>
         {editorial?.summary ? <p className={styles.cardContext}>{editorial.summary}</p> : null}
@@ -38,7 +38,7 @@ export default function StoreProductCard({ product, className = "", editorial, i
             {editorial?.priceText ? <strong>{editorial.priceText}</strong> : <strong>NT$ {money.format(currentPrice)}</strong>}
             {onSale ? <><span className={styles.srOnly}>原價：</span><del>NT$ {money.format(product.price)}</del></> : null}
           </p>
-          {editorial?.pointsText ? <p className={styles.availability}>{editorial.pointsText}</p> : null}
+          {editorial?.pointsText ? <p className={`${styles.availability} ${styles.points}`}>{editorial.pointsText}</p> : null}
           {!editorial?.compact ? <p className={styles.availability}>{product.inStock ? "有庫存" : "目前無庫存"}</p> : null}
         </div>
       </div>

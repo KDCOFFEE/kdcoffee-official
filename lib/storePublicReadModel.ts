@@ -9,6 +9,8 @@ export type PublicStoreProductReadModel = {
   product: PublicStoreProductDetail;
   /** Detail-only presentation value; never adds reward internals to public cards or gallery props. */
   pvValue?: number;
+  /** Server-only classification; never added to public product DTOs. */
+  giftProductId?: string;
   /** Server-side source values only; pass product, not this wrapper, to client components. */
   manualSeo: { seoTitle?: string; seoDescription?: string };
 };
@@ -31,6 +33,7 @@ export async function readPublicStoreProductBySlug(slug: string): Promise<Public
   return {
     product,
     pvValue: source.pvValue,
+    ...(source.productType === "gift" ? { giftProductId: source.id } : {}),
     manualSeo: {
       ...(source.seoTitle !== undefined ? { seoTitle: source.seoTitle } : {}),
       ...(source.seoDescription !== undefined ? { seoDescription: source.seoDescription } : {}),

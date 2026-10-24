@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import type { GiftCmsState, GiftLandingDocument } from "./giftCms";
 import type { StoreCatalog } from "./storeTypes";
 import { selectPublicStoreIndex, findPublicStoreProductBySlug } from "./storePublicSelectors";
 import type { PublicStoreProductCard } from "./storePublicSelectors";
@@ -20,7 +21,7 @@ const POSITIONING: Readonly<Record<string, string>> = {
 export type GiftCard = { product: PublicStoreProductCard; label?: string; summary: string; pvValue: number };
 export type GiftCatalog = ReturnType<typeof selectPublicGiftCatalog>;
 
-export function selectPublicGiftCatalog(catalog: StoreCatalog, pointDisplayName = "") {
+export function selectPublicGiftCatalog(catalog: StoreCatalog, pointDisplayName = "", cms?: Pick<GiftCmsState, "products">) {
   // The canonical Store graph owns publication, parent/category and ordering.
   const first = selectPublicStoreIndex(catalog, { sectionSlug: "gift" });
   const cards = [...first.products.items];
@@ -35,7 +36,8 @@ export function selectPublicGiftCatalog(catalog: StoreCatalog, pointDisplayName 
     const summary = detail.specifications.length
       ? detail.specifications.slice(0, 3).map(item => item.value).join(" · ")
       : (plannedContents?.split(/\r?\n/u).slice(0, 3).join(" · ") || "");
-    return { product, label: POSITIONING[source.sku], summary, pvValue: source.pvValue };
+    const card = cms?.products[source.id]?.card;
+    return { product, label: card?.label ?? POSITIONING[source.sku], summary: card?.summary ?? summary, pvValue: source.pvValue };
   });
   const custom = gifts.find(gift => sourceBySlug.get(gift.product.slug)?.sku === "GIFT-CUSTOM");
   const hero = custom?.product.heroMedia?.type === "image" ? custom.product.heroMedia
@@ -50,13 +52,13 @@ export function selectPublicGiftCatalog(catalog: StoreCatalog, pointDisplayName 
   };
 }
 
-export function giftPageMetadata(indexable: boolean): Metadata {
-  const title = "送禮專區｜精品咖啡禮盒｜KD Coffee";
-  const description = "探索 KD Coffee 精品咖啡禮盒，從耳掛咖啡、咖啡豆到手沖組合與客製送禮，為日常問候、節慶與重要時刻挑選一份剛剛好的咖啡禮。";
+export function giftPageMetadata(indexable: boolean, seo?: GiftLandingDocument["seo"]): Metadata {
+  const title = seo?.title || "送禮專區｜精品咖啡禮盒｜KD Coffee";
+  const description = seo?.description || "探索 KD Coffee 精品咖啡禮盒，從耳掛咖啡、咖啡豆到手沖組合與客製送禮，為日常問候、節慶與重要時刻挑選一份剛剛好的咖啡禮。";
   return {
     title: { absolute: title }, description,
     alternates: { canonical: "/gifts" }, robots: { index: indexable, follow: true },
-    openGraph: { title, description, url: "/gifts", siteName: "KD Coffee", locale: "zh_TW", type: "website" },
-    twitter: { card: "summary", title, description },
+    openGraph: { title: seo?.socialTitle || title, description: seo?.socialDescription || description, ...(seo?.image ? { images: [{ url: seo.image.url, alt: seo.image.alt }] } : {}), url: "/gifts", siteName: "KD Coffee", locale: "zh_TW", type: "website" },
+    twitter: { card: seo?.image ? "summary_large_image" : "summary", title: seo?.socialTitle || title, description: seo?.socialDescription || description, ...(seo?.image ? { images: [seo.image.url] } : {}) },
   };
 }
