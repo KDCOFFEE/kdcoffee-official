@@ -28,6 +28,8 @@ type RegisterHooks = (hooks: {
   },
 });
 
+const REVIEWED_SITEMAP_PATH = /^(?:\/|\/works(?:\/[^/?]+)?|\/monthly-menu|\/pages\/[^/?]+|\/store(?:\/[^/?]+)?|\/gifts)$/u;
+
 const project = process.cwd();
 async function jsonHashes() {
   const result: Record<string, string> = {};
@@ -119,6 +121,7 @@ try {
   const gate = await moduleAt("lib/storeSeoPublication.ts");
   const { generateMetadata: landingMetadata } = await moduleAt("app/store/page.tsx");
   const { generateMetadata: detailMetadata } = await moduleAt("app/store/[slug]/page.tsx");
+  const { generateMetadata: giftMetadata } = await moduleAt("app/gifts/page.tsx");
   const { default: sitemap, dynamic: sitemapDynamic } = await moduleAt("app/sitemap.ts");
   const { default: robots, dynamic: robotsDynamic } = await moduleAt("app/robots.ts");
   const { getCanonicalPublicSiteOrigin } = await moduleAt("lib/publicSiteOrigin.ts");
@@ -148,6 +151,12 @@ try {
     assert.deepEqual(meta.robots, { index: false, follow: true });
     assert.deepEqual(meta.alternates, { canonical: "/store/product-0" });
   });
+  await test("Gate OFF keeps Gifts noindex and outside sitemap", async () => {
+    const metadata = await giftMetadata();
+    assert.deepEqual(metadata.alternates, { canonical: "/gifts" });
+    assert.deepEqual(metadata.robots, { index: false, follow: true });
+    assert.ok(!(await sitemapPaths()).includes("/gifts"));
+  });
   await test("Gate OFF excludes every Store URL from sitemap", async () =>
     assert.ok((await sitemapPaths()).every(url => !url.startsWith("/store"))));
   await test("Gate OFF does not read unavailable Store storage", async () => {
@@ -160,6 +169,10 @@ try {
   await test("Gate ON is independent of disabled commerce", () => assert.equal(gate.isStoreSeoPublicEnabled(), true));
   await test("Gate ON canonical landing is indexable", async () =>
     assert.deepEqual((await landing()).robots, { index: true, follow: true }));
+  await test("Gate ON indexes canonical Gifts and includes its landing URL", async () => {
+    assert.deepEqual((await giftMetadata()).robots, { index: true, follow: true });
+    assert.ok((await sitemapPaths()).includes("/gifts"));
+  });
   for (const query of [{ q: "coffee" }, { section: "equipment" }, { category: "cups" }, { sort: "price" }, { page: "1" }, { unknown: "" }]) {
     await test("Gate ON preserves query noindex " + Object.keys(query)[0], async () =>
       assert.deepEqual((await landing(query)).robots, { index: false, follow: true }));
@@ -222,10 +235,40 @@ try {
       assert.deepEqual(actual.filter(url => url.includes("seo-fixture-")), ["/pages/seo-fixture-3"]);
     } finally { await writeJson(pagesFile, pages); }
   });
+  await test("Reviewed sitemap guard accepts only the exact Gifts landing path", () => {
+    assert.match("/gifts", REVIEWED_SITEMAP_PATH);
+  });
+  await test("Reviewed sitemap guard still rejects unknown/private/query Gift routes", () => {
+    for (const path of ["/unapproved", "/giftz", "/gifts/not-approved", "/admin/gifts", "/gifts?preview=true"])
+      assert.doesNotMatch(path, REVIEWED_SITEMAP_PATH);
+  });
+  await test("Gifts adds no changes to existing canonical sitemap URLs", async () => {
+    const products = selectPublicStoreIndex(store).products;
+    const storePaths: string[] = [];
+    for (let page = 1; page <= products.totalPages; page++)
+      storePaths.push(...selectPublicStoreIndex(store, { page }).products.items.map((product: { slug: string }) => "/store/" + product.slug));
+    const expected = [...new Set(["/", "/works", "/monthly-menu",
+      ...resolveWorksProductListing(website.menu.products).map((product: { slug: string }) => "/works/" + encodeURIComponent(product.slug)),
+      ...publishedPageRegistry(pages).filter((page: { published: boolean }) => page.published).map((page: { href: string }) => page.href),
+      "/store", ...storePaths])];
+    assert.deepEqual((await sitemapPaths()).filter(path => path !== "/gifts"), expected);
+  });
+  await test("Gifts landing inclusion never publishes DRAFT Gift product URLs", async () => {
+    const copy = structuredClone(store);
+    copy.products.push({ ...structuredClone(copy.products[0]), id: "draft-gift", slug: "draft-gift", sku: "DRAFT-GIFT-FIXTURE", productType: "gift", published: false });
+    validateStoreCatalog(copy);
+    await writeJson(catalogFile, copy);
+    try {
+      assert.equal(findPublicStoreProductBySlug(copy, "draft-gift"), null);
+      const urls = await sitemapPaths();
+      assert.ok(urls.includes("/gifts"));
+      assert.ok(!urls.includes("/store/draft-gift"));
+    } finally { await writeJson(catalogFile, store); }
+  });
   await test("Sitemap has only reviewed public route families, no private/auth/query URLs", async () => {
     const urls = await sitemapPaths();
     assert.ok(urls.includes("/") && urls.includes("/works") && urls.includes("/monthly-menu"));
-    for (const url of urls) assert.match(url, /^(?:\/|\/works(?:\/[^/?]+)?|\/monthly-menu|\/pages\/[^/?]+|\/store(?:\/[^/?]+)?)$/u);
+    for (const url of urls) assert.match(url, REVIEWED_SITEMAP_PATH);
     assert.equal(new Set(urls).size, urls.length);
   });
   await test("robots allows crawling, points to official sitemap, and does not hide noindex via Disallow", () => {
