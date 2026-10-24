@@ -77,6 +77,33 @@ async function protectedHashes() {
     [file, createHash("sha256").update(await fs.readFile(file)).digest("hex")])));
 }
 
+/** Inspect syntax, not comments/prose; quoted keys and module references cannot hide internals. */
+function assertNoPublicReadModelCommerceReferences(source: string) {
+  const prohibited = /AddToCart|CartProvider|checkout|\/api\/orders|membershipCommerce|referral|reward|cloudinary/i;
+  const ast = ts.createSourceFile("read-model-guard.ts", source, ts.ScriptTarget.Latest, true);
+  function referenceString(node: ts.StringLiteralLike): boolean {
+    for (let current: ts.Node = node; current.parent; current = current.parent) {
+      const parent = current.parent;
+      if ((ts.isImportDeclaration(parent) || ts.isExportDeclaration(parent)) && parent.moduleSpecifier === current) return true;
+      if (ts.isExternalModuleReference(parent) || ts.isImportTypeNode(parent)) return true;
+      if (ts.isCallExpression(parent) && (parent.expression.kind === ts.SyntaxKind.ImportKeyword ||
+        ts.isIdentifier(parent.expression) && parent.expression.text === "require") && parent.arguments.some(argument => argument === current)) return true;
+      if (ts.isElementAccessExpression(parent) && parent.argumentExpression === current || ts.isComputedPropertyName(parent)) return true;
+      if ((ts.isPropertyAssignment(parent) || ts.isPropertySignature(parent) || ts.isMethodDeclaration(parent) ||
+        ts.isMethodSignature(parent) || ts.isGetAccessorDeclaration(parent) || ts.isSetAccessorDeclaration(parent)) && parent.name === current) return true;
+      if (ts.isStatement(parent) || ts.isSourceFile(parent)) return false;
+    }
+    return false;
+  }
+  function inspect(node: ts.Node) {
+    if (ts.isIdentifier(node)) assert.doesNotMatch(node.text, prohibited, "Public read model references prohibited commerce/reward internals");
+    if (ts.isStringLiteralLike(node) && (referenceString(node) || /\/api\/orders/i.test(node.text)))
+      assert.doesNotMatch(node.text, prohibited, "Public read model imports or exposes prohibited commerce/reward internals");
+    ts.forEachChild(node, inspect);
+  }
+  inspect(ast);
+}
+
 async function main() {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "kd-j6d1-public-read-"));
   assert.ok(path.resolve(root).startsWith(path.resolve(os.tmpdir()) + path.sep));
@@ -442,6 +469,27 @@ async function main() {
       assert.equal(imports.length, 1); assert.match(imports[0], /^import type .* from "\.\/storeTypes";$/);
       assert.doesNotMatch(source, /server-only|process\.env|node:|createStoreRepository|fetch\s*\(/);
     });
+    await test("Reward guard ignores harmless comments and prose", () => {
+      assertNoPublicReadModelCommerceReferences('/* reward internals are excluded */\n// reward documentation\nconst note = "reward internals"; const pvValue = 88;');
+    });
+    await test("Reward guard rejects actual reward module imports and re-exports", () => {
+      for (const source of ['import { value } from "./orderRewardBasis";', 'export { value } from "./rewardLedger";',
+        'const value = require("./rewardLedger");', 'const value = import("./rewardLedger");', 'type Value = import("./rewardLedger").Value;'])
+        assert.throws(() => assertNoPublicReadModelCommerceReferences(source), assert.AssertionError);
+    });
+    await test("Reward guard rejects executable identifiers and exposed reward members", () => {
+      for (const source of ['const value = rewardState;', 'export const rewardBalance = 1;',
+        'const value = state.rewardBalance;', 'export interface PublicValue { rewardInternals: unknown; }'])
+        assert.throws(() => assertNoPublicReadModelCommerceReferences(source), assert.AssertionError);
+    });
+    await test("Reward guard rejects quoted/computed keys and order endpoints", () => {
+      for (const source of ['const value = state["rewardBalance"];', 'const value = {"rewardBalance": 1};',
+        'const value = {["reward" + "Balance"]: 1};', 'send("/api/orders");'])
+        assert.throws(() => assertNoPublicReadModelCommerceReferences(source), assert.AssertionError);
+    });
+    await test("Reward guard permits legitimate Store PV public data", () => {
+      assertNoPublicReadModelCommerceReferences('export type PublicValue = { pvValue?: number }; const source = { pvValue: 88 }; export const value = { pvValue: source.pvValue };');
+    });
     await test("Server read model contains only read calls and no commerce or mutation wiring", async () => {
       const source = await fs.readFile("lib/storePublicReadModel.ts", "utf8");
       assert.match(source, /import "server-only"/);
@@ -474,7 +522,7 @@ async function main() {
       inspect(ast);
       assert.ok(approvedReads > 0, "At least one approved repository read is required");
       assert.doesNotMatch(source, /\.initialize\(|\.create(?:Product|Section|Category)\(|\.update|\.archive|withCatalogLock|atomicWrite|writeFile|fetch\(|catch\s*\(/);
-      assert.doesNotMatch(source, /AddToCart|CartProvider|checkout|\/api\/orders|membershipCommerce|referral|reward|cloudinary/i);
+      assertNoPublicReadModelCommerceReferences(source);
       const dependencies = [...source.matchAll(/(?:from\s+|import\s+)["']([^"']+)["']/g)].map(match => match[1]);
       assert.deepEqual([...new Set(dependencies)].sort(), ["./storeHero", "./storePublicSelectors", "./storeRepository", "server-only"].sort());
     });
