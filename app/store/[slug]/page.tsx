@@ -64,7 +64,7 @@ export default async function StoreProductPage({ params }: DetailProps) {
               <strong>NT$ {money.format(currentPrice)}</strong>
               {onSale ? <><span className={styles.srOnly}>原價：</span><del>NT$ {money.format(product.price)}</del></> : null}
             </p>
-            {pvValue > 0 ? <p className={styles.availability}>{pointDisplayName} {money.format(pvValue)}</p> : null}
+            {pvValue > 0 && pointDisplayName ? <p className={styles.points}>可獲得 {money.format(pvValue)} {pointDisplayName}</p> : null}
             <p className={styles.availability}>{product.inStock ? "有庫存" : "目前無庫存"}</p>
             {isStoreCommerceEnabled() ? <StoreAddToCart key={product.slug} slug={product.slug} inStock={product.inStock} /> : null}
           </section>

@@ -200,9 +200,18 @@ async function main() {
     assert.doesNotMatch(source.page, /\.featured|\.sort\(/);
   });
 
-  await test("Cards are semantic articles with one accessible detail link and no fake CTA", () => {
+  await test("Cards have accessible image and name links to the same detail URL without nesting", () => {
     assert.equal(nodes(ast.card).filter(node => jsxTag(node) === "article").length, 1);
-    assert.equal(nodes(ast.card).filter(node => jsxTag(node) === "Link").length, 1);
+    const links = nodes(ast.card).filter(node => jsxTag(node) === "Link");
+    assert.equal(links.length, 2);
+    for (const link of links) {
+      assert.ok(ts.isJsxElement(link));
+      const href = link.openingElement.attributes.properties.find(attr => ts.isJsxAttribute(attr) && attr.name.getText() === "href");
+      assert.ok(href && ts.isJsxAttribute(href));
+      assert.equal(href.initializer?.getText(), "{storeProductHref(product.slug)}");
+      assert.equal(nodes(link).filter(node => jsxTag(node) === "Link").length, 1);
+    }
+    assert.match(source.card, /aria-label=\{`查看 \$\{product.name\}`\}/);
     for (const tag of ["a", "button"]) assert.equal(nodes(ast.card).filter(node => jsxTag(node) === tag).length, 0);
     assert.match(source.card, /href=\{storeProductHref\(product\.slug\)\}/);
     assert.match(source.card, /\{product\.name\}<\/Link>/);
@@ -377,7 +386,7 @@ async function main() {
     assert.match(source.css, /@media \(max-width: 640px\)[\s\S]*?\.grid\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\)/));
   await test("Card media has stable 4:3 space with cover images", () => {
     assert.match(source.css, /\.cardMedia\s*\{[^}]*aspect-ratio:\s*4 \/ 3/);
-    assert.match(source.css, /\.cardMedia > img\s*\{[^}]*object-fit:\s*cover/);
+    assert.match(source.css, /\.cardImageLink > img\s*\{[^}]*object-fit:\s*cover/);
   });
   await test("Mobile navigation can scroll without widening the page", () => {
     assert.match(source.css, /\.sectionNav, \.categoryNav\s*\{[^}]*max-width:\s*100%[^}]*overflow-x:\s*auto/);

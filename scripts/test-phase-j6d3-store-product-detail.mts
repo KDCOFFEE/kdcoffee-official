@@ -454,7 +454,7 @@ try {
       const { readPointDisplayName } = await import("../lib/pointDisplayNameStore");
       const html = await render(); assertPublicPdpHtml(html);
       const formatted = new Intl.NumberFormat("zh-TW", { maximumSignificantDigits: 21 }).format(pvValue);
-      assert.ok(html.includes((await readPointDisplayName()) + " " + formatted));
+      assert.ok(html.includes("可獲得 " + formatted + " " + (await readPointDisplayName())));
     });
   }
   await test("PDP guard rejects reward-internal fields and serialized/attribute leaks", () => {
@@ -484,9 +484,12 @@ try {
     assert.deepEqual(Object.keys(clientGallery.props).sort(), ["gallery", "heroMedia", "name"]);
     assert.doesNotMatch(JSON.stringify(clientGallery.props), /pvValue|inventory|sectionId|categoryId|subscriptionEligible|seoTitle|seoDescription/);
   });
-  await test("Public card has exactly one semantic named detail link without nested links", () => {
+  await test("Public card image and name links share one destination without nested anchors", () => {
     const html = renderToStaticMarkup(createElement(Card, { product: publicProduct() }));
-    assert.equal((html.match(/<a\b/g) ?? []).length, 1); assert.match(html, /href="\/store\/v60-dripper"/);
+    const links = [...html.matchAll(/<a\b([^>]*)>([\s\S]*?)<\/a>/g)];
+    assert.equal(links.length, 2);
+    for (const link of links) { assert.match(link[1], /href="\/store\/v60-dripper"/); assert.doesNotMatch(link[2], /<a\b/); }
+    assert.match(links[0][2], /<img/);
     assert.match(html, /V60 手沖濾杯<\/a><\/h3>/); assert.doesNotMatch(html, /<button/);
   });
   await test("Server route is dynamic Node with awaited params and real read model boundary", () => {

@@ -187,7 +187,7 @@ function renderCTA(inStock = true) {
   hooks = actionHooks; hooks.begin(); return CTA({ slug: "test-dripper", inStock });
 }
 function button(tree: unknown) {
-  const node = nodes(tree).find(node => node.type === "button"); assert.ok(node); return node;
+  const node = nodes(tree).find(node => node.type === "button" && node.props["aria-label"] === "加入購物車"); assert.ok(node); return node;
 }
 function click(tree: unknown) { (button(tree).props.onClick as () => void)(); }
 async function settled() {

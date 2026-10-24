@@ -30,6 +30,7 @@
 .price { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px 16px; margin: 0; line-height: 1.6; overflow-wrap: anywhere; }
 .price strong { max-width: 100%; font-size: 28px; font-weight: 500; }
 .price del { max-width: 100%; color: #806e5b; font-size: 15px; }
+.points { margin: 10px 0 0; color: var(--color-text-primary, #251b16); font-size: 14px; line-height: 1.8; }
 .availability { margin: 12px 0 0; color: #655649; font-size: 14px; line-height: 1.8; }
 .content { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr); gap: clamp(40px, 7vw, 110px); margin-top: 76px; padding-top: 46px; border-top: 1px solid var(--color-border, #ded1c0); }
 .content h2 { margin: 0 0 26px; font-family: var(--font-display); font-size: 25px; font-weight: 500; line-height: 1.5; }
