@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import ts from "typescript";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -119,6 +120,39 @@ function click(tree: unknown, label: string) {
   assert.ok(node, "Missing button: " + label);
   (node.props.onClick as () => void)();
 }
+const PDP_REWARD_INTERNAL = /reward|referral|qualification|ledger|wallet|membershipCommerce|creditReservation/i;
+function assertNoPdpRewardFields(value: unknown) {
+  if (!value || typeof value !== "object") return;
+  for (const [key, child] of Object.entries(value)) {
+    assert.doesNotMatch(key, PDP_REWARD_INTERNAL, "Public PDP must not expose reward-internal properties");
+    assertNoPdpRewardFields(child);
+  }
+}
+function assertPublicPdpHtml(html: string) {
+  // Private identities/field names stay forbidden; public numeric PV is not a sentinel.
+  assert.doesNotMatch(html, /PRIVATE-(?:SECTION|CATEGORY|PRODUCT|SKU|MEDIA)-87432|private_spec_key|pvValue|kdRedemption|subscriptionEligible|archivedAt|manualSeo/);
+  for (const match of html.matchAll(/(?:["']|&quot;|&#x27;)([A-Za-z_$][\w$]*)(?:["']|&quot;|&#x27;)\s*:/gu))
+    assert.doesNotMatch(match[1], PDP_REWARD_INTERNAL, "Serialized reward-internal fields must not enter public HTML");
+  for (const match of html.matchAll(/\sdata-([a-z0-9-]+)=/giu))
+    assert.doesNotMatch(match[1].replaceAll("-", ""), PDP_REWARD_INTERNAL);
+}
+function assertNoPdpRewardReferences(source: string) {
+  const ast = ts.createSourceFile("pdp-reward-guard.ts", source, ts.ScriptTarget.Latest, true);
+  function inspect(node: ts.Node) {
+    if (ts.isIdentifier(node)) assert.doesNotMatch(node.text, PDP_REWARD_INTERNAL);
+    if (ts.isStringLiteralLike(node)) {
+      const parent = node.parent;
+      const module = (ts.isImportDeclaration(parent) || ts.isExportDeclaration(parent)) && parent.moduleSpecifier === node ||
+        ts.isCallExpression(parent) && (parent.expression.kind === ts.SyntaxKind.ImportKeyword || ts.isIdentifier(parent.expression) && parent.expression.text === "require");
+      const property = ts.isElementAccessExpression(parent) && parent.argumentExpression === node ||
+        (ts.isPropertyAssignment(parent) || ts.isPropertySignature(parent)) && parent.name === node;
+      if (module || property) assert.doesNotMatch(node.text, PDP_REWARD_INTERNAL);
+    }
+    ts.forEachChild(node, inspect);
+  }
+  inspect(ast);
+}
+
 let passed = 0;
 async function test(label: string, run: () => unknown | Promise<unknown>) {
   globalThis.__storeDetailRequest = new Map();
@@ -411,9 +445,41 @@ try {
     assert.doesNotMatch(gallerySource, /setInterval|setTimeout|autoPlay|requestAnimationFrame|fetch\(|localStorage|upload|deleteMedia/);
     assert.match(gallerySource, /backgroundVideo=\{false\}/);
   });
+  for (const pvValue of [123.75, 87.125]) {
+    await test("Public PV decimal is permitted without exposing reward fields: " + pvValue, async () => {
+      const catalog = fixture(); catalog.products[0].pvValue = pvValue;
+      await writeFixture(catalog);
+      const model = await readPublicStoreProductBySlug("v60-dripper"); assert.ok(model);
+      assert.equal(model.pvValue, pvValue); assertNoPdpRewardFields(model);
+      const { readPointDisplayName } = await import("../lib/pointDisplayNameStore");
+      const html = await render(); assertPublicPdpHtml(html);
+      const formatted = new Intl.NumberFormat("zh-TW", { maximumSignificantDigits: 21 }).format(pvValue);
+      assert.ok(html.includes((await readPointDisplayName()) + " " + formatted));
+    });
+  }
+  await test("PDP guard rejects reward-internal fields and serialized/attribute leaks", () => {
+    for (const field of ["rewardBasis", "referralRewards", "qualificationAttempts", "creditReservations", "rewardLedger"]) {
+      assert.throws(() => assertNoPdpRewardFields({ pvValue: 123.75, [field]: {} }), assert.AssertionError);
+      assert.throws(() => assertPublicPdpHtml('<script type="application/json">' + JSON.stringify({ [field]: 1 }) + '</script>'), assert.AssertionError);
+      assert.throws(() => assertPublicPdpHtml('<div data-' + field + '="1"></div>'), assert.AssertionError);
+    }
+  });
+  await test("PDP guard rejects reward imports/references while ignoring comments", () => {
+    assertNoPdpRewardReferences('/* reward internals stay private */ const pvValue = 87.125;');
+    for (const source of ['import { value } from "./orderRewardBasis";', 'export { value } from "./rewardLedger";',
+      'const value = require("./membershipCommerce");', 'const value = import("./referralRewards");', 'const value = rewardState;', 'const value = state["rewardBasis"];'])
+      assert.throws(() => assertNoPdpRewardReferences(source), assert.AssertionError);
+  });
+  await test("Real PDP/read-model sources retain no reward implementation wiring", async () => {
+    for (const source of [pageSource, gallerySource, notFoundSource, await fs.readFile("lib/storePublicReadModel.ts", "utf8")])
+      assertNoPdpRewardReferences(source);
+  });
   await test("Public DOM and client gallery props exclude private domain fields", async () => {
     const tree = await Page(props()); const html = renderToStaticMarkup(tree);
-    assert.doesNotMatch(html, /PRIVATE-(?:SECTION|CATEGORY|PRODUCT|SKU|MEDIA)-87432|private_spec_key|pvValue|123\.75|kdRedemption|subscriptionEligible|archivedAt|manualSeo/);
+    assertPublicPdpHtml(html);
+    const model = await readPublicStoreProductBySlug("v60-dripper"); assert.ok(model);
+    assert.deepEqual(Object.keys(model).sort(), ["manualSeo", "product", "pvValue"]);
+    assertNoPdpRewardFields(model);
     const clientGallery = nodes(tree, node => node.type === Gallery)[0];
     assert.deepEqual(Object.keys(clientGallery.props).sort(), ["gallery", "heroMedia", "name"]);
     assert.doesNotMatch(JSON.stringify(clientGallery.props), /pvValue|inventory|sectionId|categoryId|subscriptionEligible|seoTitle|seoDescription/);
