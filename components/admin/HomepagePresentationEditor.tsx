@@ -5,6 +5,7 @@ import { HOMEPAGE_PRESENTATION_NUMBER_RULES, HOMEPAGE_SECTION_CAPABILITIES, type
 import { describeHomepageContent, HOMEPAGE_CONTENT_SOURCES, HOMEPAGE_CONTENT_SLOT_LABELS, type HomepageContentDescription, type HomepageContentExample, type HomepageContentInput, type HomepageContentProduct } from "@/lib/homepageContent";
 import type { CmsLinkRegistryInput } from "@/lib/cmsLinks";
 import type { HomepageBasePresentationEdit } from "@/lib/homepagePresentationAdmin";
+import { HOMEPAGE_MOTION_PRESETS, HOMEPAGE_SECTION_MOTION_DEFAULTS, resolveSectionMotion, type HomepageMotionSectionKey, type HomepageSectionMotion } from "@/lib/homepageCms";
 import { VISUAL_ALIGNMENT_PRESETS, VISUAL_COLOR_PRESETS, VISUAL_WEIGHT_PRESETS, resolveVisualColor, visualColorHex, type VisualColorValue } from "@/lib/pageBuilderVisualStyle";
 
 export const HOMEPAGE_TEXT_SLOT_LABELS = HOMEPAGE_CONTENT_SLOT_LABELS;
@@ -19,6 +20,7 @@ const numericLabels: Record<NumericField, [string, string]> = {
   contentMaxWidthPx: ["內容最大寬度", "px"], paddingTopPx: ["上方留白", "px"], paddingBottomPx: ["下方留白", "px"],
 };
 type PresentationContextValue = {
+  device?: "desktop" | "mobile";
   content?: ContentContext;
   presentation?: HomepagePresentationV3;
   onEdit: (section: HomepagePresentationKey, edit: HomepageBasePresentationEdit) => void;
@@ -28,9 +30,11 @@ type PresentationContextValue = {
   issues: Record<string, string>;
 };
 const PresentationContext = createContext<PresentationContextValue | null>(null);
+export function useHomepageEditorDevice() { return useContext(PresentationContext)?.device; }
 
 /** Draft-only UI state. Opening/expanding controls never initializes CMS data. */
-export function HomepagePresentationProvider({ presentation, content, onEdit, onMobileEdit, onMobileToggle, onValidityChange, children }: {
+export function HomepagePresentationProvider({ presentation, content, device, onEdit, onMobileEdit, onMobileToggle, onValidityChange, children }: {
+  device?: "desktop" | "mobile";
   presentation?: HomepagePresentationV3;
   content?: ContentContext;
   onEdit: PresentationContextValue["onEdit"];
@@ -48,7 +52,7 @@ export function HomepagePresentationProvider({ presentation, content, onEdit, on
   }), []);
   const invalid = Object.keys(issues).length > 0;
   useEffect(() => onValidityChange(invalid), [invalid, onValidityChange]);
-  return <PresentationContext.Provider value={{ presentation, content, onEdit, onMobileEdit, onMobileToggle, reportIssue, issues }}>
+  return <PresentationContext.Provider value={{ presentation, content, device, onEdit, onMobileEdit, onMobileToggle, reportIssue, issues }}>
     {invalid ? <p className="cms-message" role="alert">呈現設定尚有未完成的輸入，請修正或選擇「沿用目前設計」後再儲存。</p> : null}
     {children}
   </PresentationContext.Provider>;
@@ -108,6 +112,11 @@ export function HomepagePresentationEditor({ sectionKey }: { sectionKey: Homepag
   return <SectionPresentationEditor sectionKey={sectionKey} context={context} />;
 }
 
+export function HomepageAnimationEditor({ sectionKey }: { sectionKey: HomepageMotionSectionKey }) {
+  const context = useContext(PresentationContext);
+  return context?.device ? <StudioAnimationFields sectionKey={sectionKey} context={context} /> : null;
+}
+
 
 function describeValue(value: unknown): string {
   if (typeof value === "boolean") return value ? "顯示" : "隱藏";
@@ -126,6 +135,25 @@ function SectionPresentationEditor({ sectionKey, context }: { sectionKey: Homepa
   const enabled = mobile?.overrideEnabled === true;
   const descriptions = context.content ? describeHomepageContent(context.content.homepage, sectionKey, context.content.products, context.content.pages) : undefined;
   const hasIssue = Object.keys(context.issues).some((key) => key.startsWith(`${sectionKey}.`));
+  if (context.device) {
+    const isMobile = context.device === "mobile";
+    return <section aria-label={isMobile ? "手機呈現設定" : "桌機呈現設定"}>
+      {isMobile ? <p className="cms-help">{enabled && mobile?.overrides ? "手機自訂 · 未覆寫欄位與桌機同步" : "與桌機同步 · 直接編輯即可建立手機自訂"}</p> : null}
+      {isMobile ? <><label className="cms-switch"><input type="checkbox" checked={enabled} onChange={event => context.onMobileToggle?.(sectionKey, event.currentTarget.checked)} />啟用手機自訂</label>{!enabled && mobile?.overrides ? <p className="cms-help">手機自訂目前暫停套用，下方保留原設定。重新啟用或編輯任一欄位會恢復套用；恢復同步則會刪除覆寫。</p> : null}</> : null}
+      {isMobile && mobile?.overrides ? <button type="button" onClick={() => {
+        // Reset deletes every leaf. Turning the enable flag off alone retains overrides.
+        const patch = mobile.overrides!;
+        for (const [slot, fields] of Object.entries(patch.text || {})) for (const field of Object.keys(fields)) context.onMobileEdit?.(sectionKey, { group: "text", slot: slot as HomepageTextSlot, field: field as keyof NonNullable<typeof fields>, value: undefined });
+        for (const field of Object.keys(patch.layout || {})) context.onMobileEdit?.(sectionKey, { group: "layout", field: field as keyof NonNullable<HomepagePresentationPatch["layout"]>, value: undefined });
+        context.onMobileEdit?.(sectionKey, { group: "background", value: undefined });
+        context.onMobileEdit?.(sectionKey, { group: "visible", value: undefined });
+        for (const field of Object.keys(patch.animation || {})) context.onMobileEdit?.(sectionKey, { group: "animation", field: field as keyof HomepageSectionMotion, value: undefined });
+        context.onMobileToggle?.(sectionKey, false);
+      }}>全部恢復與桌機同步</button> : null}
+      <PresentationFields key={`${sectionKey}-${context.device}`} sectionKey={sectionKey} context={context} mode={isMobile ? "mobile" : "base"} patch={isMobile ? mobile?.overrides : base} base={isMobile ? base : undefined} descriptions={isMobile ? undefined : descriptions} />
+      {sectionKey !== "hero" ? <StudioAnimationFields sectionKey={sectionKey} context={context} /> : <p className="cms-help">主視覺採既有電影式分段進場，時間與開關位於「內容與媒體」。目前兩種裝置共用此進場序列。</p>}
+    </section>;
+  }
   return <details className="cms-panel cms-collapsible homepage-base-presentation">
     <summary><div><h3>呈現設定</h3><p>{hasIssue ? "請完成輸入後再儲存" : enabled ? "已啟用手機自訂" : base && Object.keys(base).some((key) => key !== "animation") ? "已自訂共用樣式" : "沿用目前設計"}</p></div><span>展開／收合</span></summary>
     <div className="cms-panel-body">
@@ -174,7 +202,7 @@ function PresentationFields({ sectionKey, context, mode, patch, base, descriptio
   const { onEdit, onMobileEdit, reportIssue } = context;
   const slots = HOMEPAGE_SECTION_CAPABILITIES[sectionKey];
   const isMobile = mode === "mobile";
-  const inheritLabel = isMobile ? "沿用 Desktop" : "沿用目前設計";
+  const inheritLabel = isMobile ? context.device ? "恢復與桌機同步" : "沿用 Desktop" : "沿用目前設計";
   const inheritHint = (value: unknown, unit = "") => value === undefined ? "沿用 Desktop／網站設計" : `沿用 Desktop：${describeValue(value)}${unit}`;
   const [choosingColor, setChoosingColor] = useState(false);
   const background = patch?.background;
@@ -225,4 +253,28 @@ function PresentationFields({ sectionKey, context, mode, patch, base, descriptio
         {backgroundMode === "color" ? <ColorField label="背景顏色" value={background?.color} allowInherit={false} onChange={(color) => { if (color !== undefined) { setChoosingColor(false); reportIssue(backgroundIssue); edit({ group: "background", value: { mode: "color", color } }); } }} /> : null}
       </details>
   </section>;
+}
+
+const animationNames: Record<string, string> = { none: "無動畫", fade: "淡入", "fade-up": "由下淡入", "slide-left": "由左滑入", "slide-right": "由右滑入", "scale-reveal": "縮放揭示", editorial: "精品敘事" };
+function StudioAnimationFields({ sectionKey, context }: { sectionKey: HomepageMotionSectionKey; context: PresentationContextValue }) {
+  const mobile = context.device === "mobile", stored = context.presentation?.sections?.[sectionKey];
+  const legacy = (context.content?.homepage as unknown as Record<string, { motion?: unknown }>)?.[sectionKey]?.motion;
+  const desktop = { ...resolveSectionMotion(legacy, sectionKey), ...stored?.base?.animation };
+  const patch = mobile ? stored?.mobile?.overrides?.animation : stored?.base?.animation;
+  const effective = { ...desktop, ...(mobile && stored?.mobile?.overrideEnabled ? patch : {}) };
+  const edit = (field: keyof HomepageSectionMotion, value: unknown) => (mobile ? context.onMobileEdit : context.onEdit)?.(sectionKey, { group: "animation", field, value });
+  const state = (field: keyof HomepageSectionMotion) => mobile ? patch?.[field] === undefined ? "與桌機同步" : "手機自訂" : patch?.[field] === undefined ? "沿用區塊動畫" : "桌機自訂";
+  const reset = (field: keyof HomepageSectionMotion) => <button type="button" disabled={patch?.[field] === undefined} onClick={() => edit(field, undefined)}>{mobile ? "恢復與桌機同步" : "沿用區塊動畫"}</button>;
+  return <details className="cms-item-card" open><summary><strong>動畫</strong></summary>
+    <p className="cms-help">沿用首頁既有進場機制；減少動態偏好仍優先生效。右側可重播真實區塊。</p>
+    <label className="cms-switch"><input type="checkbox" checked={effective.enabled} onChange={event => edit("enabled", event.target.checked)} />啟用動畫 · {state("enabled")}</label>{reset("enabled")}
+    <label>進場方式 · {state("preset")}<select style={selectStyle} value={effective.preset} onChange={event => edit("preset", event.target.value)}>{HOMEPAGE_MOTION_PRESETS.map(value => <option key={value} value={value}>{animationNames[value]}</option>)}</select></label>{reset("preset")}
+    <div className="cms-grid two">{(["durationMs", "delayMs", "distancePx", "staggerMs"] as const).map(field => {
+      const rule = HOMEPAGE_PRESENTATION_NUMBER_RULES[field], labels = { durationMs: "時間（ms）", delayMs: "延遲（ms）", distancePx: "距離（px）", staggerMs: "項目間隔（ms）" };
+      return <div key={field}><label>{labels[field]} · {state(field)}<input type="range" min={rule.min} max={rule.max} step={rule.step} value={effective[field]} onChange={event => edit(field, Number(event.target.value))} /></label><output>{effective[field]}</output>{reset(field)}</div>;
+    })}</div>
+    <button type="button" onClick={() => {
+      for (const field of ["enabled", "preset", "delayMs", "durationMs", "distancePx", "staggerMs"] as const) edit(field, mobile ? undefined : HOMEPAGE_SECTION_MOTION_DEFAULTS[sectionKey][field]);
+    }}>{mobile ? "動畫恢復與桌機同步" : "恢復此區塊預設動畫"}</button>
+  </details>;
 }

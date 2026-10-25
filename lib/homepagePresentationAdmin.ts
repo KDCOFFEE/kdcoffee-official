@@ -9,7 +9,8 @@ export type HomepageBasePresentationEdit =
   | { group: "text"; slot: HomepageTextSlot; field: keyof HomepageTextPresentation; value: unknown }
   | { group: "layout"; field: keyof Layout; value: unknown }
   | { group: "background"; value: HomepagePresentationPatch["background"] }
-  | { group: "visible"; value: boolean | undefined };
+  | { group: "visible"; value: boolean | undefined }
+  | { group: "animation"; field: keyof NonNullable<HomepagePresentationPatch["animation"]>; value: unknown };
 
 const textFields = ["fontSizePx", "fontWeight", "color", "lineHeight", "letterSpacingEm", "alignment", "maxWidthCh"] as const;
 const layoutFields = ["contentMaxWidthPx", "paddingTopPx", "paddingBottomPx"] as const;
@@ -49,6 +50,9 @@ export function updateHomepageBasePresentation<T extends { presentation?: Homepa
       else if (edit.value !== undefined && (edit.value.mode !== "none" && edit.value.mode !== "color" || edit.value.mode === "color" && edit.value.color === undefined)) throw new Error("請先選擇有效的背景顏色。");
       break;
     case "visible": path = ["visible"]; break;
+    case "animation":
+      if (sectionKey === "hero" || !["enabled", "preset", "delayMs", "durationMs", "distancePx", "staggerMs"].includes(edit.field)) throw new Error("這個區塊不支援此動畫參數。");
+      path = ["animation", edit.field]; break;
     default: throw new Error("不支援的首頁呈現設定。");
   }
   const presentation = editPath(homepage.presentation as Record<string, unknown> | undefined, ["sections", sectionKey, "base", ...path], value);

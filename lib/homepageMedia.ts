@@ -129,6 +129,15 @@ export async function verifyHomepageMedia(homepage: JsonRecord) {
     addOwner(home006, "image", "content");
   }
 
+  // SEO already stores its asset as { media, alt }, with no legacy image key.
+  const seo = isRecord(homepage.seo) ? homepage.seo : undefined;
+  const share = seo && isRecord(seo.shareImage) ? seo.shareImage : undefined;
+  if (share && isRecord(share.media)) {
+    allowedOwners.add(share);
+    const candidate = { media: share.media, image: share.media.url };
+    checks.push(verifyOwnerMedia(candidate, "image", "content").then(() => { share.media = candidate.media; }));
+  }
+
   const rejectUnexpectedMedia = (value: unknown) => {
     if (Array.isArray(value)) {
       value.forEach(rejectUnexpectedMedia);

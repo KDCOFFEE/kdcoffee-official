@@ -263,7 +263,7 @@ export default function HomepageV3({
 
   return (
     <>
-      <HomepageMotion />
+      <HomepageMotion presentation={h.presentation} sections={Object.fromEntries((["campaignSection", "home002", "home003", "home004", "home005", "home006", "home007", "home008", "home009", "home010"] as const).map(key => [key, (h[key] as MotionOwner)?.motion]))} />
       {/**
        * ======================================================
        * HERO

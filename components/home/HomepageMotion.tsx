@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect } from "react";
+import { HOMEPAGE_PRESENTATION_MOBILE_MAX_PX, type HomepagePresentationV3 } from "@/lib/homepagePresentation";
+import { homepageMotionCssVariables, type HomepageMotionSectionKey } from "@/lib/homepageCms";
+import { resolveHomepageStudioMotion } from "@/lib/homepageStudioMotion";
 
 const revealSelector = "[data-home-reveal]";
 const sectionMotionSelector = "[data-home-motion]";
@@ -15,7 +18,32 @@ function reveal(target: HTMLElement) {
   target.classList.add("is-home-revealed");
 }
 
-export default function HomepageMotion() {
+export default function HomepageMotion({ presentation, sections }: { presentation?: HomepagePresentationV3; sections?: Partial<Record<HomepageMotionSectionKey, unknown>> } = {}) {
+  const motionPresentation = presentation ? { schemaVersion: 3, sections: Object.fromEntries(Object.entries(presentation.sections || {}).map(([key, value]) => [key, { base: { animation: value.base?.animation }, mobile: { overrideEnabled: value.mobile?.overrideEnabled === true, overrides: { animation: value.mobile?.overrides?.animation } } }])) } : undefined;
+  const settingsKey = JSON.stringify([motionPresentation, sections]);
+  useEffect(() => {
+    const query = window.matchMedia(`(max-width: ${HOMEPAGE_PRESENTATION_MOBILE_MAX_PX}px)`);
+    const settings = JSON.parse(settingsKey) as [HomepagePresentationV3 | undefined, Partial<Record<HomepageMotionSectionKey, unknown>> | undefined];
+    const originals = new Map<HTMLElement, { preset?: string; variables: Record<string, string> }>();
+    const apply = () => {
+      for (const [key, value] of Object.entries(settings[0]?.sections || {})) {
+        if (key === "hero" || (!value?.base?.animation && !value?.mobile?.overrides?.animation)) continue;
+        const section = key as HomepageMotionSectionKey, node = document.getElementById(section === "campaignSection" ? "monthly-campaign" : section);
+        if (!node) continue;
+        const motion = resolveHomepageStudioMotion(settings[0], section, settings[1]?.[section], query.matches ? "mobile" : "desktop");
+        if (!originals.has(node)) originals.set(node, { preset: node.dataset.homeMotion, variables: Object.fromEntries(Object.keys(homepageMotionCssVariables(motion)).map(name => [name, node.style.getPropertyValue(name)])) });
+        node.dataset.homeMotion = motion.activePreset;
+        for (const [name, value] of Object.entries(homepageMotionCssVariables(motion))) node.style.setProperty(name, value);
+      }
+    };
+    apply(); query.addEventListener("change", apply); return () => {
+      query.removeEventListener("change", apply);
+      for (const [node, original] of originals) {
+        if (original.preset === undefined) delete node.dataset.homeMotion; else node.dataset.homeMotion = original.preset;
+        for (const [name, value] of Object.entries(original.variables)) { if (value) node.style.setProperty(name, value); else node.style.removeProperty(name); }
+      }
+    };
+  }, [settingsKey]);
   useEffect(() => {
     const root = document.documentElement;
     const configuredSections = Array.from(document.querySelectorAll<HTMLElement>(sectionMotionSelector));

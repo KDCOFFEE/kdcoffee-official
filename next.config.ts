@@ -1,6 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Local verification JSON must never enter server deployment traces.
+  outputFileTracingExcludes: {
+    "*": ["./qa-output/**/*", "./dependency-install.log"],
+  },
   allowedDevOrigins: [
     "slit-gorged-decibel.ngrok-free.dev",
     "*.ngrok-free.dev",

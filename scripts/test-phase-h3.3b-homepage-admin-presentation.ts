@@ -168,10 +168,11 @@ check("save still validates before the same Homepage PUT", () => {
 });
 check("invalid numeric/color drafts block save without writing invalid data", () => { assert.match(manager, /disabled=\{saving \|\| !dirty \|\| presentationInvalid\}/u); assert.match(manager, /if \(presentationInvalid\)/u); assert.match(editor, /Number\.isFinite\(number\)/u); assert.match(editor, /needsColor/u); assert.match(editor, /onValidityChange\(invalid\)/u); });
 check("existing content/motion/visual controls remain present", () => { for (const name of ["Home002ClosingEditor", "SectionMotionEditor", "HomepageVisualEditor", "HeroEditor", "HomepageNavigationEditor"]) assert.ok(manager.includes(name)); assert.ok(manager.includes("resolveHeroTiming(value.timing)")); });
-check("Base retains no animation/preset/Preview/API; Mobile fields stay absent until enabled", () => {
+check("Base retains no Preview/API or direct Mobile mutation; legacy Mobile fields stay absent until enabled", () => {
   assert.doesNotMatch(editor, /presentation\.animation|<iframe|postMessage|fetch\(/u);
   assert.ok(!render("home002").includes('data-presentation-mode="mobile"'));
-  assert.doesNotMatch(mutation.split("// Mobile editing")[0], /\["sections", sectionKey, "mobile"\]|\["animation"\]/u);
+  // Homepage Studio now explicitly supports validated sparse animation leaves.
+  assert.doesNotMatch(mutation.split("// Mobile editing")[0], /\["sections", sectionKey, "mobile"\]/u);
 });
 check("all edit results serialize to valid Homepage data", () => {
   let data = fixture();

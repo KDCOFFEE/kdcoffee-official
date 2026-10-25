@@ -1,6 +1,7 @@
 import type { CSSProperties } from "react";
 import { createHomepagePresentationBindings, homepagePresentationProps, mergeHomepageStyles } from "@/lib/homepagePresentationBindings";
-import { activeHomepageCampaigns, type HomepageData } from "@/data/homepageData";
+import type { HomepageData } from "@/data/homepageData";
+import { activeHomepageCampaigns } from "@/lib/homepageCampaigns";
 import CampaignMedia from "@/components/home/CampaignMedia";
 import CmsLink from "@/components/CmsLink";
 import { resolveHomepageCta } from "@/lib/homepageCta";

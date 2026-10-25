@@ -82,3 +82,7 @@ next-env.d.ts
 /validation/
 /isolated-test/
 /isolated-tests/
+
+# Local verification artifacts must not enter Tailwind/Next source watching.
+/qa-output/
+/dependency-install.log
