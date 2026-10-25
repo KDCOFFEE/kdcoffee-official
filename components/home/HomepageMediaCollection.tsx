@@ -1,5 +1,6 @@
 import KdMedia from "@/components/media/KdMedia";
 import { resolveMediaAsset, type MediaAsset } from "@/lib/media";
+import type { HomepagePreviewMode } from "./HomepagePreviewContext";
 
 type FutureMediaItem = {
   id?: string;
@@ -75,12 +76,14 @@ export default function HomepageMediaCollection({
   media,
   mediaItems,
   src,
+  previewMode = "public",
 }: {
   alt: string;
   className?: string;
   media?: MediaAsset;
   mediaItems?: unknown;
   src?: string;
+  previewMode?: HomepagePreviewMode;
 }) {
   const items = resolveHomepageMediaCollection({ alt, media, mediaItems, src });
 
@@ -89,7 +92,7 @@ export default function HomepageMediaCollection({
   return (
     <div className={`${className} home-media-collection ${items.length > 1 ? "has-multiple-media" : "has-single-media"}`}>
       {items.map((item, index) => (
-        <figure className="home-media-collection-item" key={`${item.media.url}-${index}`}>
+        <figure className="home-media-collection-item" key={previewMode === "public" ? `${item.media.url}-${index}` : item.id && !item.id.startsWith("legacy-") ? item.id : index}>
           <KdMedia media={item.media} alt={item.alt} fallback={null} />
           {item.caption ? <figcaption>{item.caption}</figcaption> : null}
         </figure>

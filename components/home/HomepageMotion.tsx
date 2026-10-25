@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useLayoutEffect } from "react";
+import { useHomepagePreview } from "./HomepagePreviewContext";
 import { HOMEPAGE_PRESENTATION_MOBILE_MAX_PX, type HomepagePresentationV3 } from "@/lib/homepagePresentation";
 import { homepageMotionCssVariables, type HomepageMotionSectionKey } from "@/lib/homepageCms";
 import { resolveHomepageStudioMotion } from "@/lib/homepageStudioMotion";
@@ -19,6 +20,7 @@ function reveal(target: HTMLElement) {
 }
 
 export default function HomepageMotion({ presentation, sections }: { presentation?: HomepagePresentationV3; sections?: Partial<Record<HomepageMotionSectionKey, unknown>> } = {}) {
+  const { mode, sectionId, replay, onReplayComplete } = useHomepagePreview();
   const motionPresentation = presentation ? { schemaVersion: 3, sections: Object.fromEntries(Object.entries(presentation.sections || {}).map(([key, value]) => [key, { base: { animation: value.base?.animation }, mobile: { overrideEnabled: value.mobile?.overrideEnabled === true, overrides: { animation: value.mobile?.overrides?.animation } } }])) } : undefined;
   const settingsKey = JSON.stringify([motionPresentation, sections]);
   useEffect(() => {
@@ -44,6 +46,59 @@ export default function HomepageMotion({ presentation, sections }: { presentatio
       }
     };
   }, [settingsKey]);
+  useLayoutEffect(() => {
+    if (mode === "public") return;
+    const focused = mode === "studio-replay" && sectionId ? document.getElementById(sectionId) : null;
+    document.querySelectorAll<HTMLElement>(`${sectionMotionSelector},${revealSelector}`).forEach(target => {
+      if (focused?.contains(target)) return;
+      if (target.matches(sectionMotionSelector)) reveal(target);
+      if (target.matches(revealSelector)) target.classList.add("is-home-revealed");
+    });
+    if (mode === "studio-stable") document.documentElement.classList.remove("is-home-motion-ready");
+  });
+  useEffect(() => {
+    if (mode !== "studio-replay") return;
+    const target = sectionId ? document.getElementById(sectionId) : null;
+    if (!target) { onReplayComplete?.(); return; }
+    let cancelled = false, firstFrame = 0, secondFrame = 0, finishFrame = 0;
+    const root = document.documentElement;
+    const legacy = Array.from(target.querySelectorAll<HTMLElement>(revealSelector));
+    const finish = () => { if (!cancelled) onReplayComplete?.(); };
+    // A timeout is only fail-open protection. Finite browser animations finish normally.
+    const timer = window.setTimeout(finish, 30000);
+    target.dataset.studioReplay = "true";
+    root.classList.add("is-home-motion-ready");
+    const disabled = target.dataset.homeMotion === "none" || target.dataset.heroMotion === "off";
+    if (!disabled) {
+      if (target.matches(sectionMotionSelector)) {
+        target.classList.remove("is-home-motion-entered"); target.classList.add("is-home-motion-pending"); target.dataset.homeMotionState = "pending";
+      }
+      legacy.forEach(node => node.classList.remove("is-home-revealed"));
+    }
+    void target.getBoundingClientRect();
+    firstFrame = requestAnimationFrame(() => {
+      secondFrame = requestAnimationFrame(() => {
+        if (cancelled) return;
+        if (target.matches(sectionMotionSelector)) reveal(target);
+        legacy.forEach(node => node.classList.add("is-home-revealed"));
+        if (target.id === "top" && !disabled) {
+          target.getAnimations({ subtree: true }).filter(animation => "animationName" in animation).forEach(animation => { animation.cancel(); animation.play(); });
+        }
+        finishFrame = requestAnimationFrame(() => {
+          const animations = target.getAnimations({ subtree: true }).filter(animation => Number.isFinite(animation.effect?.getComputedTiming().endTime));
+          void Promise.allSettled(animations.map(animation => animation.finished)).then(finish);
+        });
+      });
+    });
+    return () => {
+      cancelled = true; window.clearTimeout(timer);
+      cancelAnimationFrame(firstFrame); cancelAnimationFrame(secondFrame); cancelAnimationFrame(finishFrame);
+      delete target.dataset.studioReplay;
+      if (target.matches(sectionMotionSelector)) reveal(target);
+      legacy.forEach(node => node.classList.add("is-home-revealed"));
+      root.classList.remove("is-home-motion-ready");
+    };
+  }, [mode, sectionId, replay, onReplayComplete]);
   useEffect(() => {
     const root = document.documentElement;
     const configuredSections = Array.from(document.querySelectorAll<HTMLElement>(sectionMotionSelector));
@@ -75,6 +130,7 @@ export default function HomepageMotion({ presentation, sections }: { presentatio
     rails.forEach((rail) => rail.addEventListener("keydown", handleRailKeydown));
 
     if (
+      mode !== "public" ||
       reducedMotion.matches ||
       !("IntersectionObserver" in window) ||
       targets.length === 0
@@ -134,7 +190,7 @@ export default function HomepageMotion({ presentation, sections }: { presentatio
       );
       root.classList.remove("is-home-motion-ready");
     };
-  }, []);
+  }, [mode]);
 
   return null;
 }

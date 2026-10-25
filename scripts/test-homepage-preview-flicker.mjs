@@ -104,17 +104,17 @@ try{
   await device('desktop');const before=await probe();for(const value of [1000,1100,1200,1300,1400])await setRange(value);await poll(()=>style('#home002','--home-motion-duration'),'1400ms');await page.getByLabel(/^進場方式/).selectOption('slide-left');await poll(()=>frame.locator('#home002').getAttribute('data-home-motion'),'slide-left');await page.getByLabel(/^啟用動畫/).uncheck();await poll(()=>frame.locator('#home002').getAttribute('data-home-motion'),'none');await page.getByLabel(/^啟用動畫/).check();await poll(()=>frame.locator('#home002').getAttribute('data-home-motion'),'slide-left');assert.equal((await probe()).scrollCalls,before.scrollCalls);assert.equal(await frame.locator('main[data-homepage-preview]').getAttribute('data-homepage-preview'),'stable');await stable();
  });
  await test('Normal interaction has no sampled invisible entrance content or autosave',async()=>{await settle();const state=await probe();assert.ok(state.sampledFrames>0);assert.equal(state.hiddenSamples,0);assert.equal(puts,0);assert.equal(await fs.readFile(path.join(runtime.root,'store/homepage.json'),'utf8'),original);});
- await test('Explicit Replay alone intentionally remounts Homepage and shows real animations',async()=>{
-  await nav('咖啡時刻').click();await nav('品牌價值').click();await frame.evaluate(()=>{window.__homepagePreviewProbe.monitor=false;});await page.getByRole('button',{name:'重播動畫',exact:true}).click();await poll(async()=>(await probe()).homepageMounts,2);assert.equal((await probe()).previewMounts,1);assert.equal(loads,1);assert.equal(await frame.locator('main[data-homepage-preview]').getAttribute('data-homepage-preview'),'replay');await poll(()=>frame.locator('#home002').getAttribute('data-home-motion-state'),'entered');await poll(()=>style('#home002 .v3-why-heading','opacity'),'1');assert.notEqual(await style('#home002 .v3-why-heading','transition-duration'),'0s');
+ await test('Explicit Replay alone restarts focused animation while Homepage stays mounted',async()=>{
+  await nav('咖啡時刻').click();await nav('品牌價值').click();await frame.evaluate(()=>{window.__homepagePreviewProbe.monitor=false;});await page.getByRole('button',{name:'重播動畫',exact:true}).click();await poll(()=>frame.locator('#home002').getAttribute('data-studio-replay'),'true');assert.equal((await probe()).homepageMounts,1);assert.equal((await probe()).previewMounts,1);assert.equal(loads,1);await poll(()=>frame.locator('#home002').getAttribute('data-home-motion-state'),'entered');await poll(()=>style('#home002 .v3-why-heading','opacity'),'1');
  });
  await test('Ordinary editing after Replay returns to stable visible mode without another remount',async()=>{
-  await openTitle();await slot().getByLabel('字級（px）',{exact:true}).fill('54');await poll(()=>style('#home002 h2','font-size'),'54px');assert.equal(await frame.locator('main[data-homepage-preview]').getAttribute('data-homepage-preview'),'stable');assert.equal((await probe()).homepageMounts,2);assert.equal(loads,1);
+  await openTitle();await slot().getByLabel('字級（px）',{exact:true}).fill('54');await poll(()=>style('#home002 h2','font-size'),'54px');assert.equal(await frame.locator('main[data-homepage-preview]').getAttribute('data-homepage-preview'),'stable');assert.equal((await probe()).homepageMounts,1);assert.equal(loads,1);
  });
  await test('Save shortcut still writes only canonical TEMP data and clears dirty state',async()=>{await page.keyboard.press('Control+s');await page.getByText('✓ 已儲存',{exact:false}).waitFor();assert.equal(puts,1);assert.ok(JSON.parse(await fs.readFile(path.join(runtime.root,'store/homepage.json'),'utf8')).version>JSON.parse(original).version);});
  await test('Foreign message source cannot replace preview data',async()=>{
   await settle();const before=await probe();await frame.evaluate(()=>window.dispatchEvent(new MessageEvent('message',{origin:location.origin,source:window,data:{type:'kd-homepage-draft',homepage:{hero:{},campaigns:[]}}})));await settle();assert.equal((await probe()).homepageSnapshots,before.homepageSnapshots);
  });
- await test('Reduced-motion Replay completes visibly and runtime has no errors',async()=>{await page.emulateMedia({reducedMotion:'reduce'});await page.getByRole('button',{name:'重播動畫',exact:true}).click();await poll(async()=>(await probe()).homepageMounts,3);await poll(()=>style('#home002 h2','opacity'),'1');assert.deepEqual(errors,[]);assert.equal(loads,1);});
+ await test('Reduced-motion Replay completes visibly and runtime has no errors',async()=>{await page.emulateMedia({reducedMotion:'reduce'});await page.getByRole('button',{name:'重播動畫',exact:true}).click();await poll(()=>frame.locator('main[data-homepage-preview]').getAttribute('data-homepage-preview'),'stable');assert.equal((await probe()).homepageMounts,1);await poll(()=>style('#home002 h2','opacity'),'1');assert.deepEqual(errors,[]);assert.equal(loads,1);});
  await test('Public Homepage retains its own entrance lifecycle without Admin preview overrides',async()=>{
   const publicPage=await context.newPage();publicPage.on('pageerror',error=>errors.push(error.message));await publicPage.goto(origin+'/',{waitUntil:'networkidle'});
   assert.equal(await publicPage.locator('[data-homepage-preview]').count(),0);
@@ -125,8 +125,8 @@ try{
  });
  await page.screenshot({path:path.join(qa,'hotfix-owner-qa-desktop.png')});await device('mobile');await nav('咖啡時刻').click();await nav('品牌價值').click();await page.screenshot({path:path.join(qa,'hotfix-owner-qa-mobile.png')});
  const finalProbe=await probe(),intentionalReplays=finalProbe.messages.filter(message=>message.type==='kd-homepage-replay').length;
- assert.equal(finalProbe.homepageMounts-1-intentionalReplays,0);assert.equal(loads,1);
- result={mode:'hotfix acceptance',passed:checks.length,checks,iframeInitialLoads:Math.min(loads,1),additionalIframeLoads:loads-1,homepageDraftPreviewMounts:finalProbe.previewMounts,unintendedHomepageV3Remounts:finalProbe.homepageMounts-1-intentionalReplays,intentionalReplayRemounts:intentionalReplays,probe:finalProbe,errors,puts};
+ assert.equal(finalProbe.homepageMounts-1,0);assert.equal(loads,1);
+ result={mode:'hotfix acceptance',passed:checks.length,checks,iframeInitialLoads:Math.min(loads,1),additionalIframeLoads:loads-1,homepageDraftPreviewMounts:finalProbe.previewMounts,unintendedHomepageV3Remounts:finalProbe.homepageMounts-1,intentionalReplayRemounts:0,intentionalReplayActions:intentionalReplays,probe:finalProbe,errors,puts};
  console.log('Homepage preview flicker: '+checks.length+' checks PASS.');
  }
 }finally{

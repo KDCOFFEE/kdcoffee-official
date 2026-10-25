@@ -4,6 +4,7 @@ import { useMemo, useRef, useState } from "react";
 import KdMedia from "@/components/media/KdMedia";
 import type { ResolvedHomepageMediaItem } from "@/components/home/HomepageMediaCollection";
 import { primaryEnabledIndex } from "@/lib/homepageCms";
+import { studioPreviewImageUrl, useHomepagePreview } from "./HomepagePreviewContext";
 
 function thumbnailUrl(item: ResolvedHomepageMediaItem) {
   if (item.media.type === "image") return item.media.url;
@@ -14,6 +15,7 @@ function thumbnailUrl(item: ResolvedHomepageMediaItem) {
 }
 
 export default function HomepageStudioGallery({ items }: { items: ResolvedHomepageMediaItem[] }) {
+  const studio = useHomepagePreview().mode !== "public";
   const initialIndex = useMemo(() => {
     const primaryIndex = primaryEnabledIndex(items);
     return primaryIndex >= 0 ? primaryIndex : 0;
@@ -34,7 +36,7 @@ export default function HomepageStudioGallery({ items }: { items: ResolvedHomepa
   return (
     <div className="v3-studio-gallery">
       <div className="v3-studio-stage" ref={stage} tabIndex={-1} aria-live="polite">
-        <KdMedia key={selected.id} media={selected.media} alt={selected.alt} fallback={null} eager />
+        <KdMedia key={studio ? "studio-stage" : selected.id} media={selected.media} alt={selected.alt} fallback={null} eager />
         {selected.title || selected.caption ? (
           <div className="v3-studio-caption">
             {selected.title ? <strong>{selected.title}</strong> : null}
@@ -65,7 +67,7 @@ export default function HomepageStudioGallery({ items }: { items: ResolvedHomepa
                   (event.currentTarget.parentElement?.children[next] as HTMLButtonElement | undefined)?.focus();
                 }}
               >
-                {thumbnail ? <img src={thumbnail} alt="" loading="lazy" /> : <span aria-hidden="true">▶</span>}
+                {thumbnail ? <img src={studio ? studioPreviewImageUrl(thumbnail, 256) : thumbnail} alt="" loading={studio ? "eager" : "lazy"} /> : <span aria-hidden="true">▶</span>}
                 <small>{String(index + 1).padStart(2, "0")}</small>
               </button>
             );

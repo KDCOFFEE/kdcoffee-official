@@ -3,6 +3,8 @@
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import type { MediaAsset } from "@/lib/media";
 import { normalizeYouTubeVideoId, youtubeEmbedUrl } from "@/lib/youtubeMedia";
+import { useHomepagePreview } from "@/components/home/HomepagePreviewContext";
+import StudioPreviewMedia from "./StudioPreviewMedia";
 
 type KdMediaProps = {
   media?: MediaAsset | null;
@@ -27,6 +29,7 @@ export default function KdMedia({
   playLabel = "播放影片",
   eager = false,
 }: KdMediaProps) {
+  const studio = useHomepagePreview().mode !== "public";
   const container = useRef<HTMLDivElement | null>(null);
   const video = useRef<HTMLVideoElement | null>(null);
   const [nearViewport, setNearViewport] = useState(eager);
@@ -38,7 +41,7 @@ export default function KdMedia({
   const posterFailed = Boolean(media?.posterUrl) && failedPosterUrl === media?.posterUrl;
   const fallbackImageFailed = Boolean(fallbackImageUrl) && failedFallbackUrl === fallbackImageUrl;
   useEffect(() => {
-    if (eager || nearViewport) return;
+    if (studio || eager || nearViewport) return;
     const element = container.current;
     if (!element || !("IntersectionObserver" in window)) {
       setNearViewport(true);
@@ -52,16 +55,19 @@ export default function KdMedia({
     }, { rootMargin: "240px" });
     observer.observe(element);
     return () => observer.disconnect();
-  }, [eager, nearViewport]);
+  }, [studio, eager, nearViewport]);
   useEffect(() => {
+    if(studio)return;
     const element=video.current;
     if(!element)return;
     if(backgroundVideo){element.muted=true;element.load();void element.play().catch(()=>undefined);}
     else element.pause();
-  },[backgroundVideo,media?.url,nearViewport]);
+  },[studio,backgroundVideo,media?.url,nearViewport]);
   function handleVideoPause(){setPlaying(false);const element=video.current;if(backgroundVideo&&element&&Number.isFinite(element.duration)&&element.currentTime>=element.duration-.12){element.currentTime=0;void element.play().catch(()=>undefined);}}
   function keepBackgroundVideoLooping(){const element=video.current;if(backgroundVideo&&element&&Number.isFinite(element.duration)&&element.duration-element.currentTime<.5){element.currentTime=0;if(element.paused)void element.play().catch(()=>undefined);}}
   function startBackgroundVideo(){const element=video.current;if(!backgroundVideo||!element)return;element.currentTime=0;void element.play().catch(()=>{element.currentTime=0;});}
+
+  if (studio) return <StudioPreviewMedia media={media} alt={alt} className={className} fallbackImageUrl={fallbackImageUrl} fallback={fallback} />;
 
   if (!media || failed) {
     const cloudinaryPoster = media?.type === "video" ? media.posterUrl : undefined;

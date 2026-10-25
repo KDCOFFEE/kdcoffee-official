@@ -19,6 +19,7 @@ import KdMedia from "@/components/media/KdMedia";
 import { resolveMediaAsset, type MediaAsset } from "@/lib/media";
 import { homepageMotionCssVariables, homepageSectionOrderMap, orderedEnabledItems, resolveHome002ClosingText, resolveHeroTiming, resolveHomepageMotion, sectionIsEnabled, type HomepageMotionSectionKey } from "@/lib/homepageCms";
 import type { CmsLinkValue, PublishedCmsPage } from "@/lib/cmsLinks";
+import type { HomepagePreviewMode } from "./HomepagePreviewContext";
 
 import {
   hasAvailableHome004Sku,
@@ -149,15 +150,17 @@ function Media({
   media,
   mediaItems,
   alt,
+  previewMode = "public",
 }: {
   src?: string;
   media?: MediaAsset;
   mediaItems?: unknown;
   alt: string;
   id: string;
+  previewMode?: HomepagePreviewMode;
 }) {
   return (
-    <HomepageMediaCollection alt={alt} className="v3-media" media={media} mediaItems={mediaItems} src={src} />
+    <HomepageMediaCollection alt={alt} className="v3-media" media={media} mediaItems={mediaItems} src={src} previewMode={previewMode} />
   );
 }
 
@@ -165,11 +168,13 @@ export default function HomepageV3({
   homepageData,
   products,
   pages,
+  previewMode = "public",
 }: {
   homepageData: HomepageViewData;
 
   products: Product[];
   pages: PublishedCmsPage[];
+  previewMode?: HomepagePreviewMode;
 }) {
   const h = homepageData;
   const bindPresentation = createHomepagePresentationBindings(h.presentation);
@@ -292,6 +297,8 @@ export default function HomepageV3({
             backgroundVideo
             eager
           />
+        ) : previewMode !== "public" && (hero.poster || hero.videoWebm || hero.videoMp4) ? (
+          <KdMedia media={hero.videoWebm || hero.videoMp4 ? { type: "video", provider: "local", url: hero.videoMp4 || hero.videoWebm || "", posterUrl: hero.poster } : { type: "image", provider: "local", url: hero.poster || "" }} alt="KD Coffee 首頁主視覺" className={desktopHeroClassName} fallbackImageUrl={hero.poster} backgroundVideo eager />
         ) : hero.videoWebm || hero.videoMp4 ? (
           <video className={desktopHeroClassName} autoPlay muted loop playsInline poster={hero.poster} aria-label="KD Coffee 真實烘豆影片">
             {hero.videoWebm ? <source src={hero.videoWebm} type="video/webm" /> : null}
@@ -414,7 +421,7 @@ export default function HomepageV3({
               >
                 {cardMedia.length ? (
                   <div className="v3-value-media">
-                    <HomepageMediaCollection alt={c.alt || c.title} media={c.media} mediaItems={c.mediaItems} src={c.image} />
+                    <HomepageMediaCollection alt={c.alt || c.title} media={c.media} mediaItems={c.mediaItems} src={c.image} previewMode={previewMode} />
                   </div>
                 ) : null}
 
@@ -612,6 +619,7 @@ export default function HomepageV3({
                     href={`/works/${p.slug}`}
                   >
                     <Home004ProductMedia
+                      previewMode={previewMode}
                       src={
                         listAsset
                           ?.path
@@ -717,7 +725,7 @@ export default function HomepageV3({
           {processSteps.map((s: HomepageContentItem, i: number) => {
             const hasMedia = resolveHomepageMediaCollection({ alt: s.alt || s.title, media: s.media, mediaItems: s.mediaItems, src: s.image }).length > 0;
             return <article key={s.id} className={hasMedia ? "" : "is-text-led"} data-home-motion-item style={motionItemStyle(i + 2)}>
-              {hasMedia ? <Media src={s.image} media={s.media} mediaItems={s.mediaItems} alt={s.alt || s.title} id={s.imageId} /> : null}
+              {hasMedia ? <Media src={s.image} media={s.media} mediaItems={s.mediaItems} alt={s.alt || s.title} id={s.imageId} previewMode={previewMode} /> : null}
               <div className="v3-process-copy"><span {...homepagePresentationProps(presentation.home005.textStyle("metadata"))}>{String(i + 1).padStart(2, "0")}</span><h3 {...homepagePresentationProps(presentation.home005.textStyle("cardTitle"))}>{s.title}</h3><p {...homepagePresentationProps(presentation.home005.textStyle("cardBody"))}>{s.text}</p></div>
             </article>;
           })}
@@ -766,7 +774,7 @@ export default function HomepageV3({
         </div>
 
         <div data-home-reveal="media" data-home-motion-part style={motionItemStyle(1)}>
-          <Media src={roast.image} media={roast.media} mediaItems={roast.mediaItems} alt={roast.alt || roast.title} id={roast.imageId || "IMG0601"} />
+          <Media src={roast.image} media={roast.media} mediaItems={roast.mediaItems} alt={roast.alt || roast.title} id={roast.imageId || "IMG0601"} previewMode={previewMode} />
         </div>
         </HomepageContentWidth>
       </section> : null}
@@ -798,6 +806,7 @@ export default function HomepageV3({
                 style={motionItemStyle(index + 1)}
               >
                 <Media
+                  previewMode={previewMode}
                   src={c.image}
                   media={c.media}
                   mediaItems={c.mediaItems}

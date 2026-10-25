@@ -1,15 +1,19 @@
 import ProductVisualMedia from "@/components/commerce/ProductVisualMedia";
+import StudioPreviewMedia from "@/components/media/StudioPreviewMedia";
+import type { HomepagePreviewMode } from "./HomepagePreviewContext";
 
 export default function Home004ProductMedia({
   src = "",
   alt,
+  previewMode = "public",
 }: {
   src?: string;
   alt: string;
+  previewMode?: HomepagePreviewMode;
 }) {
   return (
     <div className="v3-media">
-      <ProductVisualMedia
+      {previewMode !== "public" ? <StudioPreviewMedia media={src ? { type: "image", provider: "local", url: src } : undefined} alt={alt} /> : <ProductVisualMedia
         src={src}
         alt={alt}
 
@@ -24,7 +28,7 @@ export default function Home004ProductMedia({
         decoding="async"
 
         fallback={null}
-      />
+      />}
     </div>
   );
 }
