@@ -7,7 +7,7 @@ import ImageLibraryPicker from "./ImageLibraryPicker";
 import HeroMediaLibraryPicker from "./HeroMediaLibraryPicker";
 import { SmartLinkEditingProvider } from "./SmartLinkPicker";
 import { updateHomepageBasePresentation, updateHomepageMobilePresentation, updateHomepageMobileEnabled, type HomepageBasePresentationEdit } from "@/lib/homepagePresentationAdmin";
-import { HOMEPAGE_STUDIO_AREAS, homepageAreaSnapshot, isHomepagePresentationArea, type HomepageStudioArea, type HomepageStudioDevice } from "@/lib/homepageStudio";
+import { HOMEPAGE_STUDIO_AREAS, homepageAreaSnapshot, homepageDraftSnapshot, isHomepagePresentationArea, type HomepageStudioArea, type HomepageStudioDevice } from "@/lib/homepageStudio";
 import { validateHomepageCms } from "@/lib/homepageCms";
 import { validateHomepageCampaigns } from "@/lib/homepageCampaignValidation";
 import { resolveHome004Recommendations } from "@/lib/home004Recommendations";
@@ -29,11 +29,24 @@ export default function HomepageContentStudio() {
   const [toolbarHeight, setToolbarHeight] = useState(130), [previewWidth, setPreviewWidth] = useState(600);
   const previewBox = useRef<HTMLDivElement>(null);
   const latest = useRef(data); latest.current = data;
+  const latestArea = useRef(area); latestArea.current = area;
+  const lastSentDraft = useRef(""), lastSentArea = useRef("");
   const dirty = Boolean(data) && (JSON.stringify(data?.homepage) !== baseline || presentationInvalid);
   const currentArea = HOMEPAGE_STUDIO_AREAS.find(item => item.key === area)!;
   const sendDraft = useCallback(() => {
-    if (latest.current) frame.current?.contentWindow?.postMessage({ type: "kd-homepage-draft", homepage: latest.current.homepage, area }, window.location.origin);
-  }, [area]);
+    const homepage = latest.current?.homepage, target = frame.current?.contentWindow;
+    if (!homepage || !target) return;
+    const snapshot = homepageDraftSnapshot(homepage);
+    if (snapshot === lastSentDraft.current) return;
+    target.postMessage({ type: "kd-homepage-draft", homepage }, window.location.origin);
+    lastSentDraft.current = snapshot;
+  }, []);
+  const sendFocus = useCallback(() => {
+    const target = frame.current?.contentWindow;
+    if (!target || lastSentArea.current === latestArea.current) return;
+    target.postMessage({ type: "kd-homepage-focus", area: latestArea.current }, window.location.origin);
+    lastSentArea.current = latestArea.current;
+  }, []);
   useEffect(() => {
     const abort = new AbortController();
     Promise.all(["/api/admin/homepage", "/api/admin/assets"].map(async url => {
@@ -58,13 +71,18 @@ export default function HomepageContentStudio() {
   useEffect(() => {
     const receive = (event: MessageEvent) => {
       if (event.origin !== window.location.origin || event.source !== frame.current?.contentWindow) return;
-      if (event.data?.type === "kd-homepage-ready") { setReady(true); setPreviewError(""); sendDraft(); }
+      if (event.data?.type === "kd-homepage-ready") {
+        // A new document (initial load or explicit error recovery) needs a handshake.
+        lastSentDraft.current = ""; lastSentArea.current = "";
+        setReady(true); setPreviewError(""); sendDraft(); sendFocus();
+      }
       if (event.data?.type === "kd-homepage-preview-error") setPreviewError(event.data.message || "預覽無法顯示");
       if (event.data?.type === "kd-homepage-save") saveAction.current();
     };
     window.addEventListener("message", receive); return () => window.removeEventListener("message", receive);
-  }, [sendDraft]);
-  useEffect(() => { if (ready) sendDraft(); }, [data, area, ready, sendDraft]);
+  }, [sendDraft, sendFocus]);
+  useEffect(() => { if (ready) sendDraft(); }, [data?.homepage, ready, sendDraft]);
+  useEffect(() => { if (ready) sendFocus(); }, [area, ready, sendFocus]);
   useEffect(() => {
     const warn = (event: BeforeUnloadEvent) => { if (dirty) { event.preventDefault(); event.returnValue = ""; } };
     const navigate = (event: MouseEvent) => {
@@ -156,10 +174,10 @@ export default function HomepageContentStudio() {
           <div className={`${styles.fields} homepage-manager v3-admin`} key={area}>{group === "presentation" && isHomepagePresentationArea(area) ? <HomepagePresentationEditor sectionKey={area} /> : <>{editor}{isHomepagePresentationArea(area) ? <HomepageCtaVisibility homepage={h} setPath={setPath} area={area} /> : null}</>}</div>
         </section>
         <aside className={styles.preview} aria-label="即時首頁預覽">
-          <div className={styles.previewHead}><strong>Live Preview · {device === "desktop" ? "桌機" : "手機"}</strong><span>未儲存草稿 · {currentArea.label}</span><button type="button" onClick={() => { frame.current?.contentWindow?.postMessage({ type: "kd-homepage-replay" }, window.location.origin); sendDraft(); }}>重播動畫</button></div>
+          <div className={styles.previewHead}><strong>Live Preview · {device === "desktop" ? "桌機" : "手機"}</strong><span>未儲存草稿 · {currentArea.label}</span><button type="button" onClick={() => { frame.current?.contentWindow?.postMessage({ type: "kd-homepage-replay" }, window.location.origin); }}>重播動畫</button></div>
           {!ready ? <p role="status">正在載入真實首頁預覽…</p> : null}
           {previewError ? <p role="alert">{previewError} <button onClick={() => { setReady(false); frame.current?.contentWindow?.location.reload(); }}>重新載入預覽</button></p> : null}
-          <div className={styles.previewScroll} ref={previewBox}><iframe ref={frame} title="首頁未儲存即時預覽" src="/admin/homepage/preview" className={device === "mobile" ? styles.mobileFrame : styles.desktopFrame} style={{ zoom: Math.min(1, previewWidth / (device === "mobile" ? 390 : 1280)), height: `calc((100dvh - ${toolbarHeight + 165}px) / ${Math.min(1, previewWidth / (device === "mobile" ? 390 : 1280))})` }} onLoad={() => sendDraft()} /></div>
+          <div className={styles.previewScroll} ref={previewBox}><iframe ref={frame} title="首頁未儲存即時預覽" src="/admin/homepage/preview" className={device === "mobile" ? styles.mobileFrame : styles.desktopFrame} style={{ zoom: Math.min(1, previewWidth / (device === "mobile" ? 390 : 1280)), height: `calc((100dvh - ${toolbarHeight + 165}px) / ${Math.min(1, previewWidth / (device === "mobile" ? 390 : 1280))})` }} /></div>
           <p className={styles.note}>採用公開首頁元件。隱藏、未開始或缺少內容的區塊依正式規則隱藏；SEO 資料請在左側確認。</p>
         </aside>
       </div>

@@ -20,6 +20,12 @@ export const HOMEPAGE_STUDIO_AREAS = [
 export type HomepageStudioArea = typeof HOMEPAGE_STUDIO_AREAS[number]["key"];
 export type HomepageStudioDevice = "desktop" | "mobile";
 
+/** JSON CMS values compare by content, including messages with reordered keys. */
+export function homepageDraftSnapshot(homepage: unknown): string {
+  return JSON.stringify(homepage, (_key, value) => value && typeof value === "object" && !Array.isArray(value)
+    ? Object.fromEntries(Object.keys(value).sort().map(key => [key, value[key]])) : value);
+}
+
 /** All draft state stays in the editor. These helpers never perform I/O. */
 export function homepageAreaSnapshot(homepage: Record<string, unknown>, area: HomepageStudioArea) {
   const definition = HOMEPAGE_STUDIO_AREAS.find(item => item.key === area)!;
