@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useLayoutEffect } from "react";
+import { useEffect } from "react";
 import { useHomepagePreview } from "./HomepagePreviewContext";
 import { HOMEPAGE_PRESENTATION_MOBILE_MAX_PX, type HomepagePresentationV3 } from "@/lib/homepagePresentation";
 import { homepageMotionCssVariables, type HomepageMotionSectionKey } from "@/lib/homepageCms";
@@ -46,30 +46,35 @@ export default function HomepageMotion({ presentation, sections }: { presentatio
       }
     };
   }, [settingsKey]);
-  useLayoutEffect(() => {
-    if (mode === "public") return;
-    const focused = mode === "studio-replay" && sectionId ? document.getElementById(sectionId) : null;
-    document.querySelectorAll<HTMLElement>(`${sectionMotionSelector},${revealSelector}`).forEach(target => {
-      if (focused?.contains(target)) return;
-      if (target.matches(sectionMotionSelector)) reveal(target);
-      if (target.matches(revealSelector)) target.classList.add("is-home-revealed");
-    });
-    if (mode === "studio-stable") document.documentElement.classList.remove("is-home-motion-ready");
-  });
   useEffect(() => {
     if (mode !== "studio-replay") return;
     const target = sectionId ? document.getElementById(sectionId) : null;
-    if (!target) { onReplayComplete?.(); return; }
+    if (!target) { onReplayComplete?.("missing"); return; }
     let cancelled = false, firstFrame = 0, secondFrame = 0, finishFrame = 0;
     const root = document.documentElement;
+    const wasReady = root.classList.contains("is-home-motion-ready");
     const legacy = Array.from(target.querySelectorAll<HTMLElement>(revealSelector));
-    const finish = () => { if (!cancelled) onReplayComplete?.(); };
+    const disabled = target.dataset.homeMotion === "none" || target.dataset.heroMotion === "off" || window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const finish = () => { if (!cancelled) onReplayComplete?.(disabled ? "disabled" : "complete"); };
+    // Reset legacy entrances synchronously. Leaving their transitions active
+    // reverses a partially hidden transition instead of replaying its full range.
+    const resets = new Map<HTMLElement, { value: string; priority: string }>();
+    const restoreTransitions = () => {
+      for (const [node, original] of resets) {
+        if (original.value) node.style.setProperty("transition", original.value, original.priority);
+        else node.style.removeProperty("transition");
+      }
+      resets.clear();
+    };
     // A timeout is only fail-open protection. Finite browser animations finish normally.
     const timer = window.setTimeout(finish, 30000);
     target.dataset.studioReplay = "true";
     root.classList.add("is-home-motion-ready");
-    const disabled = target.dataset.homeMotion === "none" || target.dataset.heroMotion === "off";
     if (!disabled) {
+      for (const node of target.querySelectorAll<HTMLElement>(`${revealSelector}, .home-media-collection, .v3-process-progress span`)) {
+        resets.set(node, { value: node.style.getPropertyValue("transition"), priority: node.style.getPropertyPriority("transition") });
+        node.style.setProperty("transition", "none", "important");
+      }
       if (target.matches(sectionMotionSelector)) {
         target.classList.remove("is-home-motion-entered"); target.classList.add("is-home-motion-pending"); target.dataset.homeMotionState = "pending";
       }
@@ -79,6 +84,7 @@ export default function HomepageMotion({ presentation, sections }: { presentatio
     firstFrame = requestAnimationFrame(() => {
       secondFrame = requestAnimationFrame(() => {
         if (cancelled) return;
+        restoreTransitions();
         if (target.matches(sectionMotionSelector)) reveal(target);
         legacy.forEach(node => node.classList.add("is-home-revealed"));
         if (target.id === "top" && !disabled) {
@@ -92,11 +98,12 @@ export default function HomepageMotion({ presentation, sections }: { presentatio
     });
     return () => {
       cancelled = true; window.clearTimeout(timer);
+      restoreTransitions();
       cancelAnimationFrame(firstFrame); cancelAnimationFrame(secondFrame); cancelAnimationFrame(finishFrame);
       delete target.dataset.studioReplay;
       if (target.matches(sectionMotionSelector)) reveal(target);
       legacy.forEach(node => node.classList.add("is-home-revealed"));
-      root.classList.remove("is-home-motion-ready");
+      if (!wasReady) root.classList.remove("is-home-motion-ready");
     };
   }, [mode, sectionId, replay, onReplayComplete]);
   useEffect(() => {
@@ -130,7 +137,7 @@ export default function HomepageMotion({ presentation, sections }: { presentatio
     rails.forEach((rail) => rail.addEventListener("keydown", handleRailKeydown));
 
     if (
-      mode !== "public" ||
+      mode === "studio-replay" ||
       reducedMotion.matches ||
       !("IntersectionObserver" in window) ||
       targets.length === 0
@@ -154,7 +161,7 @@ export default function HomepageMotion({ presentation, sections }: { presentatio
           // section before the visitor has had a chance to reach it.
           observerResponded = true;
           entries.forEach((entry) => {
-            if (!entry.isIntersecting) return;
+            if (!entry.isIntersecting || (entry.target as HTMLElement).closest("[data-studio-replay]")) return;
             reveal(entry.target as HTMLElement);
             observer?.unobserve(entry.target);
           });
@@ -164,6 +171,7 @@ export default function HomepageMotion({ presentation, sections }: { presentatio
 
       configuredSections.forEach((target) => {
         if (target.dataset.homeMotion === "none") return;
+        if (mode === "studio-live" && target.classList.contains("is-home-motion-entered")) return;
         target.classList.add("is-home-motion-pending");
         target.dataset.homeMotionState = "pending";
       });
@@ -190,7 +198,9 @@ export default function HomepageMotion({ presentation, sections }: { presentatio
       );
       root.classList.remove("is-home-motion-ready");
     };
-  }, [mode]);
+  // Replay owns only its target. Keep the normal observer and all other
+  // sections intact while the Studio switches between live and replay.
+  }, [mode === "public"]);
 
   return null;
 }

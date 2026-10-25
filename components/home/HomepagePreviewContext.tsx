@@ -1,8 +1,9 @@
 "use client";
 import { createContext, useContext, useMemo, type ReactNode } from "react";
 
-export type HomepagePreviewMode = "public" | "studio-stable" | "studio-replay";
-type Preview = { mode: HomepagePreviewMode; sectionId?: string; replay?: number; onReplayComplete?: () => void };
+export type HomepagePreviewMode = "public" | "studio-live" | "studio-replay";
+export type HomepageReplayResult = "complete" | "disabled" | "missing";
+type Preview = { mode: HomepagePreviewMode; sectionId?: string; replay?: number; onReplayComplete?: (result: HomepageReplayResult) => void };
 const Context = createContext<Preview>({ mode: "public" });
 export function useHomepagePreview() { return useContext(Context); }
 /** Reuse Next's existing local-image optimizer only for editor preview bitmaps. */

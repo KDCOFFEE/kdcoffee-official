@@ -26,8 +26,8 @@ export default function HomepageContentStudio() {
   const [seoPicker, setSeoPicker] = useState(false), [heroPicker, setHeroPicker] = useState<"desktop" | "mobile" | null>(null);
   const [ready, setReady] = useState(false), [previewError, setPreviewError] = useState("");
   const frame = useRef<HTMLIFrameElement>(null), saveLock = useRef(false), toolbar = useRef<HTMLElement>(null), saveAction = useRef<() => void>(() => {});
-  const [toolbarHeight, setToolbarHeight] = useState(130), [previewWidth, setPreviewWidth] = useState(600);
-  const previewBox = useRef<HTMLDivElement>(null);
+  const [toolbarHeight, setToolbarHeight] = useState(130), [previewWidth, setPreviewWidth] = useState(0);
+  const previewBox = useRef<HTMLDivElement>(null), previewHost = useRef<HTMLDivElement>(null);
   const latest = useRef(data); latest.current = data;
   const latestArea = useRef(area); latestArea.current = area;
   const lastSentDraft = useRef(""), lastSentArea = useRef("");
@@ -64,8 +64,16 @@ export default function HomepageContentStudio() {
     observer.observe(node); return () => observer.disconnect();
   }, [Boolean(data)]);
   useEffect(() => {
-    const node = previewBox.current; if (!node) return;
-    const observer = new ResizeObserver(() => setPreviewWidth(Math.max(240, node.clientWidth - 24)));
+    const node = previewHost.current, scroll = previewBox.current; if (!node || !scroll) return;
+    // The observed width must not depend on the child's scrollbars. Preserve
+    // fractional layout width, then round down so the iframe cannot overflow it.
+    const observer = new ResizeObserver(([entry]) => {
+      const style = getComputedStyle(scroll);
+      const padding = parseFloat(style.paddingLeft) + parseFloat(style.paddingRight);
+      const gutter = scroll.offsetWidth - scroll.clientWidth;
+      const width = Math.max(1, Math.floor(entry.contentRect.width - padding - gutter));
+      setPreviewWidth(previous => previous === width ? previous : width);
+    });
     observer.observe(node); return () => observer.disconnect();
   }, [Boolean(data)]);
   useEffect(() => {
@@ -177,7 +185,7 @@ export default function HomepageContentStudio() {
           <div className={styles.previewHead}><strong>Live Preview · {device === "desktop" ? "桌機" : "手機"}</strong><span>未儲存草稿 · {currentArea.label}</span><button type="button" onClick={() => { frame.current?.contentWindow?.postMessage({ type: "kd-homepage-replay" }, window.location.origin); }}>重播動畫</button></div>
           {!ready ? <p role="status">正在載入真實首頁預覽…</p> : null}
           {previewError ? <p role="alert">{previewError} <button onClick={() => { setReady(false); frame.current?.contentWindow?.location.reload(); }}>重新載入預覽</button></p> : null}
-          <div className={styles.previewScroll} ref={previewBox}><iframe ref={frame} title="首頁未儲存即時預覽" src="/admin/homepage/preview" className={device === "mobile" ? styles.mobileFrame : styles.desktopFrame} style={{ zoom: Math.min(1, previewWidth / (device === "mobile" ? 390 : 1280)), height: `calc((100dvh - ${toolbarHeight + 165}px) / ${Math.min(1, previewWidth / (device === "mobile" ? 390 : 1280))})` }} /></div>
+          <div className={styles.previewViewport} ref={previewHost}><div className={styles.previewScroll} ref={previewBox}>{previewWidth > 0 ? <iframe ref={frame} title="首頁未儲存即時預覽" src="/admin/homepage/preview" className={device === "mobile" ? styles.mobileFrame : styles.desktopFrame} style={{ zoom: Math.min(1, previewWidth / (device === "mobile" ? 390 : 1280)), height: `calc((100dvh - ${toolbarHeight + 165}px) / ${Math.min(1, previewWidth / (device === "mobile" ? 390 : 1280))})` }} /> : null}</div></div>
           <p className={styles.note}>採用公開首頁元件。隱藏、未開始或缺少內容的區塊依正式規則隱藏；SEO 資料請在左側確認。</p>
         </aside>
       </div>
