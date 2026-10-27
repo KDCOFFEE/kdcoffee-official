@@ -24,7 +24,9 @@ export async function readGiftCmsEditor(slug?: string, allProducts = false) {
   for (const p of preview.products) if (allProducts || p.productType === "gift") { p.active = true; p.published = true; p.archivedAt = null; }
   const publicModel = selectPublicGiftCatalog(catalog, pointDisplayName, cms);
   const previewIncludesDraft = publicModel.total === 0;
-  const model = previewIncludesDraft ? selectPublicGiftCatalog(preview, pointDisplayName, cms) : publicModel;
+  // Draft cards remain useful in Admin, but their media is not a public Hero.
+  // Preserve any real public fallback (including a public custom gift).
+  const model = previewIncludesDraft ? { ...selectPublicGiftCatalog(preview, pointDisplayName, cms), hero: publicModel.hero } : publicModel;
   const defaults = selectPublicGiftCatalog(preview, pointDisplayName);
   const cardDefault = source ? defaults.groups.flatMap(g => g.gifts).find(g => g.product.slug === source.slug) : undefined;
   const publicStoreModel=selectPublicStoreIndex(catalog);
