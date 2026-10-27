@@ -1,11 +1,13 @@
 import { randomBytes } from "crypto";
 import { promises as fs } from "fs";
 import type { FileHandle } from "fs/promises";
+import type { Stats } from "fs";
 import path from "path";
 import { inCommerceLock, inferCommerceLock, type CommerceLock } from "./commerceLockProtocol";
 
 const DEFAULT_LOCK_TIMEOUT_MS = 5_000;
 const DEFAULT_LOCK_RETRY_MS = 50;
+const LOCK_RELEASE_RETRY_DELAYS_MS = [40, 80, 160] as const;
 const TEST_LAB_WINDOWS_WRITE_RETRY_DELAYS_MS = [40, 80, 160, 320, 640] as const;
 
 function isMembershipTestLabPath(filePath: string) {
@@ -24,12 +26,60 @@ export class FileLockTimeoutError extends Error {
   }
 }
 
+type LockReleasePhase = "identity" | "close" | "unlink";
+/** The operation has finished; only cleanup of its owned lock failed. */
+export class FileLockReleaseError extends Error {
+  readonly lockPath: string;
+  readonly phase: LockReleasePhase;
+  readonly attempts: number;
+  readonly code?: string;
+  constructor(lockPath: string, phase: LockReleasePhase, attempts: number, cause: unknown) {
+    super(`Lock release failed (${phase}): ${lockPath}`, { cause });
+    this.name = "FileLockReleaseError";
+    this.lockPath = lockPath; this.phase = phase; this.attempts = attempts;
+    this.code = cause instanceof Error && "code" in cause ? String(cause.code) : undefined;
+  }
+}
+
 function hasErrorCode(error: unknown, code: string): error is NodeJS.ErrnoException {
   return error instanceof Error && "code" in error && error.code === code;
 }
 
 function wait(milliseconds: number) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+async function retryOwnedLockRelease<T>(lockPath: string, phase: LockReleasePhase, action: () => Promise<T>): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    try { return await action(); }
+    catch (error) {
+      const delay = LOCK_RELEASE_RETRY_DELAYS_MS[attempt];
+      if (delay === undefined || !["EPERM", "EACCES", "EBUSY"].some(code => hasErrorCode(error, code))) {
+        throw new FileLockReleaseError(lockPath, phase, attempt + 1, error);
+      }
+      await wait(delay);
+    }
+  }
+}
+
+async function releaseOwnedLock(handle: FileHandle, lockPath: string) {
+  let identity: Stats | undefined, releaseError: unknown;
+  try { identity = await retryOwnedLockRelease(lockPath, "identity", () => handle.stat()); }
+  catch (error) { releaseError = error; }
+  try { await retryOwnedLockRelease(lockPath, "close", () => handle.close()); }
+  catch (error) { releaseError ??= error; }
+  // If identity or close is uncertain, retain the lock instead of guessing.
+  if (releaseError) throw releaseError;
+  const owned = identity!;
+  await retryOwnedLockRelease(lockPath, "unlink", async () => {
+    try {
+      const current = await fs.lstat(lockPath);
+      if (!current.isFile() || current.dev !== owned.dev || current.ino !== owned.ino) {
+        throw Object.assign(new Error("Lock ownership changed; no cleanup attempted"), { code: "LOCK_OWNERSHIP_CHANGED" });
+      }
+      await fs.unlink(lockPath);
+    } catch (error) { if (!hasErrorCode(error, "ENOENT")) throw error; }
+  });
 }
 
 export function serializeJson(data: unknown) {
@@ -120,22 +170,22 @@ async function withFileLockCore<T>(
     }
   }
 
+  let operationFailed = false;
   try {
     return await operation();
+  } catch (error) {
+    operationFailed = true;
+    throw error;
   } finally {
     // 不自動刪除 stale lock；只有持有本次 lock handle 的流程會釋放自己的鎖。
-    let releaseError: unknown;
-    try {
-      await lockHandle.close();
-    } catch (error) {
-      releaseError = error;
+    try { await releaseOwnedLock(lockHandle, lockPath); }
+    catch (error) {
+      if (!operationFailed) throw error;
+      // Cleanup must never replace the operation's original rejection.
+      try {
+        console.warn(JSON.stringify({ event: "file_lock_release_failed_after_operation_error", lockPath, phase: error instanceof FileLockReleaseError ? error.phase : undefined, code: error instanceof FileLockReleaseError ? error.code : undefined }));
+      } catch { /* Logging cannot mask the original operation error. */ }
     }
-    try {
-      await fs.unlink(lockPath);
-    } catch (error) {
-      if (!hasErrorCode(error, "ENOENT")) releaseError ??= error;
-    }
-    if (releaseError) throw releaseError;
   }
 }
 

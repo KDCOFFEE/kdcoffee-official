@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
 import { promises as fs } from "fs";
 import path from "path";
+import { randomUUID } from "node:crypto";
 
 import { isAdminAuthenticated } from "@/lib/adminAuth";
 import {
   getAssetLibrary,
   saveAssetLibrary,
+  type AssetRecord,
 } from "@/lib/assets";
 import {
   getAssetsUploadDir,
@@ -81,11 +83,13 @@ export async function POST(request: Request) {
   const assetId = String(
     form.get("assetId") || "",
   );
+  // Explicit generic creation, not a Gifts-specific record or upload path.
+  const create = !assetId && form.get("create") === "true";
 
   /**
    * 基本資料檢查。
    */
-  if (!(file instanceof File) || !assetId) {
+  if (!(file instanceof File) || (!assetId && !create)) {
     return NextResponse.json(
       {
         error:
@@ -136,7 +140,7 @@ export async function POST(request: Request) {
         asset.id === assetId,
     );
 
-  if (index < 0) {
+  if (index < 0 && !create) {
     return NextResponse.json(
       {
         error:
@@ -145,9 +149,6 @@ export async function POST(request: Request) {
       { status: 404 },
     );
   }
-
-  const asset =
-    library.assets[index];
 
   /**
    * 取得副檔名並確認格式。
@@ -165,6 +166,15 @@ export async function POST(request: Request) {
       },
       { status: 400 },
     );
+  }
+
+  let asset: AssetRecord;
+  if (create) {
+    const id = randomUUID();
+    const name = path.parse(file.name).name.replace(/[\u0000-\u001f\u007f]/g, "").trim().slice(0, 300) || "網站共用圖片";
+    asset = { id: `ASSET-${id}`, category: "misc", name, usage: "網站共用圖片", path: "", recommendedSize: "", displaySize: "", format: ext.slice(1).toUpperCase(), alt: name, seoStem: `kd-coffee-${clean(name).slice(0, 80) || "image"}-${id}`, status: "draft" };
+  } else {
+    asset = library.assets[index];
   }
 
   /**
@@ -277,7 +287,7 @@ export async function POST(request: Request) {
   /**
    * 更新 assets.json 裡的素材記錄。
    */
-  library.assets[index] = {
+  const uploaded: AssetRecord = {
     ...asset,
     path: publicPath,
     status: "active",
@@ -286,6 +296,7 @@ export async function POST(request: Request) {
     updatedAt:
       new Date().toISOString(),
   };
+  if (create) library.assets.push(uploaded); else library.assets[index] = uploaded;
 
   /**
    * assets.json 已經接上 Persistent Storage。
@@ -297,7 +308,7 @@ export async function POST(request: Request) {
   return NextResponse.json({
     ok: true,
     asset:
-      library.assets[index],
+      uploaded,
     fileName,
     path: publicPath,
   });

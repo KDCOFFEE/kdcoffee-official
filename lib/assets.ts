@@ -1,7 +1,7 @@
 import { promises as fs } from "fs";
 import path from "path";
 import { getAssetsDataFile } from "@/lib/storagePaths";
-import { atomicWriteJson, withFileLock } from "@/lib/jsonFileStore";
+import { atomicWriteJson, withFileLock, FileLockReleaseError } from "@/lib/jsonFileStore";
 
 /**
  * ============================================================
@@ -117,8 +117,9 @@ export async function saveAssetLibrary(
   library: AssetLibrary,
 ) {
   const assetPath = getAssetsDataFile();
+  let committed = false;
   await fs.mkdir(path.dirname(assetPath), { recursive: true });
-  return withFileLock(assetPath, async () => {
+  try { return await withFileLock(assetPath, async () => {
     const current = JSON.parse(await fs.readFile(assetPath, "utf8")) as AssetLibrary;
     if (Number(current.version || 0) !== Number(library.version || 0)) {
       throw new AssetLibraryVersionConflictError();
@@ -130,13 +131,22 @@ export async function saveAssetLibrary(
       updatedAt: new Date().toISOString(),
     };
     await atomicWriteJson(assetPath, updated);
+    committed = true;
 
     // Preserve the existing caller contract: upload routes return the same
     // object after save and expect its version/timestamp to be current.
     library.version = updated.version;
     library.updatedAt = updated.updatedAt;
     return library;
-  });
+  }); } catch (error) {
+    if (!committed || !(error instanceof FileLockReleaseError)) throw error;
+    // The persisted metadata is authoritative. Never turn committed success
+    // into "upload failed" solely because lock cleanup needs intervention.
+    try {
+      console.warn(JSON.stringify({ event: "asset_library_committed_lock_release_failed", assetPath, lockPath: error.lockPath, phase: error.phase, code: error.code, attempts: error.attempts, version: library.version, recoveryRequired: true }));
+    } catch { /* Logging cannot change a committed save result. */ }
+    return library;
+  }
 }
 
 /**
