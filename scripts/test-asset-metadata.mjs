@@ -1,0 +1,32 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import crypto from 'node:crypto';
+import {registerHooks} from 'node:module';
+import sharp from 'sharp';
+import './gift-frontend-test-bootstrap.mjs';
+const {resolveAssetAlt,isMeaningfulAssetText}=await import('../lib/assetMetadata.ts');
+const {createWebsiteImageAsset}=await import('../lib/websiteImages.ts');
+const {storeHeroLibraryAssets}=await import('../lib/storeHeroMedia.ts');
+const saved={...process.env},root=await fs.mkdtemp(path.resolve('qa-output/cs1g/metadata-unit-'));
+process.env.KD_DATA_DIR=root;delete process.env.RAILWAY_VOLUME_MOUNT_PATH;process.env.ADMIN_SESSION_SECRET=crypto.randomBytes(48).toString('hex');
+const hook=registerHooks({resolve(s,c,next){return s==='next/headers'?{url:'data:text/javascript,export async function cookies(){return {get:()=>({value:globalThis.__metadataOwnerCookie})}}',shortCircuit:true}:next(s,c);}});
+const {createAdminSessionValue}=await import('../lib/adminAuth.ts');globalThis.__metadataOwnerCookie=createAdminSessionValue({role:'owner'});
+const {POST}=await import('../app/api/admin/customer-service/route.ts');
+const {readCustomerServiceState,saveCustomerServiceState,getCustomerServiceFile}=await import('../lib/customerServiceStore.ts');
+const {resolveServiceHero}=await import('../lib/customerServiceHeroServer.ts');
+const uuid=crypto.randomUUID();let count=0;const checks=[];
+async function test(name,run){await run();checks.push(name);console.log('PASS '+(++count)+' '+name);}
+try{
+ await test('A: meaningful explicit asset alt wins over display name and original filename',()=>{assert.equal(resolveAssetAlt({alt:'KD Coffee 禮盒',name:'其他名稱',originalFileName:'其他圖片.jpg'}),'KD Coffee 禮盒');assert.equal(resolveAssetAlt({alt:'Coffee: 秋日咖啡'}),'Coffee: 秋日咖啡');});
+ await test('B: meaningful display name then existing original-filename stem are reused',()=>{assert.equal(resolveAssetAlt({alt:'',name:'KD Coffee 秋日禮盒'}),'KD Coffee 秋日禮盒');assert.equal(resolveAssetAlt({alt:uuid,name:uuid,originalFileName:'KD咖啡禮盒秋日限定.jpg'}),'KD咖啡禮盒秋日限定');});
+ await test('C: UUID, UUID extensions, hashes, IDs, canonical filenames and storage paths stay empty',()=>{for(const value of [uuid,uuid+'.png','a'.repeat(32),'b'.repeat(64),'PAGEIMG-0123456789AB','ASSET-INTERNAL','LOGO001','/uploads/assets/misc/photo.webp','kd-coffee-page-image-0123456789ab-v01.webp','webp','.png']){assert.equal(resolveAssetAlt({alt:value,name:value,originalFileName:value}), '',value);assert.equal(isMeaningfulAssetText(value),false,value);}assert.equal(resolveAssetAlt({alt:'custom-internal-key',name:'',id:'custom-internal-key'}),'');});
+ await test('Shared AssetRecord creation preserves original filename while rejecting opaque initial alt',()=>{const input={id:'PAGEIMG-0123456789AB',seoStem:'kd-coffee-page-image-0123456789ab',publicPath:'/uploads/assets/page-builder/image.webp',now:'2026-10-28T00:00:00.000Z'};assert.equal(createWebsiteImageAsset({...input,originalFileName:uuid+'.png'}).alt,'');const asset=createWebsiteImageAsset({...input,originalFileName:'KD咖啡禮盒秋日限定.jpg'});assert.equal(asset.alt,'KD咖啡禮盒秋日限定');assert.equal(asset.originalFileName,'KD咖啡禮盒秋日限定.jpg');});
+ let asset;
+ await test('Actual UUID-named Owner upload returns empty alt without changing optimized bytes',async()=>{await fs.mkdir(path.join(root,'store'),{recursive:true});await fs.writeFile(path.join(root,'store/assets.json'),JSON.stringify({version:1,assets:[]}));const original=await fs.readFile('qa-output/cs1f/original.jpg'),form=new FormData();form.set('file',new File([original],uuid+'.jpg',{type:'image/jpeg'}));const response=await POST(new Request('http://localhost/api/admin/customer-service',{method:'POST',headers:{Origin:'http://localhost','Sec-Fetch-Site':'same-origin'},body:form}));assert.equal(response.status,201);asset=(await response.json()).asset;assert.equal(asset.alt,'');assert.equal(asset.name,uuid);assert.equal(asset.originalFileName,uuid+'.jpg');const stored=await fs.readFile(path.join(root,asset.path.slice(1)));assert.deepEqual(stored,await fs.readFile('qa-output/cs1f/expected-legacy.webp'));const meta=await sharp(stored).metadata();assert.equal(meta.width,1800);assert.equal(meta.height,1200);});
+ await test('D: exact Owner alt survives save, reload and public Hero resolution',async()=>{const state=await readCustomerServiceState();state.document.config.hero={src:asset.path,alt:'KD Coffee 精品咖啡禮盒',position:'center'};await saveCustomerServiceState(state);const reloaded=await readCustomerServiceState();assert.equal(reloaded.document.config.hero.alt,'KD Coffee 精品咖啡禮盒');assert.equal((await resolveServiceHero(reloaded.document.config.hero)).alt,'KD Coffee 精品咖啡禮盒');});
+ await test('Opaque manually submitted ALT is rejected without writing CMS',async()=>{const state=await readCustomerServiceState(),before=await fs.readFile(getCustomerServiceFile());for(const alt of [uuid,'PAGEIMG-0123456789AB',asset.path]){state.document.config.hero.alt=alt;await assert.rejects(saveCustomerServiceState(state));assert.deepEqual(await fs.readFile(getCustomerServiceFile()),before);}});
+ await test('Legacy opaque saved ALT renders empty without migration or replacement of the image',async()=>{const state=await readCustomerServiceState(),before=await fs.readFile(getCustomerServiceFile());state.document.config.hero.alt=uuid;await fs.writeFile(getCustomerServiceFile(),JSON.stringify(state));const legacy=await fs.readFile(getCustomerServiceFile());const hero=await resolveServiceHero((await readCustomerServiceState()).document.config.hero);assert.equal(hero.src,asset.path);assert.equal(hero.alt,'');assert.deepEqual(await fs.readFile(getCustomerServiceFile()),legacy);await fs.writeFile(getCustomerServiceFile(),before);});
+ await test('Shared guard is reused by Store labels without mutating library records',()=>{const records=[{...asset,name:uuid,alt:uuid}],before=JSON.stringify(records);const labels=storeHeroLibraryAssets(records);assert.ok(labels[0].name.startsWith('圖片素材'));assert.equal(JSON.stringify(records),before);});
+ await fs.writeFile('qa-output/cs1g/metadata-results.json',JSON.stringify({pass:count,checks,opaqueFilename:uuid+'.jpg',resultingAssetAlt:asset.alt,optimizationByteIdentical:true},null,2));console.log('SHARED ASSET METADATA: '+count+' PASS');
+}finally{hook.deregister();delete globalThis.__metadataOwnerCookie;for(const key of Object.keys(process.env))if(!(key in saved))delete process.env[key];Object.assign(process.env,saved);}

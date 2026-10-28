@@ -5,6 +5,7 @@
 import { useMemo, useState } from "react";
 
 import type { AssetRecord } from "@/lib/assets";
+import { resolveAssetAlt } from "@/lib/assetMetadata";
 
 export default function ImageLibraryPicker({
   assets,
@@ -34,7 +35,7 @@ export default function ImageLibraryPicker({
     <label>搜尋素材<input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder="名稱、分類或替代文字" /></label>
     <div className="page-asset-grid">
       {images.map((asset) => <button type="button" key={asset.id} onClick={() => onChoose(asset)}>
-        <span><img src={asset.path} alt={asset.alt || asset.name} loading="lazy" /></span>
+        <span><img src={asset.path} alt={resolveAssetAlt(asset)} loading="lazy" /></span>
         <b>{asset.name}</b><small>{asset.alt || "網站圖片"}</small>
       </button>)}
       {!images.length ? <p>找不到符合的圖片。</p> : null}

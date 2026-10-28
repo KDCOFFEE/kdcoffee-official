@@ -3,6 +3,8 @@
   "version": "15.5.0",
   "private": true,
   "scripts": {
+    "test:customer-service": "node --experimental-strip-types --import ./scripts/member-auth-test-bootstrap.mjs scripts/test-customer-service.mts",
+    "test:customer-service:browser": "node scripts/test-customer-service-browser.mjs",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",

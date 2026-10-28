@@ -139,3 +139,9 @@ export function resolveMediaAsset(
   const fallback = fallbackImageUrl?.trim();
   return fallback ? localImageMedia(fallback) : undefined;
 }
+
+/** Canonical local raster references; excludes private/member/order uploads and arbitrary URLs. */
+export function isLocalAssetImagePath(value: unknown): value is string {
+  return typeof value === "string" && value.length <= 500 && !value.includes("..")
+    && /^\/(?:uploads\/(?:assets|artworks)\/[a-z0-9-]+|images\/(?:home003|campaigns))\/[a-z0-9][a-z0-9._-]*\.(?:jpe?g|png|webp|avif)$/i.test(value);
+}

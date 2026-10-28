@@ -4,7 +4,8 @@ import { useRef, useState, type ChangeEvent } from "react";
 import type { AssetRecord } from "@/lib/assets";
 
 /** Shared Asset Library entry point. File rules and persistence stay in its API. */
-export default function AssetUploadButton({ assetId, label = "上傳新圖片", className, disabled = false, onUploaded, onUploadingChange, onError }: {
+export default function AssetUploadButton({ assetId, uploadUrl = "/api/admin/assets/upload", label = "上傳新圖片", className, disabled = false, onUploaded, onUploadingChange, onError }: {
+  uploadUrl?: string;
   assetId?: string; label?: string; className?: string; disabled?: boolean;
   onUploaded: (asset: AssetRecord) => void | Promise<void>;
   onUploadingChange?: (uploading: boolean) => void;
@@ -19,7 +20,7 @@ export default function AssetUploadButton({ assetId, label = "上傳新圖片", 
     try {
       const form = new FormData(); form.append("file", file);
       if (assetId) form.append("assetId", assetId); else form.append("create", "true");
-      const response = await fetch("/api/admin/assets/upload", { method: "POST", body: form });
+      const response = await fetch(uploadUrl, { method: "POST", body: form });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "上傳失敗");
       if (!result.asset?.path) throw new Error("上傳回應缺少素材資料，請更新素材庫確認。");

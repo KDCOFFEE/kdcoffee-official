@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const [website, pages] = await Promise.all([getLiveWebsiteData(), readPageStore()]);
   const paths = [
-    "/", "/works", "/monthly-menu",
+    "/", "/works", "/monthly-menu", "/customer-service",
     ...resolveWorksProductListing(website.menu.products).map(product => `/works/${encodeURIComponent(product.slug)}`),
     ...publishedPageRegistry(pages).filter(page => page.published).map(page => page.href),
   ];

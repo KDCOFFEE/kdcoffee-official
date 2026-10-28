@@ -1,5 +1,6 @@
 import type { AssetRecord } from "./assets";
 import { localImageMedia, type MediaAsset } from "./media";
+import { isMeaningfulAssetText } from "./assetMetadata";
 
 export type StoreHeroMediaTarget = "desktop" | "mobile";
 
@@ -21,11 +22,10 @@ export async function uploadStoreHeroImage(file: File, target: StoreHeroMediaTar
 
 /** Give the existing image picker readable labels and filename search without changing its source. */
 export function storeHeroLibraryAssets(assets: AssetRecord[]): AssetRecord[] {
-  const opaque = (value: string) => /[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}/i.test(value) || /^[a-f0-9]{32}$/i.test(value);
   return assets.filter(asset => asset.status === "active" && /\.(avif|gif|jpe?g|png|svg|webp)(?:\?|$)/i.test(asset.path)).map(asset => {
     let filename = asset.originalFileName || asset.path.split("?")[0].split("/").pop() || "";
     try { filename = decodeURIComponent(filename); } catch { /* Keep the stored readable name on malformed encoding. */ }
-    const title = asset.name.trim() && !opaque(asset.name) ? asset.name : asset.alt.trim() && !opaque(asset.alt) ? asset.alt : "圖片素材";
+    const title = isMeaningfulAssetText(asset.name, asset) ? asset.name : isMeaningfulAssetText(asset.alt, asset) ? asset.alt : "圖片素材";
     return { ...asset, name: filename ? `${title} · ${filename}` : title };
   });
 }
