@@ -20,7 +20,7 @@ const choices: Array<{ type: CmsLinkType; icon: string; label: string; descripti
   { type: "telephone", icon: "☎", label: "電話", description: "讓客人直接撥打電話" },
   { type: "email", icon: "✉", label: "電子郵件", description: "開啟電子郵件聯絡" },
   { type: "line", icon: "◉", label: "LINE／客服", description: "前往安全的客服網址" },
-  { type: "custom", icon: "⚙", label: "進階自訂", description: "特殊網址或位置" },
+  { type: "custom", icon: "⚙", label: "進階自訂", description: "站內路徑、外部網址或位置" },
   { type: "none", icon: "—", label: "不設定連結", description: "按鈕不前往其他頁面" },
 ];
 
@@ -111,7 +111,10 @@ function DestinationStep({ id, category, draft, setDraft, search, setSearch, des
       {category === "telephone" ? <label htmlFor={`${id}-telephone`}>電話號碼<input id={`${id}-telephone`} type="tel" inputMode="tel" placeholder="08-777-6335" value={draft.url || ""} onChange={(event) => setDraft({ type: "telephone", url: event.target.value })} /><small>顯示格式會保留，撥號時會安全正規化。</small></label> : null}
       {category === "email" ? <label htmlFor={`${id}-email`}>電子郵件<input id={`${id}-email`} type="email" inputMode="email" placeholder="service@example.com" value={draft.url || ""} onChange={(event) => setDraft({ type: "email", url: event.target.value })} /></label> : null}
       {category === "line" ? <label htmlFor={`${id}-line`}>LINE／客服網址<input id={`${id}-line`} type="url" inputMode="url" placeholder="https://" value={draft.url || ""} onChange={(event) => setDraft({ type: "line", url: event.target.value })} /><small>請使用企業既有的完整 https:// 客服網址。</small></label> : null}
-      {category === "custom" ? <label htmlFor={`${id}-custom`}>自訂路徑<input id={`${id}-custom`} value={draft.url || ""} onChange={(event) => setDraft({ type: "custom", url: event.target.value })} /><small>只有特殊情況才需要使用。一般連結請使用其他選項。</small></label> : null}
+      {category === "custom" ? <>
+        <label htmlFor={`${id}-custom`}>自訂路徑或網址<input id={`${id}-custom`} value={draft.url || ""} onChange={(event) => setDraft({ ...draft, type: "custom", url: event.target.value })} /><small>站內頁面可填 / 開頭路徑；外部網站可填完整 http:// 或 https:// 網址。</small></label>
+        <label style={{ display: "flex", alignItems: "center" }}><input type="checkbox" style={{ width: 18, height: 18, minHeight: 18, padding: 0 }} checked={draft.newTab ?? resolveCmsLink(draft).external} onChange={(event) => setDraft({ ...draft, newTab: event.target.checked })} />在新分頁開啟</label>
+      </> : null}
       {category === "none" ? <p className="smart-link-none-note">這個按鈕將不會前往其他頁面。</p> : null}
     </div>
     <footer><button type="button" className="smart-link-cancel" onClick={onCancel}>取消</button>{!(category === "page" && rows.length === 0) ? <button type="button" className="smart-link-confirm" disabled={!valid} onClick={onConfirm}>{category === "none" ? "確認不設定連結" : "確認目的地"}</button> : null}</footer>

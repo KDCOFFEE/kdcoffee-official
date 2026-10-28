@@ -6,6 +6,8 @@ export type StructuredCmsLink = {
   type: CmsLinkType;
   target?: string;
   url?: string;
+  /** Optional custom-link override; absent values follow the destination's default. */
+  newTab?: boolean;
 };
 
 /** Legacy string values remain supported so existing homepage data is never migrated implicitly. */
@@ -50,6 +52,7 @@ export type ResolvedCmsLink = {
   label: string;
   warning?: string;
   external: boolean;
+  newTab?: boolean;
   legacy: boolean;
 };
 
@@ -104,6 +107,11 @@ function safeExternalHref(value: string, allowLegacyHttp = false) {
   } catch {
     return false;
   }
+}
+
+function safeCustomDestinationHref(value: string) {
+  const href = value.trim();
+  return (safeCustomHref(href) && !href.startsWith("//") && !href.includes("\\")) || safeExternalHref(href, true);
 }
 
 export function buildCmsDestinationRegistry({ products = [], pages = [] }: CmsLinkRegistryInput = {}) {
@@ -166,8 +174,8 @@ export function resolveCmsLink(value: CmsLinkValue, input: CmsLinkRegistryInput 
   }
   if (value.type === "custom") {
     const href = value.url?.trim() || "";
-    const valid = safeCustomHref(href);
-    return { valid, href: valid ? href : undefined, label: valid ? "進階自訂連結" : "進階自訂連結未設定", warning: valid ? undefined : "自訂連結必須是 / 開頭的站內路徑、# 頁面位置、mailto: 或 tel:。", external: false, legacy: false };
+    const valid = safeCustomDestinationHref(href), external = safeExternalHref(href, true);
+    return { valid, href: valid ? href : undefined, label: valid ? "進階自訂連結" : "進階自訂連結未設定", warning: valid ? undefined : "自訂連結必須是 / 開頭的站內路徑、完整 http(s) 網址、# 頁面位置、mailto: 或 tel:。", external, newTab: value.newTab ?? external, legacy: false };
   }
   const destination = registry.find((entry) => entry.category === value.type && entry.id === value.target);
   if (!destination) {
@@ -198,6 +206,7 @@ export function validateCmsLinkValue(value: unknown, label: string) {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error(`${label}格式不正確。`);
   const link = value as Partial<StructuredCmsLink>;
   if (!link.type || !CMS_LINK_TYPES.includes(link.type)) throw new Error(`${label}類型不正確。`);
+  if (link.newTab !== undefined && typeof link.newTab !== "boolean") throw new Error(`${label}新分頁設定必須是布林值。`);
   if (link.type === "none") return;
   if (link.type === "external") {
     if (!link.url || !safeExternalHref(link.url)) throw new Error(`${label}必須使用完整的 https:// 網址。`);
@@ -216,7 +225,7 @@ export function validateCmsLinkValue(value: unknown, label: string) {
     return;
   }
   if (link.type === "custom") {
-    if (!link.url || !safeCustomHref(link.url)) throw new Error(`${label}必須是安全的站內路徑或頁面位置。`);
+    if (!link.url || !safeCustomDestinationHref(link.url)) throw new Error(`${label}必須是安全的站內路徑、完整 http(s) 網址或頁面位置。`);
     return;
   }
   if (typeof link.target !== "string" || !link.target.trim() || link.target.length > 200) throw new Error(`${label}尚未選擇目的地。`);
