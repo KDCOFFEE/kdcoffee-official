@@ -1,6 +1,6 @@
 import { promises as fs } from "fs";
 import path from "path";
-import sharp from "sharp";
+import sharp, { type Metadata } from "sharp";
 
 import type { CustomerNotificationPhoto } from "@/lib/customerNotifications";
 import { getOrderNotificationUploadsDir } from "@/lib/storagePaths";
@@ -189,7 +189,7 @@ export async function validateAndStoreOrderNotificationPhoto(
   }
 
   const input = Buffer.from(await file.arrayBuffer());
-  let metadata: sharp.Metadata;
+  let metadata: Metadata;
   try {
     metadata = await sharp(input, { failOn: "error" }).metadata();
   } catch {
