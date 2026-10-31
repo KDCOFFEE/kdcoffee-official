@@ -12,11 +12,13 @@ export default function ImageLibraryPicker({
   onChoose,
   onClose,
   title = "從素材庫選擇圖片",
+  showCategory = false,
 }: {
   assets: AssetRecord[];
   onChoose: (asset: AssetRecord) => void;
   onClose: () => void;
   title?: string;
+  showCategory?: boolean;
 }) {
   const [query, setQuery] = useState("");
   const images = useMemo(() => {
@@ -36,7 +38,7 @@ export default function ImageLibraryPicker({
     <div className="page-asset-grid">
       {images.map((asset) => <button type="button" key={asset.id} onClick={() => onChoose(asset)}>
         <span><img src={asset.path} alt={resolveAssetAlt(asset)} loading="lazy" /></span>
-        <b>{asset.name}</b><small>{asset.alt || "網站圖片"}</small>
+        <b>{asset.name}</b>{showCategory?<small>{asset.category}</small>:null}<small>{asset.alt || "網站圖片"}</small>
       </button>)}
       {!images.length ? <p>找不到符合的圖片。</p> : null}
     </div>

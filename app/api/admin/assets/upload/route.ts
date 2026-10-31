@@ -3,7 +3,7 @@ import { promises as fs } from "fs";
 import path from "path";
 import { randomUUID } from "node:crypto";
 
-import { isAdminAuthenticated } from "@/lib/adminAuth";
+import { isAdminAuthenticated, readAdminSession } from "@/lib/adminAuth";
 import {
   getAssetLibrary,
   saveAssetLibrary,
@@ -12,6 +12,29 @@ import {
 import {
   getAssetsUploadDir,
 } from "@/lib/storagePaths";
+
+import { isSameOriginRequest } from "@/lib/requestSecurity";
+import { uploadWebsiteImageAsset } from "@/lib/assetImageUploads";
+import { ImageSafetyError, LINE_CARD_IMAGE_LIMITS } from "@/lib/websiteImages";
+
+/** Purpose is in the URL so Owner authorization happens before multipart parsing. */
+async function uploadCardHeader(request: Request) {
+  const session = await readAdminSession();
+  if (!session) return NextResponse.json({error:"請先登入後台。"},{status:401});
+  if (session.role !== "owner" || session.legacy) return NextResponse.json({error:"此操作限 Owner 使用。"},{status:403});
+  if (!request.headers.get("origin") || !isSameOriginRequest(request) || ![null,"same-origin"].includes(request.headers.get("sec-fetch-site"))) return NextResponse.json({error:"無法確認操作來源。"},{status:403});
+  const max = LINE_CARD_IMAGE_LIMITS.maxBytes + 65536;
+  if (!request.headers.get("content-type")?.startsWith("multipart/form-data;")) return NextResponse.json({error:"請使用圖片上傳表單。"},{status:415});
+  try {
+    const reader=request.body?.getReader(); if(!reader)throw new ImageSafetyError("沒有選擇圖片。");
+    const parts:Uint8Array[]=[];let size=0;
+    try {for(;;){const {done,value}=await reader.read();if(done)break;size+=value.byteLength;if(size>max){void reader.cancel().catch(()=>undefined);throw new ImageSafetyError("圖片不可超過 5 MB。",413);}parts.push(value);}} finally {reader.releaseLock();}
+    const form=await new Request(request.url,{method:"POST",headers:{"Content-Type":request.headers.get("content-type")!},body:Buffer.concat(parts)}).formData();
+    if([...form.keys()].some(key=>!["file","create"].includes(key)) || form.getAll("file").length!==1)throw new ImageSafetyError("圖片上傳包含不允許的欄位。");
+    const file=form.get("file");if(!(file instanceof File))throw new ImageSafetyError("沒有選擇圖片。");
+    return NextResponse.json({ok:true,...await uploadWebsiteImageAsset(file,{purpose:"line-card-header"})},{status:201,headers:{"Cache-Control":"no-store"}});
+  }catch(error){return NextResponse.json({error:error instanceof ImageSafetyError?error.message:"圖片無法上傳，請稍後再試。"},{status:error instanceof ImageSafetyError?error.status:400});}
+}
 
 export const runtime = "nodejs";
 
@@ -70,6 +93,9 @@ const allowedExtensions = new Set([
  * 由我們剛建立的 serving route 負責讀取實體檔案。
  */
 export async function POST(request: Request) {
+  const purpose = new URL(request.url).searchParams.get("purpose");
+  if (purpose === "line-card-header") return uploadCardHeader(request);
+  if (purpose !== null) return NextResponse.json({error:"不支援的素材用途。"},{status:400});
   if (!(await isAdminAuthenticated())) {
     return NextResponse.json(
       { error: "Unauthorized" },

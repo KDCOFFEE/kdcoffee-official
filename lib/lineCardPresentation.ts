@@ -1,3 +1,4 @@
+import {isLineCardHeaderAsset} from './lineCardHeaderAssets';
 import {getCanonicalPublicSiteOrigin} from './publicSiteOrigin';
 import type {CardFamily,ResolvedNotificationCard} from './lineNotificationCards';
 import type {LINE_CARD_CATALOG} from './lineNotificationCardCatalog';
@@ -32,7 +33,8 @@ export function composeLineCard(card:ResolvedNotificationCard){
  const family=LINE_CARD_FAMILY_ART[card.family];
  const variant=LINE_CARD_EVENT_ART[card.eventKey as CanonicalEventKey];
  const art=card.headerAssetKey?LINE_CARD_HEADER_ASSETS[card.headerAssetKey]:variant?LINE_CARD_HEADER_ASSETS[variant]:family;
- const imagePath='/images/line-cards/'+art.file;
+ const custom=card.headerImageAsset&&isLineCardHeaderAsset(card.headerImageAsset)?card.headerImageAsset:undefined;
+ const imagePath=custom?.path??'/images/line-cards/'+art.file;
  const creditExpiry=card.eventKey==='customer.reward.credit_expiring';
  const priorities=creditExpiry?['amount','creditAmount']:card.family==='RETURN'?['refundAmount','amount','orderNumber']:card.family==='REWARD'?['amount','rewardAmount','points','creditAmount','fulfillmentNumber']:card.family==='REMINDER'?['expiresAt','expiresOn','expiryDate','modificationDeadline','deliveryDate']:card.family==='FULFILLMENT'?['storeName','pickupDate','orderNumber']:['orderNumber','productName'];
  const primary=card.recipient==='admin'?undefined:priorities.map(key=>card.rows.find(row=>row.key===key)).find(Boolean);
@@ -43,5 +45,5 @@ export function composeLineCard(card:ResolvedNotificationCard){
  if(card.eventKey==='customer.return.refund_completed')details.sort((a,b)=>['refundMethod','completedAt','orderNumber'].indexOf(a.key)-['refundMethod','completedAt','orderNumber'].indexOf(b.key));
  const showHighlight=Boolean(primary)||card.recipient==='admin';
  const showStatus=!adminReturn&&!card.title.includes(card.status.label);
- return {family,art,imagePath,imageUrl:new URL(imagePath,getCanonicalPublicSiteOrigin()).href,highlight,highlightSupporting,showHighlight,showStatus,details};
+ return {family,art:custom?{...art,alt:custom.alt||custom.name}:art,imagePath,imageUrl:new URL(imagePath,getCanonicalPublicSiteOrigin()).href,highlight,highlightSupporting,showHighlight,showStatus,details};
 }

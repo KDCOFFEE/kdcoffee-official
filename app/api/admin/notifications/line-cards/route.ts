@@ -1,3 +1,5 @@
+import {requireLineCardHeaderAsset} from '@/lib/lineCardHeaderAssetStore';
+import {ImageSafetyError} from '@/lib/websiteImages';
 import {NextResponse} from 'next/server';
 import {readAdminSession} from '@/lib/adminAuth';
 import {isSameOriginRequest} from '@/lib/requestSecurity';
@@ -12,6 +14,7 @@ export async function PUT(request:Request){
  if(!request.headers.get('content-type')?.toLowerCase().startsWith('application/json'))return json({error:'請使用 JSON 設定格式。'},415);
  try{const reader=request.body?.getReader();if(!reader)throw new LineCardValidationError('設定內容不可空白。');const parts:Uint8Array[]=[];let size=0;for(;;){const {done,value}=await reader.read();if(done)break;size+=value.byteLength;if(size>16384){await reader.cancel();return json({error:'卡片設定內容過大。'},413);}parts.push(value);}let body;try{body=JSON.parse(Buffer.concat(parts).toString('utf8'));}catch{throw new LineCardValidationError('設定格式不正確。');}
  if(!body||typeof body!=='object'||Array.isArray(body)||Object.keys(body).some(key=>!['action','eventKey','overrides','expectedRevision'].includes(key))||!['save','restore'].includes(body.action)||typeof body.eventKey!=='string'||(body.action==='restore'&&Object.hasOwn(body,'overrides')))throw new LineCardValidationError('卡片操作包含不允許的欄位。');
+ if(body.action==='save'&&body.overrides?.headerImageAssetId)await requireLineCardHeaderAsset(body.overrides.headerImageAssetId);
  return json(await writeLineCardConfig({action:body.action,eventKey:body.eventKey,overrides:body.overrides,expectedRevision:body.expectedRevision,actor:session.adminId}));
- }catch(error){const status=error instanceof LineCardConflictError?409:error instanceof LineCardValidationError?400:500;return json({error:status===500?'卡片設定儲存失敗，未變更正式通知。':(error as Error).message},status);}
+ }catch(error){const status=error instanceof LineCardConflictError?409:error instanceof LineCardValidationError||error instanceof ImageSafetyError?400:500;return json({error:status===500?'卡片設定儲存失敗，未變更正式通知。':(error as Error).message},status);}
 }

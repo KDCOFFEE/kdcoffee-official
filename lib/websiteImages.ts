@@ -92,17 +92,19 @@ export class ImageSafetyError extends Error {
   readonly status: number;
   constructor(message: string, status = 400) { super(message); this.status = status; }
 }
-export async function inspectImageBytes(bytes: Buffer, fileName: string, mimeType?: string) {
+export type ImageInspectionLimits = { maxBytes: number; maxDimension: number; maxPixels: number; minWidth?: number; minHeight?: number };
+export const LINE_CARD_IMAGE_LIMITS = { maxBytes: 5 * 1024 * 1024, maxDimension: 4096, maxPixels: 8_000_000, minWidth: 320, minHeight: 100 } as const;
+export async function inspectImageBytes(bytes: Buffer, fileName: string, mimeType?: string, limits: ImageInspectionLimits = SAFE_IMAGE_LIMITS) {
   try {
-    const image = sharp(bytes, { failOn: "error", limitInputPixels: SAFE_IMAGE_LIMITS.maxPixels });
+    const image = sharp(bytes, { failOn: "error", limitInputPixels: limits.maxPixels });
     const meta = await image.metadata(), extension = imageExtension(fileName), expected = extension === "jpg" ? "jpeg" : extension;
-    if (meta.format !== (expected === "avif" ? "heif" : expected) || (mimeType && mimeType !== "image/" + expected) || !meta.width || !meta.height || meta.width > SAFE_IMAGE_LIMITS.maxDimension || meta.height > SAFE_IMAGE_LIMITS.maxDimension || (meta.pages || 1) !== 1) throw new Error("format");
+    if (meta.format !== (expected === "avif" ? "heif" : expected) || (mimeType && mimeType !== "image/" + expected) || !meta.width || !meta.height || meta.width > limits.maxDimension || meta.height > limits.maxDimension || meta.width * meta.height > limits.maxPixels || meta.width < (limits.minWidth || 1) || meta.height < (limits.minHeight || 1) || (meta.pages || 1) !== 1) throw new Error("format");
     await image.stats();
     return { format: meta.format, width: meta.width, height: meta.height, bytes: bytes.length, frames: meta.pages || 1 };
   } catch { throw new ImageSafetyError("圖片內容、格式或尺寸無法驗證，請使用有效的 JPG、PNG 或 WebP 圖片。"); }
 }
-export async function inspectUploadedImage(file: File) {
-  if (!isAllowedImageUpload(file.name, file.type) || /[\\/\u0000-\u001f]/u.test(file.name) || file.name.length > 300 || file.size <= 0 || file.size > SAFE_IMAGE_LIMITS.maxBytes) throw new ImageSafetyError("請使用 12 MB 以內的 JPG、PNG 或 WebP 圖片。");
+export async function inspectUploadedImage(file: File, limits: ImageInspectionLimits = SAFE_IMAGE_LIMITS) {
+  if (!isAllowedImageUpload(file.name, file.type) || /[\\/\u0000-\u001f]/u.test(file.name) || file.name.length > 300 || file.size <= 0 || file.size > limits.maxBytes) throw new ImageSafetyError("請使用大小限制以內的 JPG、PNG 或 WebP 圖片。");
   const bytes = Buffer.from(await file.arrayBuffer());
-  return { bytes, metadata: await inspectImageBytes(bytes, file.name, file.type) };
+  return { bytes, metadata: await inspectImageBytes(bytes, file.name, file.type, limits) };
 }

@@ -13,6 +13,7 @@ const hook=registerHooks({resolve(s,c,next){return s==='next/headers'?{url:'data
 const auth=await import('../lib/adminAuth.ts'),assets=await import('../lib/assets.ts'),json=await import('../lib/jsonFileStore.ts'),storage=await import('../lib/storagePaths.ts');
 globalThis.__atomicityCookie=auth.createAdminSessionValue({role:'owner'});
 const require=createRequire(import.meta.url),ts=require('typescript'),next=require('next/server');
+const requestSecurity=await import('../lib/requestSecurity.ts'),imageUploads=await import('../lib/assetImageUploads.ts'),imageSafety=await import('../lib/websiteImages.ts');
 const apiSource=await fs.readFile('app/api/admin/assets/upload/route.ts','utf8');
 const input=await sharp({create:{width:8,height:8,channels:3,background:'#82603d'}}).png().toBuffer();
 let sequence=0,passed=0,trace=[],libraryArgument;const preCommitProof=[],releaseProof=[];
@@ -20,7 +21,7 @@ const warnings=[],originalWarn=console.warn;console.warn=(...args)=>warnings.pus
 const original={open:fs.open,readFile:fs.readFile,writeFile:fs.writeFile,mkdir:fs.mkdir,rename:fs.rename,unlink:fs.unlink,lstat:fs.lstat};
 const emit=(event,details={})=>trace.push({at:Date.now(),event,...details});
 const wrappedAssets={...assets,saveAssetLibrary:async library=>{libraryArgument=library;emit('save_started');try{const result=await assets.saveAssetLibrary(library);emit('save_resolved',{version:result.version});return result;}catch(error){emit('save_rejected',{code:error.code,name:error.name,path:error.path||error.lockPath});throw error;}}};
-const mod={exports:{}};new Function('require','module','exports',ts.transpileModule(apiSource,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,esModuleInterop:true}}).outputText)(s=>({'next/server':next,fs:{promises:fs},path:require('node:path'),'node:crypto':crypto,'@/lib/adminAuth':auth,'@/lib/assets':wrappedAssets,'@/lib/storagePaths':storage}[s]??require(s)),mod,mod.exports);
+const mod={exports:{}};new Function('require','module','exports',ts.transpileModule(apiSource,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,esModuleInterop:true}}).outputText)(s=>({'next/server':next,fs:{promises:fs},path:require('node:path'),'node:crypto':crypto,'@/lib/adminAuth':auth,'@/lib/assets':wrappedAssets,'@/lib/storagePaths':storage,'@/lib/requestSecurity':requestSecurity,'@/lib/assetImageUploads':imageUploads,'@/lib/websiteImages':imageSafety}[s]??require(s)),mod,mod.exports);
 const handler=mod.exports.POST;
 const initial={id:'EXISTING',category:'brand',name:'Existing',usage:'Legacy',path:'',recommendedSize:'1600',displaySize:'cover',format:'PNG',alt:'Keep ALT',seoStem:'owner-photo',status:'missing'};
 async function setup(){const dir=path.join(root,String(++sequence));await original.mkdir(path.join(dir,'store'),{recursive:true});const file=path.join(dir,'store/assets.json');await original.writeFile(file,JSON.stringify({version:1,updatedAt:'2026-01-01T00:00:00Z',assets:[initial]}));process.env.KD_DATA_DIR=dir;trace=[];warnings.length=0;libraryArgument=undefined;return {dir,file,lock:file+'.lock'};}

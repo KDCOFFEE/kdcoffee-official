@@ -110,3 +110,9 @@
 .unsavedDialog { max-width:440px; padding:26px; border-radius:14px; background:#fffdf9; box-shadow:0 20px 70px #392d2433; line-height:1.8; }
 .unsavedDialog h2 { font-size:21px; margin-top:0; }
 .unsavedDialog button { margin:6px 8px 0 0; }
+
+.headerPicker { padding:16px; border:1px solid #e4dccc; border-radius:10px; background:#faf7f1; }
+.headerPicker p { font-size:12px; line-height:1.8; color:#6d5d4c; }
+.selectedAsset { display:flex; flex-wrap:wrap; gap:12px; align-items:center; margin-bottom:14px; }
+.selectedAsset img { width:180px; height:60px; object-fit:cover; border-radius:6px; }
+.selectedAsset small { display:block; margin-top:5px; }

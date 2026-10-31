@@ -4,7 +4,7 @@ import path from "node:path";
 import { getAssetLibrary } from "./assets";
 import { isLocalAssetImagePath } from "./media";
 import { getAssetsUploadDir, getArtworkUploadDir, getCampaignUploadDir, getHome003UploadDir } from "./storagePaths";
-import { inspectImageBytes, SAFE_IMAGE_LIMITS, ImageSafetyError } from "./websiteImages";
+import { inspectImageBytes, SAFE_IMAGE_LIMITS, ImageSafetyError, type ImageInspectionLimits } from "./websiteImages";
 
 function assetImageFile(src: string) {
   const parts = src.split("/"), file = parts.at(-1)!;
@@ -12,7 +12,7 @@ function assetImageFile(src: string) {
   if (src.startsWith("/uploads/artworks/")) return path.join(getArtworkUploadDir(parts[3]), file);
   return path.join(src.startsWith("/images/home003/") ? getHome003UploadDir() : getCampaignUploadDir(), file);
 }
-export async function assertAssetImageAvailable(src: string, inspect = true) {
+export async function assertAssetImageAvailable(src: string, inspect = true, limits: ImageInspectionLimits = SAFE_IMAGE_LIMITS) {
   if (!isLocalAssetImagePath(src)) throw new ImageSafetyError("請選擇素材庫中的安全圖片。");
   const library = await getAssetLibrary();
   if (!library.assets.some(asset => asset.status === "active" && asset.path === src)) throw new ImageSafetyError("所選圖片已不在素材庫中，請重新選擇。");
@@ -23,8 +23,8 @@ export async function assertAssetImageAvailable(src: string, inspect = true) {
     let stat;
     try { stat = await fs.lstat(/* turbopackIgnore: true */ file); }
     catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") continue; throw error; }
-    if (!stat.isFile() || stat.isSymbolicLink() || stat.size <= 0 || stat.size > SAFE_IMAGE_LIMITS.maxBytes) throw new ImageSafetyError("所選圖片無法安全讀取。");
-    if (inspect) await inspectImageBytes(await fs.readFile(/* turbopackIgnore: true */ file), file);
+    if (!stat.isFile() || stat.isSymbolicLink() || stat.size <= 0 || stat.size > limits.maxBytes) throw new ImageSafetyError("所選圖片無法安全讀取。");
+    if (inspect) await inspectImageBytes(await fs.readFile(/* turbopackIgnore: true */ file), file, undefined, limits);
     return;
   }
   throw new ImageSafetyError("所選圖片不存在，請重新選擇。");
