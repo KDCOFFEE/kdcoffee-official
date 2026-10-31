@@ -41,6 +41,8 @@ const { default: PreferenceFields } = await import("../components/member/CreditP
 const { default: Help } = await import("../components/member/CreditHelpDialog");
 
 const now = new Date("2026-10-06T03:00:00.000Z");
+// Keep historical checkout/pickup fixtures on the same clock as their injected business dates.
+mock.timers.enable({ apis: ["Date"], now: now.getTime() });
 const rulesFile = storage.getMembershipRulesFile();
 const stateFile = storage.getMembershipCommerceStateFile();
 const websiteFile = storage.getWebsiteDataFile();
@@ -89,7 +91,7 @@ try {
   const templates = copy.MEMBER_CENTER_COPY_CATALOG.filter((entry) => entry.tokens.creditName);
   for (const entry of templates) {
     const values = Object.fromEntries(Object.keys(entry.tokens).filter((name) => name !== "creditName").map((name) => [name, name === "percent" ? 70 : "NT$ 120"]));
-    check(`shared name ${entry.key}`, () => { assert.equal(copy.memberCopyValidationError(entry.key, entry.defaultText), null); const rendered = copy.resolveMemberCopy(overrides, entry.key, values); assert.ok(rendered.includes("測試咖啡金") || entry.key === "member.dashboard.label.3dd941956d"); assert.ok(!rendered.includes("{creditName}")); });
+    check(`shared name ${entry.key}`, () => { assert.equal(copy.memberCopyValidationError(entry.key, entry.defaultText), null); const rendered = copy.resolveMemberCopy(overrides, entry.key, values); if (entry.key === "member.returns.approvedNotice") assert.equal(rendered, "退貨申請已核准。"); else assert.ok(rendered.includes("測試咖啡金") || entry.key === "member.dashboard.label.3dd941956d"); assert.ok(!rendered.includes("{creditName}")); });
   }
   check("name + amount + ratio and injected name cannot be overridden by caller", () => { assert.ok(copy.resolveMemberCopy(overrides, "credit.help.policy", { creditName: "wrong", percent: 70 }).includes("70% 測試咖啡金")); assert.ok(copy.resolveMemberCopy(overrides, "credit.notice.amount", { amount: "NT$ 120" }).includes("測試咖啡金 NT$ 120")); });
   const historical = { ...overrides, "member.subscription.label.a519a98b2f": "我的老名字", "member.rewards.description.a2e8013bd2": "{pointName} {pointName2} 換 {creditAmount} 舊抵用金" };
@@ -288,6 +290,7 @@ try {
   console.log(`CREDIT SUBSCRIPTION INTEGRATION: ${checks} checks; only isolated ${root}`);
 } finally {
   mock.restoreAll();
+  mock.timers.reset();
   delete globals.__creditTestCookie;
   delete globals.__creditTestAdminCookie;
   assert.ok(path.resolve(root).startsWith(path.join(os.tmpdir(), "kd-credit-integration-")));

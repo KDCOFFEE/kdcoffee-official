@@ -1,3 +1,5 @@
+import {prepareCustomerLinePresentation,type CustomerLineMessage} from './customerLinePresentation';
+import type {CustomerCardContext} from './customerLineCardEvents';
 import type {
   CustomerNotificationPhoto,
   CustomerNotificationResult,
@@ -35,14 +37,18 @@ export async function sendCustomerLineNotification(input: {
   fetcher?: typeof fetch;
   publicImageFetcher?: typeof fetch;
   retryKey?: string;
+  cardContext?: CustomerCardContext;
 }): Promise<CustomerNotificationResult> {
   // LEGACY compatibility only: remove this fallback after Railway migration.
   const token = process.env.LINE_CUSTOMER_CHANNEL_ACCESS_TOKEN?.trim()
     || process.env.LINE_CHANNEL_ACCESS_TOKEN?.trim();
   if (!token) return { status: "not_configured", error: "LINE 通知服務尚未設定" };
-  const messages: Record<string, string>[] = [{ type: "text", text: input.template.text }];
+  const presentation=await prepareCustomerLinePresentation(input.template.text,input.cardContext);
+  const messages: CustomerLineMessage[] = [presentation.message];
   let imageIssue: string | undefined;
   let imageHost: string | undefined;
+  const presentationDiagnostics={requestedPresentation:presentation.requestedPresentation,deliveredPresentation:presentation.deliveredPresentation,...(presentation.fallbackReason?{fallbackReason:presentation.fallbackReason}:{})};
+  let failureClass:'DEFINITIVE_LINE_VALIDATION_REJECTION'|'AMBIGUOUS_NETWORK_FAILURE'='AMBIGUOUS_NETWORK_FAILURE';
   let lineHttpStatus: number | undefined;
   if (input.photo) {
     try {
@@ -72,7 +78,8 @@ export async function sendCustomerLineNotification(input: {
     });
     lineHttpStatus = response.status;
     const diagnostics = {
-      messageTypes: messages.map((message) => message.type) as Array<"text" | "image">,
+      ...presentationDiagnostics,
+      messageTypes: messages.map((message) => message.type) as Array<"text" | "image" | "flex">,
       ...(messages.some((message) => message.type === "image") ? { imageMimeType: "image/jpeg" as const } : {}),
       ...(imageHost ? { imageHost } : {}),
       lineHttpStatus,
@@ -82,6 +89,7 @@ export async function sendCustomerLineNotification(input: {
         ? { status: "partial", error: `文字通知已送出，但${imageIssue}。`, diagnostics }
         : { status: "sent", diagnostics };
     }
+    failureClass=response.status>=400&&response.status<500?'DEFINITIVE_LINE_VALIDATION_REJECTION':'AMBIGUOUS_NETWORK_FAILURE';
     const errorBody = await response.text().catch(() => "");
     console.error("Customer LINE notification rejected", {
       status: response.status,
@@ -95,7 +103,8 @@ export async function sendCustomerLineNotification(input: {
     status: "failed",
     error: "LINE 通知發送失敗",
     diagnostics: {
-      messageTypes: messages.map((message) => message.type) as Array<"text" | "image">,
+      requestedPresentation:presentation.requestedPresentation,...(presentation.fallbackReason?{fallbackReason:presentation.fallbackReason}:{}),failureClass,
+      messageTypes: messages.map((message) => message.type) as Array<"text" | "image" | "flex">,
       ...(messages.some((message) => message.type === "image") ? { imageMimeType: "image/jpeg" as const } : {}),
       ...(imageHost ? { imageHost } : {}),
       ...(lineHttpStatus !== undefined ? { lineHttpStatus } : {}),

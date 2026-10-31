@@ -1,3 +1,4 @@
+import {membershipCardContext} from './customerLineCardEvents';
 import { createReturnNotificationTemplate, deliverReturnNotice, type ReturnDeliveryOptions } from "./returnNotificationDelivery";
 import { readCreditDisplayCopy } from "./creditDisplayCopy";
 import { isValidEmail, readMember } from "./memberAuth";
@@ -50,7 +51,7 @@ export async function deliverNextMembershipNotification(options: ReturnDeliveryO
   let lineSucceeded = delivered.includes("line");
   if (notice.channels.includes("line") && !lineSucceeded) {
     if (member?.lineUserId) {
-      const result = await sendCustomerLineNotification({ userId: member.lineUserId, template: message, fetcher: options.lineFetcher });
+      const result = await sendCustomerLineNotification({ userId: member.lineUserId, template: message, cardContext:membershipCardContext(notice), fetcher: options.lineFetcher });
       lineSucceeded = result.status === "sent";
       if (lineSucceeded) delivered.push("line"); else errors.push(result.error || "LINE 通知失敗");
     } else errors.push("會員沒有可用的 LINE 身份");

@@ -1,3 +1,4 @@
+import {supportsCustomerFlex} from './customerLineCardEvents';
 import {LINE_CARD_CATALOG} from './lineNotificationCardCatalog';
 import {LINE_CARD_HEADER_ASSETS} from './lineCardPresentation';
 import type {CardFamily} from './lineNotificationCards';
@@ -5,7 +6,7 @@ import type {CardFamily} from './lineNotificationCards';
 export const CARD_COPY_LIMITS={displayName:80,title:60,intro:240,secondaryText:240,ctaLabel:20,altText:300,footerText:120} as const;
 export const CARD_COPY_LABELS={displayName:'卡片名稱',title:'卡片標題',intro:'上方說明',secondaryText:'補充說明',ctaLabel:'按鈕文字',altText:'LINE altText',footerText:'頁尾文字'} as const;
 export type CardCopyField=keyof typeof CARD_COPY_LIMITS;
-export type LineCardOverride=Partial<Record<CardCopyField,string>>&{headerAsset?:CardFamily;headerImageAssetId?:string};
+export type LineCardOverride=Partial<Record<CardCopyField,string>>&{presentationMode?:'text'|'flex';headerAsset?:CardFamily;headerImageAssetId?:string};
 export type LineCardConfigStore={version:1;revision:number;events:Record<string,{overrides:LineCardOverride;updatedAt:string;updatedBy:string}>};
 export const EMPTY_LINE_CARD_CONFIG:LineCardConfigStore={version:1,revision:0,events:{}};
 export class LineCardValidationError extends Error {}
@@ -23,6 +24,7 @@ export function validateLineCardOverride(eventKey:string,input:unknown):LineCard
  for(const key of Reflect.ownKeys(input)){
   if(typeof key!=='string'||!('value'in Object.getOwnPropertyDescriptor(input,key)!))throw new LineCardValidationError('卡片包含不允許修改的欄位。');
   const value=(input as Record<string,unknown>)[key];
+  if(key==='presentationMode'){if(!supportsCustomerFlex(eventKey)||typeof value!=='string'||!['text','flex'].includes(value))throw new LineCardValidationError('此事件不支援此顯示方式。');if(value==='flex')result.presentationMode='flex';continue;}
   if(key==='headerImageAssetId'){if(typeof value!=='string'||! /^[A-Za-z0-9][A-Za-z0-9_-]{0,120}$/.test(value))throw new LineCardValidationError('請選擇有效的素材庫圖片。');result.headerImageAssetId=value;continue;}
   if(key==='headerAsset'){if(typeof value!=='string'||!Object.hasOwn(LINE_CARD_HEADER_ASSETS,value))throw new LineCardValidationError('請選擇已核准的抬頭圖片。');result.headerAsset=value as CardFamily;continue;}
   if(!Object.hasOwn(CARD_COPY_LIMITS,key))throw new LineCardValidationError('卡片包含不允許修改的欄位。');
@@ -36,6 +38,6 @@ export function validateLineCardOverride(eventKey:string,input:unknown):LineCard
  return result;
 }
 export function resolveLineCardConfig(eventKey:string,override:unknown={}){
- const clean=validateLineCardOverride(eventKey,override),defaults=cardDefaults(eventKey);const {displayName,headerAsset,headerImageAssetId,...copy}=clean;
- return {displayName:displayName??defaults.displayName,copy:{...cardDefinition(eventKey).defaultCopy,...copy},headerAsset,headerImageAssetId};
+ const clean=validateLineCardOverride(eventKey,override),defaults=cardDefaults(eventKey);const {displayName,headerAsset,headerImageAssetId,presentationMode,...copy}=clean;
+ return {displayName:displayName??defaults.displayName,copy:{...cardDefinition(eventKey).defaultCopy,...copy},headerAsset,headerImageAssetId,presentationMode:presentationMode??'text'};
 }

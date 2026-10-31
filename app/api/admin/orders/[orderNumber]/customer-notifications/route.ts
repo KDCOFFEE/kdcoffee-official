@@ -1,3 +1,4 @@
+import {orderCardContext} from '@/lib/customerLineCardEvents';
 import { NextResponse } from "next/server";
 
 import { isAdminAuthenticated } from "@/lib/adminAuth";
@@ -94,6 +95,7 @@ export async function POST(
     if (channels.includes("line") && capability.line.userId) {
       results.line = await sendCustomerLineNotification({
         userId: capability.line.userId,
+        cardContext: orderCardContext(order,template.eventType),
         template,
         photo,
       });

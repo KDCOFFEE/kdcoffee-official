@@ -22,10 +22,14 @@ export type CustomerNotificationResult = {
   status: "sent" | "partial" | "failed" | "not_configured";
   error?: string;
   diagnostics?: {
-    messageTypes: Array<"text" | "image">;
+    messageTypes: Array<"text" | "image" | "flex">;
     imageMimeType?: "image/jpeg" | "image/png";
     imageHost?: string;
     lineHttpStatus?: number;
+    requestedPresentation?: 'text'|'flex';
+    deliveredPresentation?: 'text'|'flex';
+    fallbackReason?: string;
+    failureClass?: 'DEFINITIVE_LINE_VALIDATION_REJECTION'|'AMBIGUOUS_NETWORK_FAILURE';
   };
 };
 
