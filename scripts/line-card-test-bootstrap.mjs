@@ -1,0 +1,5 @@
+import './return-settlement-test-bootstrap.mjs';
+import {registerHooks,createRequire} from 'node:module';import {pathToFileURL} from 'node:url';
+const react=pathToFileURL(createRequire(import.meta.url).resolve('react')).href;
+const hook='data:text/javascript,'+encodeURIComponent(`import React from ${JSON.stringify(react)};export * from ${JSON.stringify(react)};export const useState=(...args)=>globalThis.__lineCardHooks?globalThis.__lineCardHooks.useState(...args):React.useState(...args);`);
+registerHooks({resolve(specifier,context,nextResolve){if(specifier==='next/navigation')return {url:'data:text/javascript,export function redirect(path){throw new Error("REDIRECT:"+path)};export function usePathname(){return "/admin/notifications/line-cards"}',shortCircuit:true};if(specifier==='react'&&context.parentURL?.endsWith('/LineNotificationCardStudio.tsx'))return {url:hook,shortCircuit:true};return nextResolve(specifier,context);},load(url,context,nextLoad){if(url===hook)return {format:'module',source:decodeURIComponent(hook.slice('data:text/javascript,'.length)),shortCircuit:true};return nextLoad(url,context);}});

@@ -49,6 +49,7 @@ export default async function AdminPage() {
       <form action="/api/admin/logout" method="post"><button className="logout-button">登出後台</button></form>
     </header>
     <section className="admin-quick-links">
+      <Link href="/admin/notifications/line-cards"><strong>LINE 通知卡片工作室</strong><span>預覽會員／管理者 LINE 通知卡片 →</span></Link>
       <Link href="/admin/customer-service"><strong>客服中心內容</strong><span>Owner 專用・常見問題、快速服務與聯絡資訊 →</span></Link>
       <Link href="/admin/store/content"><strong>商店內容工作室</strong><span>送禮首頁與各禮盒商品的介紹內容 →</span></Link>
       <Link href="/admin/store"><strong>商店工作區 / Store</strong><span>Owner 專用・銷售專區、商品分類與一般零售商品 →</span></Link>

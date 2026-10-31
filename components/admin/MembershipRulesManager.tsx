@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import ReturnRefundSettingsFields from "./ReturnRefundSettingsFields";
 
 import {
@@ -867,7 +868,7 @@ export default function MembershipRulesManager({ initialRevision, initialVersion
     </section>
 
     <section className="membership-rule-card">
-      <header><span>08</span><div><h2>LINE／Email 通知</h2><p>每一種營運事件可以獨立開關；會員中心紀錄會保留，避免外部通知失敗後無處查詢。</p></div></header>
+      <header><span>08</span><div><h2>LINE／Email 通知</h2><Link href="/admin/notifications/line-cards">編輯 LINE 通知卡片 →</Link><p>每一種營運事件可以獨立開關；會員中心紀錄會保留，避免外部通知失敗後無處查詢。</p></div></header>
       <div className="membership-fields two"><NumberField label="下一期前幾天提醒" value={rules.notification.nextCycleReminderDays} min={0} max={365} unit="天" onChange={(value) => change((draft) => { draft.notification.nextCycleReminderDays = value; })} /><NumberField label="修改截止前幾天提醒" value={rules.notification.modificationCutoffReminderDays} min={0} max={60} unit="天" onChange={(value) => change((draft) => { draft.notification.modificationCutoffReminderDays = value; })} /><NumberField label="通知失敗最多重試" value={rules.notification.retryCount} min={0} max={10} unit="次" onChange={(value) => change((draft) => { draft.notification.retryCount = value; })} /><label className="membership-switch"><input type="checkbox" checked={rules.notification.emailFallback} onChange={(event) => change((draft) => { draft.notification.emailFallback = event.target.checked; })} /><span><b>LINE 失敗時改寄 Email</b><small>只有會員有可信 Email 時才會使用</small></span><AdminRuleHelpButton ruleKey="notification.emailFallback" /></label></div>
       <div className="membership-checks">{Object.entries({ next_cycle_upcoming: "下一期提醒", modification_cutoff_reminder: "修改截止提醒", subscription_order_created: "定期購訂單成立", shipped: "已出貨", arrived_at_store: "已到店", unclaimed_risk: "疑似未取貨", gift_milestone: "贈品里程碑", referral_reward: "推薦回饋", credit_reward: "抵用金入帳", credit_expiry: "抵用金到期", return_admin_request_received: "收到退貨申請（通知管理者）", return_request_received: "退貨申請已收到（通知會員）", return_request_approved: "退貨申請已核准（通知會員）", return_request_rejected: "退貨申請未核准（通知會員）", return_refund_completed: "退款完成（通知會員）" }).map(([key, label]) => <label key={key}><input type="checkbox" checked={rules.notification.events[key as keyof typeof rules.notification.events].enabled} onChange={(event) => change((draft) => { draft.notification.events[key as keyof typeof draft.notification.events].enabled = event.target.checked; })} />{label} <AdminRuleHelpButton ruleKey={`notification.events.${key}.enabled`} /></label>)}</div>
     </section>
