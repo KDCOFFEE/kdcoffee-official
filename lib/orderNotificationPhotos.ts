@@ -4,8 +4,9 @@ import sharp, { type Metadata } from "sharp";
 
 import type { CustomerNotificationPhoto } from "@/lib/customerNotifications";
 import { getOrderNotificationUploadsDir } from "@/lib/storagePaths";
+import { MAX_ORDER_NOTIFICATION_PHOTO_BYTES, ORDER_PHOTO_MIME_TYPES, ORDER_PHOTO_EXTENSIONS } from "./orderPhotoPolicy";
 
-export const MAX_ORDER_NOTIFICATION_PHOTO_BYTES = 5 * 1024 * 1024;
+export { MAX_ORDER_NOTIFICATION_PHOTO_BYTES } from "./orderPhotoPolicy";
 export const MAX_LINE_ORIGINAL_IMAGE_BYTES = 10 * 1024 * 1024;
 export const MAX_LINE_PREVIEW_IMAGE_BYTES = 1024 * 1024;
 const ALLOWED_FORMATS = new Set(["jpeg", "png", "webp"]);
@@ -180,11 +181,11 @@ export async function validateAndStoreOrderNotificationPhoto(
   if (file.size < 1 || file.size > MAX_ORDER_NOTIFICATION_PHOTO_BYTES) {
     throw new OrderNotificationPhotoError("照片大小必須在 5MB 以內。");
   }
-  if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+  if (!ORDER_PHOTO_MIME_TYPES.some(type => type === file.type)) {
     throw new OrderNotificationPhotoError("照片只接受 JPEG、PNG 或 WebP。");
   }
   const extension = path.extname(file.name).toLowerCase();
-  if (![".jpg", ".jpeg", ".png", ".webp"].includes(extension)) {
+  if (!ORDER_PHOTO_EXTENSIONS.some(value => value === extension)) {
     throw new OrderNotificationPhotoError("照片副檔名不正確。");
   }
 

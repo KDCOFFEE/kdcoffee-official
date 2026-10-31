@@ -43,7 +43,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ or
   const latestAtmTransferClaim = atmTransferClaims.length ? atmTransferClaims[atmTransferClaims.length - 1] : null;
 
   return <main className="admin-page">
-    <div className="admin-back"><Link href="/admin/orders">← 返回訂單列表</Link>　<Link href="/admin/fulfillment">訂單與物流</Link></div>
+    <div className="admin-back"><Link href="/admin/orders">← 返回訂單列表</Link>　<Link href="/admin/fulfillment">訂單與物流</Link>　<Link href={`/admin/returns/${encodeURIComponent(orderNumber)}`}>退貨申請／審核</Link></div>
     <section className="admin-detail-grid">
       <article className="admin-panel">
         <p className="eyebrow dark">ORDER DETAIL</p><h1>{order.orderNumber}</h1><p>{new Date(order.createdAt).toLocaleString("zh-TW")}・{orderStatusLabel(order.status)}</p>

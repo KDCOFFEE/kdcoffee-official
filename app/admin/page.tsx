@@ -57,6 +57,7 @@ export default async function AdminPage() {
       <Link href="/admin/products"><strong>作品與本月豆單</strong><span>23 款作品、上架、售完與首頁顯示 →</span></Link>
       <Link href="/admin/monthly-menu"><strong>本月豆單背景</strong><span>背景圖片、濃度、位置與 AI 提示詞 →</span></Link>
       <Link href="/admin/orders"><strong>訂單管理</strong><span>查看與更新所有訂單 →</span></Link>
+      <Link href="/admin/returns"><strong>退貨管理</strong><span>退貨審核、抵用金確認證據與待發獎勵 →</span></Link>
       <Link href="/admin/fulfillment"><strong>訂單與物流</strong><span>準備、交寄、到店、取貨與人工確認 →</span></Link>
       <Link className="admin-inquiry-entry" href="/admin/orders/inquiries"><strong className="admin-inquiry-link-title">訂單詢問{pendingInquiries.length ? <b>{pendingInquiries.length}</b> : null}</strong><span>查看等待回覆的客人留言 →</span></Link>
       <Link className="admin-members-entry" href="/admin/members"><strong>會員管理</strong><span>搜尋、查看與管理會員資料、訂單、抵用金與會員狀態 →</span></Link>

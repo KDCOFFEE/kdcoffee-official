@@ -2,8 +2,10 @@ import { validateSubscriptionCreditPreference, type SubscriptionCreditPreference
 import { createHash, randomBytes } from "crypto";
 import { promises as fs } from "fs";
 import path from "path";
+import { isDeepStrictEqual } from "node:util";
+import { buildReturnConfirmationPreview, signReturnPreview, verifyReturnPreviewToken, ReturnWorkflowError } from "./returnCreditPreview";
 
-import { listOrders, readOrder } from "./adminOrders";
+import { listOrders, readOrder, withStoredOrderUpdateLock } from "./adminOrders";
 import { getDateOnlyInTimeZone } from "./checkoutRules";
 import { atomicWriteJson, withFileLock } from "./jsonFileStore";
 import { getCanonicalMemberRecord, getIdentityRegistrySnapshot } from "./memberIdentity";
@@ -41,7 +43,7 @@ import {
   type SubscriptionItem,
 } from "./membershipPolicies";
 import { projectOrderFinancialBreakdown } from "./orderFinancialProjection";
-import { resolveOrderRewardBasis, type OrderRewardBasis } from "./orderRewardBasis";
+import { allocatePreservedRewardMoney, cumulativeOriginalLineContribution, originalEconomicFingerprint, resolveOrderRewardBasis, type OrderRewardBasis } from "./orderRewardBasis";
 
 async function persistedOrderRewardBasis(orderId: string) {
   const order = await readOrder(orderId);
@@ -56,6 +58,12 @@ function isolatePaidRewardInput<T extends { paidAmountBasis: number; basePV?: nu
     basePV: basis.totalBasePV, effectivePV: basis.totalEffectivePV,
     discountRatio: basis.totalBasePV > 0 ? Math.min(1, basis.totalEffectivePV / basis.totalBasePV) : 1 };
 }
+import { hasOrderCompletion, resolveOrderEconomicAllocation, resolveReturnLineEvidence, returnDeadlineAtTaipeiDayEnd } from "./orderCompletion";
+import {
+  assertReturnEventsPreserved, normalizeReturnCommand, preservedReturnCompletion, projectOrderReturns,
+  returnCommandConflict, returnEvidenceText, validateReturnEventLog,
+  type ReturnActor, type ReturnCommand, type ReturnCommandResult, type ReturnDomainEvent, type ReturnRequestStatus,
+} from "./orderReturns";
 import {
   buildRewardWaitingExplanation,
   buildSafeRewardSourceOrderSummary,
@@ -163,6 +171,9 @@ export type ReferralConversion = {
   rewardCreditEntryId: string | null;
   pendingRewardAmount: number;
   occurredAt: string;
+  /** New conversion evidence only; missing legacy evidence is never backfilled. */
+  originalCalculation?: { rulesVersion: number; merchandiseAmount: number; eligibleItemCount: number;
+    calculatedRewardAmount: number; referrerEligibleAtCreation: boolean; repeatedAllowedAtCreation: boolean };
 };
 
 export type ValidConsumptionEvent = {
@@ -564,10 +575,1329 @@ export type MembershipCommerceState = {
   creditEntries: Record<string, CreditEntry>;
   creditReservations: Record<string, CreditReservation>;
   events: CommerceEvent[];
+  /** Absent in historical state. Immutable facts; statuses/quantities are replayed, never stored separately. */
+  returnEvents?: ReturnDomainEvent[];
   notifications: NotificationEvent[];
   audit: AuditRecord[];
   idempotency: Record<string, { resultId: string; occurredAt: string }>;
 };
+
+export type OriginalRewardOrderEvidence = {
+  orderId: string;
+  /** Original creation time, never completion, reward generation or later review time. */
+  orderCreatedAt: string;
+  timeSource: "completion_snapshot" | "persisted_order" | "legacy_qualification_attempt";
+  completedAt: string | null;
+  consumptionEventId: string | null;
+};
+export type RewardDependencyEvidenceResult =
+  | { status: "manual_review_required"; reason: "reward_not_found" | "missing_original_order_evidence"
+      | "inconsistent_dependency_evidence" | "missing_qualification_evidence" }
+  | { status: "resolved"; schemaVersion: 1; program: "referral" | "retail_promotion";
+      rewardId: string; rewardType: ReferralReward["rewardType"] | "retail_promotion";
+      authority: ReferralRewardQualificationAuthority | null;
+      sourceOrder: OriginalRewardOrderEvidence; qualificationOrders: OriginalRewardOrderEvidence[];
+      /** Preserved policy and monetary evidence, not a new eligibility/payout decision. */
+      reward: ReferralReward | RetailPromotionReward;
+      consumptions: ValidConsumptionEvent[]; qualificationRound: QualificationRound | null;
+      coverage: ReferralRewardCoverage | null; maturation: ReferralRewardMaturation | null;
+      creditEntry: CreditEntry | null; sourceReferences: string[]; idempotencyKeys: string[] };
+
+/** Read-only dependency evidence for future return logic. No clock, rules lookup, role
+ * requirement, qualification creation, scheduler, payout or reversal is invoked here.
+ * Callers must supply one consistent state snapshot; orders are read once per identity.
+ * A resolved result preserves evidence; it does NOT assert present reward eligibility. */
+export async function resolveRewardDependencyEvidence(input: {
+  program: "referral" | "retail_promotion";
+  rewardId: string;
+  state: MembershipCommerceState;
+  readSourceOrder?: (orderId: string) => Promise<Record<string, unknown> | null>;
+}): Promise<RewardDependencyEvidenceResult> {
+  const state = structuredClone(input.state);
+  const retail = input.program === "retail_promotion";
+  const reward = retail ? state.retailPromotionRewards[input.rewardId] : state.referralRewards[input.rewardId];
+  const manual = (reason: Extract<RewardDependencyEvidenceResult, { status: "manual_review_required" }>["reason"]): RewardDependencyEvidenceResult => ({ status: "manual_review_required", reason });
+  if (!reward) return manual("reward_not_found");
+  if (reward.rewardId !== input.rewardId) return manual("inconsistent_dependency_evidence");
+  const referral = retail ? null : reward as ReferralReward;
+  if (referral?.qualificationAuthority !== undefined
+    && !["legacy_order", "qualification_coverage", "self_purchase_direct"].includes(referral.qualificationAuthority)) return manual("inconsistent_dependency_evidence");
+  const authority = referral ? referralRewardQualificationAuthority(referral) : null;
+  const read = input.readSourceOrder ?? readOrder;
+  const orders = new Map<string, Record<string, unknown> | null>();
+  const validTime = (value: unknown): value is string => typeof value === "string" && Number.isFinite(Date.parse(value));
+  const sameTime = (left: string, right: string) => Date.parse(left) === Date.parse(right);
+  const consumptions = new Map<string, ValidConsumptionEvent>();
+  const sourceConsumptions = Object.values(state.validConsumptionEvents).filter(item => item.sourceOrderId === reward.sourceOrderNumber);
+  if (sourceConsumptions.length > 1) return manual("inconsistent_dependency_evidence");
+  for (const consumption of sourceConsumptions) {
+    if (state.validConsumptionEvents[consumption.eventId] !== consumption
+      || (referral && consumption.memberId !== referral.sourceMemberId)) return manual("inconsistent_dependency_evidence");
+    consumptions.set(consumption.eventId, consumption);
+  }
+
+  async function originalOrder(orderId: string, consumption?: ValidConsumptionEvent,
+    legacy?: { orderCreatedAt: string; finalizedAt: string | null }): Promise<OriginalRewardOrderEvidence | null> {
+    if (!orders.has(orderId)) {
+      try { orders.set(orderId, await read(orderId)); }
+      catch { return null; }
+    }
+    const order = orders.get(orderId);
+    if (consumption && (consumption.sourceOrderId !== orderId
+      || consumption.sourceReference !== `completed-order:${orderId}` || !validTime(consumption.finalizedAt))) return null;
+    if (order && order.orderNumber !== orderId) return null;
+    const lines = order ? resolveReturnLineEvidence(order) : null;
+    if (lines?.status === "manual_review_required" && lines.reason === "invalid_saved_evidence") return null;
+    const preservedTime = lines?.status === "resolved" ? lines.orderCreatedAt : null;
+    const orderTime = order?.createdAt;
+    if (preservedTime && validTime(orderTime) && !sameTime(preservedTime, orderTime)) return null;
+    const createdAt = preservedTime ?? (validTime(orderTime) ? orderTime : legacy?.orderCreatedAt);
+    if (!validTime(createdAt)) return null;
+    if (legacy && (!validTime(legacy.orderCreatedAt) || !sameTime(createdAt, legacy.orderCreatedAt))) return null;
+    // Successful consumption / completed legacy attempt are also preserved completion evidence.
+    if (!(order && hasOrderCompletion(order)) && !consumption && !validTime(legacy?.finalizedAt)) return null;
+    const completion = order?.completion as Record<string, unknown> | undefined;
+    const history = Array.isArray(order?.statusHistory) ? order.statusHistory as Record<string, unknown>[] : [];
+    const events = Array.isArray(order?.fulfillmentEvents) ? order.fulfillmentEvents as Record<string, unknown>[] : [];
+    const completedAt = [completion?.completedAt, order?.completedAt,
+      events.find(event => event.state === "completed")?.occurredAt,
+      history.find(event => event.to === "completed")?.at, consumption?.finalizedAt, legacy?.finalizedAt].find(validTime) ?? null;
+    if (completedAt && Date.parse(createdAt) > Date.parse(completedAt)) return null;
+    return { orderId, orderCreatedAt: createdAt,
+      timeSource: preservedTime ? "completion_snapshot" : validTime(orderTime) ? "persisted_order" : "legacy_qualification_attempt",
+      completedAt, consumptionEventId: consumption?.eventId ?? null };
+  }
+
+  const sourceOrder = await originalOrder(reward.sourceOrderNumber, sourceConsumptions[0]);
+  if (!sourceOrder) return manual("missing_original_order_evidence");
+  const qualificationOrders: OriginalRewardOrderEvidence[] = [];
+  let qualificationRound: QualificationRound | null = null;
+  let coverage: ReferralRewardCoverage | null = null;
+  let maturation: ReferralRewardMaturation | null = null;
+  if (authority === "qualification_coverage" && referral) {
+    const coverages = Object.values(state.referralRewardCoverages).filter(item => item.referralRewardId === reward.rewardId);
+    const maturations = Object.values(state.referralRewardMaturations).filter(item => item.referralRewardId === reward.rewardId);
+    if (coverages.length !== 1 || maturations.length > 1) return manual("missing_qualification_evidence");
+    // Reuse the existing evidence-chain validator, without its payout/scheduler consumers.
+    let chain: ReturnType<typeof qualificationCoverageProjectionEvidence>;
+    try { chain = qualificationCoverageProjectionEvidence(state, referral); }
+    catch { return manual("inconsistent_dependency_evidence"); }
+    if (!chain) return manual("inconsistent_dependency_evidence");
+    ({ round: qualificationRound, coverage, maturation } = chain);
+    const ids = [...new Set([qualificationRound.triggeringValidConsumptionEventId,
+      ...qualificationRound.consumptionAccounting.allocations.map(item => item.validConsumptionEventId)])].sort();
+    for (const eventId of ids) {
+      const consumption = state.validConsumptionEvents[eventId];
+      if (!consumption || consumption.eventId !== eventId || consumption.memberId !== reward.beneficiaryMemberId
+        || (eventId === qualificationRound.triggeringValidConsumptionEventId
+          && consumption.sourceOrderId !== qualificationRound.triggeringSourceOrderId)) return manual("inconsistent_dependency_evidence");
+      const original = await originalOrder(consumption.sourceOrderId, consumption);
+      if (!original) return manual("missing_original_order_evidence");
+      consumptions.set(eventId, consumption);
+      qualificationOrders.push(original);
+    }
+  } else if (authority === "legacy_order" && referral) {
+    const attempts = (referral.qualificationAttempts ?? []).filter(item => item.orderNumber === referral.qualificationOrderNumber);
+    const attempt = attempts.find(item => item.status === "completed" && item.finalState === "completed");
+    const pointer = referral.qualificationOrderNumber && referral.qualificationOrderFinalState === "completed"
+      && validTime(referral.qualificationOrderCreatedAt) && validTime(referral.qualificationQualifiedAt)
+      ? { orderCreatedAt: referral.qualificationOrderCreatedAt, finalizedAt: referral.qualificationQualifiedAt } : null;
+    if (attempts.length > 1 || (attempt && pointer && !sameTime(attempt.orderCreatedAt, pointer.orderCreatedAt))) return manual("inconsistent_dependency_evidence");
+    const legacy = attempt ?? pointer;
+    if (legacy && referral.qualificationOrderNumber) {
+      const original = await originalOrder(referral.qualificationOrderNumber, undefined, legacy);
+      if (!original) return manual("missing_original_order_evidence");
+      qualificationOrders.push(original);
+    } else if (referral.qualificationStatus === "qualified") return manual("missing_qualification_evidence");
+  } else if (authority === "self_purchase_direct") {
+    if (referral?.rewardType !== "self_purchase") return manual("inconsistent_dependency_evidence");
+    qualificationOrders.push(sourceOrder);
+  }
+  if (referral?.selfPurchaseTierSnapshot) {
+    const tierEvidence = [...referral.selfPurchaseTierSnapshot.initialEvidence, ...referral.selfPurchaseTierSnapshot.latestEvidence];
+    for (const evidence of tierEvidence) {
+      if (evidence.role === "current" && evidence.sourceOrderId !== reward.sourceOrderNumber) return manual("inconsistent_dependency_evidence");
+      const consumption = evidence.validConsumptionEventId ? state.validConsumptionEvents[evidence.validConsumptionEventId] : undefined;
+      if (evidence.validConsumptionEventId && (!consumption || consumption.eventId !== evidence.validConsumptionEventId
+        || consumption.memberId !== reward.beneficiaryMemberId || consumption.sourceOrderId !== evidence.sourceOrderId
+        || !sameTime(consumption.finalizedAt, evidence.finalizedAt))) return manual("inconsistent_dependency_evidence");
+      const original = await originalOrder(evidence.sourceOrderId, consumption);
+      if (!original) return manual("missing_original_order_evidence");
+      if (consumption) consumptions.set(consumption.eventId, consumption);
+      if (!qualificationOrders.some(item => item.orderId === original.orderId)) qualificationOrders.push(original);
+    }
+  }
+  const creditEntry = reward.rewardCreditEntryId ? state.creditEntries[reward.rewardCreditEntryId] : null;
+  if (reward.rewardCreditEntryId && (!creditEntry || creditEntry.creditEntryId !== reward.rewardCreditEntryId
+    || creditEntry.memberId !== reward.beneficiaryMemberId
+    || creditEntry.sourceReference !== `${retail ? "retail_promotion_reward" : "referral_reward"}:${reward.rewardId}`)) return manual("inconsistent_dependency_evidence");
+  const dependencies = [...consumptions.values()].sort((left, right) => left.eventId.localeCompare(right.eventId));
+  return { status: "resolved", schemaVersion: 1, program: input.program, rewardId: reward.rewardId,
+    rewardType: referral?.rewardType ?? "retail_promotion", authority, sourceOrder,
+    qualificationOrders: qualificationOrders.sort((left, right) => left.orderId.localeCompare(right.orderId)),
+    reward, consumptions: dependencies, qualificationRound, coverage, maturation, creditEntry: creditEntry ?? null,
+    sourceReferences: [...new Set([...dependencies.map(item => item.sourceReference),
+      coverage?.sourceReference, maturation?.sourceReference, creditEntry?.sourceReference].filter((item): item is string => typeof item === "string"))].sort(),
+    idempotencyKeys: [...new Set([reward.idempotencyKey, ...dependencies.map(item => item.idempotencyKey),
+      qualificationRound?.idempotencyKey, coverage?.idempotencyKey, maturation?.idempotencyKey]
+      .filter((item): item is string => typeof item === "string"))].sort() };
+}
+
+export type ReturnRewardReference = { program: "referral" | "retail_promotion" | "referral_conversion"; id: string };
+
+/** D0 read-only bridge from existing commerce snapshots to the shared NTD allocator.
+ * These are calculation inputs and source links, never consequence/settlement records.
+ * Coverage and tier policies remain in their original objects, identified by fingerprint. */
+export function resolveOriginalCommerceEconomicEvidence(input: { order: Record<string, unknown>; state: MembershipCommerceState }) {
+  const allocation = resolveOrderEconomicAllocation(input.order);
+  if (allocation.status !== "resolved") return allocation;
+  const { state } = input, orderId = allocation.orderNumber;
+  const compareId = (a: string, b: string) => a < b ? -1 : a > b ? 1 : 0;
+  type MonetaryEvidence = { kind: string; authorityId: string; authorityFingerprint: string; sourceOrderId: string;
+    status: "resolved"; authoritativeTotal: number; unit: "NTD";
+    lines: ReturnType<typeof allocatePreservedRewardMoney> }
+    | { kind: string; authorityId: string; authorityFingerprint: string; sourceOrderId: string;
+        status: "manual_review_required"; reason: string };
+  const monetaryAuthorities: MonetaryEvidence[] = [];
+  const append = (kind: string, authorityId: string, original: unknown, total: number, reason?: string) => {
+    const common = { kind, authorityId, authorityFingerprint: originalEconomicFingerprint(original), sourceOrderId: orderId };
+    try {
+      if (reason) throw new Error(reason);
+      const poolTotal = allocation.lines.reduce((sum, line) => sum + (line.rewardEligibleBasis > 0 ? line.redemptionEligibleBasis : 0), 0);
+      if (!Number.isSafeInteger(total) || total < 0 || total > poolTotal) throw new Error("unproven_original_monetary_authority");
+      monetaryAuthorities.push({ ...common, status: "resolved", authoritativeTotal: total, unit: "NTD",
+        lines: allocatePreservedRewardMoney(allocation, total) });
+    } catch (error) {
+      monetaryAuthorities.push({ ...common, status: "manual_review_required", reason: error instanceof Error ? error.message : "invalid_authority" });
+    }
+  };
+  const eligibleSubtotal = allocation.lines.reduce((sum, line) => sum + (line.rewardEligibleBasis > 0 ? line.redemptionEligibleBasis : 0), 0);
+  for (const [key, consumption] of Object.entries(state.validConsumptionEvents)) {
+    if (consumption.sourceOrderId !== orderId) continue;
+    const invalid = key !== consumption.eventId || consumption.sourceReference !== `completed-order:${orderId}`
+      || consumption.merchandiseSubtotal !== eligibleSubtotal || consumption.appliedCreditAmount !== allocation.actualRedemptionUsed
+      || typeof consumption.includeCreditDiscount !== "boolean" || typeof consumption.includeShipping !== "boolean"
+      || consumption.includeCreditDiscount !== consumption.qualificationRulesSnapshot?.validConsumption?.includeCreditDiscount
+      || consumption.includeShipping !== consumption.qualificationRulesSnapshot?.validConsumption?.includeShipping;
+    const expected = Math.max(0, consumption.merchandiseSubtotal - (consumption.includeCreditDiscount ? 0 : consumption.appliedCreditAmount)
+      + (consumption.includeShipping ? consumption.shippingAmount : 0));
+    const reason = invalid || expected !== consumption.validConsumptionAmount ? "inconsistent_original_consumption"
+      : consumption.includeShipping && consumption.shippingAmount !== 0 ? "non_merchandise_consumption_requires_separate_authority" : undefined;
+    append("valid_consumption", consumption.eventId, consumption, consumption.validConsumptionAmount, reason);
+    // Self-purchase paid tiers use their own EXISTING subtotal-credit authority,
+    // independently of qualification's includeCreditDiscount/includeShipping flags.
+    append("self_purchase_paid_consumption", consumption.eventId, consumption,
+      Math.max(0, consumption.merchandiseSubtotal - consumption.appliedCreditAmount), invalid ? "inconsistent_original_consumption" : undefined);
+  }
+  for (const [key, reward] of Object.entries(state.referralRewards)) {
+    if (reward.sourceOrderNumber !== orderId) continue;
+    append("referral_paid_basis", reward.rewardId, reward, reward.paidAmountBasis,
+      key !== reward.rewardId ? "inconsistent_original_reward" : undefined);
+  }
+  for (const [key, reward] of Object.entries(state.retailPromotionRewards)) {
+    if (reward.sourceOrderNumber !== orderId) continue;
+    const invalid = key !== reward.rewardId ? "inconsistent_original_reward" : undefined;
+    append("retail_promotion_eligible_merchandise", reward.rewardId, reward, reward.eligibleMerchandiseAmount, invalid);
+    if (reward.calculationBasis !== "pv") append("retail_promotion_calculation", reward.rewardId, reward,
+      reward.calculationBaseValue ?? reward.eligibleMerchandiseAmount, invalid);
+    // PV remains in the original reward/line snapshots. Never reinterpret it as NTD.
+  }
+  const consumptionIds = new Set(Object.values(state.validConsumptionEvents).filter(item => item.sourceOrderId === orderId).map(item => item.eventId));
+  const rounds = Object.values(state.qualificationRounds).filter(round => consumptionIds.has(round.triggeringValidConsumptionEventId)
+    || round.consumptionAccounting.allocations.some(item => consumptionIds.has(item.validConsumptionEventId)))
+    .sort((a, b) => compareId(a.roundId, b.roundId));
+  const roundIds = new Set(rounds.map(round => round.roundId));
+  const coverages = Object.values(state.referralRewardCoverages).filter(item => roundIds.has(item.qualificationRoundId))
+    .sort((a, b) => compareId(a.coverageId, b.coverageId));
+  const tierRewards = Object.values(state.referralRewards).filter(reward => reward.selfPurchaseTierSnapshot
+    && [...reward.selfPurchaseTierSnapshot.initialEvidence, ...reward.selfPurchaseTierSnapshot.latestEvidence].some(item => item.sourceOrderId === orderId))
+    .sort((a, b) => compareId(a.rewardId, b.rewardId));
+  const reservation = allocation.creditReservationId ? state.creditReservations[allocation.creditReservationId] : null;
+  const redemptionLinkage = allocation.actualRedemptionUsed === 0 ? { status: "not_applicable" as const }
+    : !reservation || reservation.reservationId !== allocation.creditReservationId || reservation.orderId !== orderId
+      || reservation.amount !== allocation.actualRedemptionUsed || reservation.status === "released"
+      || reservation.allocations.some(item => !Number.isSafeInteger(item.amount) || item.amount < 0)
+      || reservation.allocations.reduce((sum, item) => sum + item.amount, 0) !== reservation.amount
+      || reservation.allocations.some(item => !state.creditEntries[item.creditEntryId]
+        || state.creditEntries[item.creditEntryId].memberId !== reservation.memberId)
+      ? { status: "manual_review_required" as const, reason: "missing_original_credit_consumption_links" }
+      : { status: "resolved" as const, reservationId: reservation.reservationId, statusAtRead: reservation.status,
+          allocations: reservation.allocations.map(item => ({ ...item, expiresAt: state.creditEntries[item.creditEntryId].expiresAt })) };
+  monetaryAuthorities.sort((a, b) => compareId(a.kind, b.kind) || compareId(a.authorityId, b.authorityId));
+  return { status: "resolved" as const, schemaVersion: 1 as const, allocation, monetaryAuthorities, redemptionLinkage,
+    dependencyLinks: {
+      consumptions: [...consumptionIds].sort(),
+      rounds: rounds.map(item => ({ roundId: item.roundId, fingerprint: originalEconomicFingerprint(item) })),
+      coverages: coverages.map(item => ({ coverageId: item.coverageId, fingerprint: originalEconomicFingerprint(item) })),
+      maturations: Object.values(state.referralRewardMaturations).filter(item => coverages.some(coverage => coverage.coverageId === item.coverageId))
+        .sort((a, b) => compareId(a.maturationId, b.maturationId))
+        .map(item => ({ maturationId: item.maturationId, fingerprint: originalEconomicFingerprint(item) })),
+      selfPurchaseTiers: tierRewards.map(item => ({ rewardId: item.rewardId, fingerprint: originalEconomicFingerprint(item.selfPurchaseTierSnapshot) })),
+    } };
+}
+export const RETURN_CONSUMPTION_UNWIND_POLICY = "carry-first-latest-round-first-v1" as const;
+/** Owner contract for future D orchestration, NOT a new release policy or timer:
+ * pending -> HOLD if a return exists -> adjust/restore pending entitlement ->
+ * release through the existing scheduler only after original safety waits AND the
+ * source order's preserved return-protection exposure (returnDeadline) have safely
+ * ended and no blocking return dependency remains. No calculated pending reward
+ * becomes spendable merely because it exists. Never restart a wait from review/
+ * resolution time. Future D must record original/adjusted pending amounts, their
+ * delta, source order/request, structured reason and adjustment time before release.
+ * Released-reward reversal remains exceptional legacy/defensive compatibility.
+ * Future member explanations belong to /admin/member-center/copy; no copy here. */
+export const RETURN_REWARD_SAFETY_WAIT_CONTRACT = "pending-before-safe-release-v1" as const;
+const RETURN_CONSUMPTION_REDUCTION_ACTION = "RETURN_CONSUMPTION_REDUCTION_RECORDED";
+export type ReturnConsumptionReduction = {
+  schemaVersion: 1; reductionId: string; idempotencyKey: string;
+  unwindPolicyVersion: typeof RETURN_CONSUMPTION_UNWIND_POLICY;
+  rewardSafetyWaitContractVersion: typeof RETURN_REWARD_SAFETY_WAIT_CONTRACT;
+  consumptionEventId: string; sourceOrderId: string; returnRequestId: string;
+  requestedReturnEventId: string; approvedReturnEventId: string;
+  occurredAt: string; recordedAt: string; unit: "NTD";
+  originalConsumptionAmount: number; consumptionFingerprint: string;
+  previousCumulativeApprovedReduction: number; incrementalEconomicReduction: number;
+  cumulativeApprovedReturnReduction: number;
+  d0AllocationFingerprint: string; d0AuthorityFingerprint: string;
+  originalAllocationRefs: Array<{ roundId: string; fingerprint: string }>;
+  sourceOrderCreatedAt: string | null; completionEventId: string; consumptionSourceReference: string;
+  reasonCode: "partial_return_approved" | "full_return_approved";
+  lines: Array<{ returnLineRef: string; originalQuantity: number; approvedQuantity: number;
+    previousApprovedQuantity: number; cumulativeApprovedQuantity: number;
+    originalLineConsumptionContribution: number; previousCumulativeContribution: number;
+    cumulativeContribution: number; incrementalContribution: number }>;
+  evidenceFingerprint: string;
+};
+type ReductionCore = Omit<ReturnConsumptionReduction, "recordedAt" | "evidenceFingerprint">;
+type ConsumptionProjectionFailure = { status: "manual_review_required"; consumptionEventId: string; reason: string };
+export type EffectiveReturnConsumption = {
+  status: "resolved"; consumptionEventId: string; sourceOrderId: string; unit: "NTD";
+  unwindPolicyVersion: typeof RETURN_CONSUMPTION_UNWIND_POLICY;
+  originalConsumptionAmount: number; cumulativeApprovedReturnReduction: number;
+  originalAllocatedAmount: number; originalUnallocatedCarry: number;
+  effectiveConsumptionAmount: number; effectiveCarry: number;
+  /** Oldest first by persisted createdAt, then qualifiedAt, then roundId (UTF-16).
+   * Unwind traverses this order backwards; object/array insertion order is irrelevant. */
+  effectiveAllocationByRound: Array<{ roundId: string; qualifiedAt: string; createdAt: string;
+    originalAllocation: number; approvedReturnReduction: number; effectiveAllocation: number }>;
+  /** NTD is never subtracted from PV. These original allocations remain a separate unit. */
+  separatePVAllocationRoundIds: string[];
+  reductionIds: string[];
+};
+function consumptionReductionAudit(state: MembershipCommerceState) {
+  return state.audit.filter(item => item.action === RETURN_CONSUMPTION_REDUCTION_ACTION);
+}
+function originalConsumptionFingerprint(event: ValidConsumptionEvent) {
+  // Legacy whole-order invalidation flags are mutable in the existing engine;
+  // the original economic/qualification facts used by D1 are not those flags.
+  const { reversedAt: _reversedAt, reversalOutcome: _reversalOutcome, ...original } = event;
+  void _reversedAt; void _reversalOutcome;
+  return originalEconomicFingerprint(original);
+}
+function reductionMoney(value: number) { return Number.isSafeInteger(value) && value >= 0; }
+function reductionSum(values: number[]) {
+  if (!values.every(reductionMoney)) throw new MembershipCommerceError("退貨消費減少金額必須為非負整數");
+  const sum = values.reduce((total, value) => total + BigInt(value), BigInt(0));
+  if (sum > BigInt(Number.MAX_SAFE_INTEGER)) throw new MembershipCommerceError("退貨消費減少金額超出安全範圍");
+  return Number(sum);
+}
+
+/** Reconstruct ONLY D0-authorized economic cores from original requested completion
+ * evidence and the authoritative B event sequence. No order/catalog/rules IO.
+ * The restriction set lets legacy reads validate recorded evidence without trying
+ * to resolve unrelated historical approvals that have no D1 record yet. */
+function approvedConsumptionReductionCores(state: MembershipCommerceState, restriction?: Set<string>):
+  { status: "resolved"; cores: ReductionCore[] } | ConsumptionProjectionFailure {
+  const cores: ReductionCore[] = [];
+  const requested = new Map<string, RequestedReturn>();
+  const quantities = new Map<string, Map<string, number>>();
+  const totals = new Map<string, number>();
+  const proofCache = new Map<string, ReturnType<typeof resolveOriginalCommerceEconomicEvidence>>();
+  for (const event of state.returnEvents ?? []) {
+    if (event.type === "RETURN_REQUESTED") { requested.set(event.returnRequestId, event); continue; }
+    if (event.type !== "RETURN_APPROVED") continue;
+    const request = requested.get(event.returnRequestId);
+    if (!request) throw new MembershipCommerceError("核准退貨缺少原申請證據");
+    const previous = quantities.get(event.orderId) ?? new Map<string, number>();
+    const next = new Map(previous);
+    for (const line of request.lines) next.set(line.returnLineRef, (next.get(line.returnLineRef) ?? 0) + line.quantity);
+    quantities.set(event.orderId, next);
+    const consumptions = Object.entries(state.validConsumptionEvents).filter(([, item]) => item.sourceOrderId === event.orderId);
+    if (!consumptions.some(([, item]) => !restriction || restriction.has(item.eventId))) continue;
+    if (consumptions.length !== 1 || consumptions[0][0] !== consumptions[0][1].eventId) return {
+      status: "manual_review_required", consumptionEventId: consumptions[0]?.[1].eventId ?? "", reason: "ambiguous_source_consumption" };
+    const consumption = consumptions[0][1];
+    let proof = proofCache.get(event.orderId);
+    if (!proof) {
+      const originalConsumption = { ...consumption };
+      delete originalConsumption.reversedAt; delete originalConsumption.reversalOutcome;
+      const originalState = { ...state, validConsumptionEvents: { ...state.validConsumptionEvents, [consumption.eventId]: originalConsumption } };
+      proof = resolveOriginalCommerceEconomicEvidence({ state: originalState, order: { orderNumber: event.orderId,
+        status: "completed", completion: request.completion } });
+      proofCache.set(event.orderId, proof);
+    }
+    if (proof.status !== "resolved") return { ...proof, consumptionEventId: consumption.eventId };
+    const authority = proof.monetaryAuthorities.find(item => item.kind === "valid_consumption" && item.authorityId === consumption.eventId);
+    if (!authority || authority.status !== "resolved") return { status: "manual_review_required", consumptionEventId: consumption.eventId,
+      reason: authority?.status === "manual_review_required" ? authority.reason : "missing_d0_consumption_authority" };
+    const lines: ReturnConsumptionReduction["lines"] = [];
+    for (const line of request.lines) {
+      const original = authority.lines.find(item => item.returnLineRef === line.returnLineRef);
+      if (!original || original.originalQuantity !== line.originalQuantity) return { status: "manual_review_required",
+        consumptionEventId: consumption.eventId, reason: "inconsistent_d0_line_authority" };
+      const oldQuantity = previous.get(line.returnLineRef) ?? 0, newQuantity = next.get(line.returnLineRef)!;
+      const before = cumulativeOriginalLineContribution(original.rewardEconomicContribution, original.originalQuantity, oldQuantity);
+      const after = cumulativeOriginalLineContribution(original.rewardEconomicContribution, original.originalQuantity, newQuantity);
+      lines.push({ returnLineRef: line.returnLineRef, originalQuantity: original.originalQuantity, approvedQuantity: line.quantity,
+        previousApprovedQuantity: oldQuantity, cumulativeApprovedQuantity: newQuantity,
+        originalLineConsumptionContribution: original.rewardEconomicContribution, previousCumulativeContribution: before,
+        cumulativeContribution: after, incrementalContribution: after - before });
+    }
+    const incrementalEconomicReduction = reductionSum(lines.map(line => line.incrementalContribution));
+    const previousTotal = totals.get(consumption.eventId) ?? 0;
+    const cumulative = reductionSum([previousTotal, incrementalEconomicReduction]);
+    if (cumulative > consumption.validConsumptionAmount) return { status: "manual_review_required", consumptionEventId: consumption.eventId,
+      reason: "approved_reduction_exceeds_original_consumption" };
+    totals.set(consumption.eventId, cumulative);
+    const reductionId = deterministicId("return_consumption_reduction", JSON.stringify([event.returnRequestId, event.eventId, consumption.eventId]));
+    cores.push({ schemaVersion: 1, reductionId, idempotencyKey: `return-domain:consumption-reduction:${reductionId}`,
+      unwindPolicyVersion: RETURN_CONSUMPTION_UNWIND_POLICY, rewardSafetyWaitContractVersion: RETURN_REWARD_SAFETY_WAIT_CONTRACT,
+      consumptionEventId: consumption.eventId, sourceOrderId: event.orderId, returnRequestId: event.returnRequestId,
+      requestedReturnEventId: request.eventId, approvedReturnEventId: event.eventId, occurredAt: event.occurredAt, unit: "NTD",
+      originalConsumptionAmount: consumption.validConsumptionAmount, consumptionFingerprint: originalConsumptionFingerprint(consumption),
+      previousCumulativeApprovedReduction: previousTotal, incrementalEconomicReduction,
+      cumulativeApprovedReturnReduction: cumulative, d0AllocationFingerprint: proof.allocation.allocationFingerprint,
+      d0AuthorityFingerprint: authority.authorityFingerprint,
+      originalAllocationRefs: Object.values(state.qualificationRounds)
+        .filter(round => round.consumptionAccounting.allocations.some(item => item.validConsumptionEventId === consumption.eventId))
+        .sort((a, b) => a.roundId < b.roundId ? -1 : a.roundId > b.roundId ? 1 : 0)
+        .map(round => ({ roundId: round.roundId, fingerprint: originalEconomicFingerprint(round) })),
+      sourceOrderCreatedAt: request.completion.returnLines?.status === "resolved" ? request.completion.returnLines.orderCreatedAt : null,
+      completionEventId: request.completion.eventId, consumptionSourceReference: consumption.sourceReference,
+      reasonCode: proof.allocation.lines.every(line => (next.get(line.returnLineRef) ?? 0) === line.originalQuantity)
+        ? "full_return_approved" : "partial_return_approved", lines });
+  }
+  return { status: "resolved", cores };
+}
+
+/** Existing audit collection only. Audit envelope, deterministic identity, D0 values,
+ * cumulative quantity chain and idempotency backlinks are all verified on replay. */
+export function readReturnConsumptionReductions(state: MembershipCommerceState): ReturnConsumptionReduction[] {
+  const audits = consumptionReductionAudit(state);
+  const records: ReturnConsumptionReduction[] = audits.map(record => {
+    try { return JSON.parse(String(record.after.evidence)); }
+    catch { throw new MembershipCommerceError("退貨消費減少證據無法讀取"); }
+  });
+  if (!records.length) {
+    if (Object.keys(state.idempotency).some(key => key.startsWith("return-domain:consumption-reduction:"))) throw new MembershipCommerceError("退貨消費減少證據遺失");
+    return [];
+  }
+  const ids = new Set<string>(), restriction = new Set(records.map(item => item?.consumptionEventId));
+  const rebuilt = approvedConsumptionReductionCores(state, restriction);
+  if (rebuilt.status !== "resolved") throw new MembershipCommerceError(`退貨消費減少原始證據不一致: ${rebuilt.reason}`);
+  const byId = new Map(rebuilt.cores.map(item => [item.reductionId, item]));
+  const cumulative = new Map<string, number>();
+  const positions = new Map<string, number>();
+  const approvedOrder = new Map((state.returnEvents ?? []).filter(item => item.type === "RETURN_APPROVED").map((item, index) => [item.eventId, index]));
+  const recordedCounts = new Map<string, number>();
+  for (const [index, record] of records.entries()) {
+    if (!record || typeof record !== "object") throw new MembershipCommerceError("退貨消費減少證據格式不正確");
+    const { recordedAt, evidenceFingerprint, ...core } = record, envelope = audits[index];
+    const expected = byId.get(record.reductionId);
+    const { originalAllocationRefs, ...originalCore } = core;
+    const expectedCore = expected ? Object.fromEntries(Object.entries(expected).filter(([key]) => key !== "originalAllocationRefs")) : null;
+    const consumption = state.validConsumptionEvents[record.consumptionEventId];
+    const approved = state.returnEvents?.find(item => item.eventId === record.approvedReturnEventId);
+    const request = state.returnEvents?.find((item): item is RequestedReturn => item.type === "RETURN_REQUESTED" && item.eventId === record.requestedReturnEventId);
+    const identity = deterministicId("return_consumption_reduction", JSON.stringify([record.returnRequestId, record.approvedReturnEventId, record.consumptionEventId]));
+    const position = approvedOrder.get(record.approvedReturnEventId) ?? -1;
+    const count = recordedCounts.get(record.consumptionEventId) ?? 0;
+    const expectedNext = rebuilt.cores.filter(item => item.consumptionEventId === record.consumptionEventId)[count];
+    if ((consumption && (!expected || !isDeepStrictEqual(originalCore, expectedCore))) || ids.has(record.reductionId)
+      || position <= (positions.get(record.consumptionEventId) ?? -1)
+      || (consumption && expectedNext?.reductionId !== record.reductionId)
+      || record.reductionId !== identity || record.idempotencyKey !== `return-domain:consumption-reduction:${identity}`
+      || record.schemaVersion !== 1 || record.unit !== "NTD" || record.unwindPolicyVersion !== RETURN_CONSUMPTION_UNWIND_POLICY
+      || record.rewardSafetyWaitContractVersion !== RETURN_REWARD_SAFETY_WAIT_CONTRACT
+      || approved?.type !== "RETURN_APPROVED" || approved.returnRequestId !== record.returnRequestId || approved.orderId !== record.sourceOrderId
+      || approved.occurredAt !== record.occurredAt || !request || request.returnRequestId !== record.returnRequestId
+      || request.orderId !== record.sourceOrderId || request.completion.eventId !== record.completionEventId
+      || !Array.isArray(originalAllocationRefs) || new Set(originalAllocationRefs.map(item => item.roundId)).size !== originalAllocationRefs.length
+      || (consumption && originalAllocationRefs.some(item => !state.qualificationRounds[item.roundId]
+        || originalEconomicFingerprint(state.qualificationRounds[item.roundId]) !== item.fingerprint))
+      || !reductionMoney(record.originalConsumptionAmount) || !reductionMoney(record.previousCumulativeApprovedReduction)
+      || !reductionMoney(record.incrementalEconomicReduction) || !reductionMoney(record.cumulativeApprovedReturnReduction)
+      || record.previousCumulativeApprovedReduction + record.incrementalEconomicReduction !== record.cumulativeApprovedReturnReduction
+      || record.cumulativeApprovedReturnReduction > record.originalConsumptionAmount
+      || !Array.isArray(record.lines) || record.lines.length !== request.lines.length
+      || record.lines.some((line, offset) => {
+        const selected = request.lines[offset];
+        return line.returnLineRef !== selected.returnLineRef || line.originalQuantity !== selected.originalQuantity
+          || line.approvedQuantity !== selected.quantity || line.previousApprovedQuantity + line.approvedQuantity !== line.cumulativeApprovedQuantity
+          || cumulativeOriginalLineContribution(line.originalLineConsumptionContribution, line.originalQuantity, line.previousApprovedQuantity) !== line.previousCumulativeContribution
+          || cumulativeOriginalLineContribution(line.originalLineConsumptionContribution, line.originalQuantity, line.cumulativeApprovedQuantity) !== line.cumulativeContribution
+          || line.cumulativeContribution - line.previousCumulativeContribution !== line.incrementalContribution;
+      })
+      || reductionSum(record.lines.map(line => line.incrementalContribution)) !== record.incrementalEconomicReduction
+      || !Number.isFinite(Date.parse(recordedAt)) || Date.parse(recordedAt) < Date.parse(record.occurredAt)
+      || originalEconomicFingerprint({ ...core, recordedAt }) !== evidenceFingerprint
+      || (cumulative.get(record.consumptionEventId) ?? 0) !== record.previousCumulativeApprovedReduction
+      || envelope.actor !== "system" || envelope.entityType !== "return_request" || envelope.entityId !== record.returnRequestId
+      || envelope.sourceEvent !== record.approvedReturnEventId || envelope.timestamp !== recordedAt
+      || envelope.after.reductionId !== record.reductionId
+      || state.idempotency[record.idempotencyKey]?.resultId !== record.reductionId) throw new MembershipCommerceError("退貨消費減少證據關聯不一致");
+    ids.add(record.reductionId); cumulative.set(record.consumptionEventId, record.cumulativeApprovedReturnReduction);
+    positions.set(record.consumptionEventId, position); recordedCounts.set(record.consumptionEventId, count + 1);
+  }
+  for (const [key, identity] of Object.entries(state.idempotency)) if (key.startsWith("return-domain:consumption-reduction:")
+    && (!ids.has(identity.resultId) || key !== `return-domain:consumption-reduction:${identity.resultId}`)) throw new MembershipCommerceError("退貨消費減少操作識別不一致");
+  return structuredClone(records);
+}
+
+/** Derives effective NTD consumption without rewriting any consumption/round/coverage.
+ * No cross-consumption replacement and no qualification or reward status decision.
+ * PV allocations are explicitly returned separately, never mixed with NTD amounts. */
+export function projectEffectiveReturnConsumption(state: MembershipCommerceState, consumptionEventId: string):
+  EffectiveReturnConsumption | ConsumptionProjectionFailure {
+  return projectReturnConsumptionWithRecords(state, consumptionEventId, readReturnConsumptionReductions(state));
+}
+/** The D1 unwind policy in exact units. NTD and preserved PV use DIFFERENT
+ * unit pools; this shared arithmetic never converts money into points. */
+function unwindOriginalAllocationUnits(original: bigint, removed: bigint, allocationsOldestFirst: bigint[]) {
+  const allocated = allocationsOldestFirst.reduce((sum, value) => sum + value, BigInt(0));
+  if (original < BigInt(0) || removed < BigInt(0) || removed > original || allocated > original
+    || allocationsOldestFirst.some(value => value < BigInt(0))) throw new MembershipCommerceError("原始消費配置超出可減少範圍");
+  const carry = original - allocated;
+  const effectiveCarry = carry > removed ? carry - removed : BigInt(0);
+  let unwind = removed > carry ? removed - carry : BigInt(0);
+  const effective = [...allocationsOldestFirst];
+  for (let index = effective.length - 1; index >= 0; index--) {
+    const delta = effective[index] < unwind ? effective[index] : unwind;
+    effective[index] -= delta; unwind -= delta;
+  }
+  if (unwind !== BigInt(0) || effectiveCarry + effective.reduce((sum, value) => sum + value, BigInt(0)) !== original - removed) throw new MembershipCommerceError("消費配置不守恆");
+  return { carry, effectiveCarry, effective };
+}
+function originalAllocationChronology(a: { createdAt: string; qualifiedAt: string; roundId: string }, b: { createdAt: string; qualifiedAt: string; roundId: string }) {
+  return Date.parse(a.createdAt) - Date.parse(b.createdAt) || Date.parse(a.qualifiedAt) - Date.parse(b.qualifiedAt)
+    || (a.roundId < b.roundId ? -1 : a.roundId > b.roundId ? 1 : 0);
+}
+function projectReturnConsumptionWithRecords(state: MembershipCommerceState, consumptionEventId: string, records: ReturnConsumptionReduction[]):
+  EffectiveReturnConsumption | ConsumptionProjectionFailure {
+  const manual = (reason: string): ConsumptionProjectionFailure => ({ status: "manual_review_required", consumptionEventId, reason });
+  const consumption = state.validConsumptionEvents[consumptionEventId];
+  if (!consumption || consumption.eventId !== consumptionEventId || !reductionMoney(consumption.validConsumptionAmount)) return manual("missing_original_consumption");
+  const effectiveAllocationByRound: EffectiveReturnConsumption["effectiveAllocationByRound"] = [];
+  const separatePVAllocationRoundIds: string[] = [];
+  try {
+    for (const [key, round] of Object.entries(state.qualificationRounds)) {
+      const allocations = round.consumptionAccounting.allocations.filter(item => item.validConsumptionEventId === consumptionEventId);
+      if (!allocations.length) continue;
+      if (key !== round.roundId || round.memberId !== consumption.memberId) return manual("inconsistent_original_allocation_identity");
+      const basis = qualificationBasisFromRound(round);
+      if (round.consumptionAccounting.basis !== undefined && round.consumptionAccounting.basis !== basis) return manual("inconsistent_allocation_unit");
+      if (basis === "pv") { separatePVAllocationRoundIds.push(round.roundId); continue; }
+      if (!Number.isFinite(Date.parse(round.createdAt)) || !Number.isFinite(Date.parse(round.qualifiedAt))
+        || Date.parse(round.createdAt) < Date.parse(round.qualifiedAt)
+        || Date.parse(round.qualifiedAt) < Date.parse(consumption.finalizedAt)) return manual("unproven_allocation_chronology");
+      const amount = reductionSum(allocations.map(item => item.amount));
+      effectiveAllocationByRound.push({ roundId: round.roundId, createdAt: round.createdAt, qualifiedAt: round.qualifiedAt,
+        originalAllocation: amount, approvedReturnReduction: 0, effectiveAllocation: amount });
+    }
+    effectiveAllocationByRound.sort(originalAllocationChronology);
+    const originalAllocatedAmount = reductionSum(effectiveAllocationByRound.map(item => item.originalAllocation));
+    if (originalAllocatedAmount > consumption.validConsumptionAmount) return manual("original_allocations_exceed_consumption");
+    const relevant = records.filter(item => item.consumptionEventId === consumptionEventId);
+    const cumulativeApprovedReturnReduction = reductionSum(relevant.map(item => item.incrementalEconomicReduction));
+    if (cumulativeApprovedReturnReduction > consumption.validConsumptionAmount) return manual("approved_reduction_exceeds_original_consumption");
+    const projected = unwindOriginalAllocationUnits(BigInt(consumption.validConsumptionAmount), BigInt(cumulativeApprovedReturnReduction), effectiveAllocationByRound.map(item => BigInt(item.originalAllocation)));
+    const originalUnallocatedCarry = Number(projected.carry), effectiveCarry = Number(projected.effectiveCarry);
+    for (const [index, allocation] of effectiveAllocationByRound.entries()) {
+      allocation.effectiveAllocation = Number(projected.effective[index]);
+      allocation.approvedReturnReduction = allocation.originalAllocation - allocation.effectiveAllocation;
+    }
+    const effectiveConsumptionAmount = consumption.validConsumptionAmount - cumulativeApprovedReturnReduction;
+    if (reductionSum([effectiveCarry, ...effectiveAllocationByRound.map(item => item.effectiveAllocation)]) !== effectiveConsumptionAmount) return manual("consumption_conservation_failed");
+    return { status: "resolved", consumptionEventId, sourceOrderId: consumption.sourceOrderId, unit: "NTD",
+      unwindPolicyVersion: RETURN_CONSUMPTION_UNWIND_POLICY, originalConsumptionAmount: consumption.validConsumptionAmount,
+      cumulativeApprovedReturnReduction, originalAllocatedAmount, originalUnallocatedCarry, effectiveConsumptionAmount, effectiveCarry,
+      effectiveAllocationByRound, separatePVAllocationRoundIds: separatePVAllocationRoundIds.sort(), reductionIds: relevant.map(item => item.reductionId) };
+  } catch { return manual("invalid_original_allocation_amount"); }
+}
+
+/** Explicit internal evidence reconciliation for future D orchestration. It does NOT
+ * resolve HOLD, recalculate entitlement, release rewards, reverse credit, or call
+ * cancellation/fulfillment. No public API. All approvals are processed in B log order.
+ * Late original consumption may be reconciled without backfilling the source order. */
+export async function reconcileApprovedReturnConsumptionReductions(input: { now?: Date; stateFilePath?: string } = {}) {
+  return transaction((state, now) => appendApprovedReturnConsumptionReductions(state, now), { now: input.now, filePath: input.stateFilePath });
+}
+function appendApprovedReturnConsumptionReductions(state: MembershipCommerceState, now: Date, restriction?: Set<string>) {
+    const existing = readReturnConsumptionReductions(state);
+    const expected = approvedConsumptionReductionCores(state, restriction);
+    if (expected.status !== "resolved") return expected;
+    const ids = new Set(existing.map(item => item.reductionId));
+    const additions = expected.cores.filter(core => !ids.has(core.reductionId)).map(core => {
+      const payload = { ...core, recordedAt: new Date(Math.max(now.getTime(), Date.parse(core.occurredAt))).toISOString() };
+      return { ...payload, evidenceFingerprint: originalEconomicFingerprint(payload) };
+    });
+    const all = [...existing, ...additions];
+    const eventIds = [...(restriction ?? new Set(all.map(item => item.consumptionEventId)))].sort();
+    const projections = eventIds.map(eventId => projectReturnConsumptionWithRecords(state, eventId, all));
+    const invalid = projections.find(item => item.status !== "resolved");
+    if (invalid) return invalid;
+    for (const record of additions) {
+      if (state.idempotency[record.idempotencyKey]) throw new MembershipCommerceError("退貨消費減少操作識別衝突");
+      audit(state, { actor: "system", action: RETURN_CONSUMPTION_REDUCTION_ACTION, entityType: "return_request",
+        entityId: record.returnRequestId, before: {}, after: { reductionId: record.reductionId, evidence: JSON.stringify(record) },
+        reason: record.reasonCode, sourceEvent: record.approvedReturnEventId }, new Date(record.recordedAt));
+      remember(state, record.idempotencyKey, record.reductionId, new Date(record.recordedAt));
+    }
+    return { status: "resolved" as const, createdCount: additions.length, reductions: structuredClone(all), projections };
+}
+
+type ReturnRewardLinks = {
+  reasons: Array<"source_order" | "qualification_order" | "qualification_consumption" | "self_purchase_tier">;
+  consumptionEventIds: string[]; roundIds: string[]; coverageIds: string[];
+};
+/** Typed evidence stored in existing audit.after.evidence (JSON), never on the reward/return event. */
+export type ReturnRewardHoldDependency = {
+  schemaVersion: 1; holdDependencyId: string; returnRequestId: string; returnRequestedEventId: string;
+  returnOrderId: string; reward: ReturnRewardReference; rewardSourceOrderId: string;
+  authority: ReferralRewardQualificationAuthority | null; rewardStatusAtCreation: string;
+  createdAt: string; idempotencyKey: string;
+  returnLines: Array<{ returnLineRef: string; quantity: number; originalQuantity: number }>;
+  links: ReturnRewardLinks;
+  evidence: {
+    status: "resolved" | "manual_review_required"; reason: string | null;
+    sourceOrder: OriginalRewardOrderEvidence | null; qualificationOrders: OriginalRewardOrderEvidence[];
+    consumptionEventIds: string[]; roundId: string | null; coverageId: string | null; maturationId: string | null;
+    creditEntryId: string | null; rulesVersion: number | null; sourceReferences: string[]; idempotencyKeys: string[];
+    policyEvidenceFingerprint: string;
+  };
+};
+export type ReturnRewardHoldProjection = {
+  reward: ReturnRewardReference; blocked: boolean; activeHoldDependencyCount: number;
+  resolutionRequiredDependencyCount: number;
+  dependencies: Array<{ holdDependencyId: string; returnRequestId: string; returnOrderId: string;
+    returnStatus: ReturnRequestStatus; state: "active" | "resolution_required" | "resolved"; persisted: boolean }>;
+};
+const RETURN_REWARD_HOLD_ACTION = "RETURN_REWARD_HOLD_CREATED";
+type RequestedReturn = Extract<ReturnDomainEvent, { type: "RETURN_REQUESTED" }>;
+type ReturnRewardCandidate = { reference: ReturnRewardReference; sourceOrderId: string; status: string;
+  authority: ReferralRewardQualificationAuthority | null; creditId: string | null; rulesVersion: number | null;
+  links: ReturnRewardLinks; policy: unknown };
+function returnHoldIdentity(requestId: string, reference: ReturnRewardReference) {
+  return deterministicId("return_reward_hold", JSON.stringify([requestId, reference.program, reference.id]));
+}
+function returnHoldAudit(state: MembershipCommerceState) {
+  return state.audit.filter(item => item.action === RETURN_REWARD_HOLD_ACTION);
+}
+function returnHoldCandidates(state: MembershipCommerceState, orderId: string): ReturnRewardCandidate[] {
+  const candidates: ReturnRewardCandidate[] = [];
+  const sorted = (values: string[]) => [...new Set(values)].sort();
+  for (const reward of Object.values(state.referralRewards)) {
+    if (!["scheduled", "released"].includes(reward.status)) continue;
+    const authority = referralRewardQualificationAuthority(reward);
+    const links: ReturnRewardLinks = { reasons: [], consumptionEventIds: [], roundIds: [], coverageIds: [] };
+    if (reward.sourceOrderNumber === orderId) links.reasons.push("source_order");
+    if (authority === "legacy_order" && (reward.qualificationOrderNumber === orderId
+      || (reward.qualificationStatus !== "qualified" && reward.qualificationAttempts?.some(attempt => attempt.orderNumber === orderId && attempt.status !== "failed")))) links.reasons.push("qualification_order");
+    for (const coverage of Object.values(state.referralRewardCoverages).filter(item => item.referralRewardId === reward.rewardId && authority === "qualification_coverage")) {
+      const round = state.qualificationRounds[coverage.qualificationRoundId];
+      if (!round) continue;
+      const ids = sorted([round.triggeringValidConsumptionEventId, ...round.consumptionAccounting.allocations.map(item => item.validConsumptionEventId)]);
+      const affected = ids.filter(eventId => state.validConsumptionEvents[eventId]?.sourceOrderId === orderId);
+      if (round.triggeringSourceOrderId === orderId || affected.length) {
+        links.reasons.push("qualification_consumption"); links.consumptionEventIds.push(...affected);
+        links.roundIds.push(round.roundId); links.coverageIds.push(coverage.coverageId);
+      }
+    }
+    if (reward.rewardType === "self_purchase" && reward.selfPurchaseTierSnapshot) {
+      const affected = [...reward.selfPurchaseTierSnapshot.initialEvidence, ...reward.selfPurchaseTierSnapshot.latestEvidence]
+        .filter(item => item.sourceOrderId === orderId || (item.validConsumptionEventId && state.validConsumptionEvents[item.validConsumptionEventId]?.sourceOrderId === orderId));
+      if (affected.length) {
+        links.reasons.push("self_purchase_tier");
+        links.consumptionEventIds.push(...affected.flatMap(item => item.validConsumptionEventId ? [item.validConsumptionEventId] : []));
+      }
+    }
+    if (!links.reasons.length) continue;
+    links.reasons = [...new Set(links.reasons)].sort(); links.consumptionEventIds = sorted(links.consumptionEventIds);
+    links.roundIds = sorted(links.roundIds); links.coverageIds = sorted(links.coverageIds);
+    candidates.push({ reference: { program: "referral", id: reward.rewardId }, sourceOrderId: reward.sourceOrderNumber,
+      status: reward.status, authority, creditId: reward.rewardCreditEntryId, rulesVersion: reward.ruleVersion, links,
+      policy: { ruleVersion: reward.ruleVersion, reversalPolicy: reward.reversalPolicySnapshot,
+        baseWaitingDays: reward.baseWaitingDaysSnapshot, returnProtectionDays: reward.returnProtectionDaysSnapshot,
+        selfPurchaseTierSnapshot: reward.selfPurchaseTierSnapshot } });
+  }
+  for (const reward of Object.values(state.retailPromotionRewards)) {
+    if (reward.sourceOrderNumber !== orderId || !["scheduled", "released"].includes(reward.status)) continue;
+    candidates.push({ reference: { program: "retail_promotion", id: reward.rewardId }, sourceOrderId: orderId,
+      status: reward.status, authority: null, creditId: reward.rewardCreditEntryId, rulesVersion: reward.ruleVersion,
+      links: { reasons: ["source_order"], consumptionEventIds: [], roundIds: [], coverageIds: [] },
+      policy: { ruleVersion: reward.ruleVersion, reversalPolicy: reward.reversalPolicySnapshot,
+        baseWaitingDays: reward.baseWaitingDaysSnapshot, returnProtectionDays: reward.returnProtectionDaysSnapshot } });
+  }
+  for (const conversion of Object.values(state.referralConversions)) {
+    if (conversion.orderId !== orderId || !["pending", "rewarded"].includes(conversion.status)) continue;
+    candidates.push({ reference: { program: "referral_conversion", id: conversion.conversionId }, sourceOrderId: orderId,
+      status: conversion.status, authority: null, creditId: conversion.rewardCreditEntryId, rulesVersion: null,
+      links: { reasons: ["source_order"], consumptionEventIds: [], roundIds: [], coverageIds: [] },
+      policy: { relationshipId: conversion.relationshipId, occurredAt: conversion.occurredAt } });
+  }
+  return candidates.sort((left, right) => JSON.stringify(left.reference).localeCompare(JSON.stringify(right.reference)));
+}
+
+export function readReturnRewardHoldDependencies(state: MembershipCommerceState): ReturnRewardHoldDependency[] {
+  const ids = new Set<string>();
+  return returnHoldAudit(state).map(record => {
+    let hold: ReturnRewardHoldDependency;
+    try { hold = JSON.parse(String(record.after.evidence)); }
+    catch { throw new MembershipCommerceError("退貨 HOLD 證據無法讀取"); }
+    const request = state.returnEvents?.find((item): item is RequestedReturn => item.type === "RETURN_REQUESTED" && item.eventId === hold.returnRequestedEventId);
+    const originalTimeValid = (value: OriginalRewardOrderEvidence | null) => value === null || (value
+      && returnEvidenceText(value.orderId, 200) && Number.isFinite(Date.parse(value.orderCreatedAt))
+      && (value.completedAt === null || Number.isFinite(Date.parse(value.completedAt)))
+      && ["completion_snapshot", "persisted_order", "legacy_qualification_attempt"].includes(value.timeSource));
+    if (!request || hold.schemaVersion !== 1 || !hold.reward || !["referral", "retail_promotion", "referral_conversion"].includes(hold.reward.program)
+      || !returnEvidenceText(hold.reward.id, 200) || hold.returnRequestId !== request.returnRequestId || hold.returnOrderId !== request.orderId
+      || hold.holdDependencyId !== returnHoldIdentity(hold.returnRequestId, hold.reward)
+      || hold.idempotencyKey !== `return-domain:reward-hold:${hold.holdDependencyId}`
+      || record.entityType !== "return_request" || record.entityId !== hold.returnRequestId || record.sourceEvent !== request.eventId
+      || record.timestamp !== hold.createdAt || !Number.isFinite(Date.parse(hold.createdAt))
+      || Date.parse(hold.createdAt) < Date.parse(request.occurredAt)
+      || record.after.holdDependencyId !== hold.holdDependencyId || ids.has(hold.holdDependencyId)
+      || !isDeepStrictEqual(hold.returnLines, request.lines) || !hold.evidence || !["resolved", "manual_review_required"].includes(hold.evidence.status)
+      || !originalTimeValid(hold.evidence.sourceOrder) || !Array.isArray(hold.evidence.qualificationOrders)
+      || !hold.evidence.qualificationOrders.every(originalTimeValid)
+      || (state.idempotency[hold.idempotencyKey] && state.idempotency[hold.idempotencyKey].resultId !== hold.holdDependencyId)
+      || !/^[a-f0-9]{64}$/u.test(hold.evidence.policyEvidenceFingerprint)) throw new MembershipCommerceError("退貨 HOLD 關聯證據不一致");
+    ids.add(hold.holdDependencyId); return hold;
+  });
+}
+
+/** A terminal fact stays a blocking handoff until its explicit D resolution is persisted. */
+export function projectReturnRewardHolds(state: MembershipCommerceState, reference: ReturnRewardReference): ReturnRewardHoldProjection {
+  const dependencies: ReturnRewardHoldProjection["dependencies"] = [];
+  if (!state.returnEvents?.length) return { reward: { ...reference }, blocked: false,
+    activeHoldDependencyCount: 0, resolutionRequiredDependencyCount: 0, dependencies };
+  const persisted = new Set(readReturnRewardHoldDependencies(state)
+    .filter(hold => hold.reward.program === reference.program && hold.reward.id === reference.id).map(hold => hold.holdDependencyId));
+  const resolved = new Map(readPendingReturnRewardResolutions(state).map(item => [item.holdDependencyId, item.terminalReturnEventId]));
+  for (const request of (state.returnEvents ?? []).filter((item): item is RequestedReturn => item.type === "RETURN_REQUESTED")) {
+    const holdDependencyId = returnHoldIdentity(request.returnRequestId, reference);
+    if (!persisted.has(holdDependencyId) && !returnHoldCandidates(state, request.orderId)
+      .some(candidate => candidate.reference.program === reference.program && candidate.reference.id === reference.id)) continue;
+    const last = (state.returnEvents ?? []).filter(event => event.returnRequestId === request.returnRequestId && event.orderId === request.orderId).at(-1)!;
+    const returnStatus: ReturnRequestStatus = last.type === "RETURN_REQUESTED" ? "pending" : last.type === "RETURN_PROCESSING_LOCKED" ? "processing"
+      : last.type === "RETURN_APPROVED" ? "approved" : last.type === "RETURN_REJECTED" ? "rejected" : "withdrawn";
+    dependencies.push({ holdDependencyId, returnRequestId: request.returnRequestId, returnOrderId: request.orderId, returnStatus,
+      state: returnStatus === "pending" || returnStatus === "processing" ? "active"
+        : resolved.get(holdDependencyId) === last.eventId ? "resolved" : "resolution_required", persisted: persisted.has(holdDependencyId) });
+  }
+  dependencies.sort((left, right) => left.holdDependencyId.localeCompare(right.holdDependencyId));
+  return { reward: { ...reference }, blocked: dependencies.some(item => item.state !== "resolved"),
+    activeHoldDependencyCount: dependencies.filter(item => item.state === "active").length,
+    resolutionRequiredDependencyCount: dependencies.filter(item => item.state === "resolution_required").length, dependencies };
+}
+
+/** Reconcile late-created rewards/Coverage as well as requests. Creation is atomic with
+ * the existing commerce transaction; the synchronous release gate also derives missing links. */
+async function appendReturnRewardHolds(state: MembershipCommerceState, now: Date) {
+  if (!state.returnEvents?.length) return;
+  const existing = new Set(readReturnRewardHoldDependencies(state).map(hold => hold.holdDependencyId));
+  const evidenceCache = new Map<string, RewardDependencyEvidenceResult>();
+  for (const request of state.returnEvents.filter((item): item is RequestedReturn => item.type === "RETURN_REQUESTED")) {
+    for (const candidate of returnHoldCandidates(state, request.orderId)) {
+      const holdDependencyId = returnHoldIdentity(request.returnRequestId, candidate.reference);
+      if (existing.has(holdDependencyId)) continue;
+      const readSourceOrder = async (orderId: string): Promise<Record<string, unknown> | null> => {
+        const order = await readOrder(orderId);
+        if (order || orderId !== request.orderId) return order;
+        return { orderNumber: orderId, status: "completed", completion: request.completion };
+      };
+      let proof: RewardDependencyEvidenceResult;
+      if (candidate.reference.program === "referral_conversion") {
+        proof = { status: "manual_review_required", reason: "missing_qualification_evidence" };
+      } else {
+        const key = JSON.stringify(candidate.reference);
+        proof = evidenceCache.get(key) ?? await resolveRewardDependencyEvidence({ program: candidate.reference.program,
+          rewardId: candidate.reference.id, state, readSourceOrder });
+        evidenceCache.set(key, proof);
+      }
+      const ownTime = request.completion.returnLines?.status === "resolved" ? request.completion.returnLines.orderCreatedAt : null;
+      const requestOriginal: OriginalRewardOrderEvidence | null = ownTime
+        ? { orderId: request.orderId, orderCreatedAt: ownTime, timeSource: "completion_snapshot",
+            completedAt: request.completion.completedAt, consumptionEventId: null } : null;
+      const hold: ReturnRewardHoldDependency = { schemaVersion: 1, holdDependencyId, returnRequestId: request.returnRequestId,
+        returnRequestedEventId: request.eventId, returnOrderId: request.orderId, reward: candidate.reference,
+        rewardSourceOrderId: candidate.sourceOrderId, authority: candidate.authority, rewardStatusAtCreation: candidate.status,
+        createdAt: new Date(Math.max(now.getTime(), Date.parse(request.occurredAt))).toISOString(),
+        idempotencyKey: `return-domain:reward-hold:${holdDependencyId}`, returnLines: structuredClone(request.lines), links: candidate.links,
+        evidence: { status: proof.status, reason: proof.status === "resolved" ? null : proof.reason,
+          sourceOrder: proof.status === "resolved" ? proof.sourceOrder : candidate.sourceOrderId === request.orderId ? requestOriginal : null,
+          qualificationOrders: proof.status === "resolved" ? proof.qualificationOrders : requestOriginal && candidate.sourceOrderId !== request.orderId ? [requestOriginal] : [],
+          consumptionEventIds: proof.status === "resolved" ? proof.consumptions.map(item => item.eventId) : candidate.links.consumptionEventIds,
+          roundId: proof.status === "resolved" ? proof.qualificationRound?.roundId ?? null : candidate.links.roundIds[0] ?? null,
+          coverageId: proof.status === "resolved" ? proof.coverage?.coverageId ?? null : candidate.links.coverageIds[0] ?? null,
+          maturationId: proof.status === "resolved" ? proof.maturation?.maturationId ?? null : null,
+          creditEntryId: candidate.creditId, rulesVersion: candidate.rulesVersion,
+          sourceReferences: proof.status === "resolved" ? proof.sourceReferences : [],
+          idempotencyKeys: proof.status === "resolved" ? proof.idempotencyKeys : [],
+          policyEvidenceFingerprint: createHash("sha256").update(JSON.stringify(candidate.policy)).digest("hex") } };
+      audit(state, { actor: "system", action: RETURN_REWARD_HOLD_ACTION, entityType: "return_request",
+        entityId: request.returnRequestId, before: {}, after: { holdDependencyId, evidence: JSON.stringify(hold) },
+        reason: "Return-dependent reward deferred; final outcome requires explicit resolution", sourceEvent: request.eventId }, new Date(hold.createdAt));
+      remember(state, hold.idempotencyKey, holdDependencyId, new Date(hold.createdAt));
+      existing.add(holdDependencyId);
+    }
+  }
+}
+
+const RETURN_PENDING_RESOLUTION_PREFIX = "RETURN_REWARD_HOLD_RESOLVED_";
+const RETURN_DEFENSIVE_REVIEW_ACTION = "RETURN_REWARD_DEFENSIVE_REVIEW_REQUIRED";
+export type PendingReturnRewardResolution = {
+  schemaVersion: 1; resolutionId: string; idempotencyKey: string; holdDependencyId: string;
+  reward: ReturnRewardReference; rewardSourceOrderId: string; beneficiaryMemberId: string;
+  returnRequestId: string; terminalReturnEventId: string; returnOrderId: string;
+  result: "withdrawn" | "rejected" | "approved"; occurredAt: string; recordedAt: string;
+  originalPendingRewardAmount: number; previousEffectivePendingAmount: number; remainingEffectivePendingRewardAmount: number;
+  incrementalAdjustment: number; cumulativeAdjustment: number;
+  reasonCode: "reward_restored_after_return_withdrawn" | "reward_restored_after_return_rejected"
+    | "pending_reward_adjusted_due_to_partial_return" | "pending_reward_cancelled_due_to_return" | "pending_reward_unchanged_after_approved_return";
+  originalPolicyFingerprint: string; releaseSafetyDeadline: string | null;
+  originalQualification: { sourceOrder: OriginalRewardOrderEvidence | null; qualificationOrders: OriginalRewardOrderEvidence[];
+    qualificationRoundId: string | null; coverageId: string | null; maturationId: string | null };
+  d0Evidence: Array<{ orderId: string; allocationFingerprint: string }>;
+  d1ReductionIds: string[]; calculation: Record<string, unknown>; evidenceFingerprint: string;
+};
+function pendingResolutionAudit(state: MembershipCommerceState) {
+  return state.audit.filter(item => item.action.startsWith(RETURN_PENDING_RESOLUTION_PREFIX) || item.action === RETURN_DEFENSIVE_REVIEW_ACTION);
+}
+export function readPendingReturnRewardResolutions(state: MembershipCommerceState): PendingReturnRewardResolution[] {
+  const audits = pendingResolutionAudit(state).filter(item => item.action.startsWith(RETURN_PENDING_RESOLUTION_PREFIX));
+  if (!audits.length) {
+    if (Object.keys(state.idempotency).some(key => key.startsWith("return-domain:pending-resolution:"))) throw new MembershipCommerceError("退貨待發獎勵結案證據遺失");
+    return [];
+  }
+  const holds = new Map(readReturnRewardHoldDependencies(state).map(item => [item.holdDependencyId, item]));
+  const records: PendingReturnRewardResolution[] = [];
+  const ids = new Set<string>(), holdIds = new Set<string>(), previous = new Map<string, PendingReturnRewardResolution>();
+  const reductionIds = new Set(readReturnConsumptionReductions(state).map(item => item.reductionId));
+  for (const audit of audits) {
+    let record: PendingReturnRewardResolution;
+    try { record = JSON.parse(String(audit.after.evidence)); } catch { throw new MembershipCommerceError("退貨待發獎勵結案證據無法讀取"); }
+    if (!record || !record.reward) throw new MembershipCommerceError("退貨待發獎勵結案證據格式不正確");
+    const hold = holds.get(record.holdDependencyId), terminal = state.returnEvents?.find(item => item.eventId === record.terminalReturnEventId);
+    const identity = deterministicId("return_reward_resolution", JSON.stringify([record.holdDependencyId, record.terminalReturnEventId]));
+    const rewardKey = JSON.stringify(record.reward), prior = previous.get(rewardKey);
+    const { evidenceFingerprint, ...payload } = record;
+    if (!hold || record.schemaVersion !== 1 || record.resolutionId !== identity || ids.has(identity) || holdIds.has(record.holdDependencyId)
+      || record.idempotencyKey !== `return-domain:pending-resolution:${identity}`
+      || !isDeepStrictEqual(hold.reward, record.reward) || hold.rewardSourceOrderId !== record.rewardSourceOrderId
+      || !terminal || !["RETURN_WITHDRAWN", "RETURN_REJECTED", "RETURN_APPROVED"].includes(terminal.type)
+      || terminal.type !== `RETURN_${record.result.toUpperCase()}` || terminal.returnRequestId !== hold.returnRequestId
+      || record.returnRequestId !== hold.returnRequestId || record.returnOrderId !== hold.returnOrderId || terminal.orderId !== record.returnOrderId
+      || record.occurredAt !== terminal.occurredAt || !Number.isFinite(Date.parse(record.recordedAt))
+      || Date.parse(record.recordedAt) < Date.parse(record.occurredAt)
+      || ![record.originalPendingRewardAmount, record.previousEffectivePendingAmount, record.remainingEffectivePendingRewardAmount].every(reductionMoney)
+      || record.previousEffectivePendingAmount !== (prior?.remainingEffectivePendingRewardAmount ?? record.originalPendingRewardAmount)
+      || (prior && (prior.originalPendingRewardAmount !== record.originalPendingRewardAmount || prior.originalPolicyFingerprint !== record.originalPolicyFingerprint))
+      || record.remainingEffectivePendingRewardAmount > record.previousEffectivePendingAmount
+      || record.incrementalAdjustment !== record.remainingEffectivePendingRewardAmount - record.previousEffectivePendingAmount
+      || record.cumulativeAdjustment !== record.remainingEffectivePendingRewardAmount - record.originalPendingRewardAmount
+      || !returnEvidenceText(record.beneficiaryMemberId, 200) || !/^[a-f0-9]{64}$/u.test(record.originalPolicyFingerprint)
+      || record.reasonCode !== (record.result === "withdrawn" ? "reward_restored_after_return_withdrawn" : record.result === "rejected" ? "reward_restored_after_return_rejected"
+        : record.remainingEffectivePendingRewardAmount === 0 ? "pending_reward_cancelled_due_to_return"
+          : record.incrementalAdjustment === 0 ? "pending_reward_unchanged_after_approved_return" : "pending_reward_adjusted_due_to_partial_return")
+      || (record.result !== "approved" && record.incrementalAdjustment !== 0)
+      || !Array.isArray(record.d1ReductionIds) || record.d1ReductionIds.some(id => !reductionIds.has(id))
+      || !Array.isArray(record.d0Evidence) || record.d0Evidence.some(item => !returnEvidenceText(item.orderId, 200) || !/^[a-f0-9]{64}$/u.test(item.allocationFingerprint))
+      || !record.originalQualification || (record.originalQualification.sourceOrder !== null
+        && (record.originalQualification.sourceOrder.orderId !== record.rewardSourceOrderId
+          || !Number.isFinite(Date.parse(record.originalQualification.sourceOrder.orderCreatedAt))))
+      || (hold.evidence.sourceOrder && record.originalQualification.sourceOrder
+        && hold.evidence.sourceOrder.orderCreatedAt !== record.originalQualification.sourceOrder.orderCreatedAt)
+      || (record.releaseSafetyDeadline !== null && !Number.isFinite(Date.parse(record.releaseSafetyDeadline)))
+      || originalEconomicFingerprint(payload) !== evidenceFingerprint
+      || audit.action !== `${RETURN_PENDING_RESOLUTION_PREFIX}${record.result.toUpperCase()}`
+      || audit.actor !== "system" || audit.entityType !== "return_request" || audit.entityId !== record.returnRequestId
+      || audit.sourceEvent !== record.terminalReturnEventId || audit.timestamp !== record.recordedAt || audit.after.resolutionId !== identity
+      || state.idempotency[record.idempotencyKey]?.resultId !== identity) throw new MembershipCommerceError("退貨待發獎勵結案證據關聯不一致");
+    ids.add(identity); holdIds.add(record.holdDependencyId); records.push(record); previous.set(rewardKey, record);
+  }
+  for (const [key, entry] of Object.entries(state.idempotency)) if (key.startsWith("return-domain:pending-resolution:")
+    && (!ids.has(entry.resultId) || key !== `return-domain:pending-resolution:${entry.resultId}`)) throw new MembershipCommerceError("退貨待發獎勵結案操作識別不一致");
+  return structuredClone(records);
+}
+export function projectPendingReturnRewardEntitlement(state: MembershipCommerceState, reward: ReturnRewardReference) {
+  const resolutions = readPendingReturnRewardResolutions(state).filter(item => item.reward.program === reward.program && item.reward.id === reward.id);
+  const latest = resolutions.at(-1);
+  const original = reward.program === "referral" ? state.referralRewards[reward.id]?.projectedCreditAmount ?? state.referralRewards[reward.id]?.calculatedCreditAmount
+    : reward.program === "retail_promotion" ? state.retailPromotionRewards[reward.id]?.calculatedCreditAmount : state.referralConversions[reward.id]?.pendingRewardAmount;
+  const amount = latest?.originalPendingRewardAmount ?? original ?? 0;
+  return { reward: { ...reward }, originalPendingRewardAmount: amount,
+    remainingEffectivePendingRewardAmount: latest?.remainingEffectivePendingRewardAmount ?? amount,
+    cumulativeApprovedReturnConsequence: amount - (latest?.remainingEffectivePendingRewardAmount ?? amount),
+    cancelledBeforeRelease: Boolean(latest && latest.remainingEffectivePendingRewardAmount === 0), resolutions };
+}
+
+const pendingReturnSafety = new WeakMap<MembershipCommerceState, Map<string, string | null>>();
+const pendingReturnSafetyReviews = new WeakMap<MembershipCommerceState, Map<string, string>>();
+const conversionReleaseEligibility = new WeakMap<MembershipCommerceState, Set<string>>();
+function creditRewardReference(state: MembershipCommerceState, sourceReference: string): ReturnRewardReference | null {
+  if (sourceReference.startsWith("referral_reward:")) return { program: "referral", id: sourceReference.slice("referral_reward:".length) };
+  if (sourceReference.startsWith("retail_promotion_reward:")) return { program: "retail_promotion", id: sourceReference.slice("retail_promotion_reward:".length) };
+  const conversion = Object.values(state.referralConversions).find(item => sourceReference === `referral_conversion:${item.relationshipId}:${item.orderId}`);
+  return conversion ? { program: "referral_conversion", id: conversion.conversionId } : null;
+}
+/** Prime a transaction-local read-only gate from ORIGINAL completion snapshots.
+ * No state migration, active business-rule lookup, order write, or pricing lookup.
+ * Historical records without canonical completion retain existing legacy conditions;
+ * known return exposure is never bypassed, including the final deadline millisecond. */
+async function primePendingReturnSafety(state: MembershipCommerceState, references?: ReturnRewardReference[]) {
+  const map = pendingReturnSafety.get(state) ?? new Map<string, string | null>();
+  const reviews = pendingReturnSafetyReviews.get(state) ?? new Map<string, string>();
+  const orderCache = new Map<string, Record<string, unknown> | null>();
+  const refs = references ?? [
+    ...Object.values(state.referralRewards).filter(item => item.status === "scheduled").map(item => ({ program: "referral" as const, id: item.rewardId })),
+    ...Object.values(state.retailPromotionRewards).filter(item => item.status === "scheduled").map(item => ({ program: "retail_promotion" as const, id: item.rewardId })),
+    ...Object.values(state.referralConversions).filter(item => item.status === "pending").map(item => ({ program: "referral_conversion" as const, id: item.conversionId })),
+  ];
+  const resolutions = readPendingReturnRewardResolutions(state);
+  for (const reference of refs) {
+    const key = JSON.stringify(reference);
+    reviews.delete(key);
+    try {
+    const referral = reference.program === "referral" ? state.referralRewards[reference.id] : null;
+    const retail = reference.program === "retail_promotion" ? state.retailPromotionRewards[reference.id] : null;
+    const conversion = reference.program === "referral_conversion" ? state.referralConversions[reference.id] : null;
+    const sourceOrderId = referral?.sourceOrderNumber ?? retail?.sourceOrderNumber ?? conversion?.orderId;
+    if (!sourceOrderId) continue;
+    const orderIds = new Set([sourceOrderId]);
+    if (referral?.qualificationOrderNumber) orderIds.add(referral.qualificationOrderNumber);
+    if (referral?.selfPurchaseTierSnapshot) for (const evidence of referral.selfPurchaseTierSnapshot.latestEvidence) orderIds.add(evidence.sourceOrderId);
+    if (referral && referralRewardQualificationAuthority(referral) === "qualification_coverage") {
+      const coverage = Object.values(state.referralRewardCoverages).find(item => item.referralRewardId === referral.rewardId);
+      const round = coverage ? state.qualificationRounds[coverage.qualificationRoundId] : null;
+      for (const allocation of round?.consumptionAccounting.allocations ?? []) {
+        const consumption = state.validConsumptionEvents[allocation.validConsumptionEventId]; if (consumption) orderIds.add(consumption.sourceOrderId);
+      }
+    }
+    const deadlines = resolutions.filter(item => item.reward.program === reference.program && item.reward.id === reference.id)
+      .flatMap(item => item.releaseSafetyDeadline ? [item.releaseSafetyDeadline] : []);
+    for (const orderId of orderIds) {
+      if (!orderCache.has(orderId)) {
+        const request = state.returnEvents?.find((item): item is RequestedReturn => item.type === "RETURN_REQUESTED" && item.orderId === orderId);
+        orderCache.set(orderId, request ? { completion: request.completion } : await readOrder(orderId));
+      }
+      const order = orderCache.get(orderId), completion = order?.completion as { returnDeadline?: string } | undefined;
+      if (completion) {
+        if (!completion.returnDeadline || !Number.isFinite(Date.parse(completion.returnDeadline))) throw new MembershipCommerceError("來源訂單退貨保護證據不完整");
+        deadlines.push(completion.returnDeadline);
+      }
+    }
+    const snapshot = referral ?? retail;
+    if (snapshot?.successfulPickupBusinessDate && Number.isSafeInteger(snapshot.returnProtectionDaysSnapshot)) {
+      deadlines.push(returnDeadlineAtTaipeiDayEnd(`${snapshot.successfulPickupBusinessDate}T00:00:00+08:00`, snapshot.returnProtectionDaysSnapshot!));
+    }
+    map.set(key, deadlines.sort((a, b) => Date.parse(a) - Date.parse(b)).at(-1) ?? null);
+    } catch (error) {
+      map.delete(key); reviews.set(key, error instanceof Error ? error.message : "source_return_safety_evidence_requires_review");
+    }
+  }
+  pendingReturnSafety.set(state, map);
+  pendingReturnSafetyReviews.set(state, reviews);
+}
+function pendingRewardSafetyReview(state: MembershipCommerceState, reference: ReturnRewardReference) {
+  return pendingReturnSafetyReviews.get(state)?.get(JSON.stringify(reference)) ?? null;
+}
+function pendingRewardSafetyDeadline(state: MembershipCommerceState, reference: ReturnRewardReference) {
+  return pendingReturnSafety.get(state)?.get(JSON.stringify(reference))
+    ?? projectPendingReturnRewardEntitlement(state, reference).resolutions.map(item => item.releaseSafetyDeadline)
+      .filter((item): item is string => Boolean(item)).sort((a, b) => Date.parse(a) - Date.parse(b)).at(-1) ?? null;
+}
+
+/** Only immutable reward calculation inputs, never current status/release cap usage. */
+function pendingRewardOriginalPolicy(state: MembershipCommerceState, reference: ReturnRewardReference) {
+  if (reference.program === "referral_conversion") {
+    const conversion = state.referralConversions[reference.id];
+    return { conversionId: conversion.conversionId, relationshipId: conversion.relationshipId, orderId: conversion.orderId,
+      occurredAt: conversion.occurredAt, originalCalculation: conversion.originalCalculation };
+  }
+  if (reference.program === "retail_promotion") {
+    const reward = state.retailPromotionRewards[reference.id];
+    return { rewardId: reward.rewardId, sourceOrderNumber: reward.sourceOrderNumber, rate: reward.rewardRate,
+      eligibleMerchandiseAmount: reward.eligibleMerchandiseAmount, calculationBasis: reward.calculationBasis,
+      calculationBaseValue: reward.calculationBaseValue, pvRewardMoneyValue: reward.pvRewardMoneyValue,
+      rounding: reward.roundingModeSnapshot, ruleVersion: reward.ruleVersion };
+  }
+  const reward = state.referralRewards[reference.id];
+  return { rewardId: reward.rewardId, sourceOrderNumber: reward.sourceOrderNumber, rate: reward.rewardRate,
+    paidAmountBasis: reward.paidAmountBasis, effectivePV: reward.effectivePV, calculationMode: reward.calculationMode,
+    pvRewardMoneyValue: reward.pvRewardMoneyValue, ruleVersion: reward.ruleVersion,
+    tierSnapshot: reward.selfPurchaseTierSnapshot, organizationCapPercent: reward.organizationCapPercentSnapshot,
+    organizationCapAmount: reward.organizationCapAmountSnapshot, authority: referralRewardQualificationAuthority(reward) };
+}
+
+/** Preserve the exact decimal values already stored by the PV authority. This is
+ * arithmetic normalization only: no PV rounding, money conversion or new PV rule. */
+function preservedDecimalUnits(values: Array<number | string>) {
+  const parts = values.map(value => {
+    if (typeof value === "number" && (!Number.isFinite(value) || value < 0)) throw new MembershipCommerceError("原始點數證據不完整");
+    const match = /^(\d+)(?:\.(\d+))?(?:e([+-]?\d+))?$/iu.exec(String(value));
+    if (!match) throw new MembershipCommerceError("原始點數證據格式不正確");
+    const decimals = match[2] ?? "", exponent = Number(match[3] ?? 0);
+    const power = decimals.length - exponent;
+    const digits = BigInt(match[1] + decimals);
+    return power < 0 ? { units: digits * (BigInt(10) ** BigInt(-power)), power: 0 } : { units: digits, power };
+  });
+  const power = Math.max(0, ...parts.map(part => part.power));
+  return { power, units: parts.map(part => part.units * (BigInt(10) ** BigInt(power - part.power))) };
+}
+function preservedDecimalText(units: bigint, power: number) {
+  if (power === 0) return units.toString();
+  const digits = units.toString().padStart(power + 1, "0");
+  return `${digits.slice(0, -power)}.${digits.slice(-power)}`;
+}
+
+/** D0 quantities/economics and D1 reductions are viewed at an authoritative B log prefix.
+ * No current pricing/role/credit-cap lookup. Original archived versions supply only
+ * the original money rounding or legacy conversion policy absent on old snapshots. */
+async function calculatePendingReturnReward(input: { state: MembershipCommerceState; reference: ReturnRewardReference;
+  terminal: ReturnDomainEvent; versions: RulesVersion[]; readOriginal: (id: string) => Promise<Record<string, unknown> | null> }) {
+  const { state, reference, terminal, versions, readOriginal } = input;
+  const index = state.returnEvents!.findIndex(item => item.eventId === terminal.eventId);
+  const prefix = state.returnEvents!.slice(0, index + 1);
+  const quantities = new Map<string, Map<string, number>>();
+  const requested = new Map<string, RequestedReturn>();
+  const approvedIds = new Set<string>();
+  for (const event of prefix) {
+    if (event.type === "RETURN_REQUESTED") requested.set(event.returnRequestId, event);
+    if (event.type !== "RETURN_APPROVED") continue;
+    approvedIds.add(event.eventId);
+    const request = requested.get(event.returnRequestId)!;
+    const map = quantities.get(event.orderId) ?? new Map<string, number>();
+    for (const line of request.lines) map.set(line.returnLineRef, (map.get(line.returnLineRef) ?? 0) + line.quantity);
+    quantities.set(event.orderId, map);
+  }
+  const reductions = readReturnConsumptionReductions(state).filter(item => approvedIds.has(item.approvedReturnEventId));
+  const d0Evidence = new Map<string, string>();
+  const usedConsumptionIds = new Set<string>();
+  const calculation: Record<string, unknown> = { method: "original-program-recalculation-v1" };
+  const fail = (message: string): never => { throw new MembershipCommerceError(message); };
+  async function frozenLines(orderId: string) {
+    const order = await readOriginal(orderId); if (!order) return fail("missing_original_order");
+    const lines = resolveReturnLineEvidence(order); if (lines.status !== "resolved") return fail("missing_original_line_evidence");
+    return { order, lines };
+  }
+  async function remainingMoney(orderId: string, total: number, authorityKind?: string, authorityId?: string) {
+    const map = quantities.get(orderId); if (!map?.size) return total;
+    const { order } = await frozenLines(orderId);
+    for (const consumption of Object.values(state.validConsumptionEvents)) if (consumption.sourceOrderId === orderId) usedConsumptionIds.add(consumption.eventId);
+    const proof = resolveOriginalCommerceEconomicEvidence({ state, order });
+    if (proof.status !== "resolved") return fail(`d0_${proof.reason}`);
+    const authority = authorityKind ? proof.monetaryAuthorities.find(item => item.kind === authorityKind && item.authorityId === authorityId) : null;
+    if (authorityKind && (!authority || authority.status !== "resolved" || authority.authoritativeTotal !== total)) return fail("unproven_original_reward_basis");
+    const lines = authority?.status === "resolved" ? authority.lines : allocatePreservedRewardMoney(proof.allocation, total);
+    const removed = reductionSum(lines.map(line => cumulativeOriginalLineContribution(line.rewardEconomicContribution, line.originalQuantity, map.get(line.returnLineRef) ?? 0)));
+    d0Evidence.set(orderId, proof.allocation.allocationFingerprint);
+    if (removed > total) return fail("return_economic_reduction_exceeds_basis");
+    return total - removed;
+  }
+  async function remainingPV(orderId: string, originalTotal: number, kind: "effective" | "consumption" = "effective") {
+    const map = quantities.get(orderId); if (!map?.size) return originalTotal;
+    const { order, lines } = await frozenLines(orderId);
+    const original = resolveOrderRewardBasis({ ...lines.transactionSnapshot, items: lines.lines.map(item => item.snapshot) });
+    const base = kind === "consumption" ? original.totalValidConsumptionPV : original.totalEffectivePV;
+    if (base !== originalTotal || ["unknown_domain", "invalid_pv_snapshot"].includes(original.monetaryBasisStatus)) return fail("unproven_original_pv_authority");
+    const retained = lines.lines.flatMap(line => {
+      const quantity = line.originalQuantity - (map.get(line.returnLineRef) ?? 0);
+      return quantity > 0 ? [{ ...line.snapshot, quantity }] : [];
+    });
+    // PV is classified by the SAME existing snapshot reader, independently of NTD.
+    const basis = resolveOrderRewardBasis({ ...order, items: retained });
+    const value = kind === "consumption" ? basis.totalValidConsumptionPV : basis.totalEffectivePV;
+    if (!Number.isFinite(value) || value < 0 || value > base) return fail("invalid_remaining_pv");
+    calculation.pvAuthority = "preserved-line-pv-via-orderRewardBasis";
+    return value;
+  }
+  async function hasRetainedLine(orderId: string) {
+    const map = quantities.get(orderId); if (!map?.size) return true;
+    const { lines } = await frozenLines(orderId);
+    return lines.lines.some(line => line.originalQuantity > (map.get(line.returnLineRef) ?? 0));
+  }
+  let entitlement = 0;
+  if (reference.program === "referral_conversion") {
+    const conversion = state.referralConversions[reference.id];
+    const version = conversion.originalCalculation ? versions.find(item => item.rulesVersion === conversion.originalCalculation!.rulesVersion)
+      : versions.filter(item => Date.parse(item.effectiveAt) <= Date.parse(conversion.occurredAt)).at(-1);
+    if (!version) return fail("missing_original_conversion_policy");
+    const { lines } = await frozenLines(conversion.orderId);
+    const basis = resolveOrderRewardBasis({ ...lines.transactionSnapshot, items: lines.lines.map(item => item.snapshot) });
+    if (basis.monetaryBasisStatus !== "resolved" || basis.rewardMerchandiseAmount === null) return fail("unproven_original_conversion_basis");
+    const original = referralRewardForMerchandise({ merchandiseAfterDiscounts: basis.rewardMerchandiseAmount, eligibleItemCount: basis.coffeeEligibleQuantity, rules: version.rules });
+    const baseline = projectPendingReturnRewardEntitlement(state, reference).originalPendingRewardAmount;
+    if (original !== baseline) return fail("inconsistent_original_conversion_calculation");
+    if (conversion.originalCalculation && (conversion.originalCalculation.calculatedRewardAmount !== original
+      || conversion.originalCalculation.merchandiseAmount !== basis.rewardMerchandiseAmount)) return fail("inconsistent_original_conversion_snapshot");
+    if (!conversion.originalCalculation && (version.rules.referral.referrerEligibility.mode !== "none" || !version.rules.referral.reward.repeatedRewards)) return fail("legacy_conversion_qualification_evidence_requires_review");
+    const remaining = await remainingMoney(conversion.orderId, basis.rewardMerchandiseAmount);
+    const counts = quantities.get(conversion.orderId) ?? new Map<string, number>();
+    const remainingCount = lines.lines.filter(line => line.snapshot.domain === undefined || line.snapshot.domain === "coffee")
+      .reduce((sum, line) => sum + line.originalQuantity - (counts.get(line.returnLineRef) ?? 0), 0);
+    entitlement = await hasRetainedLine(conversion.orderId) ? referralRewardForMerchandise({ merchandiseAfterDiscounts: remaining, eligibleItemCount: remainingCount, rules: version.rules }) : 0;
+    calculation.legacyPolicy = { rulesVersion: version.rulesVersion, reward: version.rules.referral.reward, rounding: version.rules.money.roundingMode, remainingBasis: remaining };
+    calculation.originalEligibility = conversion.originalCalculation?.referrerEligibleAtCreation ?? true;
+  } else if (reference.program === "retail_promotion") {
+    const reward = state.retailPromotionRewards[reference.id], basis = reward.calculationBasis ?? "paid_amount";
+    const originalBase = reward.calculationBaseValue ?? reward.eligibleMerchandiseAmount;
+    const remaining = basis === "pv" ? await remainingPV(reward.sourceOrderNumber, originalBase)
+      : await remainingMoney(reward.sourceOrderNumber, originalBase, "retail_promotion_calculation", reward.rewardId);
+    const originalPayout = percentageRewardPayout({ calculationBasis: basis, calculationBaseValue: originalBase, rewardRate: reward.rewardRate,
+      pvRewardMoneyValue: reward.pvRewardMoneyValue ?? 0, roundingMode: reward.roundingModeSnapshot }).calculatedCreditAmount;
+    if (originalPayout !== projectPendingReturnRewardEntitlement(state, reference).originalPendingRewardAmount) return fail("inconsistent_original_retail_calculation");
+    entitlement = percentageRewardPayout({ calculationBasis: basis, calculationBaseValue: remaining, rewardRate: reward.rewardRate,
+      pvRewardMoneyValue: reward.pvRewardMoneyValue ?? 0, roundingMode: reward.roundingModeSnapshot }).calculatedCreditAmount;
+    calculation.linear = { basis, originalBase, remaining, rate: reward.rewardRate, pvRewardMoneyValue: reward.pvRewardMoneyValue ?? 0,
+      rounding: reward.roundingModeSnapshot, originalRuleVersion: reward.ruleVersion };
+  } else {
+    const reward = state.referralRewards[reference.id];
+    const version = versions.find(item => item.rulesVersion === reward.ruleVersion);
+    const rounding = reward.selfPurchaseTierSnapshot?.payout.moneyRoundingMode ?? version?.rules.money.roundingMode;
+    if (!rounding || rounding === OWNER_DECISION_REQUIRED) return fail("missing_original_reward_rounding");
+    const paid = await remainingMoney(reward.sourceOrderNumber, reward.paidAmountBasis, "referral_paid_basis", reward.rewardId);
+    const pv = reward.calculationMode === "pv" ? await remainingPV(reward.sourceOrderNumber, reward.effectivePV) : reward.effectivePV;
+    if (reward.selfPurchaseTierSnapshot) {
+      const snapshot = reward.selfPurchaseTierSnapshot;
+      const originalPayout = selfPurchaseTierPayout({ result: snapshot.latestResult, paidAmountBasis: reward.paidAmountBasis,
+        effectivePV: reward.effectivePV, snapshot }).calculatedCreditAmount;
+      if (originalPayout !== projectPendingReturnRewardEntitlement(state, reference).originalPendingRewardAmount) return fail("inconsistent_original_tier_calculation");
+      const seen = new Set<string>();
+      let prior = 0, current: number | null = null;
+      for (const evidence of snapshot.latestEvidence) {
+        if (seen.has(evidence.sourceOrderId)) return fail("duplicate_original_tier_evidence"); seen.add(evidence.sourceOrderId);
+        const consumption = evidence.validConsumptionEventId ? state.validConsumptionEvents[evidence.validConsumptionEventId] : null;
+        if (evidence.validConsumptionEventId && (!consumption || consumption.sourceOrderId !== evidence.sourceOrderId)) return fail("missing_original_tier_consumption");
+        if (consumption) {
+          usedConsumptionIds.add(consumption.eventId);
+          const d1 = projectReturnConsumptionWithRecords(state, consumption.eventId, reductions);
+          if (d1.status !== "resolved") return fail(`d1_${d1.reason}`);
+        }
+        const amount = snapshot.rules.thresholdBasis === "pv" ? await remainingPV(evidence.sourceOrderId, evidence.thresholdAmount, "consumption")
+          : await remainingMoney(evidence.sourceOrderId, evidence.thresholdAmount,
+            consumption ? "self_purchase_paid_consumption" : undefined, consumption?.eventId);
+        if (evidence.role === "current") { if (evidence.sourceOrderId !== reward.sourceOrderNumber) return fail("inconsistent_current_tier_order"); current = amount; }
+        else prior += amount;
+      }
+      if (current === null) return fail("missing_current_tier_evidence");
+      const result = calculateSelfPurchaseTierReward({ priorAmount: prior, currentAmount: current,
+        calculationMethod: snapshot.rules.calculationMethod, tiers: snapshot.rules.tiers });
+      entitlement = selfPurchaseTierPayout({ result, paidAmountBasis: paid, effectivePV: pv, snapshot }).calculatedCreditAmount;
+      calculation.tier = { rulesFingerprint: originalEconomicFingerprint(snapshot.rules), prior, current, result, payout: snapshot.payout };
+    } else {
+      const base = reward.calculationMode === "pv" ? pv * reward.pvRewardMoneyValue : paid;
+      entitlement = rewardRound(base * reward.rewardRate / 100, rounding);
+      const originalBase = reward.calculationMode === "pv" ? reward.effectivePV * reward.pvRewardMoneyValue : reward.paidAmountBasis;
+      let originalEntitlement = rewardRound(originalBase * reward.rewardRate / 100, rounding);
+      if (reward.rewardType !== "self_purchase" && reward.organizationCapPercentSnapshot !== undefined) {
+        let available = rewardRound(base * reward.organizationCapPercentSnapshot / 100, rounding);
+        let originalAvailable = rewardRound(originalBase * reward.organizationCapPercentSnapshot / 100, rounding);
+        const peers = Object.values(state.referralRewards).filter(item => item.sourceOrderNumber === reward.sourceOrderNumber
+          && item.rewardType === reward.rewardType).sort((a, b) => a.referralLevel - b.referralLevel || a.rewardId.localeCompare(b.rewardId));
+        for (const peer of peers) {
+          if (peer.paidAmountBasis !== reward.paidAmountBasis || peer.calculationMode !== reward.calculationMode
+            || peer.effectivePV !== reward.effectivePV || peer.pvRewardMoneyValue !== reward.pvRewardMoneyValue) return fail("inconsistent_original_cap_group");
+          const portion = Math.max(0, Math.min(rewardRound(base * peer.rewardRate / 100, rounding), available));
+          const originalPortion = Math.max(0, Math.min(rewardRound(originalBase * peer.rewardRate / 100, rounding), originalAvailable));
+          available -= portion; originalAvailable -= originalPortion;
+          if (peer.rewardId === reward.rewardId) { entitlement = portion; originalEntitlement = originalPortion; break; }
+        }
+      }
+      if (originalEntitlement !== projectPendingReturnRewardEntitlement(state, reference).originalPendingRewardAmount) return fail("inconsistent_original_linear_calculation");
+      calculation.linear = { mode: reward.calculationMode, remainingPaid: paid, remainingPV: pv, rate: reward.rewardRate,
+        pvRewardMoneyValue: reward.pvRewardMoneyValue, rounding, originalRuleVersion: reward.ruleVersion };
+    }
+    const authority = referralRewardQualificationAuthority(reward);
+    if (authority === "qualification_coverage") {
+      const chain = qualificationCoverageProjectionEvidence(state, reward);
+      if (!chain) return fail("missing_original_coverage_chain");
+      const effective = new Map<string, number | string>();
+      const allocationEvidence: Array<Record<string, unknown>> = [];
+      for (const allocation of chain.round.consumptionAccounting.allocations) {
+        const consumption = state.validConsumptionEvents[allocation.validConsumptionEventId];
+        if (!consumption) return fail("missing_original_coverage_consumption");
+        usedConsumptionIds.add(consumption.eventId);
+        let value: number | string = allocation.amount;
+        if (quantities.has(consumption.sourceOrderId)) {
+          if (qualificationBasisFromRound(chain.round) === "pv") {
+            if (consumption.validConsumptionPV === undefined) return fail("missing_original_pv_consumption");
+            const remaining = await remainingPV(consumption.sourceOrderId, consumption.validConsumptionPV, "consumption");
+            const rounds = Object.values(state.qualificationRounds).filter(round => qualificationBasisFromRound(round) === "pv"
+              && round.consumptionAccounting.allocations.some(item => item.validConsumptionEventId === consumption.eventId)).sort(originalAllocationChronology);
+            if (rounds.some(round => round.memberId !== consumption.memberId || !Number.isFinite(Date.parse(round.createdAt))
+              || !Number.isFinite(Date.parse(round.qualifiedAt)) || Date.parse(round.createdAt) < Date.parse(round.qualifiedAt)
+              || Date.parse(round.qualifiedAt) < Date.parse(consumption.finalizedAt))) return fail("unproven_original_pv_allocation_chronology");
+            const amounts = rounds.map(round => reductionSum(round.consumptionAccounting.allocations
+              .filter(item => item.validConsumptionEventId === consumption.eventId).map(item => item.amount)));
+            const decimal = preservedDecimalUnits([consumption.validConsumptionPV, remaining, ...amounts]);
+            const original = decimal.units[0], retained = decimal.units[1];
+            const projected = unwindOriginalAllocationUnits(original, original - retained, decimal.units.slice(2));
+            const ordinal = rounds.findIndex(round => round.roundId === chain.round.roundId);
+            if (ordinal < 0) return fail("missing_original_pv_allocation");
+            value = preservedDecimalText(projected.effective[ordinal], decimal.power);
+            calculation.pvCoveragePolicy = { unwindPolicy: RETURN_CONSUMPTION_UNWIND_POLICY, unit: "pv",
+              originalPV: String(consumption.validConsumptionPV), remainingPV: String(remaining), originalCarry: preservedDecimalText(projected.carry, decimal.power),
+              effectiveCarry: preservedDecimalText(projected.effectiveCarry, decimal.power) };
+          } else {
+            const d1 = projectReturnConsumptionWithRecords(state, consumption.eventId, reductions);
+            if (d1.status !== "resolved") return fail(`d1_${d1.reason}`);
+            value = d1.effectiveAllocationByRound.find(item => item.roundId === chain.round.roundId)?.effectiveAllocation ?? 0;
+          }
+        }
+        effective.set(consumption.eventId, value);
+        allocationEvidence.push({ consumptionEventId: consumption.eventId, originalAllocation: allocation.amount, effectiveAllocation: value });
+      }
+      const pathSupported = (path: QualificationPathEvaluation) => {
+        if (!path.passed || (path.activeSubscriptionRequired && !path.activeSubscriptionSatisfied)) return false;
+        const values = preservedDecimalUnits([path.threshold, ...path.eligibleEventIds.map(eventId => effective.get(eventId) ?? 0)]).units;
+        return values.slice(1).reduce((sum, amount) => sum + amount, BigInt(0)) >= values[0];
+      };
+      const g = pathSupported(chain.round.generalPath), s = pathSupported(chain.round.subscriptionPath), mode = chain.round.qualificationMode;
+      const supported = mode === "general" ? g : mode === "subscription" ? s : mode === "both" ? g && s : g || s;
+      if (!supported) entitlement = 0;
+      calculation.coverage = { roundId: chain.round.roundId, coverageId: chain.coverage.coverageId,
+        maturationId: chain.maturation?.maturationId ?? null, qualifiedAt: chain.round.qualifiedAt, supported, allocationEvidence };
+    } else if (authority === "legacy_order" && reward.qualificationOrderNumber && !(await hasRetainedLine(reward.qualificationOrderNumber))) {
+      entitlement = 0; calculation.legacyQualification = "original_qualification_order_fully_returned";
+    }
+  }
+  if (!reductionMoney(entitlement)) return fail("invalid_remaining_pending_entitlement");
+  return { entitlement, calculation, d0Evidence: [...d0Evidence].map(([orderId, allocationFingerprint]) => ({ orderId, allocationFingerprint })),
+    d1ReductionIds: reductions.filter(item => usedConsumptionIds.has(item.consumptionEventId)).map(item => item.reductionId) };
+}
+
+/** Explicit D worker after B terminal facts, in the SAME commerce lock as D1 and
+ * audit/idempotency writes. The normal scheduler never resolves an unprocessed fact
+ * by itself: resolution_required remains a blocking handoff until this succeeds.
+ * New UI/API orchestration can call this without exposing caller-supplied amounts. */
+export async function resolveTerminalReturnRewardDependencies(input: { now?: Date; stateFilePath?: string; rulesFilePath?: string } = {}) {
+  const rulesStore = await readMembershipRulesStore(input.rulesFilePath);
+  return transaction(async (state, now) => {
+    await appendReturnRewardHolds(state, now);
+    // Review each affected consumption independently. Incomplete legacy evidence
+    // for one order must not prevent another request/reward from resolving.
+    const approvedOrderIds = new Set((state.returnEvents ?? []).filter(item => item.type === "RETURN_APPROVED").map(item => item.orderId));
+    const consumptionReviews: ConsumptionProjectionFailure[] = [];
+    for (const consumption of Object.values(state.validConsumptionEvents).filter(item => approvedOrderIds.has(item.sourceOrderId))) {
+      const d1 = appendApprovedReturnConsumptionReductions(state, now, new Set([consumption.eventId]));
+      if (d1.status !== "resolved") consumptionReviews.push(d1);
+    }
+    const resolutions = readPendingReturnRewardResolutions(state), resolvedIds = new Set(resolutions.map(item => item.holdDependencyId));
+    const holds = readReturnRewardHoldDependencies(state);
+    const orders = new Map<string, Record<string, unknown> | null>();
+    const readOriginal = async (orderId: string) => {
+      if (!orders.has(orderId)) {
+        const request = state.returnEvents?.find((item): item is RequestedReturn => item.type === "RETURN_REQUESTED" && item.orderId === orderId);
+        orders.set(orderId, request ? { orderNumber: orderId, status: "completed", completion: request.completion,
+          createdAt: request.completion.returnLines?.status === "resolved" ? request.completion.returnLines.orderCreatedAt : undefined } : await readOrder(orderId));
+      }
+      return orders.get(orderId)!;
+    };
+    const issues: Array<{ holdDependencyId: string; reward: ReturnRewardReference; reason: string; compatibility?: "released_reward_defensive_review" }> = [];
+    let resolvedCount = 0;
+    for (const terminal of state.returnEvents ?? []) {
+      if (!["RETURN_WITHDRAWN", "RETURN_REJECTED", "RETURN_APPROVED"].includes(terminal.type)) continue;
+      for (const hold of holds.filter(item => item.returnRequestId === terminal.returnRequestId && !resolvedIds.has(item.holdDependencyId))) {
+        const reference = hold.reward;
+        const referral = reference.program === "referral" ? state.referralRewards[reference.id] : null;
+        const retail = reference.program === "retail_promotion" ? state.retailPromotionRewards[reference.id] : null;
+        const conversion = reference.program === "referral_conversion" ? state.referralConversions[reference.id] : null;
+        const reward = referral ?? retail ?? conversion;
+        if (!reward) { issues.push({ holdDependencyId: hold.holdDependencyId, reward: reference, reason: "missing_original_reward" }); continue; }
+        if (reward.status === "released" || reward.status === "rewarded" || reward.rewardCreditEntryId) {
+          const key = `return-domain:defensive-review:${hold.holdDependencyId}`;
+          if (!state.idempotency[key]) {
+            audit(state, { actor: "system", action: RETURN_DEFENSIVE_REVIEW_ACTION, entityType: "return_request", entityId: hold.returnRequestId,
+              before: {}, after: { holdDependencyId: hold.holdDependencyId, rewardId: reference.id, positiveCreditEntryId: reward.rewardCreditEntryId ?? "" },
+              reason: "already_released_reward_requires_existing_defensive_compatibility", sourceEvent: terminal.eventId }, now);
+            remember(state, key, hold.holdDependencyId, now);
+          }
+          issues.push({ holdDependencyId: hold.holdDependencyId, reward: reference, reason: "already_released_reward_requires_defensive_review", compatibility: "released_reward_defensive_review" }); continue;
+        }
+        try {
+          if (terminal.type === "RETURN_APPROVED" && consumptionReviews.some(item => hold.evidence.consumptionEventIds.includes(item.consumptionEventId)
+            || state.validConsumptionEvents[item.consumptionEventId]?.sourceOrderId === hold.returnOrderId)) throw new MembershipCommerceError("related_consumption_evidence_requires_review");
+          const previous = projectPendingReturnRewardEntitlement(state, reference);
+          const beneficiaryMemberId = referral?.beneficiaryMemberId ?? retail?.beneficiaryMemberId ?? state.referrals[conversion!.relationshipId]?.referrerMemberId;
+          if (!beneficiaryMemberId || (conversion && !hold.evidence.sourceOrder)) throw new MembershipCommerceError("missing_original_reward_beneficiary_or_order_evidence");
+          if (conversion && !conversion.originalCalculation) {
+            const originalVersion = rulesStore.versions.filter(item => Date.parse(item.effectiveAt) <= Date.parse(conversion.occurredAt)).at(-1);
+            if (!originalVersion || originalVersion.rules.referral.referrerEligibility.mode !== "none" || !originalVersion.rules.referral.reward.repeatedRewards)
+              throw new MembershipCommerceError("legacy_conversion_qualification_evidence_requires_review");
+          }
+          const policy = originalEconomicFingerprint(pendingRewardOriginalPolicy(state, reference));
+          if (previous.resolutions.some(item => item.originalPolicyFingerprint !== policy)) throw new MembershipCommerceError("original_reward_policy_changed");
+          let proof: RewardDependencyEvidenceResult | null = null;
+          if (reference.program !== "referral_conversion") {
+            proof = await resolveRewardDependencyEvidence({ state, program: reference.program, rewardId: reference.id, readSourceOrder: readOriginal });
+            if (proof.status !== "resolved") throw new MembershipCommerceError(proof.reason);
+          }
+          if (referral && referralRewardQualificationAuthority(referral) === "legacy_order"
+            && !(proof?.status === "resolved" && proof.qualificationOrders.length)) {
+            const originalVersion = rulesStore.versions.find(item => item.rulesVersion === referral.ruleVersion);
+            if (originalVersion?.rules.referral.referrerEligibility.mode !== "none") throw new MembershipCommerceError("missing_original_legacy_qualification_evidence");
+          }
+          const result = terminal.type === "RETURN_APPROVED" ? "approved" : terminal.type === "RETURN_REJECTED" ? "rejected" : "withdrawn";
+          const computed = result === "approved" ? await calculatePendingReturnReward({ state, reference, terminal, versions: rulesStore.versions, readOriginal })
+            : { entitlement: previous.remainingEffectivePendingRewardAmount, calculation: { method: "original-entitlement-restored-without-requalification",
+              ...(conversion ? { originalEligibility: conversion.originalCalculation?.referrerEligibleAtCreation ?? true } : {}) }, d0Evidence: [], d1ReductionIds: [] };
+          if (referral && referralRewardQualificationAuthority(referral) === "legacy_order") (computed.calculation as Record<string, unknown>).originalEligibility = true;
+          const amount = Math.min(previous.remainingEffectivePendingRewardAmount, computed.entitlement);
+          const deadlines: string[] = [];
+          for (const orderId of [...new Set([hold.rewardSourceOrderId, hold.returnOrderId, ...(proof?.status === "resolved" ? proof.qualificationOrders.map(item => item.orderId) : [])])]) {
+            const order = await readOriginal(orderId), completion = order?.completion as { returnDeadline?: string } | undefined;
+            if (completion?.returnDeadline && Number.isFinite(Date.parse(completion.returnDeadline))) deadlines.push(completion.returnDeadline);
+          }
+          const resolutionId = deterministicId("return_reward_resolution", JSON.stringify([hold.holdDependencyId, terminal.eventId]));
+          const payload: Omit<PendingReturnRewardResolution, "evidenceFingerprint"> = {
+            schemaVersion: 1, resolutionId, idempotencyKey: `return-domain:pending-resolution:${resolutionId}`, holdDependencyId: hold.holdDependencyId,
+            reward: { ...reference }, rewardSourceOrderId: hold.rewardSourceOrderId,
+            beneficiaryMemberId,
+            returnRequestId: hold.returnRequestId, terminalReturnEventId: terminal.eventId, returnOrderId: hold.returnOrderId, result,
+            occurredAt: terminal.occurredAt, recordedAt: new Date(Math.max(now.getTime(), Date.parse(terminal.occurredAt))).toISOString(),
+            originalPendingRewardAmount: previous.originalPendingRewardAmount, previousEffectivePendingAmount: previous.remainingEffectivePendingRewardAmount,
+            remainingEffectivePendingRewardAmount: amount, incrementalAdjustment: amount - previous.remainingEffectivePendingRewardAmount,
+            cumulativeAdjustment: amount - previous.originalPendingRewardAmount,
+            reasonCode: result === "withdrawn" ? "reward_restored_after_return_withdrawn" : result === "rejected" ? "reward_restored_after_return_rejected"
+              : amount === 0 ? "pending_reward_cancelled_due_to_return" : amount === previous.remainingEffectivePendingRewardAmount
+                ? "pending_reward_unchanged_after_approved_return" : "pending_reward_adjusted_due_to_partial_return",
+            originalPolicyFingerprint: policy, releaseSafetyDeadline: deadlines.sort((a, b) => Date.parse(a) - Date.parse(b)).at(-1) ?? null,
+            originalQualification: { sourceOrder: proof?.status === "resolved" ? proof.sourceOrder : hold.evidence.sourceOrder,
+              qualificationOrders: proof?.status === "resolved" ? proof.qualificationOrders : hold.evidence.qualificationOrders,
+              qualificationRoundId: proof?.status === "resolved" ? proof.qualificationRound?.roundId ?? null : hold.evidence.roundId,
+              coverageId: proof?.status === "resolved" ? proof.coverage?.coverageId ?? null : hold.evidence.coverageId,
+              maturationId: proof?.status === "resolved" ? proof.maturation?.maturationId ?? null : hold.evidence.maturationId },
+            calculation: computed.calculation, d0Evidence: computed.d0Evidence, d1ReductionIds: computed.d1ReductionIds,
+          };
+          const record = { ...payload, evidenceFingerprint: originalEconomicFingerprint(payload) };
+          audit(state, { actor: "system", action: `${RETURN_PENDING_RESOLUTION_PREFIX}${result.toUpperCase()}`, entityType: "return_request",
+            entityId: hold.returnRequestId, before: {}, after: { resolutionId, evidence: JSON.stringify(record) }, reason: payload.reasonCode, sourceEvent: terminal.eventId }, new Date(payload.recordedAt));
+          remember(state, payload.idempotencyKey, resolutionId, new Date(payload.recordedAt)); resolvedIds.add(hold.holdDependencyId); resolvedCount++;
+        } catch (error) { issues.push({ holdDependencyId: hold.holdDependencyId, reward: reference, reason: error instanceof Error ? error.message : "pending_reward_evidence_requires_review" }); }
+      }
+    }
+    return { status: issues.some(item => !item.compatibility) ? "manual_review_required" as const : "resolved" as const,
+      resolvedCount, issues, consumptionReviews, resolutions: readPendingReturnRewardResolutions(state) };
+  }, { now: input.now, filePath: input.stateFilePath });
+}
+
+export class ReturnRewardHeldError extends Error {
+  readonly hold: ReturnRewardHoldProjection;
+  constructor(hold: ReturnRewardHoldProjection) {
+    super("Reward deferred by unresolved return dependencies"); this.name = "ReturnRewardHeldError"; this.hold = hold;
+  }
+}
 
 export class MembershipCommerceError extends Error {
   constructor(message: string) {
@@ -598,7 +1928,7 @@ function nowIso(now = new Date()) {
 
 function emptyState(now = new Date()): MembershipCommerceState {
   const timestamp = nowIso(now);
-  return { schemaVersion: 1, revision: 0, createdAt: timestamp, updatedAt: timestamp, subscriptions: {}, cycles: {}, referrals: {}, referralConversions: {}, referralRewards: {}, retailPromotionRewards: {}, validConsumptionEvents: {}, qualificationRounds: {}, referralRewardCoverages: {}, referralRewardMaturations: {}, creditEntries: {}, creditReservations: {}, events: [], notifications: [], audit: [], idempotency: {} };
+  return { schemaVersion: 1, revision: 0, createdAt: timestamp, updatedAt: timestamp, subscriptions: {}, cycles: {}, referrals: {}, referralConversions: {}, referralRewards: {}, retailPromotionRewards: {}, validConsumptionEvents: {}, qualificationRounds: {}, referralRewardCoverages: {}, referralRewardMaturations: {}, creditEntries: {}, creditReservations: {}, events: [], returnEvents: [], notifications: [], audit: [], idempotency: {} };
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -607,6 +1937,8 @@ function isObject(value: unknown): value is Record<string, unknown> {
 
 export function validateMembershipCommerceState(value: unknown): MembershipCommerceState {
   if (!isObject(value) || value.schemaVersion !== 1 || !Number.isSafeInteger(value.revision) || typeof value.createdAt !== "string" || typeof value.updatedAt !== "string") throw new MembershipCommerceError("會員商務資料格式不正確");
+  if (value.returnEvents === undefined) value.returnEvents = [];
+  validateReturnEventLog(value.returnEvents);
   if (!isObject(value.referralRewards)) value.referralRewards = {};
   if (!isObject(value.retailPromotionRewards)) value.retailPromotionRewards = {};
   if (!isObject(value.validConsumptionEvents)) value.validConsumptionEvents = {};
@@ -615,6 +1947,15 @@ export function validateMembershipCommerceState(value: unknown): MembershipComme
   if (!isObject(value.referralRewardMaturations)) value.referralRewardMaturations = {};
   for (const field of ["subscriptions", "cycles", "referrals", "referralConversions", "referralRewards", "retailPromotionRewards", "validConsumptionEvents", "qualificationRounds", "referralRewardCoverages", "referralRewardMaturations", "creditEntries", "creditReservations", "idempotency"] as const) if (!isObject(value[field])) throw new MembershipCommerceError("會員商務資料集合不完整");
   for (const field of ["events", "notifications", "audit"] as const) if (!Array.isArray(value[field])) throw new MembershipCommerceError("會員商務事件集合不完整");
+  readReturnRewardHoldDependencies(value as MembershipCommerceState);
+  readReturnConsumptionReductions(value as MembershipCommerceState);
+  readPendingReturnRewardResolutions(value as MembershipCommerceState);
+  for (const conversion of Object.values(value.referralConversions as Record<string, ReferralConversion>)) {
+    const original = conversion.originalCalculation;
+    if (original !== undefined && (!isObject(original) || !Number.isSafeInteger(original.rulesVersion) || original.rulesVersion < 1
+      || ![original.merchandiseAmount, original.eligibleItemCount, original.calculatedRewardAmount].every(reductionMoney)
+      || typeof original.referrerEligibleAtCreation !== "boolean" || typeof original.repeatedAllowedAtCreation !== "boolean")) throw new MembershipCommerceError("推薦轉換原始計算快照不正確");
+  }
   for (const reward of Object.values(value.referralRewards as Record<string, ReferralReward>)) {
     if (
       reward.qualificationAuthority !== undefined
@@ -739,7 +2080,16 @@ async function transaction<T>(operation: (state: MembershipCommerceState, now: D
   await fs.mkdir(path.dirname(filePath), { recursive: true });
   return withFileLock(filePath, async () => {
     const state = await readMembershipCommerceState(filePath);
+    const originalReturnEvents = structuredClone(state.returnEvents ?? []);
+    const originalHolds = structuredClone(returnHoldAudit(state));
+    const originalReductions = structuredClone(consumptionReductionAudit(state));
+    const originalResolutions = structuredClone(pendingResolutionAudit(state));
     const result = await operation(state, now);
+    await appendReturnRewardHolds(state, now);
+    assertReturnEventsPreserved(originalReturnEvents, state.returnEvents ?? []);
+    if (!isDeepStrictEqual(originalHolds, returnHoldAudit(state).slice(0, originalHolds.length))) throw new MembershipCommerceError("退貨 HOLD 歷史不可刪改");
+    if (!isDeepStrictEqual(originalReductions, consumptionReductionAudit(state).slice(0, originalReductions.length))) throw new MembershipCommerceError("退貨消費減少歷史不可刪改");
+    if (!isDeepStrictEqual(originalResolutions, pendingResolutionAudit(state).slice(0, originalResolutions.length))) throw new MembershipCommerceError("退貨獎勵結案歷史不可刪改");
     state.revision += 1;
     state.updatedAt = nowIso(now);
     validateMembershipCommerceState(state);
@@ -764,6 +2114,104 @@ function event(state: MembershipCommerceState, type: string, safeData: CommerceE
   const record: CommerceEvent = { eventId: id("event"), type, occurredAt: nowIso(now), safeData, ...refs };
   state.events.push(record);
   return record;
+}
+
+/** Internal-only return command boundary. A future API must derive the actor/capability
+ * from its authenticated session and supply ownership authorization, never trust body roles.
+ * Order gate -> order file lock -> existing commerce state lock. No order persist is called.
+ * Not exposed by any route until the separate reward-HOLD phase supplies its release gate. */
+export async function executeOrderReturnCommand(input: {
+  orderNumber: string; actor: ReturnActor; command: ReturnCommand; reason: string; idempotencyKey: string;
+  authorizeOrder: (order: Readonly<Record<string, unknown>>, actor: ReturnActor) => void | Promise<void>;
+  now?: Date; stateFilePath?: string;
+  /** E-only server confirmation. Omitted by the accepted internal B/C/D commands. */
+  confirmation?: { token: string; memberId: string; quantityAcknowledged: true; supportingPhotos?: import("./customerNotifications").CustomerNotificationPhoto[] };
+}): Promise<ReturnCommandResult> {
+  const command = normalizeReturnCommand(input.command, input.actor, input.reason);
+  if (!command || !/^KD[0-9-]+$/u.test(input.orderNumber) || !returnEvidenceText(input.idempotencyKey, 120)) {
+    return { status: "conflict", reason: "invalid_input" };
+  }
+  if (input.now && !Number.isFinite(input.now.getTime())) return { status: "conflict", reason: "invalid_clock" };
+  if (typeof input.authorizeOrder !== "function") return { status: "conflict", reason: "not_authorized" };
+  const key = "return-domain:" + JSON.stringify([input.orderNumber, command.actor.actorId, input.idempotencyKey]);
+  const fingerprint = createHash("sha256").update(JSON.stringify(command)).digest("hex");
+  return withStoredOrderUpdateLock(input.orderNumber, async order => {
+    try { await input.authorizeOrder(structuredClone(order), structuredClone(command.actor)); }
+    catch { return { status: "conflict", reason: "not_authorized" }; }
+    return transaction<ReturnCommandResult>((state) => {
+      const events = state.returnEvents ?? [];
+      const prior = events.find(item => item.idempotencyKey === key);
+      const rememberedId = remembered(state, key);
+      if (rememberedId && rememberedId !== prior?.eventId) throw new MembershipCommerceError("退貨操作識別與事件不一致");
+      if (prior && prior.commandFingerprint !== fingerprint) return { status: "conflict", reason: "idempotency_conflict" };
+      const projection = projectOrderReturns(order, events);
+      if (projection.status !== "resolved") return projection;
+      if (prior) {
+        if (input.confirmation && (prior.type !== "RETURN_REQUESTED" || prior.confirmation?.tokenDigest !== originalEconomicFingerprint(input.confirmation.token))) throw new ReturnWorkflowError("idempotency_conflict");
+        if (input.confirmation && prior.type === "RETURN_REQUESTED" && !isDeepStrictEqual(prior.confirmation?.supportingPhotos ?? [], input.confirmation.supportingPhotos ?? [])) throw new ReturnWorkflowError("idempotency_conflict");
+        return { status: "applied", replayed: true, event: structuredClone(prior), projection };
+      }
+      const proof = preservedReturnCompletion(order);
+      if (proof.status !== "resolved") return proof;
+      // Evaluate acceptance at the locked boundary, not before waiting for the lock.
+      const now = input.now ?? new Date();
+      if (!Number.isFinite(now.getTime())) return { status: "conflict", reason: "invalid_clock" };
+      const timestamp = nowIso(now);
+      const conflict = returnCommandConflict(command, projection, timestamp, proof.completion.completedAt);
+      if (conflict === "return_deadline_expired") return { status: "not_eligible", reason: conflict };
+      if (conflict) return { status: "conflict", reason: conflict };
+      const confirmation = input.confirmation ? (() => {
+        const saved = verifyReturnPreviewToken(input.confirmation.token, now);
+        const current = buildReturnConfirmationPreview({ order, state, command, memberId: input.confirmation.memberId,
+          now, generatedAt: saved.generatedAt, rewardHoldExpected: returnHoldCandidates(state, order.orderNumber).length > 0 });
+        if (saved.actorId !== command.actor.actorId || saved.sourceOrderId !== order.orderNumber
+          || saved.confirmationFingerprint !== current.confirmationFingerprint) throw new ReturnWorkflowError("stale_confirmation");
+        return { preview: current, tokenDigest: originalEconomicFingerprint(input.confirmation.token), confirmedAt: timestamp, quantityAcknowledged: true as const,
+          ...(input.confirmation.supportingPhotos?.length ? { supportingPhotos: structuredClone(input.confirmation.supportingPhotos) } : {}) };
+      })() : undefined;
+      const returnRequestId = command.type === "RETURN_REQUESTED"
+        ? deterministicId("return_request", key) : command.returnRequestId;
+      const eventId = deterministicId("return_event", key);
+      const base = { schemaVersion: 1 as const, eventId, returnRequestId, orderId: order.orderNumber,
+        actor: command.actor, source: "return_service" as const, occurredAt: timestamp, recordedAt: timestamp,
+        idempotencyKey: key, commandFingerprint: fingerprint, reason: command.reason,
+        previousEventId: projection.requests.find(item => item.returnRequestId === returnRequestId)?.lastEventId ?? null };
+      const appended: ReturnDomainEvent = command.type === "RETURN_REQUESTED"
+        ? { ...base, type: command.type, completion: proof.completion, conditionAcknowledgement: command.conditionAcknowledgement,
+            ...(confirmation ? { confirmation } : {}),
+            lines: command.lines.map(line => ({ ...line, originalQuantity: projection.lines.find(item => item.returnLineRef === line.returnLineRef)!.originalQuantity })) }
+        : { ...base, type: command.type };
+      state.returnEvents = [...events, appended];
+      const next = projectOrderReturns(order, state.returnEvents);
+      if (next.status !== "resolved") throw new MembershipCommerceError("退貨證據投影不一致");
+      remember(state, key, eventId, now);
+      audit(state, { actor: command.actor.authority === "customer" ? "member" : "admin", action: command.type,
+        entityType: "return_request", entityId: returnRequestId, before: {}, after: { eventId, orderId: order.orderNumber },
+        reason: command.reason, sourceEvent: eventId }, now);
+      return { status: "applied", replayed: false, event: structuredClone(appended), projection: next };
+    }, { filePath: input.stateFilePath, now: input.now });
+  });
+}
+
+/** Read-only preview under the same order -> commerce lock order as creation. */
+export async function previewOrderReturn(input: {
+  orderNumber: string; memberId: string; command: ReturnCommand; reason: string;
+  authorizeOrder: (order: Readonly<Record<string, unknown>>, actor: ReturnActor) => void | Promise<void>;
+  now?: Date; stateFilePath?: string;
+}) {
+  const actor: ReturnActor = { actorId: input.memberId, authority: "customer" };
+  const command = normalizeReturnCommand(input.command, actor, input.reason);
+  if (!command || command.type !== "RETURN_REQUESTED" || input.reason.length > 200) throw new ReturnWorkflowError("invalid_input", 400);
+  return withStoredOrderUpdateLock(input.orderNumber, async order => {
+    await input.authorizeOrder(structuredClone(order), actor);
+    const filePath = input.stateFilePath ?? getMembershipCommerceStateFile();
+    return withFileLock(filePath, async () => {
+      const state = await readMembershipCommerceState(filePath);
+      const preview = buildReturnConfirmationPreview({ order, state, command, memberId: input.memberId,
+        now: input.now ?? new Date(), rewardHoldExpected: returnHoldCandidates(state, order.orderNumber).length > 0 });
+      return { preview, confirmationToken: signReturnPreview(preview) };
+    });
+  });
 }
 
 function notify(state: MembershipCommerceState, rules: MembershipBusinessRules, eventType: NotificationEvent["eventType"], sourceEvent: string, now: Date, input: { memberId?: string; safeData?: NotificationEvent["safeData"]; adminOnly?: boolean } = {}) {
@@ -1908,7 +3356,7 @@ function rewardRound(value: number, mode: MembershipBusinessRules["money"]["roun
   return mode === "round-down" ? Math.floor(value) : mode === "round-up" ? Math.ceil(value) : Math.floor(value + 0.5);
 }
 
-function percentageRewardPayout(input: {
+export function percentageRewardPayout(input: {
   calculationBasis: RewardCalculationBasis;
   calculationBaseValue: number;
   rewardRate: number;
@@ -2039,7 +3487,7 @@ function createSelfPurchaseTierSnapshot(input: {
   };
 }
 
-function selfPurchaseTierPayout(input: {
+export function selfPurchaseTierPayout(input: {
   result: SelfPurchaseTierRewardResult;
   paidAmountBasis: number;
   effectivePV: number;
@@ -2830,6 +4278,8 @@ function appendDueReferralRewardMaturations(
     const reward = state.referralRewards[coverage.referralRewardId];
     const round = state.qualificationRounds[coverage.qualificationRoundId];
     if (!reward || !round || referralRewardQualificationAuthority(reward) !== "qualification_coverage") continue;
+    if (projectReturnRewardHolds(state, { program: "referral", id: reward.rewardId }).blocked
+      || projectPendingReturnRewardEntitlement(state, { program: "referral", id: reward.rewardId }).cancelledBeforeRelease) continue;
     const safety = historicalRoundSafetySnapshot(round, ruleVersions);
     const maturesAtMs = Date.parse(round.qualifiedAt) + (safety.baseWaitingDays + safety.returnProtectionDays) * QUALIFICATION_DAY_MS;
     if (now.getTime() < maturesAtMs) continue;
@@ -3297,11 +4747,36 @@ export async function runReferralRewardReleaseScheduler(input: { now?: Date; sta
     getActiveMembershipRules(input.now, input.rulesFilePath),
     readMembershipRulesStore(input.rulesFilePath),
   ]);
-  return transaction((state, now) => {
+  return transaction(async (state, now) => {
+    await primePendingReturnSafety(state);
     appendDueReferralRewardMaturations(state, now, rulesStore.versions);
-    const results: Array<{ rewardId: string; status: "released" | "failed" | "expired" | "cap_blocked"; error?: string }> = [];
+    const results: Array<{ rewardId: string; status: "released" | "failed" | "expired" | "cap_blocked" | "held" | "safety_wait" | "return_cancelled";
+      error?: string; holdDependencyIds?: string[]; activeHoldDependencyCount?: number; resolutionRequiredDependencyCount?: number }> = [];
+    const held = new Set<string>();
+    for (const [program, rewards] of [["referral", state.referralRewards], ["retail_promotion", state.retailPromotionRewards]] as const) {
+      for (const reward of Object.values(rewards).filter(item => item.status === "scheduled").sort((left, right) => left.rewardId.localeCompare(right.rewardId))) {
+        const hold = projectReturnRewardHolds(state, { program, id: reward.rewardId });
+        const safetyReview = pendingRewardSafetyReview(state, { program, id: reward.rewardId });
+        if (safetyReview) { held.add(JSON.stringify([program, reward.rewardId])); results.push({ rewardId: reward.rewardId, status: "failed", error: safetyReview }); continue; }
+        const entitlement = projectPendingReturnRewardEntitlement(state, { program, id: reward.rewardId });
+        const deadline = pendingRewardSafetyDeadline(state, { program, id: reward.rewardId });
+        if (!hold.blocked && !entitlement.cancelledBeforeRelease && (!deadline || now.getTime() > Date.parse(deadline))) continue;
+        held.add(JSON.stringify([program, reward.rewardId]));
+        // Preserve the scheduler's existing quiet behavior before its original due
+        // date. Report the new safety gate only when it actually defers a due payout.
+        if (!hold.blocked && !entitlement.cancelledBeforeRelease) {
+          const dueDate = program === "referral" ? referralRewardProjectedReleaseBusinessDate(state, reward as ReferralReward)
+            : (reward as RetailPromotionReward).releaseEligibleBusinessDate;
+          if (!dueDate || !isReferralReleaseBusinessDateDue(getDateOnlyInTimeZone(now), dueDate)) continue;
+        }
+        results.push({ rewardId: reward.rewardId, status: hold.blocked ? "held" : entitlement.cancelledBeforeRelease ? "return_cancelled" : "safety_wait",
+          holdDependencyIds: hold.dependencies.filter(item => item.state !== "resolved").map(item => item.holdDependencyId),
+          activeHoldDependencyCount: hold.activeHoldDependencyCount, resolutionRequiredDependencyCount: hold.resolutionRequiredDependencyCount });
+      }
+    }
+    const referralHeld = (reward: ReferralReward) => held.has(JSON.stringify(["referral", reward.rewardId]));
     const today = getDateOnlyInTimeZone(now);
-    for (const reward of Object.values(state.referralRewards).filter((item) => referralRewardQualificationAuthority(item) === "legacy_order" && item.status === "scheduled" && item.qualificationStatus === "awaiting_order" && typeof item.qualificationExpiresAt === "string" && Date.parse(item.qualificationExpiresAt) < now.getTime())) {
+    for (const reward of Object.values(state.referralRewards).filter((item) => !referralHeld(item) && referralRewardQualificationAuthority(item) === "legacy_order" && item.status === "scheduled" && item.qualificationStatus === "awaiting_order" && typeof item.qualificationExpiresAt === "string" && Date.parse(item.qualificationExpiresAt) < now.getTime())) {
       reward.qualificationStatus = "expired";
       const source = event(state, "referral_qualification_expired", { rewardId: reward.rewardId, amount: reward.calculatedCreditAmount }, now, { memberId: reward.beneficiaryMemberId, orderId: reward.sourceOrderNumber });
       notify(state, version.rules, "referral_conversion", source.eventId, now, { memberId: reward.beneficiaryMemberId, safeData: { rewardAmount: reward.calculatedCreditAmount, qualificationStatus: "expired" } });
@@ -3311,7 +4786,7 @@ export async function runReferralRewardReleaseScheduler(input: { now?: Date; sta
       const authority =
         referralRewardQualificationAuthority(item);
 
-      if (item.status !== "scheduled") return false;
+      if (item.status !== "scheduled" || referralHeld(item)) return false;
 
       if (authority === "qualification_coverage") {
         return false;
@@ -3352,6 +4827,8 @@ export async function runReferralRewardReleaseScheduler(input: { now?: Date; sta
         if (
           authority === "legacy_order"
           && !hasQualificationSnapshot(reward)
+          && !projectPendingReturnRewardEntitlement(state, { program: "referral", id: reward.rewardId }).resolutions
+            .some(item => item.calculation.originalEligibility === true || item.originalQualification.qualificationOrders.length > 0)
           && version.rules.referral.referrerEligibility.mode === "active-subscription"
           && !hasActiveSubscription(
             state,
@@ -3372,7 +4849,7 @@ export async function runReferralRewardReleaseScheduler(input: { now?: Date; sta
         const cap = reward.monthlyCapAmountSnapshot ?? version.rules.referral.referralMonthlyCreditCap;
         const capPeriod = reward.monthlyCapPeriodSnapshot ?? reward.createdAt.slice(0, 7);
         const monthUsed = reward.rewardType === "self_purchase" ? 0 : Object.values(state.referralRewards).filter((item) => item.rewardId !== reward.rewardId && item.rewardType !== "self_purchase" && item.beneficiaryMemberId === reward.beneficiaryMemberId && item.status === "released" && (item.monthlyCapPeriodSnapshot ?? item.createdAt.slice(0, 7)) === capPeriod).reduce((sum, item) => sum + item.calculatedCreditAmount, 0);
-        const projectedAmount = reward.projectedCreditAmount ?? reward.calculatedCreditAmount;
+        const projectedAmount = projectPendingReturnRewardEntitlement(state, { program: "referral", id: reward.rewardId }).remainingEffectivePendingRewardAmount;
         const releaseAmount = cap === 0 ? projectedAmount : Math.min(projectedAmount, Math.max(0, cap - monthUsed));
         reward.monthlyCapUsageAtRelease = monthUsed;
         reward.monthlyCapLimitedAmount = projectedAmount - releaseAmount;
@@ -3391,7 +4868,7 @@ export async function runReferralRewardReleaseScheduler(input: { now?: Date; sta
       } catch (error) { results.push({ rewardId: reward.rewardId, status: "failed", error: error instanceof Error ? error.message : "發放失敗" }); }
     }
     const maturedCoverageRewards = Object.values(state.referralRewards).filter((item) => {
-      if (item.status !== "scheduled") return false;
+      if (item.status !== "scheduled" || referralHeld(item)) return false;
       const evidence = validQualificationCoverageMaturation(state, item);
       const projectedReleaseDate = referralRewardProjectedReleaseBusinessDate(state, item);
       return Boolean(
@@ -3414,7 +4891,7 @@ export async function runReferralRewardReleaseScheduler(input: { now?: Date; sta
         const cap = reward.monthlyCapAmountSnapshot ?? version.rules.referral.referralMonthlyCreditCap;
         const capPeriod = reward.monthlyCapPeriodSnapshot ?? reward.createdAt.slice(0, 7);
         const monthUsed = reward.rewardType === "self_purchase" ? 0 : Object.values(state.referralRewards).filter((item) => item.rewardId !== reward.rewardId && item.rewardType !== "self_purchase" && item.beneficiaryMemberId === reward.beneficiaryMemberId && item.status === "released" && (item.monthlyCapPeriodSnapshot ?? item.createdAt.slice(0, 7)) === capPeriod).reduce((sum, item) => sum + item.calculatedCreditAmount, 0);
-        const projectedAmount = reward.projectedCreditAmount ?? reward.calculatedCreditAmount;
+        const projectedAmount = projectPendingReturnRewardEntitlement(state, { program: "referral", id: reward.rewardId }).remainingEffectivePendingRewardAmount;
         const releaseAmount = cap === 0 ? projectedAmount : Math.min(projectedAmount, Math.max(0, cap - monthUsed));
         reward.monthlyCapUsageAtRelease = monthUsed;
         reward.monthlyCapLimitedAmount = projectedAmount - releaseAmount;
@@ -3434,7 +4911,7 @@ export async function runReferralRewardReleaseScheduler(input: { now?: Date; sta
       } catch (error) { results.push({ rewardId: reward.rewardId, status: "failed", error: error instanceof Error ? error.message : "發放失敗" }); }
     }
     const dueRetailPromotionRewards = Object.values(state.retailPromotionRewards)
-      .filter((reward) => reward.status === "scheduled" && reward.sourceOrderFinalState === "completed" && isReferralReleaseBusinessDateDue(today, reward.releaseEligibleBusinessDate))
+      .filter((reward) => !held.has(JSON.stringify(["retail_promotion", reward.rewardId])) && reward.status === "scheduled" && reward.sourceOrderFinalState === "completed" && isReferralReleaseBusinessDateDue(today, reward.releaseEligibleBusinessDate))
       .sort((left, right) => left.releaseEligibleBusinessDate.localeCompare(right.releaseEligibleBusinessDate) || left.createdAt.localeCompare(right.createdAt) || left.rewardId.localeCompare(right.rewardId));
     for (const reward of dueRetailPromotionRewards) {
       try {
@@ -3442,7 +4919,7 @@ export async function runReferralRewardReleaseScheduler(input: { now?: Date; sta
           memberId: reward.beneficiaryMemberId,
           sourceType: "promotion",
           sourceReference: `retail_promotion_reward:${reward.rewardId}`,
-          amount: reward.calculatedCreditAmount,
+          amount: projectPendingReturnRewardEntitlement(state, { program: "retail_promotion", id: reward.rewardId }).remainingEffectivePendingRewardAmount,
           metadata: {
             rewardId: reward.rewardId,
             orderId: reward.sourceOrderNumber,
@@ -3451,6 +4928,7 @@ export async function runReferralRewardReleaseScheduler(input: { now?: Date; sta
           },
         }, now);
         reward.status = "released";
+        reward.calculatedCreditAmount = credit.amount;
         reward.releasedAt = nowIso(now);
         reward.rewardCreditEntryId = credit.creditEntryId;
         const source = event(state, "retail_promotion_reward_released", { amount: credit.amount, rewardType: "retail_promotion" }, now, { memberId: reward.beneficiaryMemberId, orderId: reward.sourceOrderNumber });
@@ -3634,6 +5112,48 @@ export async function cancelOrReverseReferralRewards(input: { orderId: string; o
 function issueCreditInState(state: MembershipCommerceState, rules: MembershipBusinessRules, input: { memberId: string; sourceType: CreditEntry["sourceType"]; sourceReference: string; amount: number; metadata?: CreditEntry["metadata"] }, now: Date) {
   const duplicate = Object.values(state.creditEntries).find((entry) => entry.sourceType === input.sourceType && entry.sourceReference === input.sourceReference);
   if (duplicate) return duplicate;
+  // Shared last monetary boundary, including direct issueCredit callers using reserved reward references.
+  const reference = creditRewardReference(state, input.sourceReference);
+  if (reference) {
+    const hold = projectReturnRewardHolds(state, reference);
+    if (hold.blocked) throw new ReturnRewardHeldError(hold);
+    const safetyReview = pendingRewardSafetyReview(state, reference);
+    if (safetyReview) throw new MembershipCommerceError(safetyReview);
+    const deadline = pendingRewardSafetyDeadline(state, reference);
+    if (deadline && now.getTime() <= Date.parse(deadline)) throw new MembershipCommerceError("原始退貨保護期間尚未安全結束");
+    const entitlement = projectPendingReturnRewardEntitlement(state, reference);
+    const referral = reference.program === "referral" ? state.referralRewards[reference.id] : null;
+    const retail = reference.program === "retail_promotion" ? state.retailPromotionRewards[reference.id] : null;
+    const conversion = reference.program === "referral_conversion" ? state.referralConversions[reference.id] : null;
+    const reward = referral ?? retail ?? conversion;
+    if (!reward && entitlement.resolutions.length) throw new MembershipCommerceError("退貨獎勵原始紀錄不存在，不可發放");
+    if (reward) {
+      const expectedMember = referral?.beneficiaryMemberId ?? retail?.beneficiaryMemberId ?? state.referrals[conversion!.relationshipId]?.referrerMemberId;
+      const expectedType = retail ? "promotion" : referral?.rewardType === "self_purchase" ? "member_reward" : "referral";
+      if (!["scheduled", "pending"].includes(reward.status) || input.memberId !== expectedMember || input.sourceType !== expectedType) throw new MembershipCommerceError("獎勵發放狀態、來源類型或受益會員不一致");
+      if (referral || retail) {
+        const dueDate = referral ? referralRewardProjectedReleaseBusinessDate(state, referral) : retail!.releaseEligibleBusinessDate;
+        if (!dueDate || !isReferralReleaseBusinessDateDue(getDateOnlyInTimeZone(now), dueDate)) throw new MembershipCommerceError("原始獎勵安全等待期間尚未完成");
+        if ((referral?.sourceOrderFinalState && referral.sourceOrderFinalState !== "completed")
+          || (retail && retail.sourceOrderFinalState !== "completed")) throw new MembershipCommerceError("來源交易狀態不允許獎勵發放");
+        if (referral && referralRewardQualificationAuthority(referral) === "qualification_coverage") {
+          const chain = validQualificationCoverageMaturation(state, referral);
+          if (!chain || Date.parse(chain.maturation.maturedAt) > now.getTime()) throw new MembershipCommerceError("獎勵缺少原始資格成熟證據");
+        }
+        if (referral && referralRewardQualificationAuthority(referral) === "legacy_order" && hasQualificationSnapshot(referral)
+          && referral.qualificationStatus !== "qualified") throw new MembershipCommerceError("原始獎勵資格尚未成立");
+        if (referral && referralRewardQualificationAuthority(referral) === "legacy_order" && referral.qualificationOrderFinalState
+          && referral.qualificationOrderFinalState !== "completed") throw new MembershipCommerceError("原始資格交易狀態不允許發放");
+      }
+      if (conversion) {
+        const originallyEligible = conversion.originalCalculation?.referrerEligibleAtCreation && conversion.originalCalculation.repeatedAllowedAtCreation;
+        if (!originallyEligible && !entitlement.resolutions.some(item => item.calculation.originalEligibility === true)
+          && !conversionReleaseEligibility.get(state)?.has(conversion.conversionId)) throw new MembershipCommerceError("推薦轉換資格尚未由原始制度確認");
+      }
+    }
+    if (entitlement.resolutions.length && (input.amount > entitlement.remainingEffectivePendingRewardAmount
+      || input.memberId !== entitlement.resolutions.at(-1)!.beneficiaryMemberId)) throw new MembershipCommerceError("獎勵抵用金超過退貨後有效待發額度或來源會員不一致");
+  }
   const amount = assertIntegerMoney(input.amount, "抵用金");
   if (amount < 1) throw new MembershipCommerceError("抵用金必須大於零");
   const issuedDate = nowIso(now).slice(0, 10);
@@ -3648,9 +5168,11 @@ export async function issueCredit(input: { memberId: string; sourceType: CreditE
   await assertCanonicalMember(input.memberId);
   const version = await getActiveMembershipRules(input.now, input.rulesFilePath);
   const key = `credit:issue:${input.idempotencyKey}`;
-  return transaction((state, now) => {
+  return transaction(async (state, now) => {
     const existingId = remembered(state, key);
     if (existingId) return state.creditEntries[existingId];
+    const reference = creditRewardReference(state, input.sourceReference);
+    if (reference) await primePendingReturnSafety(state, [reference]);
     const entry = issueCreditInState(state, version.rules, input, now);
     remember(state, key, entry.creditEntryId, now);
     const source = event(state, "credit_issued", { amount: entry.amount, sourceType: entry.sourceType }, now, { memberId: entry.memberId });
@@ -3671,7 +5193,7 @@ export async function processReferralOrderOutcome(input: { referredMemberId: str
   if (basis?.hasStore && input.outcome === "completed") input = { ...input,
     orderMerchandiseAmount: basis.rewardMerchandiseAmount!, eligibleItemCount: basis.coffeeEligibleQuantity };
   const key = `referral:conversion:${input.idempotencyKey}`;
-  return transaction((state, now) => {
+  return transaction(async (state, now) => {
     const existingId = remembered(state, key);
     if (existingId) return state.referralConversions[existingId];
     const relationship = Object.values(state.referrals).find((item) => item.referredMemberId === input.referredMemberId && item.status !== "inactive");
@@ -3685,11 +5207,21 @@ export async function processReferralOrderOutcome(input: { referredMemberId: str
     const calculatedReward = input.outcome === "completed" ? referralRewardAmount(version.rules, input.orderMerchandiseAmount, input.eligibleItemCount) : null;
     const repeatedAllowed = version.rules.referral.reward.repeatedRewards || !Object.values(state.referralConversions).some((item) => item.relationshipId === relationship.relationshipId && item.status === "rewarded");
     const rewardAmount = eligible && repeatedAllowed ? calculatedReward : null;
-    const credit = rewardAmount ? issueCreditInState(state, version.rules, { memberId: relationship.referrerMemberId, sourceType: "referral", sourceReference, amount: rewardAmount, metadata: { relationshipId: relationship.relationshipId } }, now) : null;
     const conversionId = id("conversion");
     const pendingRewardAmount = input.outcome === "completed" && !eligible && calculatedReward ? calculatedReward : 0;
-    const conversion: ReferralConversion = { conversionId, relationshipId: relationship.relationshipId, orderId: input.orderId, status: input.outcome === "uncollected" ? "uncollected" : credit ? "rewarded" : pendingRewardAmount ? "pending" : "ineligible", rewardCreditEntryId: credit?.creditEntryId ?? null, pendingRewardAmount, occurredAt: nowIso(now) };
+    const conversion: ReferralConversion = { conversionId, relationshipId: relationship.relationshipId, orderId: input.orderId,
+      status: input.outcome === "uncollected" ? "uncollected" : rewardAmount || pendingRewardAmount ? "pending" : "ineligible",
+      rewardCreditEntryId: null, pendingRewardAmount: rewardAmount ?? pendingRewardAmount, occurredAt: nowIso(now),
+      originalCalculation: { rulesVersion: version.rulesVersion, merchandiseAmount: input.orderMerchandiseAmount,
+        eligibleItemCount: input.eligibleItemCount ?? 0, calculatedRewardAmount: calculatedReward ?? 0,
+        referrerEligibleAtCreation: eligible, repeatedAllowedAtCreation: repeatedAllowed } };
     state.referralConversions[conversionId] = conversion;
+    const reference: ReturnRewardReference = { program: "referral_conversion", id: conversionId };
+    await primePendingReturnSafety(state, [reference]);
+    const hold = projectReturnRewardHolds(state, reference), deadline = pendingRewardSafetyDeadline(state, reference);
+    const credit = rewardAmount && !hold.blocked && !pendingRewardSafetyReview(state, reference) && (!deadline || now.getTime() > Date.parse(deadline))
+      ? issueCreditInState(state, version.rules, { memberId: relationship.referrerMemberId, sourceType: "referral", sourceReference, amount: rewardAmount, metadata: { relationshipId: relationship.relationshipId } }, now) : null;
+    if (credit) { conversion.status = "rewarded"; conversion.rewardCreditEntryId = credit.creditEntryId; conversion.pendingRewardAmount = 0; }
     if (credit) relationship.status = "qualified";
     relationship.updatedAt = nowIso(now);
     remember(state, key, conversionId, now);
@@ -3703,23 +5235,45 @@ export async function processReferralOrderOutcome(input: { referredMemberId: str
 }
 
 export async function releasePendingReferralRewards(input: { referrerMemberId: string; completedOrders?: number; lifetimeSpend?: number; lastValidPurchaseAt?: string; idempotencyKey: string; now?: Date; stateFilePath?: string; rulesFilePath?: string }) {
-  const version = await getActiveMembershipRules(input.now, input.rulesFilePath);
+  const [version, rulesStore] = await Promise.all([getActiveMembershipRules(input.now, input.rulesFilePath), readMembershipRulesStore(input.rulesFilePath)]);
   const key = `referral:release-pending:${input.idempotencyKey}`;
-  return transaction((state, now) => {
+  return transaction(async (state, now) => {
     if (remembered(state, key)) return [];
+    await primePendingReturnSafety(state);
     const eligibility = version.rules.referral.referrerEligibility;
     const eligible = eligibility.mode === "none" || (eligibility.mode === "active-subscription" && ((input.completedOrders ?? 0) >= 1 || hasActiveSubscription(state, input.referrerMemberId))) || (eligibility.mode === "completed-orders" && (input.completedOrders ?? 0) >= eligibility.minimumOrders) || (eligibility.mode === "lifetime-spend" && (input.lifetimeSpend ?? 0) >= eligibility.minimumAmount) || (eligibility.mode === "recent-valid-purchase" && Date.parse(input.lastValidPurchaseAt ?? "") >= now.getTime() - eligibility.withinDays * 86_400_000);
-    if (!eligible) return [];
     const relationshipIds = new Set(Object.values(state.referrals).filter((item) => item.referrerMemberId === input.referrerMemberId).map((item) => item.relationshipId));
     const released: CreditEntry[] = [];
+    let deferred = false;
     for (const conversion of Object.values(state.referralConversions).filter((item) => relationshipIds.has(item.relationshipId) && item.status === "pending" && item.pendingRewardAmount > 0)) {
-      const credit = issueCreditInState(state, version.rules, { memberId: input.referrerMemberId, sourceType: "referral", sourceReference: `referral_conversion:${conversion.relationshipId}:${conversion.orderId}`, amount: conversion.pendingRewardAmount }, now);
+      const reference: ReturnRewardReference = { program: "referral_conversion", id: conversion.conversionId };
+      const entitlement = projectPendingReturnRewardEntitlement(state, reference), deadline = pendingRewardSafetyDeadline(state, reference);
+      const snapshot = conversion.originalCalculation;
+      if (snapshot && !snapshot.repeatedAllowedAtCreation) continue;
+      const originallyEligible = (snapshot?.referrerEligibleAtCreation && snapshot.repeatedAllowedAtCreation)
+        || entitlement.resolutions.some(item => item.calculation.originalEligibility === true);
+      let eligibleForOriginalPolicy = eligible;
+      if (snapshot && !originallyEligible) {
+        const original = rulesStore.versions.find(item => item.rulesVersion === snapshot.rulesVersion)?.rules.referral.referrerEligibility;
+        if (!original) { deferred = true; continue; }
+        eligibleForOriginalPolicy = original.mode === "none"
+          || (original.mode === "active-subscription" && ((input.completedOrders ?? 0) >= 1 || hasActiveSubscription(state, input.referrerMemberId)))
+          || (original.mode === "completed-orders" && (input.completedOrders ?? 0) >= original.minimumOrders)
+          || (original.mode === "lifetime-spend" && (input.lifetimeSpend ?? 0) >= original.minimumAmount)
+          || (original.mode === "recent-valid-purchase" && Date.parse(input.lastValidPurchaseAt ?? "") >= now.getTime() - original.withinDays * 86_400_000);
+      }
+      if (!eligibleForOriginalPolicy && !originallyEligible) continue;
+      if (projectReturnRewardHolds(state, reference).blocked || pendingRewardSafetyReview(state, reference) || (deadline && now.getTime() <= Date.parse(deadline))) { deferred = true; continue; }
+      if (entitlement.remainingEffectivePendingRewardAmount === 0) continue;
+      const checked = conversionReleaseEligibility.get(state) ?? new Set<string>();
+      checked.add(conversion.conversionId); conversionReleaseEligibility.set(state, checked);
+      const credit = issueCreditInState(state, version.rules, { memberId: input.referrerMemberId, sourceType: "referral", sourceReference: `referral_conversion:${conversion.relationshipId}:${conversion.orderId}`, amount: entitlement.remainingEffectivePendingRewardAmount }, now);
       conversion.status = "rewarded";
       conversion.rewardCreditEntryId = credit.creditEntryId;
       conversion.pendingRewardAmount = 0;
       released.push(credit);
     }
-    remember(state, key, released[0]?.creditEntryId ?? "none", now);
+    if (!deferred) remember(state, key, released[0]?.creditEntryId ?? "none", now);
     return released;
   }, { now: input.now, filePath: input.stateFilePath });
 }
@@ -4845,9 +6399,14 @@ export async function purgeMembershipCommerceForMembers(memberIds?: string[]) {
     const current = await readMembershipCommerceState(filePath);
     if (!memberIds?.length) {
       const cleared = emptyState();
+      // Return facts survive this existing membership maintenance path as well.
+      cleared.returnEvents = structuredClone(current.returnEvents ?? []);
+      cleared.idempotency = Object.fromEntries(Object.entries(current.idempotency).filter(([key]) => key.startsWith("return-domain:")));
+      cleared.audit = current.audit.filter(item => item.entityType === "return_request");
       cleared.revision = current.revision + 1;
       cleared.createdAt = current.createdAt;
       cleared.updatedAt = new Date().toISOString();
+      assertReturnEventsPreserved(current.returnEvents ?? [], cleared.returnEvents);
       await atomicWriteJson(filePath, cleared);
       return { clearedAll: true };
     }
@@ -4873,8 +6432,8 @@ export async function purgeMembershipCommerceForMembers(memberIds?: string[]) {
     for (const [id, item] of Object.entries(current.creditReservations)) if (targets.has(item.memberId) || item.allocations.some((allocation) => creditEntryIds.has(allocation.creditEntryId))) delete current.creditReservations[id];
     current.events = current.events.filter((item) => !item.memberId || !targets.has(item.memberId));
     current.notifications = current.notifications.filter((item) => !item.memberId || !targets.has(item.memberId));
-    current.audit = current.audit.filter((item) => !targets.has(item.entityId) && ![...targets].some((memberId) => item.sourceEvent.includes(memberId)));
-    current.idempotency = {};
+    current.audit = current.audit.filter((item) => item.entityType === "return_request" || (!targets.has(item.entityId) && ![...targets].some((memberId) => item.sourceEvent.includes(memberId))));
+    current.idempotency = Object.fromEntries(Object.entries(current.idempotency).filter(([key]) => key.startsWith("return-domain:")));
     current.revision += 1;
     current.updatedAt = new Date().toISOString();
     validateMembershipCommerceState(current);

@@ -35,6 +35,9 @@ export async function POST(request: Request) {
     const releaseSummary = {
       processed: releases.length,
       released: releases.filter((item) => item.status === "released").length,
+      held: releases.filter((item) => item.status === "held").length,
+      safetyWaiting: releases.filter((item) => item.status === "safety_wait").length,
+      returnCancelled: releases.filter((item) => item.status === "return_cancelled").length,
       expired: releases.filter((item) => item.status === "expired").length,
       capBlocked: releases.filter((item) => item.status === "cap_blocked").length,
       failed: releases.filter((item) => item.status === "failed").length,

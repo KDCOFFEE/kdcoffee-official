@@ -1,4 +1,8 @@
 import CreditHelpDialog from "@/components/member/CreditHelpDialog";
+import { readMembershipCommerceState } from "@/lib/membershipCommerce";
+import { projectReturnWorkflow, returnRewardPresentation } from "@/lib/returnWorkflow";
+import { returnTaipeiDate, returnStatusCopyKey } from "@/lib/returnPresentation";
+import { ReturnRewardEvidence } from "@/components/member/ReturnEvidence";
 import { MemberCopyValue, MemberCopyText, MemberCopyElement } from "@/components/member/MemberCenterCopyProvider";
 import Link from "next/link";
 import { promises as fs } from "fs";
@@ -43,6 +47,7 @@ type OrderSummary = {
   status: string;
   total?: number;
   subtotal?: number;
+  returnSummary?: { deadline: string | null; status: string; message: string | null };
 
   lineNotification?: {
     sent?: boolean;
@@ -96,7 +101,7 @@ async function getMemberOrders(
     getOrdersDir();
 
   try {
-    const fulfillmentStore = await readFulfillmentStore();
+    const [fulfillmentStore, commerceState] = await Promise.all([readFulfillmentStore(), readMembershipCommerceState()]);
     /**
      * 取得所有訂單 JSON。
      */
@@ -137,8 +142,10 @@ async function getMemberOrders(
           memberId
         ) {
           const record = fulfillmentRecordForOrder(fulfillmentStore, order);
+          const returns = order.status === "completed" ? projectReturnWorkflow(order, commerceState, memberId) : null;
           orders.push({
             ...order,
+            ...(returns ? { returnSummary: { deadline: returns.returnDeadline, status: returns.requests.at(-1)?.status ?? "none", message: returns.message } } : {}),
             fulfillment: {
               currentState: record.currentState,
               pickupDeadline: record.pickupDeadline,
@@ -356,6 +363,7 @@ export default async function MemberPage({
       member.id,
     );
   const memberName = member.pickupName?.trim() || member.displayName?.trim() || "";
+  const returnRewards = returnRewardPresentation(await readMembershipCommerceState(), undefined, member.id);
   const [loginMethods, commerce, rulesVersion, subscriptionProducts, referralCenter, creditPassbook] = await Promise.all([
     getMemberLoginMethods(member),
     getMemberCommerceDashboard(member.id),
@@ -368,9 +376,7 @@ export default async function MemberPage({
     .filter((item) => item.status === "available")
     .reduce((sum, item) => sum + item.remainingAmount, 0);
   const rawPointDisplayName = rulesVersion.rules.referral.pointDisplayName || "KD點";
-  const pointDisplayName = /^[A-Za-z]+$/.test(rawPointDisplayName)
-    ? rawPointDisplayName.toUpperCase()
-    : rawPointDisplayName;
+  const pointDisplayName = rawPointDisplayName;
   const pendingRewardPoints = commerce.pendingRewardSummary.rewardPoints;
   const pendingRewardCount = commerce.pendingRewardSummary.rewardCount;
   const pendingRewardCredit = commerce.pendingRewardSummary.projectedCreditAmount;
@@ -678,6 +684,7 @@ export default async function MemberPage({
                       className="member-order-detail-link"
                       href={`/orders/${encodeURIComponent(order.orderNumber)}`}
                     ><MemberCopyValue value={"查看／管理此訂單"} /></Link>
+                    {order.returnSummary ? <div><p><MemberCopyText copyKey="member.returns.completed" /></p>{order.returnSummary.deadline ? <p><MemberCopyText copyKey="member.returns.deadline" values={{ date: returnTaipeiDate(order.returnSummary.deadline) }} /></p> : null}<p><MemberCopyText copyKey="member.returns.statusLabel" /><MemberCopyText copyKey={order.returnSummary.status === "none" ? "member.returns.statusNone" : returnStatusCopyKey(order.returnSummary.status)} /></p>{order.returnSummary.message ? <p><MemberCopyText copyKey="member.returns.manualHelp" /></p> : null}<Link className="member-order-detail-link" href={`/member/orders/${encodeURIComponent(order.orderNumber)}/returns`}><MemberCopyText copyKey="member.returns.openHistory" /></Link></div> : null}
                   </div>
                 </article>
               ),
@@ -692,6 +699,7 @@ export default async function MemberPage({
             </div>
           )}
         </section>
+        {returnRewards.length ? <ReturnRewardEvidence rewards={returnRewards} /> : null}
         </MemberMobileDisclosure>
         </section>
         </div>
