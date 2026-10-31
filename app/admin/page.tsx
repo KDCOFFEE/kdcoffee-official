@@ -1,4 +1,5 @@
 import Link from "next/link";
+import {isActionableOrder} from "@/lib/adminOrderOperations";
 import {returnOperationCounts} from "@/lib/returnOperations";
 import { redirect } from "next/navigation";
 
@@ -18,7 +19,7 @@ export default async function AdminPage() {
   const [orders, fulfillment, commerce] = await Promise.all([listOrders(), readFulfillmentStore(), readMembershipCommerceState()]);
   const today = new Date().toLocaleDateString("zh-TW");
   const todayOrders = orders.filter((order) => new Date(order.createdAt).toLocaleDateString("zh-TW") === today);
-  const pending = orders.filter((order) => !["completed", "cancelled"].includes(order.status));
+  const pending = orders.filter(isActionableOrder);
   const pendingInquiries = listPendingOrderInquiries(orders);
   const month = new Date().getMonth();
   const year = new Date().getFullYear();
