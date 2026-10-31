@@ -55,7 +55,7 @@ check("historical completed order is never backfilled",()=>{assert.equal(legacyA
 const coffee=basis.resolveOrderRewardBasis({...original,items:[{quantity:2,basePV:10,effectivePV:0}],credit:{appliedAmount:50}});
 check("pure evidence keeps accepted Coffee money and zero-PV distinctions",()=>{assert.equal(coffee.rewardMerchandiseAmount,950);assert.equal(coffee.coffeeEffectivePV,20);assert.equal(coffee.coffeeValidConsumptionPV,0);});
 check("persisted Store PV needs no cart/catalog import",()=>{assert.equal(basis.resolveOrderRewardBasis({items:[{domain:"store",quantity:1,pvValue:5,lineTotal:500}],subtotal:500}).storeEligiblePV,5);assert.equal(basis.resolveOrderRewardBasis({items:[{domain:"store",quantity:1,pvValue:-1,lineTotal:500}],subtotal:500}).monetaryBasisStatus,"invalid_pv_snapshot");});
-const untouched=["app/api/orders/route.ts","lib/orderConfirmationEmail.ts","app/member/page.tsx","app/member/layout.tsx","components/member/MemberCenterCopyProvider.tsx","components/admin/MemberCenterCopyManager.tsx","lib/customerNotificationDelivery.ts","lib/internalLineNotifications.ts","proxy.ts","app/gmail-fulfillment/layout.tsx"];
+const untouched=["app/api/orders/route.ts","lib/orderConfirmationEmail.ts","app/member/page.tsx","app/member/layout.tsx","components/member/MemberCenterCopyProvider.tsx","components/admin/MemberCenterCopyManager.tsx","lib/internalLineNotifications.ts","proxy.ts","app/gmail-fulfillment/layout.tsx"];
 execFileSync("git",["diff","--exit-code","7ea8f2c785d151ac4022683912515165cdb3e949","--",...untouched],{stdio:"pipe"});
 check("Production checkout/email/Member IA/copy/LINE/OAuth/Gmail source preserved",()=>assert.ok(true));
 const commerceFile=path.join(root,"membership-commerce/commerce-state.json");

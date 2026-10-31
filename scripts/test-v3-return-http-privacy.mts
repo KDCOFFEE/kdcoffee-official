@@ -6,7 +6,7 @@ import {runInventoryOrderTransaction} from '../lib/orderInventoryTransaction';
 import {withStoredOrderUpdateLock} from '../lib/adminOrders';
 import {prepareOrderCompletionWrite} from '../lib/orderCompletion';
 const session=JSON.parse(await fs.readFile('qa-output/j6f2c-owner-session.json','utf8'));
-assert.equal(session.url,'http://localhost:3188');assert.ok(path.resolve(session.qaRoot).startsWith(path.resolve(os.tmpdir())+path.sep+'kd-j6f2c-owner-'));process.env.KD_DATA_DIR=session.qaRoot;
+assert.equal(session.url,'http://localhost:'+Number(process.env.RETURN_REFUND_QA_PORT||3188));assert.ok(path.resolve(session.qaRoot).startsWith(path.resolve(os.tmpdir())+path.sep+'kd-j6f2c-owner-'));process.env.KD_DATA_DIR=session.qaRoot;
 const orderDir=path.join(session.qaRoot,'orders'),stateFile=path.join(session.qaRoot,'membership-commerce/commerce-state.json');
 const before=JSON.parse(await fs.readFile(stateFile,'utf8')),oldOrders=new Map<string,string>();for(const file of await fs.readdir(orderDir))if(file.endsWith('.json'))oldOrders.set(file,await fs.readFile(path.join(orderDir,file),'utf8'));
 let checks=0;const check=async(name:string,fn:()=>unknown|Promise<unknown>)=>{await fn();console.log('PASS '+(++checks)+' '+name);};

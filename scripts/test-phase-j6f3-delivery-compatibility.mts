@@ -1,0 +1,18 @@
+import assert from "node:assert/strict";
+import {sendCustomerLineNotification,sendCustomerOrderEmail} from "../lib/customerNotificationDelivery";
+import {returnOpsFixture} from "./return-ops-test-support";
+import {readMemberCenterCopy,saveMemberCenterCopy} from "../lib/memberCenterCopyStore";
+import {createReturnNotificationTemplate} from "../lib/returnNotificationDelivery";
+import {readMembershipCommerceState} from "../lib/membershipCommerce";
+let count=0;const check=(name:string,fn:()=>void)=>{fn();console.log("PASS "+(++count)+" "+name);};
+const f=await returnOpsFixture();try{
+ process.env.LINE_CUSTOMER_CHANNEL_ACCESS_TOKEN="isolated-customer-token";process.env.RESEND_API_KEY="isolated-email-token";process.env.MEMBER_EMAIL_FROM="qa@example.test";
+ const template={eventType:"order_confirmed",subject:"Existing subject",text:"Existing order text"};
+ for(const retryKey of [undefined,"11111111-1111-4111-a111-111111111111"]){let headers=new Headers();const result=await sendCustomerLineNotification({userId:"U"+"a".repeat(32),template,retryKey,fetcher:async(url,init)=>{assert.equal(String(url),"https://api.line.me/v2/bot/message/push");headers=new Headers(init?.headers);assert.deepEqual(JSON.parse(String(init?.body)),{to:"U"+"a".repeat(32),messages:[{type:"text",text:template.text}]});return Response.json({});}});check("existing LINE payload preserved; optional retry header "+!!retryKey,()=>{assert.equal(result.status,"sent");assert.equal(headers.get("X-Line-Retry-Key"),retryKey??null);});}
+ const accepted=await sendCustomerLineNotification({userId:"U"+"a".repeat(32),template,retryKey:"11111111-1111-4111-a111-111111111111",fetcher:async()=>new Response(null,{status:409,headers:{"x-line-accepted-request-id":"previous-safe-attempt"}})});check("provider-accepted return retry recognized without duplicate delivery",()=>assert.equal(accepted.status,"sent"));
+ for(const idempotencyKey of [undefined,"return-notice-only"]){let headers=new Headers();const result=await sendCustomerOrderEmail({recipientEmail:"member@example.test",orderNumber:f.orderNumber,template,subject:template.subject,idempotencyKey,fetcher:async(url,init)=>{assert.equal(String(url),"https://api.resend.com/emails");headers=new Headers(init?.headers);const body=JSON.parse(String(init?.body));assert.equal(body.subject,template.subject);assert.equal(body.text,template.text);assert.deepEqual(body.to,["member@example.test"]);return Response.json({id:"isolated"});}});check("existing Email payload preserved; optional idempotency header "+!!idempotencyKey,()=>{assert.equal(result.status,"sent");assert.equal(headers.get("Idempotency-Key"),idempotencyKey??null);});}
+ const copy=await readMemberCenterCopy();await saveMemberCenterCopy({expectedRevision:copy.revision,overrides:{...copy.overrides,"member.returns.notificationReceived":"Owner 自訂：我們收到申請了。","member.returns.refundLine":"Owner 退款：{orderNumber} NT$ {amount} {method}"}});
+ const received=(await readMembershipCommerceState()).notifications.find(n=>n.eventType==="return_request_received")!;const receipt=await createReturnNotificationTemplate(received);check("new lifecycle notice honors existing copy management",()=>assert.ok(receipt.text.includes("Owner 自訂：我們收到申請了。")));
+ const refund=await createReturnNotificationTemplate({...received,eventType:"return_refund_completed",safeData:{orderNumber:f.orderNumber,amount:500,method:"manual_cash"}});check("existing refundLine override remains authoritative",()=>{assert.ok(refund.text.includes("Owner 退款："));assert.ok(refund.text.includes("500"));assert.ok(refund.text.includes("現場退款"));assert.ok(!refund.text.includes(f.bank.account));});
+ }finally{await f.cleanup();}
+console.log("J6F3 DELIVERY COMPATIBILITY "+count+" PASS; mocked providers only");

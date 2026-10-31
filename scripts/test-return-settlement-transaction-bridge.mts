@@ -55,7 +55,7 @@ else {
     await check("actual Production order creation stays finalized",()=>assert.equal(result.finalized,true));
     await check("Production checkout preserves durable return receipts",async()=>assert.deepEqual((await read()).returnSettlementReceipts,website.returnSettlementReceipts));
     await check("Production inventory metadata remains unchanged in shape",()=>assert.match(String((result.order.inventoryTransaction as Record<string,unknown>).operationId),/^coffee-apply:/));
-    const untouched=["lib/jsonFileStore.ts","lib/orderInventoryTransaction.ts","lib/orderIdempotency.ts","lib/orderCancellation.ts","app/api/orders/route.ts","lib/orderConfirmationEmail.ts","lib/internalLineNotifications.ts","lib/customerNotificationDelivery.ts","app/member/page.tsx","components/member/MemberCenterCopyProvider.tsx","proxy.ts"];
+    const untouched=["lib/jsonFileStore.ts","lib/orderInventoryTransaction.ts","lib/orderIdempotency.ts","lib/orderCancellation.ts","app/api/orders/route.ts","lib/orderConfirmationEmail.ts","lib/internalLineNotifications.ts","app/member/page.tsx","components/member/MemberCenterCopyProvider.tsx","proxy.ts"];
     await check("checkout/order numbers/global locks/email/LINE/Member/OAuth unchanged",()=>assert.equal(execFileSync("git",["diff","HEAD","--",...untouched],{encoding:"utf8"}),""));
     console.log(`RETURN TRANSACTION BRIDGE ${count}/${count} PASS; isolated data; external network disabled.`);
   }finally{if(previous===undefined)delete process.env.KD_DATA_DIR;else process.env.KD_DATA_DIR=previous;assert.ok(root.startsWith(path.join(os.tmpdir(),"kd-return-bridge-")));await fs.rm(root,{recursive:true,force:true});}

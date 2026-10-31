@@ -299,12 +299,13 @@ if (process.argv[2] === "--worker") {
     const fulfillmentBytes = JSON.stringify({ records: { [boundary.orderNumber]: { currentState: "completed" } } });
     await fs.writeFile(inventoryFile, inventoryBytes); await fs.writeFile(fulfillmentFile, fulfillmentBytes);
     const beforeState = await state();
-    const protectedState = (value: typeof beforeState) => Object.fromEntries(Object.entries(value).filter(([key]) => !["revision", "updatedAt", "returnEvents", "returnSettlementEvents", "audit", "idempotency"].includes(key)));
+    const protectedState = (value: typeof beforeState) => Object.fromEntries(Object.entries(value).filter(([key]) => !["revision", "updatedAt", "returnEvents", "returnSettlementEvents", "audit", "idempotency", "notifications"].includes(key)));
     for (const type of ["RETURN_WITHDRAWN", "RETURN_APPROVED", "RETURN_REJECTED"] as const) {
       const entry = applied(await request(boundary)); applied(await transition(boundary, entry.event.returnRequestId, type));
       await test(`order, fulfillment, payment and inventory remain byte-identical after ${type}`, async () => assert.equal(await fs.readFile(boundary.file, "utf8"), beforeBytes));
     }
-    await test("reward, consumption, credit, subscription and notification state remain unchanged", async () => assert.deepEqual(protectedState(await state()), protectedState(beforeState)));
+    await test("existing non-return notifications remain unchanged",async()=>assert.deepEqual((await state()).notifications.filter(n=>!n.eventType.startsWith("return_")),beforeState.notifications.filter(n=>!n.eventType.startsWith("return_"))));
+    await test("reward, consumption, credit and subscription state remain unchanged; return notices are independent", async () => assert.deepEqual(protectedState(await state()), protectedState(beforeState)));
     await test("domain approval appends pending settlement plans without executing inventory", async () => { const saved = await state(); assert.ok((saved.returnSettlementEvents?.length ?? 0) > (beforeState.returnSettlementEvents?.length ?? 0)); assert.ok(saved.returnSettlementEvents?.every(event => event.type === "PLANNED")); });
     await test("physical inventory and fulfillment state files remain byte-identical", async () => {
       assert.equal(await fs.readFile(inventoryFile, "utf8"), inventoryBytes); assert.equal(await fs.readFile(fulfillmentFile, "utf8"), fulfillmentBytes);

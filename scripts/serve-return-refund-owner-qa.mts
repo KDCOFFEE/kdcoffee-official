@@ -17,13 +17,13 @@ const qaRoot=await fs.mkdtemp(path.join(os.tmpdir(),"kd-j6f2c-owner-"));process.
 for(const key of ["RAILWAY_VOLUME_MOUNT_PATH","RAILWAY_PROJECT_ID","RAILWAY_SERVICE_ID","RAILWAY_ENVIRONMENT_ID","LINE_CUSTOMER_CHANNEL_ACCESS_TOKEN","LINE_CHANNEL_ACCESS_TOKEN","LINE_INTERNAL_CHANNEL_ACCESS_TOKEN","LINE_INTERNAL_RECIPIENT_ID"])process.env[key]="";
 for(const key of ["AUTH_SESSION_SECRET","MEMBER_IDENTITY_SECRET","ADMIN_SESSION_SECRET"])process.env[key]=randomBytes(40).toString("hex");
 for(const key of Object.keys(process.env))if(/^(LINE_|GMAIL_|GOOGLE_|SMTP_|RESEND_)/.test(key))delete process.env[key];
-process.env.ADMIN_PASSWORD="Return-QA-Owner-2026";process.env.ADMIN_OWNER_ID="owner";process.env.RETURN_REQUEST_LINE_NOTIFICATION_ENABLED="false";process.env.NEXT_TELEMETRY_DISABLED="1";
+process.env.ADMIN_PASSWORD="Return-QA-Owner-2026";process.env.ADMIN_OWNER_ID="owner";process.env.NEXT_TELEMETRY_DISABLED="1";
 const port=Number(process.env.RETURN_REFUND_QA_PORT||3162),backendPort=port+1,url="http://localhost:"+port;
 if(!Number.isInteger(port)||port<1024||port>65533)throw Error("Invalid isolated QA port");process.env.NEXT_PUBLIC_SITE_URL=url;process.env.MEMBER_SITE_URL=url;process.env.DEV_PUBLIC_ORIGIN=url;
 const password="Return-QA-Member-2026",now=new Date();const rules=structuredClone(DEFAULT_MEMBERSHIP_RULES);rules.money.roundingMode="round-half-up";rules.returnRefund=structuredClone(DEFAULT_RETURN_REFUND_SETTINGS);
 rules.returnRefund.destinations.seven_eleven={...rules.returnRefund.destinations.seven_eleven,enabled:true,storeNumber:"208303",storeName:"高鳳儀（隔離 QA 範例）",address:"高雄市鳳山區頂庄路209號",instructions:"隔離 QA：請勿實際寄送"};
 rules.returnRefund.destinations.courier={...rules.returnRefund.destinations.courier,enabled:true,recipient:"QA 工作室",address:"隔離 QA 測試地址，請勿實際寄送",phone:"0000000000",instructions:"僅供測試宅配退貨選項"};
-rules.returnRefund.destinations.in_person={...rules.returnRefund.destinations.in_person,enabled:true,address:"隔離 QA 工作室測試地址",phone:"0000000000",hours:"QA 預約測試",instructions:"請勿實際到訪"};rules.returnRefund.lineEnabled=true;
+rules.returnRefund.destinations.in_person={...rules.returnRefund.destinations.in_person,enabled:true,address:"隔離 QA 工作室測試地址",phone:"0000000000",hours:"QA 預約測試",instructions:"請勿實際到訪"};rules.returnRefund.lineEnabled=true;rules.notification.events.return_refund_completed.enabled=true;
 await saveMembershipBusinessRules({expectedRevision:0,rules,now:new Date(now.getTime()-86400000)});
 const website=path.join(qaRoot,"store/website-data.json");await fs.mkdir(path.dirname(website),{recursive:true});await fs.writeFile(website,JSON.stringify({version:1,menu:{products:[{id:"qa-coffee",slug:"qa-coffee",name:"退款 QA 咖啡",active:true,purchasable:true,skus:[{id:"qa-half-pound",kind:"beans",label:"半磅",enabled:true,price:500,stock:100}]}]},artworks:[],pages:[]}));
 const cases:Array<{number:number;name:string;orderNumber:string;email:string;memberCookie:string}>=[];
