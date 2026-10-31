@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import ReturnRefundSettingsFields from "./ReturnRefundSettingsFields";
 
 import {
   OWNER_DECISION_REQUIRED,
@@ -145,6 +146,7 @@ export default function MembershipRulesManager({ initialRevision, initialVersion
     {message && <p className="membership-save-feedback" role="status">{message}</p>}
     {impact && <p className="membership-save-feedback" role="status">這次調整會影響 {impact.affectedCycles} 個尚未鎖定期次（{impact.activeSubscriptions} 個啟用中的定期購）；{impact.lockedCyclesPreserved} 個已鎖定／已成立期次與既有推薦獎勵維持原快照。{impact.pvSwitchBlocked ? ` 尚有 ${impact.missingPv?.length ?? 0} 個販售中 SKU 未設定 PV，目前不能切換。` : ""}</p>}
 
+    <ReturnRefundSettingsFields value={rules.returnRefund} onChange={value=>change(draft=>{draft.returnRefund=value;})} />
     <section className="membership-rule-card">
       <header><span>01</span><div><h2>配送費與定期購優惠</h2><p>集中管理一般配送費、定期購配送優惠與開站會員免運活動。</p></div></header>
       <div className="membership-fields two">

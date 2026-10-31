@@ -1,3 +1,5 @@
+import { allocateApprovedReturnPayment } from "./returnPaymentAllocation";
+import type { ReturnPaymentResult } from "./returnPaymentResult";
 import { approvedReturnCreditSelection } from "./returnCreditSelection";
 import { isDeepStrictEqual } from "node:util";
 import { originalEconomicFingerprint as fingerprint } from "./orderRewardBasis";
@@ -17,7 +19,8 @@ export type CreditSettlementResult = {
 };
 export type SettlementEvent = {
   sequence: number; previousHash: string | null; hash: string; effectId: string; recordedAt: string;
-  type: "PLANNED" | "APPLIED" | "FAILED" | "MANUAL_REVIEW_REQUIRED";
+  type: "PLANNED" | "APPLIED" | "FAILED" | "MANUAL_REVIEW_REQUIRED" | "NOTIFIED";
+  paymentResult?: ReturnPaymentResult; notification?: "sent"|"failed"|"disabled";
   plan?: SettlementPlan; receipt?: InventoryReceipt; creditResult?: CreditSettlementResult; reason?: string;
 };
 export type SettlementState = { returnEvents?: ReturnDomainEvent[]; returnSettlementEvents?: SettlementEvent[];
@@ -26,6 +29,7 @@ export type SettlementState = { returnEvents?: ReturnDomainEvent[]; returnSettle
 };
 export type SettlementEffect = SettlementPlan & {
   status: "pending" | "applied" | "failed" | "manual_review_required" | "pending_future_settlement";
+  paymentResult?: ReturnPaymentResult; notification?: "sent"|"failed"|"disabled";
   appliedAt: string | null; receipt?: InventoryReceipt; creditResult?: CreditSettlementResult; reason?: string; attempts: number;
 };
 export class ReturnSettlementIntegrityError extends Error {}
@@ -56,7 +60,7 @@ export function projectReturnSettlements(state: SettlementState): SettlementEffe
       && Number.isFinite(Date.parse(entry.recordedAt)));
     let effect = effects.get(entry.effectId);
     if (entry.type === "PLANNED") {
-      requireEvidence(!effect && entry.plan && entry.plan.effectId === entry.effectId && !entry.receipt && !entry.creditResult && !entry.reason);
+      requireEvidence(!effect && entry.plan && entry.plan.effectId === entry.effectId && !entry.receipt && !entry.creditResult && !entry.paymentResult && !entry.notification && !entry.reason);
       const approval = state.returnEvents?.find(event => event.eventId === entry.plan!.approvedEventId);
       requireEvidence(approval?.type === "RETURN_APPROVED");
       let expectedForApproval = expectedPlans.get(approval.eventId);
@@ -65,12 +69,31 @@ export function projectReturnSettlements(state: SettlementState): SettlementEffe
       requireEvidence(isDeepStrictEqual(expected, entry.plan) && Date.parse(entry.recordedAt) >= Date.parse(entry.plan.createdAt));
       effect = { ...entry.plan, status: entry.plan.effectType === "payment_refund" ? "pending_future_settlement" : "pending", appliedAt: null, attempts: 0 };
       effects.set(entry.effectId, effect);
+    } else if (effect?.effectType === "payment_refund" && entry.type === "NOTIFIED") {
+      requireEvidence(effect.status === "applied" && ["sent","failed","disabled"].includes(entry.notification ?? "") && !entry.paymentResult && !entry.plan && !entry.receipt && !entry.creditResult && !entry.reason && Date.parse(entry.recordedAt)>=Date.parse(effect.appliedAt!));
+      effect.notification=entry.notification;
+    } else if (effect?.effectType === "payment_refund" && entry.type === "APPLIED") {
+      const r=entry.paymentResult;
+      requireEvidence(effect.status !== "applied" && r && !entry.plan && !entry.receipt && !entry.creditResult && !entry.reason
+        && [r.amount,r.originalPaidTotal,r.merchandisePaidTotal].every(n=>Number.isSafeInteger(n)&&n>=0)
+        && r.amount<=r.merchandisePaidTotal && r.merchandisePaidTotal<=r.originalPaidTotal
+        && ["manual_cash","manual_bank_transfer"].includes(r.method) && r.confirmedBy.length>0 && r.confirmedAt===entry.recordedAt
+        && Date.parse(entry.recordedAt)>=Date.parse(effect.createdAt) && r.note.length<=200 && Array.isArray(r.proof) && r.proof.length<=3);
+      const request=state.returnEvents?.find(e=>e.type==="RETURN_REQUESTED"&&e.orderId===effect!.orderId&&e.returnRequestId===effect!.returnRequestId);
+      requireEvidence(request?.type==="RETURN_REQUESTED"&&request.confirmation?.refundRequest);
+      const saved=request.confirmation.refundRequest;
+      const quote=allocateApprovedReturnPayment({orderNumber:effect.orderId,status:"completed",completion:request.completion,payment:saved.originalPayment,orderMode:saved.originalOrderMode??"home_delivery"},state.returnEvents??[],effect.returnRequestId);
+      requireEvidence(quote.status==="resolved"&&quote.amount===r.amount&&quote.originalPaidTotal===r.originalPaidTotal&&quote.merchandisePaidTotal===r.merchandisePaidTotal&&quote.method===r.method&&saved.originalPayment===r.originalPayment&&quote.evidenceFingerprint===r.allocationFingerprint);
+      requireEvidence(r.proof.every(photo=>typeof photo.url==="string"&&/^\/uploads\/order-notifications\/[0-9a-f-]{36}\.webp$/iu.test(photo.url)&&photo.mimeType==="image/webp"&&photo.bytes>0&&photo.width>0&&photo.height>0));
+      const prior=[...effects.values()].filter(e=>e.orderId===effect!.orderId&&e.effectType==="payment_refund"&&e.status==="applied");
+      requireEvidence(prior.reduce((n,e)=>n+(e.paymentResult?.amount ?? 0),0)+r.amount<=r.merchandisePaidTotal);
+      effect.status="applied";effect.paymentResult=structuredClone(r);effect.appliedAt=r.confirmedAt;effect.attempts++;
     } else {
       requireEvidence(effect && effect.effectType !== "payment_refund" && effect.status !== "applied" && effect.status !== "manual_review_required" && !entry.plan
         && Date.parse(entry.recordedAt) >= Date.parse(effect.createdAt));
       effect.attempts++;
       if (entry.type === "APPLIED" && effect.effectType === "member_credit_restore") {
-        requireEvidence(entry.creditResult && !entry.receipt && !entry.reason);
+        requireEvidence(entry.creditResult && !entry.receipt && !entry.reason && !entry.paymentResult && !entry.notification);
         validateCreditResult(state,effect,entry.creditResult,entry.recordedAt);
         for(const selected of entry.creditResult.entries) {
           const key=JSON.stringify([effect.orderId,selected.creditEntryId]);
@@ -81,7 +104,7 @@ export function projectReturnSettlements(state: SettlementState): SettlementEffe
         }
         effect.status="applied"; effect.creditResult=structuredClone(entry.creditResult); effect.appliedAt=entry.creditResult.settledAt; delete effect.reason;
       } else if (entry.type === "APPLIED") {
-        requireEvidence(!entry.creditResult);
+        requireEvidence(!entry.creditResult && !entry.paymentResult && !entry.notification);
         const receipt = entry.receipt;
         requireEvidence(receipt?.kind === "RESTORE" && receipt.operationId === "return-stock:" + fingerprint(effect.effectId)
           && receipt.items.length === 1 && receipt.items[0].quantity === effect.approvedQuantity && receipt.parentOperationId

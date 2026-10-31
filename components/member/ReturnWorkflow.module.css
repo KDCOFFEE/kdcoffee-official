@@ -107,3 +107,44 @@
 .historicalEstimate .credit { margin: 8px 0 0; background: #f8f5ef; }
 @media(max-width:600px) { .settlement { padding: 17px; } .resultAmounts { gap: 10px 12px; } .resultAmounts dt { font-size: 12px; } .resultAmounts dd { font-size: 15px; } }
 @media(max-width:400px) { .resultAmounts { grid-template-columns: minmax(0,1fr); gap: 5px; } .resultAmounts dd { text-align: left; margin-bottom: 9px; } .resultAmounts .restoredAmount { line-height: 1.3; } }
+
+.returnDestination { margin: 14px 0; padding: 16px 18px; min-width: 0; max-width: 100%; border: 1px solid #e2d9cc; border-radius: 12px; background: #faf7f1; }
+.returnDestination h3 { margin: 0 0 12px; font-size: 15px; color: #514c40; }
+.destinationRows { margin: 0; }
+.destinationRows>div { display: grid; grid-template-columns: 88px minmax(0,1fr); gap: 8px 14px; padding: 6px 0; }
+.destinationRows dt { font-size: 13px; color: #887d6c; }
+.destinationRows dd { min-width: 0; margin: 0; color: #403b32; font-size: 14px; line-height: 1.6; overflow-wrap: anywhere; }
+.destinationInstructions { margin-top: 12px; padding-top: 12px; border-top: 1px solid #e8dfd2; }
+.destinationInstructions h4 { margin: 0 0 6px; font-size: 13px; color: #887d6c; font-weight: 500; }
+.destinationInstructions p { margin: 0; font-size: 14px; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; }
+@media(max-width:480px) { .returnDestination { padding: 14px; } .destinationRows>div { grid-template-columns: minmax(0,1fr); gap: 3px; padding: 7px 0; } }
+
+.refundAccount { margin: 14px 0; padding: 14px 16px; border: 1px solid #e4dbcf; border-radius: 14px; background: #faf7f2; min-width: 0; }
+.refundAccount legend { font-size: 16px; font-weight: 650; color: #4b473d; padding: 0 5px; }
+.refundAccount>p { color: #827765; font-size: 13px; margin: 0 0 12px; line-height: 1.6; }
+.bankAccountGrid { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 10px 14px; }
+.refundAccount label { min-width: 0; display: flex; flex-direction: column; gap: 6px; margin: 0; font-size: 13px; font-weight: 500; color: #716451; }
+.bankBranch { grid-column: 1 / -1; }.refundAccount .bankSearch { position: relative; margin: 0 0 12px; }
+.refundAccount input { display: block; min-width: 0; width: 100%; height: 44px; padding: 10px 12px; border: 1px solid #bcad98; border-radius: 8px; background: #fff; color: #403b32; font: inherit; font-size: 15px; box-sizing: border-box; }
+.refundAccount input::placeholder { color: #8b8276; opacity: 1; font-weight: 400; }
+.refundAccount input:hover:not(:disabled) { border-color: #8b795d; background: #fffefa; }
+.refundAccount input:disabled { opacity: .65; cursor: not-allowed; }
+.refundAccount input:focus { border-color: #78623e; outline: 2px solid #b3a078; outline-offset: 2px; background: #fff; }
+.bankOptions { position: absolute; top: 100%; left: 0; right: 0; z-index: 20; max-height: 240px; overflow-y: auto; margin: 4px 0 0; padding: 5px; list-style: none; background: #fffdf9; border: 1px solid #d9cdbb; border-radius: 10px; box-shadow: 0 7px 20px #42372518; }
+.bankOptions li { min-height: 44px; padding: 9px 10px; cursor: pointer; overflow-wrap: anywhere; color: #403b32; box-sizing: border-box; }.bankOptions li span { color: #887b67; margin-right: 10px; }
+.bankOptions li[aria-selected=true],.bankOptions li:hover { background: #f0eadf; border-radius: 6px; }
+.fieldError { display: block; color: #a23e32; font-size: 12px; line-height: 1.6; margin-top: 5px; }
+.form [aria-invalid=true] { border-color: #b25b49; outline: 1px solid #b25b49; outline-offset: 1px; }
+.invalidSection { border-color: #c68c7f; background: #fff8f5; }
+.refundAccount .fieldError { color: #b12d25; font-size: 14px; font-weight: 500; line-height: 1.65; margin-top: 2px; }
+.refundAccount input[aria-invalid=true],.refundAccount input[aria-invalid=true]:hover,.refundAccount input[aria-invalid=true]:focus { border-color: #b12d25; outline-color: #b12d25; background: #fffafa; }
+.lineCard .quantityError { display: block; color: #b12d25; font-size: 17px; font-weight: 700; line-height: 1.65; margin-top: 10px; }
+@media(max-width:600px) { .bankAccountGrid { grid-template-columns: minmax(0,1fr); } .refundAccount { padding: 12px 14px; } }
+
+.paymentPreview{border:1px solid #ddd1bc;background:#fcf8f1;border-radius:12px;padding:16px;margin:16px 0}.paymentPreview h3{font-size:16px;margin:0 0 12px;color:#624b30}.paymentRows{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;margin:0}.paymentRows dt{font-size:13px;color:#88765f}.paymentRows dd{margin:0;font-size:15px;font-weight:600;text-align:right}.paymentRows small{display:block;color:#a17b53;font-size:11px}.paymentRows .paymentTotal{font-size:16px;font-weight:700;color:#6e5030;border-top:1px solid #e5dbc9;padding-top:12px}
+.paymentRows .paymentOrderTotal{font-size:14px;font-weight:600;color:#66533f;border-bottom:1px solid #e5dbc9;padding-bottom:12px}
+.memberRefundStatus{margin:16px 0;padding:14px 16px;border:1px solid #d8e4d5;border-radius:12px;background:#f3f7f0;color:#476441}.memberRefundStatus h3{margin:0 0 10px;font-size:17px}
+.historySummary{display:flex;flex-wrap:wrap;gap:6px 16px;align-items:center}.historySummary span{font-size:12px;color:#6b7e60}.historyFacts{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.5fr);gap:8px 14px;margin:10px 0;font-size:13px}.historyFacts dt{color:#81715f}.historyFacts dd{margin:0;overflow-wrap:anywhere;text-align:right}.timeline>li{padding-bottom:20px}.timeline h4{margin:0 0 5px;font-size:15px;color:#5a4a38}.timeline time{font-size:12px}.timeline p{margin:8px 0;font-size:13px}.timeline .historyItems{list-style:none;margin:10px 0;padding:0}.timeline .historyItems li{padding:0 0 4px}.timeline .historyItems li::before{content:none}.historyDestination{margin-top:8px}.historyNotification{margin-top:14px;border-top:1px solid #e8dfd3;padding-top:10px;color:#88765f;font-size:12px}.historyNotification strong{font-weight:500}.historyNotification p{font-size:12px;margin:4px 0}
+@media(max-width:600px){.historyFacts{grid-template-columns:1fr;gap:3px}.historyFacts dd{text-align:left;margin-bottom:7px}.memberRefundStatus{padding:12px}.timeline{padding-left:14px}}
+.memberRefundStatus .memberRefundAmount{font-size:30px;font-weight:700;line-height:1.3;color:#65502f}.memberRefundStatus .historyFacts{align-items:center}.creditCompact{border-top:1px solid #e8dfd2;border-bottom:1px solid #e8dfd2;margin:18px 0;color:#8e7d66;font-size:13px}.creditCompact>summary{display:flex;justify-content:space-between;gap:12px;padding:12px 0;cursor:pointer}.creditCompact>summary span{color:#9a8b78}.memberCreditSecondary .credit,.memberCreditSecondary .settlement{background:#faf8f3;border-color:#ece5da;padding:16px}.memberCreditSecondary .amounts dd,.memberCreditSecondary .resultAmounts dd{font-size:17px}.memberCreditSecondary h3{font-size:14px}.memberCreditSecondary .restoredAmount{font-size:19px}
+.refundProof{margin-top:14px;padding-top:12px;border-top:1px solid #dce5d7}.refundProof h4{font-size:13px;font-weight:600;margin:0 0 8px;color:#6f765e}.refundProof p{margin:7px 0 0;font-size:12px;color:#8e927f}.refundProofThumbnails{display:flex;flex-wrap:wrap;gap:8px}.refundProofThumbnail{width:80px;height:64px;object-fit:cover;border:1px solid #dce1d3;border-radius:7px;background:#fff}.refundProofReference{display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin-top:12px;font-size:12px;color:#8a785f}.refundProofSmall{width:48px;height:36px;object-fit:cover;border:1px solid #e5d9c9;border-radius:6px;background:#fff}

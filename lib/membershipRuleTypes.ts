@@ -105,6 +105,7 @@ export type AtmTransferSettings = {
 };
 
 export type MembershipBusinessRules = {
+  returnRefund?: import("./returnRefundSettings").ReturnRefundSettings;
   membership: { openingYearFreeShipping: { enabled: boolean; startDate: string; endDate: string; shippingMethods: string[] } };
   shipping: { subscriptionFreeShipping: boolean; subscriptionShippingFee: number; sevenElevenShippingFee: number; homeDeliveryShippingFee: number; homeDeliveryCodFee: number; subscriptionShippingDiscount: number };
   payment: { atmTransfer: AtmTransferSettings };

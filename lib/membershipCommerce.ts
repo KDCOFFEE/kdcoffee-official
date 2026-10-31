@@ -4,6 +4,7 @@ import { createHash, randomBytes } from "crypto";
 import { promises as fs } from "fs";
 import path from "path";
 import { isDeepStrictEqual } from "node:util";
+import { allocateApprovedReturnPayment } from "./returnPaymentAllocation";
 import { planApprovedReturnSettlement, projectReturnSettlements, assertSettlementPrefix, appendSettlementEvent, returnCreditSettlementSummary, type SettlementEvent } from "./returnSettlementLedger";
 import { approvedReturnCreditSelection } from "./returnCreditSelection";
 import { originalReturnCreditSources, buildReturnConfirmationPreview, signReturnPreview, verifyReturnPreviewToken, ReturnWorkflowError } from "./returnCreditPreview";
@@ -2132,7 +2133,7 @@ export async function executeOrderReturnCommand(input: {
   authorizeOrder: (order: Readonly<Record<string, unknown>>, actor: ReturnActor) => void | Promise<void>;
   now?: Date; stateFilePath?: string;
   /** E-only server confirmation. Omitted by the accepted internal B/C/D commands. */
-  confirmation?: { token: string; memberId: string; quantityAcknowledged: true; supportingPhotos?: import("./customerNotifications").CustomerNotificationPhoto[] };
+  confirmation?: { token: string; memberId: string; quantityAcknowledged: true; supportingPhotos?: import("./customerNotifications").CustomerNotificationPhoto[]; prepareSupportingPhotos?: (previous?: readonly import("./customerNotifications").CustomerNotificationPhoto[]) => Promise<import("./customerNotifications").CustomerNotificationPhoto[]>; refundRequest?: import("./returnRefundSettings").ReturnRefundRequest };
 }): Promise<ReturnCommandResult> {
   const command = normalizeReturnCommand(input.command, input.actor, input.reason);
   if (!command || !/^KD[0-9-]+$/u.test(input.orderNumber) || !returnEvidenceText(input.idempotencyKey, 120)) {
@@ -2145,7 +2146,7 @@ export async function executeOrderReturnCommand(input: {
   return withStoredOrderUpdateLock(input.orderNumber, async order => {
     try { await input.authorizeOrder(structuredClone(order), structuredClone(command.actor)); }
     catch { return { status: "conflict", reason: "not_authorized" }; }
-    return transaction<ReturnCommandResult>((state) => {
+    return transaction<ReturnCommandResult>(async (state) => {
       const events = state.returnEvents ?? [];
       const prior = events.find(item => item.idempotencyKey === key);
       const rememberedId = remembered(state, key);
@@ -2155,7 +2156,11 @@ export async function executeOrderReturnCommand(input: {
       if (projection.status !== "resolved") return projection;
       if (prior) {
         if (input.confirmation && (prior.type !== "RETURN_REQUESTED" || prior.confirmation?.tokenDigest !== originalEconomicFingerprint(input.confirmation.token))) throw new ReturnWorkflowError("idempotency_conflict");
-        if (input.confirmation && prior.type === "RETURN_REQUESTED" && !isDeepStrictEqual(prior.confirmation?.supportingPhotos ?? [], input.confirmation.supportingPhotos ?? [])) throw new ReturnWorkflowError("idempotency_conflict");
+        if (input.confirmation && prior.type === "RETURN_REQUESTED" && !isDeepStrictEqual(prior.confirmation?.refundRequest, input.confirmation.refundRequest)) throw new ReturnWorkflowError("idempotency_conflict");
+        if (input.confirmation && prior.type === "RETURN_REQUESTED") {
+          const photos = input.confirmation.prepareSupportingPhotos ? await input.confirmation.prepareSupportingPhotos(prior.confirmation?.supportingPhotos ?? []) : input.confirmation.supportingPhotos ?? [];
+          if (!isDeepStrictEqual(prior.confirmation?.supportingPhotos ?? [], photos)) throw new ReturnWorkflowError("idempotency_conflict");
+        }
         return { status: "applied", replayed: true, event: structuredClone(prior), projection };
       }
       const proof = preservedReturnCompletion(order);
@@ -2167,14 +2172,17 @@ export async function executeOrderReturnCommand(input: {
       const conflict = returnCommandConflict(command, projection, timestamp, proof.completion.completedAt);
       if (conflict === "return_deadline_expired") return { status: "not_eligible", reason: conflict };
       if (conflict) return { status: "conflict", reason: conflict };
-      const confirmation = input.confirmation ? (() => {
-        const saved = verifyReturnPreviewToken(input.confirmation.token, now);
-        const current = buildReturnConfirmationPreview({ order, state, command, memberId: input.confirmation.memberId,
+      const confirmationInput = input.confirmation;
+      const confirmation = confirmationInput ? await (async () => {
+        const saved = verifyReturnPreviewToken(confirmationInput.token, now);
+        const current = buildReturnConfirmationPreview({ order, state, command, memberId: confirmationInput.memberId,
           now, generatedAt: saved.generatedAt, warningDays: saved.expiryWarning?.days ?? 7, rewardHoldExpected: returnHoldCandidates(state, order.orderNumber).length > 0 });
         if (saved.actorId !== command.actor.actorId || saved.sourceOrderId !== order.orderNumber
           || saved.confirmationFingerprint !== current.confirmationFingerprint) throw new ReturnWorkflowError("stale_confirmation");
-        return { preview: current, tokenDigest: originalEconomicFingerprint(input.confirmation.token), confirmedAt: timestamp, quantityAcknowledged: true as const,
-          ...(input.confirmation.supportingPhotos?.length ? { supportingPhotos: structuredClone(input.confirmation.supportingPhotos) } : {}) };
+        // Auth, ownership, eligibility and token are verified under these same locks.
+        const supportingPhotos = confirmationInput.prepareSupportingPhotos ? await confirmationInput.prepareSupportingPhotos() : confirmationInput.supportingPhotos;
+        return { ...(confirmationInput.refundRequest ? {refundRequest:structuredClone(confirmationInput.refundRequest)} : {}), preview: current, tokenDigest: originalEconomicFingerprint(confirmationInput.token), confirmedAt: timestamp, quantityAcknowledged: true as const,
+          ...(supportingPhotos?.length ? { supportingPhotos: structuredClone(supportingPhotos) } : {}) };
       })() : undefined;
       const returnRequestId = command.type === "RETURN_REQUESTED"
         ? deterministicId("return_request", key) : command.returnRequestId;
@@ -6527,4 +6535,27 @@ export async function applyApprovedReturnCredit(orderNumber:string, returnReques
       throw error;
     }
   });
+}
+
+/** Records an already-performed manual payment; never calls a payment gateway. */
+export async function confirmManualReturnPayment(orderNumber:string,requestId:string,adminId:string,input:{note?:string;proof?:import("./customerNotifications").CustomerNotificationPhoto[];prepareProof?:()=>Promise<import("./customerNotifications").CustomerNotificationPhoto[]>;now?:Date;stateFilePath?:string}={}) {
+ return withStoredOrderUpdateLock(orderNumber,async order=>transaction(async state=>{
+  const effect=projectReturnSettlements(state).find(e=>e.orderId===orderNumber&&e.returnRequestId===requestId&&e.effectType==="payment_refund");
+  if(!effect)throw new ReturnWorkflowError("return_not_approved");
+  if(effect.status==="applied")return {replayed:true,additionalRefund:0,result:effect.paymentResult!};
+  const request=state.returnEvents?.find(e=>e.orderId===orderNumber&&e.returnRequestId===requestId&&e.type==="RETURN_REQUESTED");
+  const saved=request?.type==="RETURN_REQUESTED"?request.confirmation?.refundRequest:undefined;
+  const allocation=allocateApprovedReturnPayment(order,state.returnEvents??[],requestId);
+  if(allocation.status!=="resolved"||allocation.method==="manual_review_required"||!saved||saved.method!==allocation.method||saved.originalPayment!==order.payment|| (saved.method==="manual_bank_transfer"&&!saved.bank))throw new ReturnWorkflowError("refund_manual_review_required");
+  if(allocation.otherShippingReviewRequired)throw new ReturnWorkflowError("refund_unknown_fee_requires_review");
+  const note=input.note??"";if(note.length>200||!adminId)throw new ReturnWorkflowError("invalid_input",400);
+  // Exact approved effect, supported route and request limits precede any decoder.
+  const proof=input.prepareProof?await input.prepareProof():input.proof??[];
+  const result={amount:allocation.amount,merchandisePaidTotal:allocation.merchandisePaidTotal,originalPaidTotal:allocation.originalPaidTotal,method:allocation.method,originalPayment:saved.originalPayment,confirmedBy:adminId,confirmedAt:(input.now??new Date()).toISOString(),proof,note,allocationFingerprint:allocation.evidenceFingerprint};
+  appendSettlementEvent(state,{effectId:effect.effectId,type:"APPLIED",recordedAt:result.confirmedAt,paymentResult:result});
+  return {replayed:false,additionalRefund:result.amount,result};
+ },{filePath:input.stateFilePath,now:input.now}));
+}
+export async function recordReturnRefundNotification(orderNumber:string,requestId:string,status:"sent"|"failed"|"disabled",input:{stateFilePath?:string;now?:Date}={}) {
+ return transaction(state=>{const effect=projectReturnSettlements(state).find(e=>e.orderId===orderNumber&&e.returnRequestId===requestId&&e.effectType==="payment_refund");if(!effect||effect.status!=="applied")throw new ReturnWorkflowError("refund_not_completed");appendSettlementEvent(state,{effectId:effect.effectId,type:"NOTIFIED",notification:status,recordedAt:(input.now??new Date()).toISOString()});},{filePath:input.stateFilePath,now:input.now});
 }

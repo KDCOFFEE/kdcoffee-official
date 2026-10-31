@@ -1,5 +1,7 @@
 "use client";
-/* eslint-disable @next/next/no-img-element -- Reuse the existing native order-photo thumbnail/link pattern for member uploads. */
+import MemberPaymentRefundPreview from "./MemberPaymentRefundPreview";
+import MemberReturnTimeline, {MemberReturnPaymentStatus} from "./MemberReturnTimeline";
+import AttachmentLightbox from "@/components/shared/AttachmentLightbox";
 
 import type { ReturnWorkflowView, safeCreditPreview } from "@/lib/returnWorkflow";
 import { returnTaipeiDate, returnStatusCopyKey, returnCreditExpiryDate } from "@/lib/returnPresentation";
@@ -85,20 +87,20 @@ export function ReturnRewardEvidence({ rewards }: { rewards: ReturnWorkflowView[
 }
 export function ReturnRequestEvidence({ request, view, admin = false }: { request: ReturnWorkflowView["requests"][number]; view: ReturnWorkflowView; admin?: boolean }) {
   const copy = useMemberCopyKey();
+  const zeroCredit=(request.creditPreview?.returnCreditAmount??request.creditSettlement?.selectedAmount)===0;
+  const creditContent=request.creditSettlement?.status==="applied"?<ReturnCreditSettlement result={request.creditSettlement} preview={request.creditPreview}/>:<>{request.creditPreview?<ReturnCreditEvidence preview={request.creditPreview} warning/>:<p><Copy copyKey="member.returns.noCreditSnapshot"/></p>}{request.creditSettlement?<ReturnCreditSettlement result={request.creditSettlement} preview={null}/>:null}</>;
   const notice = { pending: "pendingNotice", processing: "processingNotice", approved: "approvedNotice", rejected: "rejectedNotice", withdrawn: "withdrawnNotice" }[request.status];
   return <><div className={styles.cardHeading}><h3><Copy copyKey={admin ? "member.returns.adminRequestTitle" : "member.returns.requestTitle"} /></h3><span className={`${styles.badge} ${styles[request.status] ?? ""}`}><Copy copyKey={returnStatusCopyKey(request.status)} /></span></div>
     <p><Copy copyKey={`member.returns.${notice}`} /></p>
+    {!admin?(["pending","processing"].includes(request.status)?<MemberPaymentRefundPreview preview={request.paymentRefund.preview}/>:<MemberReturnPaymentStatus request={request}/>):null}
     {request.status === "approved" && request.rejectedLines?.length ? <p><Copy copyKey="member.returns.partialApproval" values={{ approved: request.approvedLines?.reduce((sum,line) => sum + line.quantity, 0) ?? 0, rejected: request.rejectedLines.reduce((sum,line) => sum + line.quantity, 0) }} /></p> : null}
     <div className={styles.itemList}>{request.lines.map(line => <div className={styles.item} key={line.returnLineRef}><span><strong>{view.lines.find(item => item.returnLineRef === line.returnLineRef)?.name}</strong><small>{view.lines.find(item => item.returnLineRef === line.returnLineRef)?.option}</small></span><b>× {line.quantity}</b></div>)}</div>
     <p><Copy copyKey="member.returns.reasonLabel" />：{request.reason}</p>
-    {request.photos?.length ? <section><h3><Copy copyKey="member.returns.submittedPhotos" /></h3><div className={styles.photos}>{request.photos.map(photo => <a key={photo.url} href={photo.url} target="_blank" rel="noreferrer"><img src={photo.url} alt={copy("member.returns.photoAlt")} loading="lazy" /></a>)}</div></section> : null}
-    {request.creditSettlement?.status === "applied" ? <ReturnCreditSettlement result={request.creditSettlement} preview={request.creditPreview} /> : <>
-      {request.creditPreview ? <ReturnCreditEvidence preview={request.creditPreview} warning /> : <p><Copy copyKey="member.returns.noCreditSnapshot" /></p>}
-      {request.creditSettlement ? <ReturnCreditSettlement result={request.creditSettlement} preview={null} /> : null}
-    </>}
-    <details className={styles.details}><summary><Copy copyKey="member.returns.timelineDetails" /></summary><p><Copy copyKey="member.returns.acknowledged" /></p>
+    {request.photos?.length ? <section><h3><Copy copyKey="member.returns.submittedPhotos" /></h3><div className={styles.photos}>{request.photos.map(photo => <AttachmentLightbox key={photo.url} src={photo.url} alt={copy("member.returns.photoAlt")} width={128} height={108} loading="lazy"/>)}</div></section> : null}
+    {admin?creditContent:zeroCredit?<details className={styles.creditCompact}><summary><Copy copyKey="member.returns.creditSecondaryTitle"/><span><Copy copyKey="member.returns.creditNoneRequired"/></span></summary>{creditContent}</details>:<section className={styles.memberCreditSecondary}>{creditContent}</section>}
+    {!admin?<MemberReturnTimeline request={request} view={view}/>:<details className={styles.details}><summary><Copy copyKey="member.returns.timelineDetails" /></summary><p><Copy copyKey="member.returns.acknowledged" /></p>
       {request.confirmedAt ? <small><Copy copyKey="member.returns.confirmedTime" values={{ date: returnTaipeiDate(request.confirmedAt, true) }} /></small> : null}
       <ol className={styles.timeline}>{request.timeline.map((entry, index) => <li key={index}><strong><Copy copyKey={returnStatusCopyKey(entry.type)} /></strong><time>{returnTaipeiDate(entry.occurredAt, true)}</time>{entry.type !== "RETURN_WITHDRAWN" ? <p>{entry.reason}</p> : null}</li>)}</ol>
-    </details>
+    </details>}
   </>;
 }

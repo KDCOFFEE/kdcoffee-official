@@ -1,0 +1,47 @@
+/* eslint-disable react/no-children-prop -- The non-JSX Provider fixture requires its children prop for the React overload. */
+import assert from "node:assert/strict";
+import {createElement,type ReactElement} from "react";
+import {renderToStaticMarkup} from "react-dom/server";
+import Provider from "../components/member/MemberCenterCopyProvider";
+import Fields, {ReturnDestinationCard} from "../components/member/ReturnRefundFields";
+import Processing from "../components/admin/ReturnRefundProcessing";
+import {AdminReturnDetail} from "../components/admin/AdminReturnWorkflow";
+import {DEFAULT_RETURN_REFUND_SETTINGS,safeRefundRequest} from "../lib/returnRefundSettings";
+import type {ReturnWorkflowView} from "../lib/returnWorkflow";
+let count=0;const check=(label:string,fn:()=>void)=>{fn();console.log("PASS "+(++count)+" "+label);};
+const settings=structuredClone(DEFAULT_RETURN_REFUND_SETTINGS);settings.destinations.in_person={...settings.destinations.in_person,enabled:true,address:"QA configurable address"};
+const render=(element:ReactElement)=>renderToStaticMarkup(createElement(Provider,{initialOverrides:{},children:element}));
+const destination={...settings.destinations.in_person,storeName:"測試甲",storeNumber:"123456",address:"設定來源地址",recipient:"設定收件人",phone:"0001234567",hours:"週二午後",instructions:"設定中的寄回說明"};
+const untouched=structuredClone(destination);
+const storeCard=render(createElement(ReturnDestinationCard,{method:"seven_eleven",destination}));
+for(const label of ["門市名稱","門市店號","門市地址","寄回說明"])check("7-ELEVEN labelled "+label,()=>assert.ok(storeCard.includes(label)));
+check("store values have semantic label/value rows",()=>{assert.match(storeCard,/<dl/);assert.match(storeCard,/<dt/);assert.match(storeCard,/<dd>123456<\/dd>/);assert.match(storeCard,/<dd>設定來源地址<\/dd>/);});
+check("store name gets display-only suffix",()=>{assert.match(storeCard,/測試甲門市/);assert.deepEqual(destination,untouched);});
+const namedCard=render(createElement(ReturnDestinationCard,{method:"seven_eleven",destination:{...destination,storeName:"測試乙門市"}}));check("existing suffix is not duplicated",()=>{assert.match(namedCard,/測試乙門市/);assert.doesNotMatch(namedCard,/門市門市/);});
+const courier=render(createElement(ReturnDestinationCard,{method:"courier",destination}));for(const label of ["收件人","收件地址","聯絡電話","寄回說明"])check("courier labelled "+label,()=>assert.ok(courier.includes(label)));
+const inPerson=render(createElement(ReturnDestinationCard,{method:"in_person",destination}));for(const label of ["地址","聯絡方式","可受理時間","退貨說明"])check("in-person labelled "+label,()=>assert.ok(inPerson.includes(label)));
+const emptyCard=render(createElement(ReturnDestinationCard,{method:"in_person",destination:{...destination,phone:"",hours:"  ",instructions:""}}));check("empty field labels omitted",()=>{assert.doesNotMatch(emptyCard,/聯絡方式|可受理時間|退貨說明/);});
+check("configured values and instructions retained",()=>{for(const value of [destination.address,destination.recipient,destination.phone,destination.instructions])assert.ok(courier.includes(value));});
+check("saved snapshot stays unchanged after live setting edit",()=>{const saved=structuredClone(destination);destination.address="後來修改的地址";const historical=render(createElement(ReturnDestinationCard,{method:"courier",destination:saved}));assert.ok(historical.includes(saved.address));assert.ok(!historical.includes(destination.address));});
+check("no hardcoded Owner QA store values",()=>assert.doesNotMatch(storeCard,/208303|高鳳儀|頂庄路209號/));
+const bank=render(createElement(Fields,{settings,method:"manual_bank_transfer",disabled:false}));
+check("enabled logistics option renders",()=>assert.match(bank,/value="in_person"/));
+check("disabled courier hidden",()=>assert.doesNotMatch(bank,/value="courier"/));
+check("disabled 7-ELEVEN hidden",()=>assert.doesNotMatch(bank,/value="seven_eleven"/));
+for(const name of ["bank","holder","account","branch"])check("bank field "+name,()=>assert.match(bank,new RegExp('name="refund_'+name+'"')));
+for(const placeholder of ["請輸入銀行帳戶戶名","請輸入退款帳號","請輸入分行名稱"])check("visible account placeholder "+placeholder,()=>assert.ok(bank.includes('placeholder="'+placeholder+'"')));
+const cash=render(createElement(Fields,{settings,method:"manual_cash",disabled:false}));check("cash has no account field",()=>assert.doesNotMatch(cash,/name="refund_account"/));
+const masked=safeRefundRequest({method:"manual_bank_transfer",originalPayment:"atm_transfer",rulesVersion:1,handoff:"in_person",destination:settings.destinations.in_person,bank:{bank:"QA bank",holder:"QA holder",account:"12345678901234",branch:""}})!;
+const request:ReturnWorkflowView["requests"][number]={returnRequestId:"qa-request",requestedEventId:"qa-requested",lastEventId:"qa-approved",requestedBy:"qa-member",withdrawable:false,occurredAt:"2026-10-30T02:00:00Z",lastOccurredAt:"2026-10-30T02:00:00Z",lines:[{returnLineRef:"qa-line",quantity:1,originalQuantity:1}],eventIds:[],reason:"QA",conditionAcknowledgement:{itemsComplete:true,unopenedUnusedWhereApplicable:true},photos:[],creditPreview:null,creditSettlement:null,inventorySettlement:undefined,confirmedAt:null,timeline:[],status:"approved",refundRequest:masked,paymentRefund:{status:"pending",quote:{status:"resolved",amount:500,originalPaidTotal:540,merchandisePaidTotal:500,retainedHomeShipping:40,retainedCodFee:0,otherShippingReviewRequired:false,method:"manual_bank_transfer",evidenceFingerprint:"fixture"},amount:null,confirmedAt:null,notification:undefined,proof:[]}};
+const pending=render(createElement(Processing,{orderNumber:"KD20261030-9399",request,autoOpen:false,onReload:async()=>{},proofEnabled:true}));
+check("postponed refund retains later action",()=>assert.match(pending,/辦理退款/));check("postpone action present",()=>assert.match(pending,/稍後處理/));
+check("normal summary contains masked account",()=>assert.ok(pending.includes("********1234")));check("normal HTML has no full account",()=>assert.doesNotMatch(pending,/12345678901234/));
+const view={refundSettings:settings,refundMethod:"manual_bank_transfer",orderNumber:"KD20261030-9399",orderStatus:"completed",completedAt:"2026-10-30T02:00:00Z",customer:"QA",returnDeadline:"2026-11-07T15:59:59Z",eligible:false,eligibility:"resolved",message:null,technicalReason:null,lines:[],requests:[{...request,status:"processing",lines:[{returnLineRef:"qa-line",quantity:1,originalQuantity:1}],withdrawable:false,photos:[],timeline:[],creditPreview:null,creditSettlement:null,inventorySettlement:undefined}],rewards:[]} as ReturnWorkflowView;
+const globals=globalThis as typeof globalThis & {__returnHooks?:{useState:(value:unknown)=>unknown;useRef:()=>unknown;useEffect:()=>void;useContext:()=>unknown}};
+let index=0,refundTarget="";globals.__returnHooks={useState:value=>{const current=index++;return [value,(next:unknown)=>{if(current===3)refundTarget=String(next);}];},useRef:()=>({current:null}),useEffect:()=>{},useContext:()=>null};
+const actions:string[]=[];const originalFetch=globalThis.fetch;globalThis.fetch=async(_url,init)=>{if(init?.body)actions.push(JSON.parse(String(init.body)).action);return new Response(JSON.stringify(init?{rewardResolution:null}:view),{status:200,headers:{"Content-Type":"application/json"}});};
+try{const tree=AdminReturnDetail({initial:view});let review:((...args:unknown[])=>Promise<void>)|undefined;
+ function find(value:unknown){if(Array.isArray(value)){value.forEach(find);return;}if(!value||typeof value!=="object")return;const item=value as {props?:{onReview?:typeof review;children?:unknown}};if(item.props?.onReview)review=item.props.onReview;if(item.props?.children)find(item.props.children);}
+ find(tree);assert.ok(review);await review("approve","QA approved",[{returnLineRef:"qa-line",quantity:1}]);check("successful approval immediately selects refund modal",()=>assert.equal(refundTarget,"qa-request"));refundTarget="";await review("reject","QA rejected");check("reject action sends existing backend command",()=>assert.ok(actions.includes("reject")));check("rejection does not open refund modal",()=>assert.equal(refundTarget,""));
+}finally{delete globals.__returnHooks;globalThis.fetch=originalFetch;}
+console.log("J6F2C REFUND UI "+count+" PASS");

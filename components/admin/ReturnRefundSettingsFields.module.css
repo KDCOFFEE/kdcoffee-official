@@ -1,0 +1,31 @@
+.section { min-width: 0; border-radius: 16px; }
+.section > .heading { margin-bottom: 20px; }
+.cards { display: grid; gap: 20px; }
+.card { min-width: 0; margin: 0; padding: 18px 20px 22px; border: 1px solid #dfd3c5; border-radius: 12px; background: #fffcf7; }
+.card legend { padding: 0 8px; color: #443426; font-size: 1.05rem; font-weight: 800; }
+.description { margin: 0 0 14px; color: #766b60; font-size: .9rem; line-height: 1.65; }
+.enable { display: flex; align-items: center; gap: 10px; width: fit-content; margin-bottom: 18px; color: #514234; font-size: .9rem; font-weight: 700; cursor: pointer; }
+.enable input, .option input { flex: 0 0 20px; width: 20px; height: 20px; margin: 0; accent-color: #72503a; cursor: pointer; }
+.fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 20px; }
+.field { display: grid; align-content: start; gap: 7px; min-width: 0; color: #574638; font-size: .9rem; font-weight: 700; }
+.full { grid-column: 1 / -1; }
+.field input, .field textarea { box-sizing: border-box; width: 100%; min-width: 0; min-height: 44px; padding: 10px 12px; border: 1px solid #cdbfae; border-radius: 7px; background: #fff; color: #30251f; font: inherit; font-weight: 400; line-height: 1.5; transition: border-color .15s, box-shadow .15s; }
+.field textarea { resize: vertical; }
+.field input::placeholder, .field textarea::placeholder { color: #9a8e82; }
+.field input:hover, .field textarea:hover { border-color: #a58a71; }
+.field input:focus-visible, .field textarea:focus-visible, .enable input:focus-visible, .option input:focus-visible, .mapLink:focus-visible { outline: 2px solid #8d6546; outline-offset: 3px; }
+.mapLink { justify-self: start; color: #775437; font-size: .85rem; font-weight: 600; text-underline-offset: 3px; }
+.inactive { border-color: #e3ddd4; background: #f7f5f0; }
+.inactive legend { color: #756b60; }
+.options { display: grid; gap: 18px; }
+.option { display: flex; align-items: flex-start; gap: 12px; cursor: pointer; }
+.option input { margin-top: 2px; }
+.option > span { display: grid; gap: 5px; min-width: 0; }
+.option strong { color: #514234; font-size: .95rem; font-weight: 700; line-height: 1.5; }
+.option small { color: #766b60; font-size: .85rem; line-height: 1.65; }
+.footnote { margin: 16px 0 0; color: #817467; font-size: .82rem; line-height: 1.65; }
+@media (max-width: 620px) {
+  .card { padding: 14px 14px 18px; }
+  .fields { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+  .cards { gap: 16px; }
+}

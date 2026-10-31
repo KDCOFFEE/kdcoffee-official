@@ -191,8 +191,10 @@ export async function validateAndStoreOrderNotificationPhoto(
 
   const input = Buffer.from(await file.arrayBuffer());
   let metadata: Metadata;
+  let image: ReturnType<typeof sharp>;
   try {
-    metadata = await sharp(input, { failOn: "error" }).metadata();
+    image = sharp(input, { failOn: "error" });
+    metadata = await image.metadata();
   } catch {
     throw new OrderNotificationPhotoError("照片檔案無法安全讀取。");
   }
@@ -206,7 +208,7 @@ export async function validateAndStoreOrderNotificationPhoto(
     throw new OrderNotificationPhotoError("照片格式與檔案資訊不一致。");
   }
 
-  const output = await sharp(input, { failOn: "error" })
+  const output = await image
     .rotate()
     .resize({ width: 1600, height: 1600, fit: "inside", withoutEnlargement: true })
     .webp({ quality: 84 })

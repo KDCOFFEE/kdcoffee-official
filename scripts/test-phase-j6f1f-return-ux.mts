@@ -1,3 +1,4 @@
+import AttachmentLightbox from "../components/shared/AttachmentLightbox";
 import assert from "node:assert/strict";
 import { promises as fs } from "node:fs";
 import os from "node:os";
@@ -135,7 +136,7 @@ try {
   await test("photos reuse existing WebP storage and stable safe UUID URLs", async () => { for (const photo of request.photos) { assert.match(photo.url, /^\/uploads\/order-notifications\/[0-9a-f-]{36}\.webp$/u); assert.equal(photo.mimeType, "image/webp"); const stored = await fs.readFile(path.join(root, photo.url.slice(1))); assert.equal((await sharp(stored).metadata()).format, "webp"); } });
   await test("exact request retry preserves same photo references", async () => { const retry = await submit(f, creation(f, p.confirmationToken), images); assert.equal((await retry.json()).replayed, true); assert.deepEqual((await getReturnWorkflow(f.orderNumber, memberId)).requests[0].photos, request.photos); assert.equal((await state()).returnEvents?.length, 1); });
   await test("retry with changed photos conflicts without rewriting request", async () => { assert.equal((await submit(f, creation(f, p.confirmationToken), [await image("png", "#112233")])).status, 409); assert.deepEqual((await getReturnWorkflow(f.orderNumber, memberId)).requests[0].photos, request.photos); });
-  await test("Admin detail reads submitted attachment thumbnails and original links", async () => { const html = render(createElement(AdminReturnDetail, { initial: await getReturnWorkflow(f.orderNumber) })); for (const photo of request.photos) { assert.ok(html.includes(`src="${photo.url}"`)); assert.ok(html.includes(`href="${photo.url}"`)); } assert.ok(html.includes('target="_blank"')); });
+  await test("Admin detail previews submitted attachments inline", async () => { const html = render(createElement(AdminReturnDetail, { initial: await getReturnWorkflow(f.orderNumber) })); for (const photo of request.photos) { assert.ok(html.includes(`src="${photo.url}"`)); assert.ok(!html.includes(`<a href="${photo.url}"`)); } assert.ok(!html.includes('target="_blank"'));assert.ok(html.includes('aria-haspopup="dialog"')); });
   await test("member presentation hides internal request IDs and engine labels", async () => { const view = await getReturnWorkflow(f.orderNumber, memberId), html = render(createElement(ReturnRequestEvidence, { request: view.requests[0], view })); assert.ok(!html.includes(created.returnRequestId)); assert.doesNotMatch(html, /manual_review_required|confirmationFingerprint|確認證據|return_request_/u); });
   await test("self-purchase label derives actual reward type", async () => assert.equal((await getReturnWorkflow(f.orderNumber, memberId)).rewards[0].programCopyKey, "member.returns.rewardSelf"));
   await test("pending HOLD uses friendly configurable reason key", async () => assert.equal((await getReturnWorkflow(f.orderNumber, memberId)).rewards[0].reasonCopyKey, "member.returns.rewardHeld"));
@@ -173,10 +174,10 @@ try {
   let ui = await draw(); (ui.find(node => node.props["data-action"] === "start-return")!.props.onClick as () => void)(); ui = await draw();
   const picker = ui.find(node => node.type === "input" && node.props.type === "file")!;
   (picker.props.onChange as (event: unknown) => void)({ target: { files: [images[0]], value: "photo" } }); ui = await draw();
-  await test("member photo picker creates local preview before submission", () => assert.ok(ui.some(node => node.type === "img" && String(node.props.src).startsWith("blob:"))));
+  await test("member photo picker creates local preview before submission", () => assert.ok(ui.some(node => node.type === AttachmentLightbox && String(node.props.src).startsWith("blob:"))));
   const remove = ui.find(node => node.type === "button" && nodes(node).some(child => child.props.copyKey === "member.returns.removePhoto"))!;
   (remove.props.onClick as () => void)(); ui = await draw();
-  await test("member can remove a selected photo before submission", () => assert.ok(!ui.some(node => node.type === "img")));
+  await test("member can remove a selected photo before submission", () => assert.ok(!ui.some(node => node.type === AttachmentLightbox)));
   globals.__returnHooks = undefined;
   await saveMemberCenterCopy({ expectedRevision: 0, overrides: { "member.returns.errorInput": "請重新檢查您的退貨資料。" } });
   await test("member API validation messages use existing copy-management overrides", async () => { const response = await POST(new Request("http://localhost:3161/api/member/returns", { method: "POST", headers: { Origin: "http://localhost:3161", "Content-Type": "application/json" }, body: JSON.stringify({ action: "preview", reason: "", quantityAcknowledged: true }) }), { params: Promise.resolve({ orderNumber: next.orderNumber }) }); assert.equal((await response.json()).error, "請重新檢查您的退貨資料。"); });

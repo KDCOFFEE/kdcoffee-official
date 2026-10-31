@@ -1,3 +1,4 @@
+import { validateReturnRefundSettings } from "./returnRefundSettings";
 import { promises as fs } from "fs";
 import path from "path";
 
@@ -339,6 +340,7 @@ export function validateMembershipBusinessRules(value: unknown, options: Members
   if (typeof opening.enabled !== "boolean" || !dateOnly(opening.startDate, true) || !dateOnly(opening.endDate, true) || !Array.isArray(opening.shippingMethods) || opening.shippingMethods.some((method) => typeof method !== "string" || !method)) throw new MembershipRulesValidationError("開站會員免運設定不正確");
   if ((opening.startDate || opening.endDate) && (!opening.startDate || !opening.endDate || opening.startDate > opening.endDate)) throw new MembershipRulesValidationError("會員免運的開始與結束日期不正確");
 
+  if (rules.returnRefund !== undefined) validateReturnRefundSettings(rules.returnRefund);
   if (!object(rules.shipping) || typeof rules.shipping.subscriptionFreeShipping !== "boolean") throw new MembershipRulesValidationError("定期購運費設定不正確");
   integer(rules.shipping.subscriptionShippingFee, 0, 10_000, "定期購運費");
   integer(rules.shipping.sevenElevenShippingFee, 0, 10_000, "7-ELEVEN shipping fee");

@@ -1,0 +1,24 @@
+// Adds only two isolated Owner cases; preserves existing cases and never creates a return request.
+import assert from "node:assert/strict";
+import fs from "node:fs/promises";
+import path from "node:path";
+import os from "node:os";
+import {runInventoryOrderTransaction} from "../lib/orderInventoryTransaction";
+import {withStoredOrderUpdateLock} from "../lib/adminOrders";
+import {prepareOrderCompletionWrite} from "../lib/orderCompletion";
+const session=JSON.parse(await fs.readFile("qa-output/j6f2c-owner-session.json","utf8"));
+const root=path.resolve(session.qaRoot);assert.ok(root.startsWith(path.resolve(os.tmpdir())+path.sep+"kd-j6f2c-owner-"));assert.equal(session.url,"http://localhost:"+Number(process.env.RETURN_REFUND_QA_PORT||3162));process.env.KD_DATA_DIR=root;
+const loginForm=new FormData();loginForm.set("password",session.adminPassword);const login=await fetch(session.url+"/api/admin/login",{method:"POST",body:loginForm,redirect:"manual"});assert.equal(login.status,303);const cookie=login.headers.get("set-cookie")?.split(";")[0];assert.ok(cookie?.startsWith("kd_admin_session="));session.adminCookie=cookie;
+const c=session.cases[2],original=JSON.parse(await fs.readFile(path.join(root,"orders",c.orderNumber+".json"),"utf8"));assert.equal(original.orderMode,"home_delivery");assert.equal(original.payment,"cash_on_delivery");
+const ownerBefore=await Promise.all(session.cases.map(async(item:{orderNumber:string})=>fs.readFile(path.join(root,"orders",item.orderNumber+".json"),"utf8")));
+for(const [orderNumber,handoff] of [["KD20261030-9311","in_person"],["KD20261030-9312","courier"]]){
+ const file=path.join(root,"orders",orderNumber+".json"),now=new Date().toISOString();
+ try{await fs.access(file);}catch{const created=await runInventoryOrderTransaction({websiteFile:path.join(root,"store/website-data.json"),orderDir:path.join(root,"orders"),initialOrderNumber:orderNumber,generateOrderNumber:()=>orderNumber,items:[{slug:"qa-coffee",optionId:"qa-half-pound",optionLabel:"半磅",quotedUnitPrice:500,quantity:1,preparationLabel:"咖啡豆"}],buildOrder:(id,priced)=>({order:{...priced,orderNumber:id,createdAt:now,status:"ready_for_pickup",orderMode:"home_delivery",payment:"cash_on_delivery",paymentDetails:{method:"cash_on_delivery",status:"paid"},member:original.member,customer:{name:handoff==="in_person"?"隔離 QA：COD 現場退貨":"隔離 QA：COD 宅配寄回"},shipping:40,codServiceFee:25,totalBeforeCredit:565,total:565,credit:{appliedAmount:0}},lineText:"isolated Owner payment-preview QA"})});assert.ok(created.finalized);await withStoredOrderUpdateLock(orderNumber,async(order,persist)=>{await persist(await prepareOrderCompletionWrite(order,{...order,status:"completed",fulfillmentEvents:[{eventId:"qa-preview-"+orderNumber,state:"completed",occurredAt:now}]}) as typeof order);});}
+ const response=await fetch(session.url+"/api/member/orders/"+orderNumber+"/returns",{headers:{Cookie:c.memberCookie}});assert.equal(response.status,200);const view=await response.json();assert.equal(view.requests.length,0,"Do not reset an already-used Owner case");
+ const payload={action:"preview",lines:[{returnLineRef:view.lines[0].returnLineRef,quantity:1}],reason:"商品不符需求",conditionAcknowledgement:{itemsComplete:true,unopenedUnusedWhereApplicable:true},quantityAcknowledged:true,refundHandoff:handoff,refundBank:handoff==="in_person"?null:{bank:"822｜中國信託商業銀行",holder:"隔離 QA",account:"1234567890",branch:""}};
+ const previewResponse=await fetch(session.url+"/api/member/orders/"+orderNumber+"/returns",{method:"POST",headers:{Origin:session.url,Cookie:c.memberCookie,"Content-Type":"application/json"},body:JSON.stringify(payload)});const preview=await previewResponse.json();assert.equal(previewResponse.status,200,JSON.stringify(preview));assert.deepEqual(preview.paymentPreview,{status:"resolved",originalPaidTotal:565,merchandiseAmount:500,shippingAmount:40,codFee:25,amount:500,method:handoff==="in_person"?"manual_cash":"manual_bank_transfer"});assert.equal(view.refundSettings.destinations.in_person.mapUrl,"https://maps.app.goo.gl/LnWPuqmR2BfDW3UM8");
+ for(const role of ["member","admin"]){const route=role==="member"?"/member/orders/"+orderNumber+"/returns":"/admin/returns/"+orderNumber;const page=await fetch(session.url+route,{headers:{Cookie:role==="member"?c.memberCookie:session.adminCookie},redirect:"manual"});assert.equal(page.status,200,route);}
+ console.log(orderNumber+" "+handoff+": HTTP preview 500; original shipping 40/COD 25 retained; Member/Admin HTTP 200; request not created");
+}
+assert.deepEqual(await Promise.all(session.cases.map(async(item:{orderNumber:string})=>fs.readFile(path.join(root,"orders",item.orderNumber+".json"),"utf8"))),ownerBefore);
+console.log("Original Owner cases A-D unchanged. Login as case 3, then open orders 9311 / 9312. Server remains running.");

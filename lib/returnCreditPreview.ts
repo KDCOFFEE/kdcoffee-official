@@ -19,7 +19,7 @@ export type ReturnConfirmationPreview = {
   rewardHoldExpected: boolean; rewardAdjustmentPreview: { status: "review_on_decision"; explanation: string };
   evidenceFingerprint: string; confirmationFingerprint: string;
 };
-export type ReturnConfirmationSnapshot = { preview: ReturnConfirmationPreview; tokenDigest: string; confirmedAt: string; quantityAcknowledged: true; supportingPhotos?: CustomerNotificationPhoto[] };
+export type ReturnConfirmationSnapshot = { refundRequest?: import("./returnRefundSettings").ReturnRefundRequest; preview: ReturnConfirmationPreview; tokenDigest: string; confirmedAt: string; quantityAcknowledged: true; supportingPhotos?: CustomerNotificationPhoto[] };
 export class ReturnWorkflowError extends Error {
   readonly code: string;
   readonly status: number;

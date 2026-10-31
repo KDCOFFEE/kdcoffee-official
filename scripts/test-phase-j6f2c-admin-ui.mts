@@ -1,0 +1,47 @@
+/* eslint-disable react/no-children-prop -- Non-JSX Provider fixture overload. */
+import assert from "node:assert/strict";
+import {createElement} from "react";
+import {renderToStaticMarkup} from "react-dom/server";
+import Provider from "../components/member/MemberCenterCopyProvider";
+import MemberReturnWorkflow from "../components/member/MemberReturnWorkflow";
+import {AdminReturnDetail} from "../components/admin/AdminReturnWorkflow";
+import {safeRefundRequest} from "../lib/returnRefundSettings";
+import type {ReturnWorkflowView} from "../lib/returnWorkflow";
+const fullAccount="12345678901234",photo="/uploads/order-notifications/11111111-1111-4111-a111-111111111111.webp";
+const saved=safeRefundRequest({method:"manual_bank_transfer",originalPayment:"cash_on_delivery",originalOrderMode:"711_cod",rulesVersion:1,handoff:"seven_eleven",destination:{enabled:true,storeNumber:"123456",storeName:"歷史設定門市",address:"原申請時的寄回地址",recipient:"",phone:"",hours:"",instructions:"歷史寄回說明"},bank:{bank:"822｜中國信託商業銀行",holder:"測試會員",account:fullAccount,branch:""}})!;
+const request:ReturnWorkflowView["requests"][number]={returnRequestId:"return_request_admin_ui",requestedEventId:"requested",lastEventId:"requested",requestedBy:"qa-member",status:"pending",withdrawable:true,occurredAt:"2026-10-30T02:00:00Z",lastOccurredAt:"2026-10-30T02:00:00Z",lines:[{returnLineRef:"line",quantity:1,originalQuantity:2}],eventIds:["requested"],inventorySettlement:undefined,creditSettlement:null,refundRequest:saved,paymentRefund:{quote:{status:"resolved",amount:500,originalPaidTotal:1000,merchandisePaidTotal:1000,retainedHomeShipping:0,retainedCodFee:0,otherShippingReviewRequired:false,method:"manual_bank_transfer",evidenceFingerprint:"private-fingerprint"},status:"not_started",amount:null,confirmedAt:null,notification:undefined,proof:[]},reason:"商品破損：外盒有凹痕",conditionAcknowledgement:{itemsComplete:true,unopenedUnusedWhereApplicable:true},photos:[{url:photo,mimeType:"image/webp",bytes:12,width:8,height:8}],creditPreview:null,confirmedAt:null,timeline:[{type:"RETURN_REQUESTED",occurredAt:"2026-10-30T02:00:00Z",reason:"商品破損"}]};
+const view:ReturnWorkflowView={refundSettings:undefined,refundMethod:"manual_bank_transfer",orderNumber:"KD20261030-9397",orderStatus:"completed",completedAt:"2026-10-29T02:00:00Z",customer:"QA 退款會員",returnDeadline:"2026-11-06T15:59:59Z",eligible:true,eligibility:"resolved",message:null,technicalReason:null,lines:[{returnLineRef:"line",name:"咖啡商品",option:"半磅／中焙",imageUrl:photo,originalQuantity:2,approvedQuantity:0,effectivePendingQuantity:1,remainingReturnableQuantity:1}],requests:[request],rewards:[]};
+const render=(value:ReturnWorkflowView)=>renderToStaticMarkup(createElement(Provider,{initialOverrides:{"member.rewards.storeCredit.title":"KD幣"},children:createElement(AdminReturnDetail,{initial:value})}));
+let n=0;const check=(name:string,fn:()=>void)=>{fn();console.log("PASS "+(++n)+" "+name);};const html=render(view),plain=html.replace(/<[^>]+>/g," ").replace(/<!--.*?-->/g,"");
+check("compact order/member header",()=>{assert.match(html,/<header/);assert.ok(plain.includes("審核退貨")&&plain.includes(view.orderNumber)&&plain.includes(view.customer));});
+check("return status badge",()=>assert.ok(plain.includes("待審核")));check("refund status badge",()=>assert.ok(plain.includes("待審核後辦理")));
+for(const label of ["退貨申請摘要","退貨商品","退貨原因與說明","退貨寄回方式","退款資訊","審核處理"])check("section "+label,()=>assert.ok(plain.includes(label)));
+check("requested product and quantity prominent",()=>{assert.ok(plain.includes("咖啡商品")&&plain.includes("半磅／中焙")&&plain.includes("申請退貨"));assert.ok(html.includes("originalQuantity")===false);});
+check("member reason and explanation",()=>assert.ok(plain.includes(request.reason)));
+check("safe thumbnails open larger",()=>{assert.ok(html.includes('src="'+photo+'"'));assert.ok(!html.includes('<a href="'+photo+'"'));assert.ok(html.includes('aria-haspopup="dialog"'));assert.ok(!html.includes('target="_blank"'));assert.ok(!plain.includes(photo));});
+check("saved logistics labelled",()=>{for(const text of ["門市名稱","門市店號","門市地址","寄回說明",saved.destination.address,saved.destination.instructions])assert.ok(plain.includes(text));});
+check("original payment translated",()=>assert.ok(plain.includes("7-ELEVEN 取貨付款")));
+check("pre-approval payment quote",()=>assert.ok(plain.includes("本次預計退款")&&plain.includes("NT$500")));
+check("masked bank only",()=>{assert.ok(plain.includes("********1234"));assert.ok(!html.includes(fullAccount));});
+check("approve and reject actions",()=>assert.ok(plain.includes("核准退貨")&&plain.includes("拒絕退貨")));
+check("no engineering names in visible text",()=>{for(const term of ["payment_refund","manual_bank_transfer","manual_review_required","RETURN_REQUESTED","APPLIED","effectId","allocationFingerprint","private-fingerprint"])assert.ok(!plain.includes(term));});
+const approved=structuredClone(view);approved.requests[0].status="approved";approved.requests[0].paymentRefund.status="pending";approved.requests[0].inventorySettlement={approvedQuantity:1,appliedQuantity:1,status:"applied"};
+const after=render(approved);check("approved settlement mode retains refund action",()=>{assert.ok(after.includes("結算處理狀態")&&after.includes("辦理退款"));assert.ok(!after.includes("核准數量"));});
+approved.requests[0].paymentRefund.status="completed";approved.requests[0].paymentRefund.amount=500;approved.requests[0].paymentRefund.notification="failed";
+check("completed refund uses friendly status",()=>{const text=render(approved);assert.ok(text.includes("退款已完成")&&text.includes("發送失敗，可重送"));});
+const noPhotos=structuredClone(view);noPhotos.requests[0].photos=[];check("empty photo state",()=>assert.ok(render(noPhotos).includes("會員未提供退貨照片")));check("no credit state",()=>assert.ok(plain.includes("本次訂單未使用抵用金")));
+const empty=structuredClone(view);empty.requests=[];check("no-request state remains useful",()=>assert.ok(render(empty).includes("尚未收到這筆訂單的退貨申請")));
+
+function visibleText(markup:string){const stack:Array<{open:boolean;summary:boolean}>=[];let hiddenDialog=0;const output:string[]=[];for(const token of markup.match(/<[^>]+>|[^<]+/g)??[]){if(/^<details[ >]/.test(token)){stack.push({open:/\sopen(?:[ =>])/.test(token),summary:false});continue;}if(token.startsWith("</details")){stack.pop();continue;}if(token.startsWith("<summary")){if(stack.length)stack[stack.length-1].summary=true;continue;}if(token.startsWith("</summary")){if(stack.length)stack[stack.length-1].summary=false;continue;}if(token.startsWith("<dialog")){if(!/\sopen(?:[ =>])/.test(token))hiddenDialog++;continue;}if(token.startsWith("</dialog")){hiddenDialog=Math.max(0,hiddenDialog-1);continue;}if(!token.startsWith("<")&&!hiddenDialog&&stack.every(level=>level.open||level.summary))output.push(token);}return output.join(" ").replace(/\s+/g," ");}
+const visible=visibleText(html);
+check("secondary sections are closed by default",()=>{assert.ok((html.match(/<details/g)??[]).length>=4);assert.ok(!(html.match(/<details[^>]*\sopen[ =>]/g)??[]).length);});
+check("collapsed summaries remain useful",()=>{for(const text of ["商品破損：外盒有凹痕","1 張照片","7-ELEVEN 歷史設定門市","本次無需返還","期限"])assert.ok(visible.includes(text),text);assert.ok(!visible.includes(saved.destination.instructions));});
+check("critical product and refund data always visible",()=>{for(const text of ["退貨商品","申請退貨","待審核","NT$500","銀行轉帳","核准退貨"])assert.ok(visible.includes(text),text);});
+const pendingApproved=structuredClone(view);pendingApproved.requests[0].status="approved";pendingApproved.requests[0].paymentRefund.status="pending";const pendingHtml=render(pendingApproved),pendingVisible=visibleText(pendingHtml);
+check("approval shifts priority to refund processing",()=>{for(const text of ["退貨已核准","下一步","辦理退款","本次退款","NT$500","銀行轉帳","********1234"])assert.ok(pendingVisible.includes(text),text);assert.ok(!pendingVisible.includes("核准退貨"));});
+check("completed success stays primary when LINE failed",()=>{const markup=render(approved),text=visibleText(markup);assert.ok(text.includes("✓ 退款已完成"));assert.ok(text.includes("NT$500")&&text.includes("發送失敗，可重送")&&text.includes("重送退款通知"));assert.ok(!/<button[^>]*>辦理退款<\/button>/.test(markup));assert.ok(markup.indexOf("✓ 退款已完成")<markup.indexOf("⚠ 發送失敗"));});
+approved.requests[0].paymentRefund.proof=[{url:photo,width:8,height:8}];
+check("proof is compact and opens larger",()=>{const markup=render(approved);assert.match(markup,/<img[^>]*width="80"[^>]*height="64"/);assert.ok(markup.includes("退款證明")&&markup.includes('aria-haspopup="dialog"'));});
+check("normal collapsed and expanded HTML never contains full account",()=>{assert.ok(!pendingHtml.includes(fullAccount));assert.ok(!render(approved).includes(fullAccount));});
+check("Member return history uses the shared inline preview",()=>{const markup=renderToStaticMarkup(createElement(Provider,{initialOverrides:{},children:createElement(MemberReturnWorkflow,{initial:view})}));assert.ok(markup.includes('src="'+photo+'"'));assert.ok(markup.includes('aria-haspopup="dialog"'));assert.ok(!markup.includes('target="_blank"'));assert.ok(!markup.includes('<a href="'+photo+'"'));});
+console.log("J6F2C ADMIN UI "+n+" PASS");

@@ -15,3 +15,14 @@ export function returnStatusCopyKey(status: string) {
     RETURN_REQUESTED: "Pending", RETURN_PROCESSING_LOCKED: "Processing", RETURN_APPROVED: "Approved", RETURN_REJECTED: "Rejected", RETURN_WITHDRAWN: "Withdrawn" };
   return `member.returns.status${names[status] ?? "Pending"}`;
 }
+
+/** Display only: original payment plus preserved fulfillment context; never changes routing. */
+export function displayOriginalPaymentMethod(method?:string,orderMode?:string){
+ if(method==="pickup_confirmation")return "工作室現場付款";
+ if(method==="atm_transfer")return "ATM／銀行轉帳";
+ if(method==="cash_on_delivery"&&orderMode==="711_cod")return "7-ELEVEN 取貨付款";
+ if(method==="cash_on_delivery"&&orderMode==="home_delivery")return "宅配貨到付款";
+ return "需人工確認";
+}
+
+export function displayReturnRefundMethod(method?:string){return method==="manual_cash"?"工作室現場退款":method==="manual_bank_transfer"?"銀行轉帳":"需確認";}

@@ -1,5 +1,8 @@
 "use client";
-/* eslint-disable @next/next/no-img-element -- Native blob previews follow the existing order-photo UI; these user uploads bypass image optimization. */
+import MemberPaymentRefundPreview from "./MemberPaymentRefundPreview";
+import type {ReturnPaymentPreview} from "@/lib/returnPaymentAllocation";
+import AttachmentLightbox from "@/components/shared/AttachmentLightbox";
+import {validateReturnForm,submittedReturnQuantity,focusReturnFormError} from "@/lib/memberReturnFormValidation";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
@@ -7,15 +10,18 @@ import type { ReturnWorkflowView, safeCreditPreview } from "@/lib/returnWorkflow
 import { returnTaipeiDate } from "@/lib/returnPresentation";
 import { MemberCopyText } from "./MemberCenterCopyProvider";
 import { useMemberCopyKey } from "./MemberCenterCopyProvider";
+import ReturnRefundFields from "./ReturnRefundFields";
 import ReturnReasonFields from "./ReturnReasonFields";
 import { PackageReturnIcon, ReturnPhotoIcon } from "./ReturnIcons";
 import { ORDER_PHOTO_ACCEPT, validOrderPhotoSelection } from "@/lib/orderPhotoPolicy";
 import { ReturnCreditEvidence, ReturnRequestEvidence, ReturnRewardEvidence } from "./ReturnEvidence";
 import styles from "./ReturnWorkflow.module.css";
 
-type Confirmation = { preview: ReturnType<typeof safeCreditPreview>; confirmationToken: string; values: Record<string, unknown>; idempotencyKey: string; photos: File[] };
+type Confirmation = { paymentPreview?:ReturnPaymentPreview;quantity:number; preview: ReturnType<typeof safeCreditPreview>; confirmationToken: string; values: Record<string, unknown>; idempotencyKey: string; photos: File[] };
 export default function MemberReturnWorkflow({ initial }: { initial: ReturnWorkflowView }) {
   const [view, setView] = useState(initial), [open, setOpen] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState("");
+  const formRef=useRef<HTMLFormElement>(null);
+  const [fieldErrors,setFieldErrors]=useState<Record<string,string>>({});
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
   const [photos, setPhotos] = useState<File[]>([]), [photoUrls, setPhotoUrls] = useState<string[]>([]);
   const copy = useMemberCopyKey();
@@ -51,12 +57,16 @@ export default function MemberReturnWorkflow({ initial }: { initial: ReturnWorkf
     if (!response.ok) throw Object.assign(new Error(result.error || copy("member.returns.submitError")), { status: response.status });
     return result;
   }
+  function checkForm(form:HTMLFormElement){const data=new FormData(form);return validateReturnForm(view.lines,name=>data.get(name),{handoff:!!view.refundSettings,bank:!!view.refundSettings&&view.refundMethod==="manual_bank_transfer"});}
+  function clearCorrected(){const form=formRef.current;if(!form)return;requestAnimationFrame(()=>{const current=checkForm(form).errors;setFieldErrors(previous=>Object.fromEntries(Object.keys(previous).filter(name=>current[name]).map(name=>[name,current[name]])));});}
   async function preview(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault(); setError(""); setBusy(true);
-    const data = new FormData(event.currentTarget);
+    event.preventDefault();if(busy)return;setError("");setConfirmation(null);
+    const form=event.currentTarget,validation=checkForm(form);setFieldErrors(validation.errors);
+    const first=Object.keys(validation.errors)[0];if(first){focusReturnFormError(form,first);return;}
+    setBusy(true);const data=new FormData(form);
     const values = { lines: view.lines.map(line => ({ returnLineRef: line.returnLineRef, quantity: Number(data.get(line.returnLineRef)) })).filter(line => line.quantity > 0),
-      reason: data.get("reason"), conditionAcknowledgement: { itemsComplete: data.get("itemsComplete") === "on", unopenedUnusedWhereApplicable: data.get("unopened") === "on" }, quantityAcknowledged: data.get("quantityAcknowledged") === "on" };
-    try { const result = await post({ ...values, action: "preview" }); setConfirmation({ ...result, values, photos: [...photos], idempotencyKey: crypto.randomUUID() }); }
+      refundHandoff:data.get("refundHandoff"),refundBank:Object.fromEntries(["bank","holder","account","branch"].map(key=>[key,String(data.get("refund_"+key)??"")])),reason: data.get("reason"), conditionAcknowledgement: { itemsComplete: data.get("itemsComplete") === "on", unopenedUnusedWhereApplicable: data.get("unopened") === "on" }, quantityAcknowledged: data.get("quantityAcknowledged") === "on" };
+    try { const quantity=submittedReturnQuantity(values.lines);const result = await post({ ...values, action: "preview" });submittedReturnQuantity(values.lines,result.preview.lines);setConfirmation({ ...result, quantity,values, photos: [...photos], idempotencyKey: crypto.randomUUID() }); }
     catch (error) { setError(error instanceof Error ? error.message : copy("member.returns.previewError")); }
     finally { setBusy(false); }
   }
@@ -64,6 +74,7 @@ export default function MemberReturnWorkflow({ initial }: { initial: ReturnWorkf
     if (!confirmation || busy) return;
     setBusy(true); setError("");
     try {
+      submittedReturnQuantity(confirmation.values.lines as Array<{returnLineRef:string;quantity:number}>,confirmation.preview.lines);
       await post({ ...confirmation.values, action: "create", confirmationToken: confirmation.confirmationToken, finalConfirmation: true, idempotencyKey: confirmation.idempotencyKey }, confirmation.photos);
       setConfirmation(null); setOpen(false); replacePhotos([]); await reload();
     } catch (error) {
@@ -88,27 +99,29 @@ export default function MemberReturnWorkflow({ initial }: { initial: ReturnWorkf
     {requests.length ? <section className={styles.requestSection}><h2><MemberCopyText copyKey="member.returns.history" /></h2>{requests.map(request => <article className={styles.card} key={request.returnRequestId}>
       <ReturnRequestEvidence request={request} view={view} />{request.withdrawable ? <button className={styles.secondary} type="button" disabled={busy} onClick={() => withdraw(request.returnRequestId)}><MemberCopyText copyKey="member.returns.withdraw" /></button> : null}</article>)}</section> : null}
     {view.eligible ? <section className={styles.newRequest}><div><strong><MemberCopyText copyKey="member.returns.remaining" values={{ quantity: remaining }} /></strong></div><button type="button" data-action="start-return" onClick={() => setOpen(!open)} disabled={busy}><MemberCopyText copyKey={requests.length ? "member.returns.applyAgain" : "member.returns.apply"} /></button></section> : null}
-    {open && view.eligible ? <form className={styles.form} onSubmit={preview}><h2><MemberCopyText copyKey="member.returns.selectItems" /></h2>{view.lines.map(line => <div className={styles.lineCard} key={line.returnLineRef}><strong>{line.name}</strong><p>{line.option}</p>
+    {open && view.eligible ? <form ref={formRef} noValidate className={styles.form} onSubmit={preview} onChange={clearCorrected}><h2><MemberCopyText copyKey="member.returns.selectItems" /></h2>{view.lines.map(line => <div className={styles.lineCard} key={line.returnLineRef}><strong>{line.name}</strong><p>{line.option}</p>
       <small><MemberCopyText copyKey="member.returns.quantitySummary" values={{ original: line.originalQuantity, approved: line.approvedQuantity, pending: line.effectivePendingQuantity, remaining: line.remainingReturnableQuantity }} /></small>
-      <label><MemberCopyText copyKey="member.returns.quantity" /><input type="number" name={line.returnLineRef} min={0} max={line.remainingReturnableQuantity} step={1} defaultValue={0} disabled={!line.remainingReturnableQuantity || busy} /></label></div>)}
-      <ReturnReasonFields disabled={busy} />
+      <label><MemberCopyText copyKey="member.returns.quantity" /><input type="number" name={line.returnLineRef} aria-invalid={!!fieldErrors[line.returnLineRef]} aria-describedby={fieldErrors[line.returnLineRef]?"return-error-"+line.returnLineRef:undefined} min={0} max={line.remainingReturnableQuantity} step={1} defaultValue={0} disabled={!line.remainingReturnableQuantity || busy} />{fieldErrors[line.returnLineRef]?<small id={"return-error-"+line.returnLineRef} className={`${styles.fieldError} ${styles.quantityError}`} role="alert">{copy("member.returns."+fieldErrors[line.returnLineRef])}</small>:null}</label></div>)}
+      {view.refundSettings?<ReturnRefundFields settings={view.refundSettings} method={view.refundMethod} disabled={busy} errors={Object.fromEntries(Object.entries(fieldErrors).map(([key,value])=>[key,copy("member.returns."+value)]))} onEdited={clearCorrected}/>:null}
+      <ReturnReasonFields disabled={busy} error={fieldErrors.reason?copy("member.returns."+fieldErrors.reason):undefined}/>
       <section className={styles.photoPicker}><label className={`${styles.uploadControl}${busy ? ` ${styles.uploadDisabled}` : ""}`} htmlFor={photoInputId}><ReturnPhotoIcon /><span><strong><MemberCopyText copyKey="member.returns.uploadPhotos" /></strong><small>JPEG / PNG / WebP</small></span>
         <input id={photoInputId} className={styles.nativeFileInput} type="file" multiple accept={ORDER_PHOTO_ACCEPT} disabled={busy} aria-describedby={`${photoInputId}-help`} onChange={event => {
         const selected = [...photos, ...Array.from(event.target.files ?? [])]; event.target.value = "";
         if (selected.length > 3 || selected.some(photo => !validOrderPhotoSelection(photo))) { setError(copy("member.returns.photoError")); return; }
         setError(""); replacePhotos(selected);
       }} /></label><p id={`${photoInputId}-help`} className={styles.muted}><MemberCopyText copyKey="member.returns.photosHint" /></p>
-        <div className={styles.photos}>{photos.map((photo, index) => <figure key={`${photo.name}-${index}`}><img src={photoUrls[index]} alt={copy("member.returns.photoAlt")} /><button type="button" disabled={busy} className={styles.secondary} onClick={() => replacePhotos(photos.filter((_, i) => i !== index))}><MemberCopyText copyKey="member.returns.removePhoto" /></button></figure>)}</div>
+        <div className={styles.photos}>{photos.map((photo, index) => <figure key={`${photo.name}-${index}`}><AttachmentLightbox src={photoUrls[index]} alt={copy("member.returns.photoAlt")} width={128} height={108}/><button type="button" disabled={busy} className={styles.secondary} onClick={() => replacePhotos(photos.filter((_, i) => i !== index))}><MemberCopyText copyKey="member.returns.removePhoto" /></button></figure>)}</div>
       </section>
-      <div className={styles.conditions}><label><input type="checkbox" name="itemsComplete" required disabled={busy} /><MemberCopyText copyKey="member.returns.conditionComplete" /></label>
-      <label><input type="checkbox" name="unopened" required disabled={busy} /><MemberCopyText copyKey="member.returns.conditionUnused" /></label>
-      <label><input type="checkbox" name="quantityAcknowledged" required disabled={busy} /><MemberCopyText copyKey="member.returns.conditionQuantity" /></label></div>
+      <div className={styles.conditions}><label><input type="checkbox" name="itemsComplete" aria-invalid={!!fieldErrors.itemsComplete} aria-describedby={fieldErrors.itemsComplete?"return-error-itemsComplete":undefined} required disabled={busy} /><MemberCopyText copyKey="member.returns.conditionComplete" />{fieldErrors.itemsComplete?<small id="return-error-itemsComplete" className={styles.fieldError} role="alert">{copy("member.returns."+fieldErrors.itemsComplete)}</small>:null}</label>
+      <label><input type="checkbox" name="unopened" aria-invalid={!!fieldErrors.unopened} aria-describedby={fieldErrors.unopened?"return-error-unopened":undefined} required disabled={busy} /><MemberCopyText copyKey="member.returns.conditionUnused" />{fieldErrors.unopened?<small id="return-error-unopened" className={styles.fieldError} role="alert">{copy("member.returns."+fieldErrors.unopened)}</small>:null}</label>
+      <label><input type="checkbox" name="quantityAcknowledged" aria-invalid={!!fieldErrors.quantityAcknowledged} aria-describedby={fieldErrors.quantityAcknowledged?"return-error-quantityAcknowledged":undefined} required disabled={busy} /><MemberCopyText copyKey="member.returns.conditionQuantity" />{fieldErrors.quantityAcknowledged?<small id="return-error-quantityAcknowledged" className={styles.fieldError} role="alert">{copy("member.returns."+fieldErrors.quantityAcknowledged)}</small>:null}</label></div>
       <button type="submit" disabled={busy} ref={previewButton}><MemberCopyText copyKey="member.returns.confirmTitle" /></button>
     </form> : null}
     <dialog ref={dialog} className={`${styles.panel} ${styles.dialog}`} aria-labelledby="return-confirm-title" onCancel={event => { event.preventDefault(); if (!busy) { setConfirmation(null); setError(""); } }}>
       {confirmation ? <><div className={styles.dialogBody}><h2 id="return-confirm-title"><MemberCopyText copyKey="member.returns.confirmTitle" /></h2>
-        <p><MemberCopyText copyKey="member.returns.confirmBody" values={{ quantity: confirmation.preview.lines.reduce((sum, line) => sum + line.quantity, 0) }} /></p>
+        <p><MemberCopyText copyKey="member.returns.confirmBody" values={{ quantity: confirmation.quantity }} /></p>
         {confirmation.preview.lines.map(line => <p key={line.returnLineRef}>{view.lines.find(item => item.returnLineRef === line.returnLineRef)?.name} × {line.quantity}</p>)}
+        <MemberPaymentRefundPreview preview={confirmation.paymentPreview}/>
         <ReturnCreditEvidence preview={confirmation.preview} warning />
         {error ? <p role="alert" className={styles.notice}>{error}</p> : null}
         </div>
