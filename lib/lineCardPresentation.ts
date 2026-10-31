@@ -31,7 +31,7 @@ export const LINE_CARD_EVENT_ART:Readonly<Partial<Record<CanonicalEventKey,keyof
 export function composeLineCard(card:ResolvedNotificationCard){
  const family=LINE_CARD_FAMILY_ART[card.family];
  const variant=LINE_CARD_EVENT_ART[card.eventKey as CanonicalEventKey];
- const art=variant?LINE_CARD_HEADER_ASSETS[variant]:family;
+ const art=card.headerAssetKey?LINE_CARD_HEADER_ASSETS[card.headerAssetKey]:variant?LINE_CARD_HEADER_ASSETS[variant]:family;
  const imagePath='/images/line-cards/'+art.file;
  const creditExpiry=card.eventKey==='customer.reward.credit_expiring';
  const priorities=creditExpiry?['amount','creditAmount']:card.family==='RETURN'?['refundAmount','amount','orderNumber']:card.family==='REWARD'?['amount','rewardAmount','points','creditAmount','fulfillmentNumber']:card.family==='REMINDER'?['expiresAt','expiresOn','expiryDate','modificationDeadline','deliveryDate']:card.family==='FULFILLMENT'?['storeName','pickupDate','orderNumber']:['orderNumber','productName'];
