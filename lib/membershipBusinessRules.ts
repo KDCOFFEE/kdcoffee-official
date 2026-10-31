@@ -173,8 +173,8 @@ export const DEFAULT_MEMBERSHIP_RULES: MembershipBusinessRules = {
     nextCycleReminderDays: 14,
     modificationCutoffReminderDays: 1,
     events: Object.fromEntries(membershipNotificationEventTypes.map((eventType) => [eventType, {
-      enabled: true,
-      channels: eventType === "unclaimed_risk"
+      enabled: eventType !== "return_refund_completed",
+      channels: eventType === "return_admin_request_received" ? ["admin", "line"] : eventType === "unclaimed_risk"
         ? ["member_center", "line", "admin"]
         : eventType === "credit_reward"
           ? ["member_center", "line", "email"]
@@ -206,11 +206,14 @@ export function normalizeMembershipBusinessRules(value: unknown, options: Member
   const sourceEvents = object(notification.events) ? notification.events : {};
   const events = Object.fromEntries(membershipNotificationEventTypes.map((eventType) => {
     const policy = object(sourceEvents[eventType]) ? sourceEvents[eventType] : {};
-    return [eventType, { ...DEFAULT_MEMBERSHIP_RULES.notification.events[eventType], ...policy }];
+    const legacyRefund = eventType === "return_refund_completed" && !object(sourceEvents[eventType])
+      ? { enabled: typeof nested("returnRefund").lineEnabled === "boolean" ? nested("returnRefund").lineEnabled : false } : {};
+    return [eventType, { ...DEFAULT_MEMBERSHIP_RULES.notification.events[eventType], ...legacyRefund, ...policy }];
   }));
   return {
     ...structuredClone(DEFAULT_MEMBERSHIP_RULES),
     ...source,
+    ...(object(source.returnRefund) ? { returnRefund: { ...source.returnRefund, lineEnabled: events.return_refund_completed.enabled } } : {}),
     membership: { ...DEFAULT_MEMBERSHIP_RULES.membership, ...membership, openingYearFreeShipping: { ...DEFAULT_MEMBERSHIP_RULES.membership.openingYearFreeShipping, ...opening } },
     shipping: { ...DEFAULT_MEMBERSHIP_RULES.shipping, ...nested("shipping") },
     payment: (() => {

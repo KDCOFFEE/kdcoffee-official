@@ -14,6 +14,11 @@ export const membershipNotificationEventTypes = [
   "referral_reward",
   "credit_reward",
   "credit_expiry",
+  "return_admin_request_received",
+  "return_request_received",
+  "return_request_approved",
+  "return_request_rejected",
+  "return_refund_completed",
 ] as const;
 
 export type MembershipNotificationEventType = (typeof membershipNotificationEventTypes)[number];

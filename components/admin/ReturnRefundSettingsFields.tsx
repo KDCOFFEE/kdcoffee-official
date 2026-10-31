@@ -49,7 +49,7 @@ export default function ReturnRefundSettingsFields({ value, onChange }: { value?
         <legend>退款通知與證明</legend>
         <p className={styles.description}>設定退款完成後的通知與證明顯示。</p>
         <div className={styles.options}>
-          <label className={styles.option}><input name="lineEnabled" type="checkbox" checked={settings.lineEnabled} onChange={event => onChange({ ...structuredClone(settings), lineEnabled: event.target.checked })} /><span><strong>退款完成後通知會員 LINE</strong><small>退款完成後通知會員退款結果；通知失敗不影響退款完成狀態。</small></span></label>
+          <p >退款完成通知請至「08 LINE／Email 通知」設定。</p>
           <label className={styles.option}><input name="proofEnabled" type="checkbox" checked={settings.proofEnabled} onChange={event => onChange({ ...structuredClone(settings), proofEnabled: event.target.checked })} /><span><strong>允許上傳退款證明</strong><small>退款完成後，會員可在會員中心查看退款證明。</small></span></label>
         </div>
       </fieldset>

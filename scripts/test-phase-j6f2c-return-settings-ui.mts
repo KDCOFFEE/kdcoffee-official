@@ -51,6 +51,7 @@ check("existing canonical values load without migration", () => {
 check("four accessible cards and friendly grouping", () => {
   const html = renderToStaticMarkup(draw());
   assert.equal((html.match(/<fieldset/g) ?? []).length, 4);
+  assert.ok(!nodes(draw()).some(n=>n.props.name==="lineEnabled"));assert.ok(html.includes("08 LINE／Email 通知"));
   for (const title of ["7-ELEVEN 寄回", "宅配寄回工作室", "工作室現場退貨", "退款通知與證明"]) assert.ok(html.includes(title));
   assert.match(html, /設定會員可使用的退貨方式、寄回資訊與人工退款通知。/);
 });
@@ -70,8 +71,8 @@ check("saved HTTPS map URL supplies secondary safe link", () => {
 change("in_person_mapUrl", "javascript:alert(1)");
 check("invalid map cannot become an actionable link", () => assert.ok(!nodes(draw()).some(node => node.type === "a")));
 change("in_person_mapUrl", "https://maps.example.test/qa");
-change("lineEnabled", true); change("proofEnabled", false); await persist();
-check("LINE and proof switches retain independent canonical flags", () => { assert.equal(edited.lineEnabled, true); assert.equal(edited.proofEnabled, false); });
+rules.notification.events.return_refund_completed.enabled=true; edited.lineEnabled=true; change("proofEnabled", false); await persist();
+check("central LINE policy mirrors the legacy flag while proof remains independent", () => { assert.equal(edited.lineEnabled, true); assert.equal(edited.proofEnabled, false); });
 const destinationBeforeDisable = structuredClone(edited.destinations.courier);
 change("courier_enabled", false); await persist();
 check("disable preserves destination values", () => assert.deepEqual(edited.destinations.courier, { ...destinationBeforeDisable, enabled: false }));
@@ -90,7 +91,7 @@ const preview = await memberReturnAction(orderNumber, "qa-settings-member", { ..
 assert.ok("confirmationToken" in preview);
 await memberReturnAction(orderNumber, "qa-settings-member", { ...values, action: "create", finalConfirmation: true, confirmationToken: preview.confirmationToken, idempotencyKey: "qa-settings-request" });
 const historical = structuredClone((await getReturnWorkflow(orderNumber, "qa-settings-member")).requests[0].refundRequest);
-change("courier_address", "QA future address"); change("lineEnabled", false); change("proofEnabled", true); await persist();
+change("courier_address", "QA future address"); rules.notification.events.return_refund_completed.enabled=false; edited.lineEnabled=false; change("proofEnabled", true); await persist();
 member = await getReturnWorkflow(orderNumber, "qa-settings-member");
 check("settings edits preserve historical request snapshots", () => { assert.deepEqual(member.requests[0].refundRequest, historical); assert.equal(member.refundSettings?.destinations.courier.address, "QA future address"); });
 await assert.rejects(() => saveMembershipBusinessRules({ expectedRevision: 0, rules }), MembershipRulesVersionConflictError);

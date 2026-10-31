@@ -5,6 +5,10 @@ const text = (name: string, defaultText: string, tokens: Record<string, string> 
   tokens: { ...tokens, ...(defaultText.includes("{creditName}") ? { creditName: "會員中心統一抵用金名稱" } : {}) }, multiline: true,
 });
 export const RETURN_COPY_CATALOG: readonly MemberCopyDefinition[] = [
+  text("notificationSubject","KD Coffee｜退貨進度通知"),
+  text("notificationReceived","我們已收到您的退貨申請，工作室將進行審核。"),
+  text("notificationApproved","您的退貨申請已核准，退款將依核准後流程辦理。"),
+  text("notificationRejected","您的退貨申請未獲核准，請登入會員中心查看結果或聯絡工作室。"),
   text("paymentOrderTotal", "本次訂單金額"),
   text("refundProofTitle", "退款證明"), text("refundProofHint", "點擊圖片可查看退款證明"),
   text("refundProofView", "查看退款證明"), text("refundProofAlt", "退款證明 {number}", { number: "證明圖片序號" }),
