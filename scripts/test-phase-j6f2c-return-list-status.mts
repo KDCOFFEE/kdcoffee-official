@@ -13,11 +13,11 @@ const rows=[base,{...base,returnRequestId:"return_request_private_2",orderNumber
 const list=render(createElement(AdminReturnList,{initial:rows})),plain=list.replace(/<[^>]+>/g," ");
 check("operational header and search labels",()=>{assert.match(plain,/退貨管理/);assert.match(plain,/集中查看會員退貨申請/);assert.match(plain,/搜尋訂單、會員/);});
 check("internal IDs and enums absent from visible list",()=>{for(const word of ["return_request_","manual_bank_transfer","manual_cash","manual_review_required","not_started","fingerprint","effectId"])assert.ok(!plain.includes(word),word);});
-check("order/member/status badges visible",()=>{for(const word of [base.orderNumber,base.customer!,"已核准","待退款","待審核","已完成退款"])assert.ok(plain.includes(word),word);});
+check("order/member/status badges visible",()=>{for(const word of [base.orderNumber,base.customer!,"已核准","待退款","待審核"])assert.ok(plain.includes(word),word);});
 check("quantity, server amount and method visible",()=>{assert.match(plain,/申請退貨.*1 件/);assert.match(plain,/本次退款.*NT\$500/);assert.match(plain,/銀行轉帳/);assert.match(plain,/工作室現場退款/);});
 check("unknown amount stays unresolved",()=>assert.match(plain,/本次退款.*需確認/));
-check("actions match pending/approved/completed state",()=>{for(const word of ["審核退貨","辦理退款","查看紀錄"])assert.match(plain,new RegExp(word));assert.match(list,/href="\/admin\/returns\/KD20261030-9312#/);});
-check("attention rows precede completed records",()=>assert.ok(plain.indexOf("KD20261030-9302")<plain.indexOf("KD20261030-9304")));
+check("actions match pending/approved/completed state",()=>{for(const word of ["審核退貨","辦理退款","人工確認退款方式"])assert.match(plain,new RegExp(word));assert.match(list,/href="\/admin\/returns\/KD20261030-9312#/);});
+check("default work view excludes completed records",()=>{assert.ok(plain.includes("KD20261030-9302"));assert.ok(!plain.includes("KD20261030-9304"));});
 const globals=globalThis as unknown as Record<string,unknown>,slots:unknown[]=[];let cursor=0;
 function nodes(v:unknown):Array<{type:unknown;props:Record<string,unknown>}>{if(Array.isArray(v))return v.flatMap(nodes);if(!v||typeof v!=="object"||!("props"in v))return[];const e=v as {type:unknown;props:Record<string,unknown>};return[e,...nodes(e.props.children)];}
 function drawList(){cursor=0;globals.__returnHooks={useState(initial:unknown){const i=cursor++;if(!(i in slots))slots[i]=initial;return[slots[i],(next:unknown)=>{slots[i]=next;}];}};try{return AdminReturnList({initial:rows});}finally{delete globals.__returnHooks;}}

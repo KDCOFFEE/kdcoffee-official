@@ -1,5 +1,6 @@
 "use client";
 
+import {returnOperation,isActionableReturn,returnOperationAction,uniqueReturnOperationRows,summarizeReturnOperationRows,compareReturnOperationRows} from "@/lib/returnOperationPresentation";
 import css from "./AdminReturnDetail.module.css";
 import {StatusBadge,Facts,AdminReturnItems,AdminReasonPhotos,AdminLogistics,AdminRefundInformation,AdminCreditInformation,AdminSettlementStatus,AdminRequestSummary,AdminSecondaryDetails,AdminCreditSummary,returnReasonSummary,returnLogisticsSummary} from "./AdminReturnSections";
 import ReturnRefundProcessing from "./ReturnRefundProcessing";
@@ -50,17 +51,22 @@ function ReviewControls({ lines, disabled, pending, onReview }: { lines: Array<{
 }
 export type AdminReturnRow = { returnRequestId:string;orderNumber:string;customer?:string;status:string;refundStatus:string;refundAmount:number|null;refundMethod?:string;requestedAt:string;quantity:number;returnDeadline:string|null };
 export function AdminReturnList({ initial }: { initial: AdminReturnRow[] }) {
- const [search,setSearch]=useState(""),[filter,setFilter]=useState("");
- const matches=(row:AdminReturnRow)=>!filter||(filter==="review"&&["pending","processing"].includes(row.status))||(filter==="approved"&&row.status==="approved")||(filter==="refund_pending"&&row.refundStatus==="pending")||(filter==="completed"&&row.refundStatus==="completed")||(filter==="closed"&&["rejected","withdrawn"].includes(row.status));
- const priority=(row:AdminReturnRow)=>["pending","processing"].includes(row.status)?0:row.refundStatus==="pending"?1:row.refundStatus==="manual_review_required"?2:row.refundStatus==="completed"?3:4;
- const rows=initial.filter(row=>matches(row)&&[row.orderNumber,row.customer??""].join(" ").toLowerCase().includes(search.trim().toLowerCase())).sort((a,b)=>priority(a)-priority(b)||Date.parse(b.requestedAt)-Date.parse(a.requestedAt));
- const action=(row:AdminReturnRow)=>row.refundStatus==="completed"?"查看紀錄":row.status==="approved"&&row.refundStatus==="pending"?"辦理退款":["pending","processing"].includes(row.status)?"審核退貨":["rejected","withdrawn"].includes(row.status)?"查看紀錄":"查看退貨";
+ const [search,setSearch]=useState(""),[filter,setFilter]=useState("actionable");
+ const searched=uniqueReturnOperationRows(initial).filter(row=>[row.orderNumber,row.customer??""].join(" ").toLowerCase().includes(search.trim().toLowerCase()));
+ const counts=summarizeReturnOperationRows(searched);
+ const matches=(row:AdminReturnRow)=>!filter||(filter==="actionable"?isActionableReturn(row):returnOperation(row)===filter);
+ const rows=searched.filter(matches).sort(compareReturnOperationRows);
+ const filters:Array<[string,string,number]>=[["actionable","待處理",counts.total],["review","待審核",counts.pending],["refund_pending","待退款",counts.awaitingRefund],["manual_review","人工確認",counts.manualReview],["completed","已完成",counts.completed],["closed","已拒絕／已撤回",counts.closed],["","全部",counts.records]];
+ const groups=filter===""?[{label:"待處理",rows:rows.filter(isActionableReturn)},{label:"已完成／歷史紀錄",rows:rows.filter(row=>!isActionableReturn(row))}]:[{label:filters.find(([value])=>value===filter)?.[1]??"退貨申請",rows}];
+ const card=(row:AdminReturnRow)=>{const actionable=isActionableReturn(row),action=returnOperationAction(row);return <article className={css.listCard+" "+(actionable?css.listActionable:css.listHistory)} key={row.orderNumber+":"+row.returnRequestId}>
+  <div className={css.listCardHeader}><div><h3>{row.orderNumber}</h3><p><span>會員</span>{row.customer??"未提供"}</p></div><div className={css.badges}>{actionable?<span className={css.operationBadge}>待處理</span>:null}<StatusBadge value={row.status}/><StatusBadge value={row.refundStatus} refund/></div></div>
+  {actionable?<div className={css.listNextStep}><span>下一步</span><strong>{action}</strong></div>:null}
+  <dl className={css.listFacts}><div><dt>申請退貨</dt><dd>{row.quantity} 件</dd></div><div className={css.listAmount}><dt>本次退款</dt><dd>{row.refundAmount===null?"需確認":"NT$"+row.refundAmount.toLocaleString("zh-TW")}</dd></div><div><dt>退款方式</dt><dd>{displayReturnRefundMethod(row.refundMethod)}</dd></div><div><dt>申請時間</dt><dd>{returnTaipeiDate(row.requestedAt,true)}</dd></div><div><dt>最晚退貨期限</dt><dd>{returnTaipeiDate(row.returnDeadline)}</dd></div></dl>
+  <div className={css.listActions}><Link className={actionable?css.listPrimary:css.listLink} href={"/admin/returns/"+encodeURIComponent(row.orderNumber)+"#"+encodeURIComponent(row.returnRequestId)}>{action} →</Link></div>
+ </article>;};
  return <main className={css.page}><header className={css.listHeader}><Link className={css.back} href="/admin/orders">← 訂單管理</Link><h1>退貨管理</h1><p>集中查看會員退貨申請、審核進度與退款狀態。</p></header>
-  <section className={css.listToolbar} aria-label="搜尋與篩選"><label>搜尋訂單、會員<input type="search" value={search} placeholder="輸入訂單編號或會員名稱" onChange={event=>setSearch(event.target.value)}/></label><label>狀態篩選<select value={filter} onChange={event=>setFilter(event.target.value)}>{[["","全部"],["review","待審核"],["approved","已核准"],["refund_pending","待退款"],["completed","已完成"],["closed","已拒絕／已撤回"]].map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></label></section>
-  <p className={css.listCount}>共 {rows.length} 筆退貨申請</p><section className={css.returnList} aria-label="退貨申請列表">{rows.map(row=><article className={css.listCard} key={row.returnRequestId}>
-   <div className={css.listCardHeader}><div><h2>{row.orderNumber}</h2><p><span>會員</span>{row.customer??"未提供"}</p></div><div className={css.badges}><StatusBadge value={row.status}/><StatusBadge value={row.refundStatus} refund/></div></div>
-   <dl className={css.listFacts}><div><dt>申請退貨</dt><dd>{row.quantity} 件</dd></div><div className={css.listAmount}><dt>本次退款</dt><dd>{row.refundAmount===null?"需確認":"NT$"+row.refundAmount.toLocaleString("zh-TW")}</dd></div><div><dt>退款方式</dt><dd>{displayReturnRefundMethod(row.refundMethod)}</dd></div><div><dt>申請時間</dt><dd>{returnTaipeiDate(row.requestedAt,true)}</dd></div><div><dt>最晚退貨期限</dt><dd>{returnTaipeiDate(row.returnDeadline)}</dd></div></dl>
-   <div className={css.listActions}><Link className={["審核退貨","辦理退款"].includes(action(row))?css.listPrimary:css.listLink} href={"/admin/returns/"+encodeURIComponent(row.orderNumber)+"#"+encodeURIComponent(row.returnRequestId)}>{action(row)} →</Link></div>
-  </article>)}</section>{!rows.length?<div className={css.emptyPage}><strong>沒有符合條件的退貨申請</strong><p>可調整搜尋內容或狀態篩選。</p></div>:null}
+  <section className={css.operationSummary} aria-label="退貨待辦摘要"><strong>待處理 <b>{counts.total}</b></strong><span>待審核 <b>{counts.pending}</b></span><span>待退款 <b>{counts.awaitingRefund}</b></span><span>人工確認 <b>{counts.manualReview}</b></span><span>已完成 <b>{counts.completed}</b></span></section>
+  <section className={css.listToolbar} aria-label="搜尋與篩選"><label>搜尋訂單、會員<input type="search" value={search} placeholder="輸入訂單編號或會員名稱" onChange={event=>setSearch(event.target.value)}/></label><label>狀態篩選<select value={filter} onChange={event=>setFilter(event.target.value)}>{filters.map(([value,label,count])=><option key={value} value={value}>{label}（{count}）</option>)}</select></label></section>
+  <p className={css.listCount}>共 {rows.length} 筆退貨申請</p><section className={css.returnList} aria-label="退貨申請列表">{groups.filter(group=>group.rows.length>0).map(group=><section className={css.listGroup} aria-label={group.label} key={group.label}><h2 className={css.listGroupTitle}>{group.label}（{group.rows.length}）</h2>{group.rows.map(card)}</section>)}</section>{!rows.length?<div className={css.emptyPage}><strong>沒有符合條件的退貨申請</strong><p>可調整搜尋內容或狀態篩選。</p></div>:null}
  </main>;
 }
