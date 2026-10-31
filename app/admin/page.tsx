@@ -1,4 +1,5 @@
 import Link from "next/link";
+import {returnOperationCounts} from "@/lib/returnOperations";
 import { redirect } from "next/navigation";
 
 import { isAdminAuthenticated } from "@/lib/adminAuth";
@@ -32,6 +33,7 @@ export default async function AdminPage() {
   const unclaimedRisk = Object.values(fulfillment.records).filter((record) => record.currentState === "suspected_uncollected").length;
   const nextSevenDays = Object.values(commerce.cycles).filter((cycle) => cycle.plannedDate >= taipeiToday && cycle.plannedDate <= nextWeek && !["completed", "cancelled", "skipped", "uncollected"].includes(cycle.status));
   const giftDemand = nextSevenDays.reduce((sum, cycle) => sum + (cycle.giftSnapshot?.eligible ? cycle.giftSnapshot.quantity : 0), 0);
+  const returnOps = returnOperationCounts(orders,commerce);
   const pendingNotifications = commerce.notifications.filter((notice) => notice.status === "pending").length;
   const upcomingRows = await Promise.all(nextSevenDays.map(async (cycle) => {
     const subscription = commerce.subscriptions[cycle.subscriptionId];
@@ -57,7 +59,7 @@ export default async function AdminPage() {
       <Link href="/admin/products"><strong>作品與本月豆單</strong><span>23 款作品、上架、售完與首頁顯示 →</span></Link>
       <Link href="/admin/monthly-menu"><strong>本月豆單背景</strong><span>背景圖片、濃度、位置與 AI 提示詞 →</span></Link>
       <Link href="/admin/orders"><strong>訂單管理</strong><span>查看與更新所有訂單 →</span></Link>
-      <Link href="/admin/returns"><strong>退貨管理</strong><span>退貨審核、抵用金確認證據與待發獎勵 →</span></Link>
+      <Link className="admin-inquiry-entry" href="/admin/returns"><strong className="admin-inquiry-link-title">退貨管理{returnOps.total?<b>{returnOps.total}</b>:null}</strong><span>待審核 {returnOps.pending}・待退款 {returnOps.awaitingRefund}・人工確認 {returnOps.manualReview}</span></Link>
       <Link href="/admin/fulfillment"><strong>訂單與物流</strong><span>準備、交寄、到店、取貨與人工確認 →</span></Link>
       <Link className="admin-inquiry-entry" href="/admin/orders/inquiries"><strong className="admin-inquiry-link-title">訂單詢問{pendingInquiries.length ? <b>{pendingInquiries.length}</b> : null}</strong><span>查看等待回覆的客人留言 →</span></Link>
       <Link className="admin-members-entry" href="/admin/members"><strong>會員管理</strong><span>搜尋、查看與管理會員資料、訂單、抵用金與會員狀態 →</span></Link>
@@ -71,7 +73,7 @@ export default async function AdminPage() {
     </section>
     <section className="admin-panel">
       <div className="admin-panel-head"><div><p className="eyebrow dark">TODAY</p><h2>今天要處理</h2></div><div><a href="/api/admin/fulfillment/export">匯出未來 7 天</a>　<Link href="/admin/fulfillment">逐筆處理</Link></div></div>
-      <div className="admin-stats"><article><small>未完成訂單</small><strong>{pending.length}</strong></article><article><small>物流／人工確認</small><strong>{fulfillmentExceptions}</strong></article><article><small>疑似未取貨</small><strong>{unclaimedRisk}</strong></article><article><small>待處理通知</small><strong>{pendingNotifications}</strong></article></div>
+      <div className="admin-stats"><article><small>待處理退貨</small><strong>{returnOps.total}</strong></article><article><small>未完成訂單</small><strong>{pending.length}</strong></article><article><small>物流／人工確認</small><strong>{fulfillmentExceptions}</strong></article><article><small>疑似未取貨</small><strong>{unclaimedRisk}</strong></article><article><small>待處理通知</small><strong>{pendingNotifications}</strong></article></div>
       <p className="admin-empty">未來 7 天共有 {nextSevenDays.length} 個定期購配送期次，預估需準備 {giftDemand} 份贈品。高風險的未取貨確認必須逐筆處理。</p>
       {upcomingRows.map(({ cycle, subscription, member }) => <Link href={cycle.createdOrderId ? `/admin/orders/${cycle.createdOrderId}` : "/admin/membership"} className="admin-order-row" key={cycle.cycleId}><div><strong>{cycle.plannedDate}・{cycle.createdOrderId || "尚未建立正式訂單"}</strong><span>{member?.displayName || member?.pickupName || "KD Coffee 會員"}・{cycle.itemsDraft.flatMap(subscriptionItemProductIds).join(" + ")}</span></div><div><span>{cycle.itemsDraft.reduce((sum, item) => sum + item.quantity, 0)} 份・{(cycle.shippingSnapshot?.method ?? subscription?.shippingMethod) === "711_cod" ? cycle.shippingSnapshot?.storeSelection?.storeName || subscription?.storeSelection?.storeName || "7-ELEVEN" : (cycle.shippingSnapshot?.method ?? subscription?.shippingMethod) === "home_delivery" ? "宅配" : "工作室自取"}</span><b>{cycle.giftSnapshot?.eligible ? `贈品 ${cycle.giftSnapshot.quantity} 份` : "本期無贈品"}</b></div></Link>)}
     </section>

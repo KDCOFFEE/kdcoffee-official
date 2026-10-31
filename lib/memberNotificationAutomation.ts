@@ -1,7 +1,8 @@
+import { createReturnNotificationTemplate, deliverReturnNotice, type ReturnDeliveryOptions } from "./returnNotificationDelivery";
 import { readCreditDisplayCopy } from "./creditDisplayCopy";
 import { isValidEmail, readMember } from "./memberAuth";
 import { sendCustomerLineNotification, sendCustomerOrderEmail } from "./customerNotificationDelivery";
-import { claimNextMembershipNotification, completeMembershipNotificationDelivery, type NotificationEvent } from "./membershipCommerce";
+import { claimNextMembershipNotification, completeMembershipNotificationDelivery, recordReturnRefundNotification, type NotificationEvent } from "./membershipCommerce";
 
 const eventLabels: Record<NotificationEvent["eventType"], string> = {
   modification_window: "下一次定期配送已可調整",
@@ -19,9 +20,11 @@ const eventLabels: Record<NotificationEvent["eventType"], string> = {
   referral_conversion: "推薦回饋已更新",
   credit_issued: "credit.notice.issued",
   credit_expiring: "credit.notice.expiring",
+  return_admin_request_received:"收到退貨申請",return_request_received:"退貨申請已收到",return_request_approved:"退貨申請已核准",return_request_rejected:"退貨申請未核准",return_refund_completed:"退款完成",
 };
 
 export async function createMembershipNotificationTemplate(notice: NotificationEvent) {
+  if(notice.eventType.startsWith("return_")&&notice.eventType!=="return_admin_request_received")return createReturnNotificationTemplate(notice);
   const copy = await readCreditDisplayCopy();
   const title = notice.eventType === "credit_issued" || notice.eventType === "credit_expiring" ? copy(eventLabels[notice.eventType]) : eventLabels[notice.eventType];
   const amount = typeof notice.safeData.amount === "number" && Number.isSafeInteger(notice.safeData.amount) && notice.safeData.amount > 0 ? notice.safeData.amount : null;
@@ -34,9 +37,10 @@ export async function createMembershipNotificationTemplate(notice: NotificationE
   return { eventType: notice.eventType, subject: `KD Coffee｜${title}`, text: `KD Coffee｜${title}\n\n${detail}` };
 }
 
-export async function deliverNextMembershipNotification(options: { stateFilePath?: string; lineFetcher?: typeof fetch; emailFetcher?: typeof fetch; now?: Date } = {}) {
-  const notice = await claimNextMembershipNotification({ stateFilePath: options.stateFilePath, now: options.now });
+export async function deliverNextMembershipNotification(options: ReturnDeliveryOptions & { now?:Date;notificationId?:string } = {}) {
+  const notice = await claimNextMembershipNotification({ stateFilePath: options.stateFilePath, now: options.now, notificationId:options.notificationId });
   if (!notice) return null;
+  if(notice.eventType.startsWith("return_")){let result:{delivered:NotificationEvent["channels"];error?:string};try{result=await deliverReturnNotice(notice,options);}catch{result={delivered:notice.deliveredChannels??[],error:"退貨通知未送達，請稍後重試"};}const completed=await completeMembershipNotificationDelivery({notificationId:notice.notificationId,deliveredChannels:result.delivered,error:result.error,stateFilePath:options.stateFilePath,now:options.now});if(notice.eventType==="return_refund_completed")await recordReturnRefundNotification(String(notice.safeData.orderNumber),String(notice.safeData.returnRequestId),completed.status==="delivered"?"sent":"failed",options);return completed;}
   const delivered: NotificationEvent["channels"] = [...new Set(notice.deliveredChannels ?? [])];
   if (notice.channels.includes("member_center") && !delivered.includes("member_center")) delivered.push("member_center");
   const errors: string[] = [];

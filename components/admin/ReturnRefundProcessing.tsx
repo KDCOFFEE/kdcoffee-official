@@ -1,4 +1,5 @@
 "use client";
+import ReturnRefundReview from "./ReturnRefundReview";
 import AttachmentLightbox from "@/components/shared/AttachmentLightbox";
 import css from "./AdminReturnDetail.module.css";
 import {returnTaipeiDate,displayOriginalPaymentMethod,displayReturnRefundMethod} from "@/lib/returnPresentation";
@@ -15,11 +16,11 @@ export default function ReturnRefundProcessing({orderNumber,request,autoOpen,onR
  const open=manualOpen||(autoOpen&&!dismissed);
  const dialog=useRef<HTMLDialogElement>(null),titleId="refund-modal-title-"+request.returnRequestId;
  const refund=request.paymentRefund,quote=refund.quote,saved=request.refundRequest,method=saved?.method;
- const amount=refund.amount??(quote.status==="resolved"?quote.amount:null),money=amount===null?"需人工確認":"NT$"+amount.toLocaleString("zh-TW");
+ const amount=refund.amount??(quote.status==="resolved"?quote.amount:refund.reviewAmount??null),money=amount===null?"需人工確認":"NT$"+amount.toLocaleString("zh-TW");
  const methodLabel=displayReturnRefundMethod(method);
  const originalLabel=displayOriginalPaymentMethod(saved?.originalPayment,saved?.originalOrderMode);
  const bankRows=(account:RefundBank,masked:boolean):Array<[string,string]>=>[["退款銀行",account.bank],["戶名",account.holder],["帳號",masked?maskedAccount(account.account):account.account],...(account.branch?[["分行",account.branch] as [string,string]]:[])];
- useEffect(()=>{if(open&&refund.status!=="completed"){if(!dialog.current?.open)dialog.current?.showModal();}else dialog.current?.close();},[open,refund.status]);
+ useEffect(()=>{if(open&&refund.status==="pending"){if(!dialog.current?.open)dialog.current?.showModal();}else dialog.current?.close();},[open,refund.status]);
  useEffect(()=>()=>urls.forEach(url=>URL.revokeObjectURL(url)),[urls]);
  const endpoint="/api/admin/returns/"+encodeURIComponent(orderNumber);
  async function post(action:string){const payload={action,returnRequestId:request.returnRequestId,manuallyPaid:paid||method==="manual_cash",note};const form=new FormData();form.append("payload",JSON.stringify(payload));photos.forEach(file=>form.append("photos",file));const response=await fetch(endpoint,{method:"POST",headers:action==="refund_confirm"&&photos.length?undefined:{"Content-Type":"application/json"},body:action==="refund_confirm"&&photos.length?form:JSON.stringify(payload)});const result=await response.json();if(!response.ok)throw Error(result.error||"退款處理失敗");return result;}
@@ -31,6 +32,7 @@ export default function ReturnRefundProcessing({orderNumber,request,autoOpen,onR
  <div className={css.refundAmount}><span>本次退款</span><strong>{money}</strong></div>
  <Facts rows={[["退款方式",methodLabel],...(!hideSummary?[["原付款方式",originalLabel] as [string,string]]:[]),...(refund.status==="completed"?[["完成時間",returnTaipeiDate(refund.confirmedAt,true)] as [string,string]]:[])]}/>
  {refund.status!=="completed"&&method==="manual_bank_transfer"&&saved?.bank?<Facts rows={[["退款銀行",saved.bank.bank],["帳號",maskedAccount(saved.bank.account)]]}/>:null}
+ {refund.status==="manual_review_required"?<ReturnRefundReview orderNumber={orderNumber} request={request} onResolved={async()=>{await onReload();setOpen(true);setDismissed(false);}}/>:null}
  {refund.status==="pending"?<button className={css.primary+" "+css.refundAction} type="button" onClick={()=>setOpen(true)}>辦理退款</button>:null}
  {refund.status==="completed"?<div className={css.notificationStatus}><span>LINE 通知</span><p className={refund.notification==="failed"?css.notificationWarning:undefined}>{refund.notification?{sent:"已發送",failed:"⚠ 發送失敗，可重送",disabled:"已停用"}[refund.notification]:"尚未發送"}</p>{refund.notification==="failed"?<button className={css.notificationRetry} disabled={busy} onClick={async()=>{setBusy(true);try{await post("refund_notify");await onReload();}catch(e){setError(e instanceof Error?e.message:"重送失敗");}finally{setBusy(false);}}}>重送退款通知</button>:null}
  {refund.proof.length?<div className={css.proofBlock}><h3>退款證明</h3><div className={css.proofThumbnails}>{refund.proof.map((photo,index)=><AttachmentLightbox key={photo.url} src={photo.url} imageClassName={css.proofThumbnail} alt={"退款證明 "+(index+1)} width={80} height={64}/>)}</div></div>:null}</div>:null}

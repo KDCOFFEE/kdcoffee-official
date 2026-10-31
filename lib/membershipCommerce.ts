@@ -4,6 +4,8 @@ import { createHash, randomBytes } from "crypto";
 import { promises as fs } from "fs";
 import path from "path";
 import { isDeepStrictEqual } from "node:util";
+import { effectiveRefundRequest, type ReturnRoutingResolution } from "./returnRefundResolution";
+import { validateRefundBank } from "./returnRefundSettings";
 import { allocateApprovedReturnPayment } from "./returnPaymentAllocation";
 import { planApprovedReturnSettlement, projectReturnSettlements, assertSettlementPrefix, appendSettlementEvent, returnCreditSettlementSummary, type SettlementEvent } from "./returnSettlementLedger";
 import { approvedReturnCreditSelection } from "./returnCreditSelection";
@@ -534,7 +536,7 @@ export type CommerceEvent = {
 
 export type NotificationEvent = {
   notificationId: string;
-  eventType: "modification_window" | "deadline_tomorrow" | "order_created" | "shipped" | "ready_for_pickup" | "uncollected_terminated" | "gift_eligible" | "stock_blocked" | "subscription_paused" | "subscription_resumed" | "subscription_terminated" | "cycle_skipped" | "referral_conversion" | "credit_issued" | "credit_expiring";
+  eventType: "modification_window" | "deadline_tomorrow" | "order_created" | "shipped" | "ready_for_pickup" | "uncollected_terminated" | "gift_eligible" | "stock_blocked" | "subscription_paused" | "subscription_resumed" | "subscription_terminated" | "cycle_skipped" | "referral_conversion" | "credit_issued" | "credit_expiring" | "return_admin_request_received" | "return_request_received" | "return_request_approved" | "return_request_rejected" | "return_refund_completed";
   memberId?: string;
   channels: Array<"member_center" | "email" | "line" | "admin">;
   status: "pending" | "processing" | "delivered" | "failed";
@@ -2131,7 +2133,7 @@ function event(state: MembershipCommerceState, type: string, safeData: CommerceE
 export async function executeOrderReturnCommand(input: {
   orderNumber: string; actor: ReturnActor; command: ReturnCommand; reason: string; idempotencyKey: string;
   authorizeOrder: (order: Readonly<Record<string, unknown>>, actor: ReturnActor) => void | Promise<void>;
-  now?: Date; stateFilePath?: string;
+  now?: Date; stateFilePath?: string; rulesFilePath?: string;
   /** E-only server confirmation. Omitted by the accepted internal B/C/D commands. */
   confirmation?: { token: string; memberId: string; quantityAcknowledged: true; supportingPhotos?: import("./customerNotifications").CustomerNotificationPhoto[]; prepareSupportingPhotos?: (previous?: readonly import("./customerNotifications").CustomerNotificationPhoto[]) => Promise<import("./customerNotifications").CustomerNotificationPhoto[]>; refundRequest?: import("./returnRefundSettings").ReturnRefundRequest };
 }): Promise<ReturnCommandResult> {
@@ -2197,6 +2199,8 @@ export async function executeOrderReturnCommand(input: {
             lines: command.lines.map(line => ({ ...line, originalQuantity: projection.lines.find(item => item.returnLineRef === line.returnLineRef)!.originalQuantity })) }
         : { ...base, type: command.type, ...(command.type === "RETURN_APPROVED" && command.approvedLines ? { approvedLines: command.approvedLines } : {}) };
       state.returnEvents = [...events, appended];
+      const notificationType = appended.type==="RETURN_REQUESTED"?"return_request_received":appended.type==="RETURN_APPROVED"?"return_request_approved":appended.type==="RETURN_REJECTED"?"return_request_rejected":null;
+      if(notificationType){const rules=(await getActiveMembershipRules(now,input.rulesFilePath)).rules;const memberId=(order.member as {memberId?:string}|undefined)?.memberId;const safeData={orderNumber:String(order.orderNumber),returnRequestId};notify(state,rules,notificationType,eventId,now,{memberId,safeData});if(appended.type==="RETURN_REQUESTED")notify(state,rules,"return_admin_request_received",eventId,now,{safeData,adminOnly:true});}
       if (appended.type === "RETURN_APPROVED") planApprovedReturnSettlement(state, appended);
       const next = projectOrderReturns(order, state.returnEvents);
       if (next.status !== "resolved") throw new MembershipCommerceError("退貨證據投影不一致");
@@ -2243,11 +2247,13 @@ function notify(state: MembershipCommerceState, rules: MembershipBusinessRules, 
     referral_conversion: "referral_reward",
     credit_issued: "credit_reward",
     credit_expiring: "credit_expiry",
+    return_admin_request_received:"return_admin_request_received", return_request_received:"return_request_received", return_request_approved:"return_request_approved", return_request_rejected:"return_request_rejected", return_refund_completed:"return_refund_completed",
   };
   const policyKey = policyMap[eventType];
   const policy = policyKey ? rules.notification.events[policyKey] : undefined;
-  if (!input.adminOnly && policy && !policy.enabled) return null;
-  const channels = input.adminOnly ? ["admin" as const] : [...(policy?.channels ?? rules.notification.channels)];
+  if ((!input.adminOnly || eventType.startsWith("return_")) && policy && !policy.enabled) return null;
+  if(eventType.startsWith("return_")&&state.notifications.some(n=>n.sourceEvent===sourceEvent&&n.eventType===eventType))return null;
+  const channels = input.adminOnly ? (eventType==="return_admin_request_received"?["admin" as const,"line" as const]:["admin" as const]) : [...(policy?.channels ?? rules.notification.channels)];
   if (!channels.includes("member_center") && input.memberId) channels.unshift("member_center");
   const notice: NotificationEvent = { notificationId: id("notice"), eventType, memberId: input.memberId, channels, status: "pending", deliveryPolicy: { maxAttempts: rules.notification.retryCount + 1, emailFallback: rules.notification.emailFallback }, sourceEvent, createdAt: nowIso(now), safeData: input.safeData ?? {} };
   state.notifications.push(notice);
@@ -6376,10 +6382,10 @@ export async function previewMembershipRulesImpact(nextRules: unknown, filePath 
   return { changedAreas, affectedCycles, activeSubscriptions, lockedCyclesPreserved, pendingReferralRewardsPreserved, historicalReferralRewardsPreserved, referralMembersAffectedByDepth, nextRulesVersion: active.rulesVersion + 1 };
 }
 
-export async function claimNextMembershipNotification(options: { now?: Date; stateFilePath?: string } = {}) {
+export async function claimNextMembershipNotification(options: { now?: Date; stateFilePath?: string; notificationId?:string } = {}) {
   return transaction((state, now) => {
     for (const notice of state.notifications) {
-      if (notice.status !== "pending") continue;
+      if (notice.status !== "pending" || (options.notificationId && notice.notificationId!==options.notificationId)) continue;
       const maximum = notice.deliveryPolicy?.maxAttempts ?? 1;
       if ((notice.attempts ?? 0) >= maximum) {
         notice.status = "failed";
@@ -6538,14 +6544,14 @@ export async function applyApprovedReturnCredit(orderNumber:string, returnReques
 }
 
 /** Records an already-performed manual payment; never calls a payment gateway. */
-export async function confirmManualReturnPayment(orderNumber:string,requestId:string,adminId:string,input:{note?:string;proof?:import("./customerNotifications").CustomerNotificationPhoto[];prepareProof?:()=>Promise<import("./customerNotifications").CustomerNotificationPhoto[]>;now?:Date;stateFilePath?:string}={}) {
+export async function confirmManualReturnPayment(orderNumber:string,requestId:string,adminId:string,input:{note?:string;proof?:import("./customerNotifications").CustomerNotificationPhoto[];prepareProof?:()=>Promise<import("./customerNotifications").CustomerNotificationPhoto[]>;now?:Date;stateFilePath?:string;rulesFilePath?:string}={}) {
  return withStoredOrderUpdateLock(orderNumber,async order=>transaction(async state=>{
   const effect=projectReturnSettlements(state).find(e=>e.orderId===orderNumber&&e.returnRequestId===requestId&&e.effectType==="payment_refund");
   if(!effect)throw new ReturnWorkflowError("return_not_approved");
   if(effect.status==="applied")return {replayed:true,additionalRefund:0,result:effect.paymentResult!};
   const request=state.returnEvents?.find(e=>e.orderId===orderNumber&&e.returnRequestId===requestId&&e.type==="RETURN_REQUESTED");
-  const saved=request?.type==="RETURN_REQUESTED"?request.confirmation?.refundRequest:undefined;
-  const allocation=allocateApprovedReturnPayment(order,state.returnEvents??[],requestId);
+  const saved=effectiveRefundRequest(request?.type==="RETURN_REQUESTED"?request.confirmation?.refundRequest:undefined,effect.routingResolution);
+  const allocation=allocateApprovedReturnPayment(order,state.returnEvents??[],requestId,effect.routingResolution?.method);
   if(allocation.status!=="resolved"||allocation.method==="manual_review_required"||!saved||saved.method!==allocation.method||saved.originalPayment!==order.payment|| (saved.method==="manual_bank_transfer"&&!saved.bank))throw new ReturnWorkflowError("refund_manual_review_required");
   if(allocation.otherShippingReviewRequired)throw new ReturnWorkflowError("refund_unknown_fee_requires_review");
   const note=input.note??"";if(note.length>200||!adminId)throw new ReturnWorkflowError("invalid_input",400);
@@ -6553,9 +6559,43 @@ export async function confirmManualReturnPayment(orderNumber:string,requestId:st
   const proof=input.prepareProof?await input.prepareProof():input.proof??[];
   const result={amount:allocation.amount,merchandisePaidTotal:allocation.merchandisePaidTotal,originalPaidTotal:allocation.originalPaidTotal,method:allocation.method,originalPayment:saved.originalPayment,confirmedBy:adminId,confirmedAt:(input.now??new Date()).toISOString(),proof,note,allocationFingerprint:allocation.evidenceFingerprint};
   appendSettlementEvent(state,{effectId:effect.effectId,type:"APPLIED",recordedAt:result.confirmedAt,paymentResult:result});
+  const notificationRules=(await getActiveMembershipRules(input.now,input.rulesFilePath)).rules;notify(state,notificationRules,"return_refund_completed",effect.effectId,input.now??new Date(),{memberId:(order.member as {memberId?:string}|undefined)?.memberId,safeData:{orderNumber,returnRequestId:requestId,amount:result.amount,method:result.method}});
   return {replayed:false,additionalRefund:result.amount,result};
  },{filePath:input.stateFilePath,now:input.now}));
 }
 export async function recordReturnRefundNotification(orderNumber:string,requestId:string,status:"sent"|"failed"|"disabled",input:{stateFilePath?:string;now?:Date}={}) {
- return transaction(state=>{const effect=projectReturnSettlements(state).find(e=>e.orderId===orderNumber&&e.returnRequestId===requestId&&e.effectType==="payment_refund");if(!effect||effect.status!=="applied")throw new ReturnWorkflowError("refund_not_completed");appendSettlementEvent(state,{effectId:effect.effectId,type:"NOTIFIED",notification:status,recordedAt:(input.now??new Date()).toISOString()});},{filePath:input.stateFilePath,now:input.now});
+ return transaction(state=>{const effect=projectReturnSettlements(state).find(e=>e.orderId===orderNumber&&e.returnRequestId===requestId&&e.effectType==="payment_refund");if(!effect||effect.status!=="applied")throw new ReturnWorkflowError("refund_not_completed");if(effect.notification===status)return;appendSettlementEvent(state,{effectId:effect.effectId,type:"NOTIFIED",notification:status,recordedAt:(input.now??new Date()).toISOString()});},{filePath:input.stateFilePath,now:input.now});
+}
+
+/** Routing-only audit under the same order/commerce locks as refund confirmation. */
+export async function resolveReturnRefundReview(orderNumber:string,requestId:string,adminId:string,values:Record<string,unknown>,runtime:{now?:Date;stateFilePath?:string}={}){
+ return withStoredOrderUpdateLock(orderNumber,async order=>transaction(state=>{
+  if(!adminId||values.acknowledged!==true||typeof values.note!=="string"||!values.note.trim()||values.note.length>200||typeof values.idempotencyKey!=="string"||!/^[-A-Za-z0-9:_]{1,120}$/.test(values.idempotencyKey)||!(values.method==="manual_cash"||values.method==="manual_bank_transfer")||Object.hasOwn(values,"amount"))throw new ReturnWorkflowError("invalid_input",400);
+  const effect=projectReturnSettlements(state).find(e=>e.orderId===orderNumber&&e.returnRequestId===requestId&&e.effectType==="payment_refund");
+  if(!effect||effect.status==="applied")throw new ReturnWorkflowError("refund_review_unavailable");
+  const request=state.returnEvents?.find(e=>e.orderId===orderNumber&&e.returnRequestId===requestId&&e.type==="RETURN_REQUESTED");
+  const saved=request?.type==="RETURN_REQUESTED"?request.confirmation?.refundRequest:undefined;
+  if(!saved||saved.originalPayment!==order.payment)throw new ReturnWorkflowError("refund_review_not_resolvable");
+  const method=values.method;let bank:ReturnRoutingResolution["bank"]=null;try{bank=method==="manual_cash"?null:validateRefundBank(values.bank??saved.bank);}catch{throw new ReturnWorkflowError("invalid_input",400);}
+  if(method==="manual_cash"&&values.bank!=null)throw new ReturnWorkflowError("invalid_input",400);
+  if(method==="manual_bank_transfer"&&!isDeepStrictEqual(bank,saved.bank)&&values.bankAcknowledged!==true)throw new ReturnWorkflowError("refund_bank_acknowledgement_required",400);
+  const operationId="return-route:"+originalEconomicFingerprint([orderNumber,requestId,adminId,values.idempotencyKey]);
+  const prior=effect.routingResolution;
+  if(prior){if(prior.operationId!==operationId||prior.method!==method||prior.note!==values.note.trim()||!isDeepStrictEqual(prior.bank,bank))throw new ReturnWorkflowError("idempotency_conflict");return {replayed:true};}
+  const original=allocateApprovedReturnPayment(order,state.returnEvents??[],requestId);
+  if(original.status!=="manual_review_required"||original.reason!=="unsupported_original_payment_method")throw new ReturnWorkflowError("refund_review_not_resolvable");
+  const quote=allocateApprovedReturnPayment(order,state.returnEvents??[],requestId,method);
+  if(quote.status!=="resolved"||quote.otherShippingReviewRequired)throw new ReturnWorkflowError("refund_review_not_resolvable");
+  const r:ReturnRoutingResolution={operationId,orderNumber,returnRequestId:requestId,originalReason:original.reason,method,adminId,resolvedAt:(runtime.now??new Date()).toISOString(),note:values.note.trim(),acknowledged:true,bank,bankAcknowledged:method==="manual_bank_transfer"&&values.bankAcknowledged===true,economicFingerprint:quote.evidenceFingerprint};
+  appendSettlementEvent(state,{effectId:effect.effectId,type:"ROUTING_RESOLVED",routingResolution:r,recordedAt:r.resolvedAt});
+  return {replayed:false};
+ },{filePath:runtime.stateFilePath,now:runtime.now}));
+}
+
+export async function retryReturnNotification(notificationId:string,options:{stateFilePath?:string}={}){return transaction(state=>{const n=state.notifications.find(x=>x.notificationId===notificationId&&x.eventType==="return_refund_completed");if(!n)throw new ReturnWorkflowError("not_found",404);if(n.status==="processing")return null;n.status="pending";n.attempts=0;n.deliveredChannels=[];return n.notificationId;},{filePath:options.stateFilePath});}
+
+/** Backward-compatible enqueue for a historical completed refund; never repeats settlement. */
+export async function ensureReturnRefundNotification(orderNumber:string,requestId:string,options:{stateFilePath?:string;rulesFilePath?:string}={}){
+ const rules=(await getActiveMembershipRules(undefined,options.rulesFilePath)).rules;
+ return transaction(state=>{const effect=projectReturnSettlements(state).find(e=>e.orderId===orderNumber&&e.returnRequestId===requestId&&e.effectType==="payment_refund");if(!effect?.paymentResult||effect.status!=="applied")throw new ReturnWorkflowError("refund_not_completed");if(!rules.notification.events.return_refund_completed.enabled)return null;const old=state.notifications.find(n=>n.eventType==="return_refund_completed"&&n.sourceEvent===effect.effectId);if(old)return old.notificationId;const request=state.returnEvents?.find(e=>e.orderId===orderNumber&&e.returnRequestId===requestId&&e.type==="RETURN_REQUESTED");const n=notify(state,rules,"return_refund_completed",effect.effectId,new Date(),{memberId:request?.type==="RETURN_REQUESTED"?request.actor.actorId:undefined,safeData:{orderNumber,returnRequestId:requestId,amount:effect.paymentResult.amount,method:effect.paymentResult.method}});return n?.notificationId??null;},{filePath:options.stateFilePath});
 }

@@ -24,7 +24,7 @@ export type ReturnPaymentAllocation =
  * Remaining paid merchandise already excludes credit and fees; do not deduct fees again.
  * Approval-order cumulative slices preserve integer rounding across multiple partial returns.
  */
-export function allocateApprovedReturnPayment(order: Record<string, unknown>, events: ReturnDomainEvent[], requestId: string): ReturnPaymentAllocation {
+export function allocateApprovedReturnPayment(order: Record<string, unknown>, events: ReturnDomainEvent[], requestId: string, reviewedMethod?: "manual_cash"|"manual_bank_transfer"): ReturnPaymentAllocation {
   const review = (reason: string): ReturnPaymentAllocation => ({ status: "manual_review_required", reason });
   try {
     const evidence = resolveReturnLineEvidence(order), economic = resolveOrderEconomicAllocation(order);
@@ -38,8 +38,7 @@ export function allocateApprovedReturnPayment(order: Record<string, unknown>, ev
       || economic.remainingPaidMerchandiseTotal + shipping + codFee !== paid) return review("unexplained_original_payment_adjustment");
     const requested=events.find(e=>e.orderId===order.orderNumber&&e.returnRequestId===requestId&&e.type==="RETURN_REQUESTED");
     const saved=requested?.type==="RETURN_REQUESTED"?requested.confirmation?.refundRequest:undefined;
-    const method = resolveReturnRefundMethod(order,saved?.routingPolicyVersion===2?saved.handoff:undefined);
-    if (method === "manual_review_required") return review("unsupported_original_payment_method");
+    const method = reviewedMethod ?? resolveReturnRefundMethod(order,saved?.routingPolicyVersion===2?saved.handoff:undefined);
     if (codFee && order.payment !== "cash_on_delivery") return review("unproven_cod_fee_type");
     const used = new Map<string, number>();
     let amount: number | null = null;
@@ -60,6 +59,7 @@ export function allocateApprovedReturnPayment(order: Record<string, unknown>, ev
     }
     if (amount === null) return review("return_not_approved");
     if (!validMoney(amount) || amount > paid || amount > economic.remainingPaidMerchandiseTotal) return review("original_payment_cap_exceeded");
+    if (method === "manual_review_required") return review("unsupported_original_payment_method");
     const home = order.orderMode === "home_delivery";
     const result = { amount, originalPaidTotal: paid, merchandisePaidTotal: economic.remainingPaidMerchandiseTotal,
       retainedHomeShipping: home ? shipping : 0, retainedCodFee: codFee,

@@ -1,3 +1,4 @@
+import { privateResolvedRefundBank, resolveReturnRefundReview } from "./returnRefundReview";
 import { randomUUID } from "node:crypto";
 import { validOrderPhotoSelection } from "./orderPhotoPolicy";
 import { readMembershipCommerceState, confirmManualReturnPayment } from "./membershipCommerce";
@@ -12,7 +13,8 @@ export async function returnRefundAction(orderNumber:string,adminId:string,value
  const effect=projectReturnSettlements(state).find(e=>e.orderId===orderNumber&&e.returnRequestId===requestId&&e.effectType==="payment_refund");
  const request=state.returnEvents?.find(e=>e.orderId===orderNumber&&e.returnRequestId===requestId&&e.type==="RETURN_REQUESTED");
  if(!effect||request?.type!=="RETURN_REQUESTED")throw new ReturnWorkflowError("return_not_approved");
- if(values.action==="refund_details")return {bank:request.confirmation?.refundRequest?.bank??null};
+ if(values.action==="refund_review_resolve")return resolveReturnRefundReview(orderNumber,requestId,adminId,values,runtime);
+ if(values.action==="refund_details")return {bank:await privateResolvedRefundBank(orderNumber,requestId,runtime.stateFilePath)};
  if(values.action==="refund_notify")return notifyCompletedReturnRefund(orderNumber,requestId,{...runtime,resend:true});
  if(values.action!=="refund_confirm"||values.manuallyPaid!==true)throw new ReturnWorkflowError("invalid_input",400);
  const prepareProof=async()=>{

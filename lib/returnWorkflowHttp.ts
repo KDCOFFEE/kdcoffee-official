@@ -10,7 +10,7 @@ export async function returnWorkflowHttpError(error: unknown, admin = false) {
   const status = error instanceof ReturnWorkflowError || error instanceof MemberOrderCancellationError ? error.status
     : error instanceof OrderFileNotFoundError ? 404 : error instanceof SyntaxError || error instanceof OrderNotificationPhotoError ? 400 : 500;
   const code = error instanceof ReturnWorkflowError ? error.code : status === 404 ? "not_found" : status === 400 ? "invalid_input" : "return_review_required";
-  const messages: Record<string, string> = { stale_confirmation: "資料或到期狀態已變更，請重新取得退貨確認。",
+  const messages: Record<string, string> = { refund_review_not_resolvable:"退款金額／原始付款證據仍不足，不能直接指定退款方式。", refund_review_unavailable:"此退貨目前無法變更退款方式。", refund_bank_acknowledgement_required:"請確認退款帳戶由會員提供且已核對。", stale_confirmation: "資料或到期狀態已變更，請重新取得退貨確認。",
     invalid_confirmation: "確認資料無效，請重新取得退貨確認。", invalid_input: "請確認數量、200 字內原因及全部勾選項目。",
     final_confirmation_required: "請先完成退貨確認。", return_deadline_expired: "已超過原訂單最晚退貨期限。",
     quantity_exceeded: "可退貨數量已變更，請重新確認。", not_found: "找不到訂單。", not_authorized: "找不到訂單。",

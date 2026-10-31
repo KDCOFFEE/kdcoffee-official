@@ -34,6 +34,7 @@ export async function sendCustomerLineNotification(input: {
   photo?: CustomerNotificationPhoto;
   fetcher?: typeof fetch;
   publicImageFetcher?: typeof fetch;
+  retryKey?: string;
 }): Promise<CustomerNotificationResult> {
   // LEGACY compatibility only: remove this fallback after Railway migration.
   const token = process.env.LINE_CUSTOMER_CHANNEL_ACCESS_TOKEN?.trim()
@@ -65,7 +66,7 @@ export async function sendCustomerLineNotification(input: {
   try {
     const response = await (input.fetcher ?? fetch)("https://api.line.me/v2/bot/message/push", {
       method: "POST",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", ...(input.retryKey?{"X-Line-Retry-Key":input.retryKey}:{}) },
       body: JSON.stringify({ to: input.userId, messages }),
       signal: AbortSignal.timeout(8_000),
     });
@@ -76,7 +77,7 @@ export async function sendCustomerLineNotification(input: {
       ...(imageHost ? { imageHost } : {}),
       lineHttpStatus,
     };
-    if (response.ok) {
+    if (response.ok || (response.status===409&&input.retryKey&&response.headers.get("x-line-accepted-request-id"))) {
       return imageIssue
         ? { status: "partial", error: `文字通知已送出，但${imageIssue}。`, diagnostics }
         : { status: "sent", diagnostics };
@@ -107,6 +108,7 @@ export async function sendCustomerOrderEmail(input: {
   orderNumber: string;
   template: CustomerNotificationTemplate;
   subject?: string;
+  idempotencyKey?: string;
   photo?: CustomerNotificationPhoto;
   fetcher?: typeof fetch;
 }): Promise<CustomerNotificationResult> {
@@ -119,7 +121,7 @@ export async function sendCustomerOrderEmail(input: {
   try {
     const response = await (input.fetcher ?? fetch)("https://api.resend.com/emails", {
       method: "POST",
-      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json", ...(input.idempotencyKey?{"Idempotency-Key":input.idempotencyKey}:{}) },
       body: JSON.stringify({
         from,
         to: [input.recipientEmail],

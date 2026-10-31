@@ -1,3 +1,5 @@
+import { effectiveRefundRequest, type ReturnRoutingResolution } from "./returnRefundResolution";
+import { validateRefundBank } from "./returnRefundSettings";
 import { allocateApprovedReturnPayment } from "./returnPaymentAllocation";
 import type { ReturnPaymentResult } from "./returnPaymentResult";
 import { approvedReturnCreditSelection } from "./returnCreditSelection";
@@ -19,7 +21,8 @@ export type CreditSettlementResult = {
 };
 export type SettlementEvent = {
   sequence: number; previousHash: string | null; hash: string; effectId: string; recordedAt: string;
-  type: "PLANNED" | "APPLIED" | "FAILED" | "MANUAL_REVIEW_REQUIRED" | "NOTIFIED";
+  type: "PLANNED" | "APPLIED" | "FAILED" | "MANUAL_REVIEW_REQUIRED" | "NOTIFIED" | "ROUTING_RESOLVED";
+  routingResolution?: ReturnRoutingResolution;
   paymentResult?: ReturnPaymentResult; notification?: "sent"|"failed"|"disabled";
   plan?: SettlementPlan; receipt?: InventoryReceipt; creditResult?: CreditSettlementResult; reason?: string;
 };
@@ -28,6 +31,7 @@ export type SettlementState = { returnEvents?: ReturnDomainEvent[]; returnSettle
   creditReservations?: Record<string,{orderId?:string;memberId:string;status:string;amount:number;allocations:Array<{creditEntryId:string;amount:number}>}>;
 };
 export type SettlementEffect = SettlementPlan & {
+  routingResolution?: ReturnRoutingResolution;
   status: "pending" | "applied" | "failed" | "manual_review_required" | "pending_future_settlement";
   paymentResult?: ReturnPaymentResult; notification?: "sent"|"failed"|"disabled";
   appliedAt: string | null; receipt?: InventoryReceipt; creditResult?: CreditSettlementResult; reason?: string; attempts: number;
@@ -58,6 +62,7 @@ export function projectReturnSettlements(state: SettlementState): SettlementEffe
     const { hash, ...payload } = entry;
     requireEvidence(entry.sequence === index && entry.previousHash === (log[index - 1]?.hash ?? null) && hash === fingerprint(payload)
       && Number.isFinite(Date.parse(entry.recordedAt)));
+    requireEvidence(entry.type==="ROUTING_RESOLVED"||!entry.routingResolution);
     let effect = effects.get(entry.effectId);
     if (entry.type === "PLANNED") {
       requireEvidence(!effect && entry.plan && entry.plan.effectId === entry.effectId && !entry.receipt && !entry.creditResult && !entry.paymentResult && !entry.notification && !entry.reason);
@@ -69,6 +74,18 @@ export function projectReturnSettlements(state: SettlementState): SettlementEffe
       requireEvidence(isDeepStrictEqual(expected, entry.plan) && Date.parse(entry.recordedAt) >= Date.parse(entry.plan.createdAt));
       effect = { ...entry.plan, status: entry.plan.effectType === "payment_refund" ? "pending_future_settlement" : "pending", appliedAt: null, attempts: 0 };
       effects.set(entry.effectId, effect);
+    } else if (effect?.effectType === "payment_refund" && entry.type === "ROUTING_RESOLVED") {
+      const r=entry.routingResolution;
+      requireEvidence(effect.status!=="applied"&&!effect.routingResolution&&r&&!entry.plan&&!entry.receipt&&!entry.creditResult&&!entry.paymentResult&&!entry.notification&&!entry.reason);
+      requireEvidence(r.orderNumber===effect.orderId&&r.returnRequestId===effect.returnRequestId&&r.originalReason==="unsupported_original_payment_method"&&r.acknowledged===true&&r.adminId.length>0&&r.note.trim().length>0&&r.note.length<=200&&r.operationId.length>0&&r.operationId.length<=200&&r.resolvedAt===entry.recordedAt&&Date.parse(r.resolvedAt)>=Date.parse(effect.createdAt)&&["manual_cash","manual_bank_transfer"].includes(r.method));
+      const request=state.returnEvents?.find(e=>e.type==="RETURN_REQUESTED"&&e.orderId===effect!.orderId&&e.returnRequestId===effect!.returnRequestId);
+      requireEvidence(request?.type==="RETURN_REQUESTED"&&request.confirmation?.refundRequest);
+      const saved=request.confirmation.refundRequest;
+      const quote=allocateApprovedReturnPayment({orderNumber:effect.orderId,status:"completed",completion:request.completion,payment:saved.originalPayment,orderMode:saved.originalOrderMode??"home_delivery"},state.returnEvents??[],effect.returnRequestId,r.method);
+      requireEvidence(quote.status==="resolved"&&!quote.otherShippingReviewRequired&&quote.evidenceFingerprint===r.economicFingerprint);
+      if(r.method==="manual_cash")requireEvidence(r.bank===null&&!r.bankAcknowledged);
+      else {requireEvidence(r.bank&&isDeepStrictEqual(validateRefundBank(r.bank),r.bank));requireEvidence(isDeepStrictEqual(r.bank,saved.bank)||r.bankAcknowledged===true);}
+      effect.routingResolution=structuredClone(r);
     } else if (effect?.effectType === "payment_refund" && entry.type === "NOTIFIED") {
       requireEvidence(effect.status === "applied" && ["sent","failed","disabled"].includes(entry.notification ?? "") && !entry.paymentResult && !entry.plan && !entry.receipt && !entry.creditResult && !entry.reason && Date.parse(entry.recordedAt)>=Date.parse(effect.appliedAt!));
       effect.notification=entry.notification;
@@ -81,8 +98,8 @@ export function projectReturnSettlements(state: SettlementState): SettlementEffe
         && Date.parse(entry.recordedAt)>=Date.parse(effect.createdAt) && r.note.length<=200 && Array.isArray(r.proof) && r.proof.length<=3);
       const request=state.returnEvents?.find(e=>e.type==="RETURN_REQUESTED"&&e.orderId===effect!.orderId&&e.returnRequestId===effect!.returnRequestId);
       requireEvidence(request?.type==="RETURN_REQUESTED"&&request.confirmation?.refundRequest);
-      const saved=request.confirmation.refundRequest;
-      const quote=allocateApprovedReturnPayment({orderNumber:effect.orderId,status:"completed",completion:request.completion,payment:saved.originalPayment,orderMode:saved.originalOrderMode??"home_delivery"},state.returnEvents??[],effect.returnRequestId);
+      const saved=effectiveRefundRequest(request.confirmation.refundRequest,effect.routingResolution)!;
+      const quote=allocateApprovedReturnPayment({orderNumber:effect.orderId,status:"completed",completion:request.completion,payment:saved.originalPayment,orderMode:saved.originalOrderMode??"home_delivery"},state.returnEvents??[],effect.returnRequestId,effect.routingResolution?.method);
       requireEvidence(quote.status==="resolved"&&quote.amount===r.amount&&quote.originalPaidTotal===r.originalPaidTotal&&quote.merchandisePaidTotal===r.merchandisePaidTotal&&quote.method===r.method&&saved.originalPayment===r.originalPayment&&quote.evidenceFingerprint===r.allocationFingerprint);
       requireEvidence(r.proof.every(photo=>typeof photo.url==="string"&&/^\/uploads\/order-notifications\/[0-9a-f-]{36}\.webp$/iu.test(photo.url)&&photo.mimeType==="image/webp"&&photo.bytes>0&&photo.width>0&&photo.height>0));
       const prior=[...effects.values()].filter(e=>e.orderId===effect!.orderId&&e.effectType==="payment_refund"&&e.status==="applied");
