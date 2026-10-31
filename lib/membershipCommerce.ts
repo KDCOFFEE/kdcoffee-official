@@ -1,9 +1,12 @@
 import { validateSubscriptionCreditPreference, type SubscriptionCreditPreference } from "./subscriptionCreditPreference";
+import { collectProtectedCreditEvidenceReferences, retainProtectedCreditEvidence } from "./returnCreditCleanupProtection";
 import { createHash, randomBytes } from "crypto";
 import { promises as fs } from "fs";
 import path from "path";
 import { isDeepStrictEqual } from "node:util";
-import { buildReturnConfirmationPreview, signReturnPreview, verifyReturnPreviewToken, ReturnWorkflowError } from "./returnCreditPreview";
+import { planApprovedReturnSettlement, projectReturnSettlements, assertSettlementPrefix, appendSettlementEvent, returnCreditSettlementSummary, type SettlementEvent } from "./returnSettlementLedger";
+import { approvedReturnCreditSelection } from "./returnCreditSelection";
+import { originalReturnCreditSources, buildReturnConfirmationPreview, signReturnPreview, verifyReturnPreviewToken, ReturnWorkflowError } from "./returnCreditPreview";
 
 import { listOrders, readOrder, withStoredOrderUpdateLock } from "./adminOrders";
 import { getDateOnlyInTimeZone } from "./checkoutRules";
@@ -60,7 +63,7 @@ function isolatePaidRewardInput<T extends { paidAmountBasis: number; basePV?: nu
 }
 import { hasOrderCompletion, resolveOrderEconomicAllocation, resolveReturnLineEvidence, returnDeadlineAtTaipeiDayEnd } from "./orderCompletion";
 import {
-  assertReturnEventsPreserved, normalizeReturnCommand, preservedReturnCompletion, projectOrderReturns,
+  approvedReturnLines, assertReturnEventsPreserved, normalizeReturnCommand, preservedReturnCompletion, projectOrderReturns,
   returnCommandConflict, returnEvidenceText, validateReturnEventLog,
   type ReturnActor, type ReturnCommand, type ReturnCommandResult, type ReturnDomainEvent, type ReturnRequestStatus,
 } from "./orderReturns";
@@ -577,6 +580,7 @@ export type MembershipCommerceState = {
   events: CommerceEvent[];
   /** Absent in historical state. Immutable facts; statuses/quantities are replayed, never stored separately. */
   returnEvents?: ReturnDomainEvent[];
+  returnSettlementEvents?: SettlementEvent[];
   notifications: NotificationEvent[];
   audit: AuditRecord[];
   idempotency: Record<string, { resultId: string; occurredAt: string }>;
@@ -920,7 +924,7 @@ function approvedConsumptionReductionCores(state: MembershipCommerceState, restr
     if (!request) throw new MembershipCommerceError("核准退貨缺少原申請證據");
     const previous = quantities.get(event.orderId) ?? new Map<string, number>();
     const next = new Map(previous);
-    for (const line of request.lines) next.set(line.returnLineRef, (next.get(line.returnLineRef) ?? 0) + line.quantity);
+    for (const line of approvedReturnLines(request, event)) next.set(line.returnLineRef, (next.get(line.returnLineRef) ?? 0) + line.quantity);
     quantities.set(event.orderId, next);
     const consumptions = Object.entries(state.validConsumptionEvents).filter(([, item]) => item.sourceOrderId === event.orderId);
     if (!consumptions.some(([, item]) => !restriction || restriction.has(item.eventId))) continue;
@@ -941,7 +945,7 @@ function approvedConsumptionReductionCores(state: MembershipCommerceState, restr
     if (!authority || authority.status !== "resolved") return { status: "manual_review_required", consumptionEventId: consumption.eventId,
       reason: authority?.status === "manual_review_required" ? authority.reason : "missing_d0_consumption_authority" };
     const lines: ReturnConsumptionReduction["lines"] = [];
-    for (const line of request.lines) {
+    for (const line of approvedReturnLines(request, event)) {
       const original = authority.lines.find(item => item.returnLineRef === line.returnLineRef);
       if (!original || original.originalQuantity !== line.originalQuantity) return { status: "manual_review_required",
         consumptionEventId: consumption.eventId, reason: "inconsistent_d0_line_authority" };
@@ -1029,9 +1033,9 @@ export function readReturnConsumptionReductions(state: MembershipCommerceState):
       || !reductionMoney(record.incrementalEconomicReduction) || !reductionMoney(record.cumulativeApprovedReturnReduction)
       || record.previousCumulativeApprovedReduction + record.incrementalEconomicReduction !== record.cumulativeApprovedReturnReduction
       || record.cumulativeApprovedReturnReduction > record.originalConsumptionAmount
-      || !Array.isArray(record.lines) || record.lines.length !== request.lines.length
+      || !Array.isArray(record.lines) || record.lines.length !== approvedReturnLines(request, approved).length
       || record.lines.some((line, offset) => {
-        const selected = request.lines[offset];
+        const selected = approvedReturnLines(request, approved)[offset];
         return line.returnLineRef !== selected.returnLineRef || line.originalQuantity !== selected.originalQuantity
           || line.approvedQuantity !== selected.quantity || line.previousApprovedQuantity + line.approvedQuantity !== line.cumulativeApprovedQuantity
           || cumulativeOriginalLineContribution(line.originalLineConsumptionContribution, line.originalQuantity, line.previousApprovedQuantity) !== line.previousCumulativeContribution
@@ -1578,7 +1582,7 @@ async function calculatePendingReturnReward(input: { state: MembershipCommerceSt
     approvedIds.add(event.eventId);
     const request = requested.get(event.returnRequestId)!;
     const map = quantities.get(event.orderId) ?? new Map<string, number>();
-    for (const line of request.lines) map.set(line.returnLineRef, (map.get(line.returnLineRef) ?? 0) + line.quantity);
+    for (const line of approvedReturnLines(request, event)) map.set(line.returnLineRef, (map.get(line.returnLineRef) ?? 0) + line.quantity);
     quantities.set(event.orderId, map);
   }
   const reductions = readReturnConsumptionReductions(state).filter(item => approvedIds.has(item.approvedReturnEventId));
@@ -1939,6 +1943,7 @@ export function validateMembershipCommerceState(value: unknown): MembershipComme
   if (!isObject(value) || value.schemaVersion !== 1 || !Number.isSafeInteger(value.revision) || typeof value.createdAt !== "string" || typeof value.updatedAt !== "string") throw new MembershipCommerceError("會員商務資料格式不正確");
   if (value.returnEvents === undefined) value.returnEvents = [];
   validateReturnEventLog(value.returnEvents);
+  projectReturnSettlements(value as MembershipCommerceState);
   if (!isObject(value.referralRewards)) value.referralRewards = {};
   if (!isObject(value.retailPromotionRewards)) value.retailPromotionRewards = {};
   if (!isObject(value.validConsumptionEvents)) value.validConsumptionEvents = {};
@@ -2081,12 +2086,14 @@ async function transaction<T>(operation: (state: MembershipCommerceState, now: D
   return withFileLock(filePath, async () => {
     const state = await readMembershipCommerceState(filePath);
     const originalReturnEvents = structuredClone(state.returnEvents ?? []);
+    const originalSettlements = structuredClone(state.returnSettlementEvents ?? []);
     const originalHolds = structuredClone(returnHoldAudit(state));
     const originalReductions = structuredClone(consumptionReductionAudit(state));
     const originalResolutions = structuredClone(pendingResolutionAudit(state));
     const result = await operation(state, now);
     await appendReturnRewardHolds(state, now);
     assertReturnEventsPreserved(originalReturnEvents, state.returnEvents ?? []);
+    assertSettlementPrefix(originalSettlements, state.returnSettlementEvents ?? []);
     if (!isDeepStrictEqual(originalHolds, returnHoldAudit(state).slice(0, originalHolds.length))) throw new MembershipCommerceError("退貨 HOLD 歷史不可刪改");
     if (!isDeepStrictEqual(originalReductions, consumptionReductionAudit(state).slice(0, originalReductions.length))) throw new MembershipCommerceError("退貨消費減少歷史不可刪改");
     if (!isDeepStrictEqual(originalResolutions, pendingResolutionAudit(state).slice(0, originalResolutions.length))) throw new MembershipCommerceError("退貨獎勵結案歷史不可刪改");
@@ -2163,7 +2170,7 @@ export async function executeOrderReturnCommand(input: {
       const confirmation = input.confirmation ? (() => {
         const saved = verifyReturnPreviewToken(input.confirmation.token, now);
         const current = buildReturnConfirmationPreview({ order, state, command, memberId: input.confirmation.memberId,
-          now, generatedAt: saved.generatedAt, rewardHoldExpected: returnHoldCandidates(state, order.orderNumber).length > 0 });
+          now, generatedAt: saved.generatedAt, warningDays: saved.expiryWarning?.days ?? 7, rewardHoldExpected: returnHoldCandidates(state, order.orderNumber).length > 0 });
         if (saved.actorId !== command.actor.actorId || saved.sourceOrderId !== order.orderNumber
           || saved.confirmationFingerprint !== current.confirmationFingerprint) throw new ReturnWorkflowError("stale_confirmation");
         return { preview: current, tokenDigest: originalEconomicFingerprint(input.confirmation.token), confirmedAt: timestamp, quantityAcknowledged: true as const,
@@ -2180,8 +2187,9 @@ export async function executeOrderReturnCommand(input: {
         ? { ...base, type: command.type, completion: proof.completion, conditionAcknowledgement: command.conditionAcknowledgement,
             ...(confirmation ? { confirmation } : {}),
             lines: command.lines.map(line => ({ ...line, originalQuantity: projection.lines.find(item => item.returnLineRef === line.returnLineRef)!.originalQuantity })) }
-        : { ...base, type: command.type };
+        : { ...base, type: command.type, ...(command.type === "RETURN_APPROVED" && command.approvedLines ? { approvedLines: command.approvedLines } : {}) };
       state.returnEvents = [...events, appended];
+      if (appended.type === "RETURN_APPROVED") planApprovedReturnSettlement(state, appended);
       const next = projectOrderReturns(order, state.returnEvents);
       if (next.status !== "resolved") throw new MembershipCommerceError("退貨證據投影不一致");
       remember(state, key, eventId, now);
@@ -2197,7 +2205,7 @@ export async function executeOrderReturnCommand(input: {
 export async function previewOrderReturn(input: {
   orderNumber: string; memberId: string; command: ReturnCommand; reason: string;
   authorizeOrder: (order: Readonly<Record<string, unknown>>, actor: ReturnActor) => void | Promise<void>;
-  now?: Date; stateFilePath?: string;
+  now?: Date; stateFilePath?: string; rulesFilePath?: string;
 }) {
   const actor: ReturnActor = { actorId: input.memberId, authority: "customer" };
   const command = normalizeReturnCommand(input.command, actor, input.reason);
@@ -2207,7 +2215,8 @@ export async function previewOrderReturn(input: {
     const filePath = input.stateFilePath ?? getMembershipCommerceStateFile();
     return withFileLock(filePath, async () => {
       const state = await readMembershipCommerceState(filePath);
-      const preview = buildReturnConfirmationPreview({ order, state, command, memberId: input.memberId,
+      const version = await getActiveMembershipRules(input.now ?? new Date(), input.rulesFilePath);
+      const preview = buildReturnConfirmationPreview({ order, state, command, memberId: input.memberId, warningDays: version.rules.credit.returnCreditExpiryWarningDays ?? 7,
         now: input.now ?? new Date(), rewardHoldExpected: returnHoldCandidates(state, order.orderNumber).length > 0 });
       return { preview, confirmationToken: signReturnPreview(preview) };
     });
@@ -5109,7 +5118,8 @@ export async function cancelOrReverseReferralRewards(input: { orderId: string; o
   }, { now: input.now, filePath: input.stateFilePath });
 }
 
-function issueCreditInState(state: MembershipCommerceState, rules: MembershipBusinessRules, input: { memberId: string; sourceType: CreditEntry["sourceType"]; sourceReference: string; amount: number; metadata?: CreditEntry["metadata"] }, now: Date) {
+function issueCreditInState(state: MembershipCommerceState, rules: MembershipBusinessRules, input: { memberId: string; sourceType: CreditEntry["sourceType"]; sourceReference: string; amount: number; metadata?: CreditEntry["metadata"] }, now: Date, originalExpiry?: string) {
+  if (originalExpiry !== undefined && (!Number.isFinite(Date.parse(originalExpiry)) || Date.parse(originalExpiry) <= now.getTime())) throw new MembershipCommerceError("原始額度已到期");
   const duplicate = Object.values(state.creditEntries).find((entry) => entry.sourceType === input.sourceType && entry.sourceReference === input.sourceReference);
   if (duplicate) return duplicate;
   // Shared last monetary boundary, including direct issueCredit callers using reserved reward references.
@@ -5159,12 +5169,13 @@ function issueCreditInState(state: MembershipCommerceState, rules: MembershipBus
   const issuedDate = nowIso(now).slice(0, 10);
   const expiryDate = addTaipeiCalendarMonths(issuedDate, rules.credit.expiryCalendarMonths);
   const creditEntryId = id("credit");
-  const entry: CreditEntry = { creditEntryId, memberId: input.memberId, sourceType: input.sourceType, sourceReference: input.sourceReference, amount, remainingAmount: amount, issuedAt: nowIso(now), expiresAt: `${addTaipeiCalendarDays(expiryDate, 1)}T00:00:00+08:00`, status: "available", createdAt: nowIso(now), metadata: input.metadata ?? {} };
+  const entry: CreditEntry = { creditEntryId, memberId: input.memberId, sourceType: input.sourceType, sourceReference: input.sourceReference, amount, remainingAmount: amount, issuedAt: nowIso(now), expiresAt: originalExpiry ?? `${addTaipeiCalendarDays(expiryDate, 1)}T00:00:00+08:00`, status: "available", createdAt: nowIso(now), metadata: input.metadata ?? {} };
   state.creditEntries[creditEntryId] = entry;
   return entry;
 }
 
 export async function issueCredit(input: { memberId: string; sourceType: CreditEntry["sourceType"]; sourceReference: string; amount: number; metadata?: CreditEntry["metadata"]; idempotencyKey: string; now?: Date; stateFilePath?: string; rulesFilePath?: string }) {
+  if (input.sourceReference.startsWith("return_credit_restore:")) throw new MembershipCommerceError("退貨額度僅可由結算執行");
   await assertCanonicalMember(input.memberId);
   const version = await getActiveMembershipRules(input.now, input.rulesFilePath);
   const key = `credit:issue:${input.idempotencyKey}`;
@@ -5701,7 +5712,7 @@ export async function getMemberCommerceDashboard(memberId: string, now = new Dat
       .flatMap((reservation) => reservation.allocations
         .filter((allocation) => allocation.creditEntryId === item.creditEntryId && allocation.amount > 0)
         .map((allocation) => ({ orderNumber: reservation.orderId, amount: allocation.amount, status: reservation.status })));
-    return { creditEntryId: item.creditEntryId, amount: item.amount, remainingAmount, issuedAt: item.issuedAt, expiresAt: item.expiresAt, status, direction, sourceLabel, sourceCopyKey: customSourceLabel !== undefined ? undefined : sourceLabel === "抵用金調整" ? "credit.source.adjustment" : sourceLabel === "會員抵用金" ? "credit.source.default" : undefined, sourceOrderNumber, orderRedemptions };
+    return { creditEntryId: item.creditEntryId, amount: item.amount, remainingAmount, issuedAt: item.issuedAt, expiresAt: item.expiresAt, status, direction, sourceLabel, sourceCopyKey: item.sourceReference.startsWith("return_credit_restore:") ? "member.returns.creditPassbookSource" : customSourceLabel !== undefined ? undefined : sourceLabel === "抵用金調整" ? "credit.source.adjustment" : sourceLabel === "會員抵用金" ? "credit.source.default" : undefined, sourceOrderNumber, orderRedemptions };
   });
   const rewardCreditSources = Object.values(state.creditEntries)
     .filter((item) =>
@@ -6396,17 +6407,23 @@ export async function purgeMembershipCommerceForMembers(memberIds?: string[]) {
   const filePath = getMembershipCommerceStateFile();
   await fs.mkdir(path.dirname(filePath), { recursive: true });
   return withFileLock(filePath, async () => {
-    const current = await readMembershipCommerceState(filePath);
+    const original = await readMembershipCommerceState(filePath);
+    const protectedRefs = collectProtectedCreditEvidenceReferences(original);
+    const current = structuredClone(original);
     if (!memberIds?.length) {
       const cleared = emptyState();
       // Return facts survive this existing membership maintenance path as well.
       cleared.returnEvents = structuredClone(current.returnEvents ?? []);
+      cleared.returnSettlementEvents = structuredClone(current.returnSettlementEvents ?? []);
       cleared.idempotency = Object.fromEntries(Object.entries(current.idempotency).filter(([key]) => key.startsWith("return-domain:")));
       cleared.audit = current.audit.filter(item => item.entityType === "return_request");
       cleared.revision = current.revision + 1;
       cleared.createdAt = current.createdAt;
       cleared.updatedAt = new Date().toISOString();
+      retainProtectedCreditEvidence(original, cleared, protectedRefs);
       assertReturnEventsPreserved(current.returnEvents ?? [], cleared.returnEvents);
+      assertSettlementPrefix(current.returnSettlementEvents ?? [], cleared.returnSettlementEvents ?? []);
+      validateMembershipCommerceState(cleared);
       await atomicWriteJson(filePath, cleared);
       return { clearedAll: true };
     }
@@ -6434,10 +6451,80 @@ export async function purgeMembershipCommerceForMembers(memberIds?: string[]) {
     current.notifications = current.notifications.filter((item) => !item.memberId || !targets.has(item.memberId));
     current.audit = current.audit.filter((item) => item.entityType === "return_request" || (!targets.has(item.entityId) && ![...targets].some((memberId) => item.sourceEvent.includes(memberId))));
     current.idempotency = Object.fromEntries(Object.entries(current.idempotency).filter(([key]) => key.startsWith("return-domain:")));
+    retainProtectedCreditEvidence(original, current, protectedRefs);
     current.revision += 1;
     current.updatedAt = new Date().toISOString();
     validateMembershipCommerceState(current);
     await atomicWriteJson(filePath, current);
     return { clearedAll: false, memberIds: [...targets] };
+  });
+}
+
+/** Credit entries, durable idempotency and APPLIED evidence commit in ONE existing commerce write.
+ * Inventory has its own receipt and is deliberately not repeated or compensated here. */
+export async function applyApprovedReturnCredit(orderNumber:string, returnRequestId:string, input:{now?:Date;stateFilePath?:string;rulesFilePath?:string;hook?:(phase:"BEFORE_CREDIT_COMMIT")=>void|Promise<void>}={}) {
+  return withStoredOrderUpdateLock(orderNumber,async order=>{
+    const run=async()=>transaction(async state=>{
+      const now=input.now ?? new Date();
+      if(!Number.isFinite(now.getTime()))throw new MembershipCommerceError("Invalid settlement clock");
+      const approval=state.returnEvents?.find(item=>item.orderId === orderNumber && item.returnRequestId === returnRequestId && item.type === "RETURN_APPROVED");
+      if(approval?.type !== "RETURN_APPROVED")throw new MembershipCommerceError("Return is not approved");
+      planApprovedReturnSettlement(state,approval,now.toISOString());
+      const effect=projectReturnSettlements(state).find(item=>item.approvedEventId === approval.eventId && item.effectType === "member_credit_restore")!;
+      if(effect.status === "applied" || effect.status === "manual_review_required")return returnCreditSettlementSummary(state,returnRequestId);
+      const request=state.returnEvents?.find(item=>item.type === "RETURN_REQUESTED" && item.returnRequestId === returnRequestId);
+      const allocation=resolveOrderEconomicAllocation(order);
+      if(request?.type !== "RETURN_REQUESTED" || allocation.status !== "resolved")throw new ReturnWorkflowError("original_credit_requires_review");
+      const memberId=String(order.member?.memberId ?? "");
+      if(!memberId)throw new ReturnWorkflowError("original_credit_member_requires_review");
+      const sources=originalReturnCreditSources(orderNumber,memberId,allocation,state);
+      let selected;
+      try { selected=approvedReturnCreditSelection(request,approval,allocation.actualRedemptionUsed === 0); }
+      catch { throw new ReturnWorkflowError("selected_credit_requires_review"); }
+      // Every approved/pending request keeps its exact source budget, including expired amounts.
+      const projection=projectOrderReturns(order,state.returnEvents ?? []);
+      if(projection.status !== "resolved")throw new ReturnWorkflowError("original_credit_requires_review");
+      const occupied=new Map<string,number>();
+      for(const item of projection.requests.filter(item=>["pending","processing","approved"].includes(item.status))) {
+        const original=state.returnEvents!.find(event=>event.eventId === item.requestedEventId)!;
+        if(original.type !== "RETURN_REQUESTED")throw new ReturnWorkflowError("original_credit_requires_review");
+        const decision=state.returnEvents!.find(event=>event.type === "RETURN_APPROVED" && event.returnRequestId === item.returnRequestId);
+        let entries;
+        try { entries=decision?.type === "RETURN_APPROVED" ? approvedReturnCreditSelection(original,decision,allocation.actualRedemptionUsed === 0) : original.confirmation?.preview.entries ?? []; }
+        catch {throw new ReturnWorkflowError("selected_credit_requires_review");}
+        if(!original.confirmation && allocation.actualRedemptionUsed > 0)throw new ReturnWorkflowError("selected_credit_requires_review");
+        for(const source of entries)occupied.set(source.creditEntryId,(occupied.get(source.creditEntryId) ?? 0)+source.amount);
+      }
+      for(const [creditId,amount] of occupied)if(amount > (sources.find(item=>item.creditEntryId === creditId)?.amount ?? -1))throw new ReturnWorkflowError("credit_source_budget_requires_review");
+      const version=await getActiveMembershipRules(now,input.rulesFilePath);
+      const entries=selected.map(source=>{
+        const original=sources.find(item=>item.creditEntryId === source.creditEntryId);
+        if(!original || original.expiresAt !== source.expiresAt || source.amount > original.amount)throw new ReturnWorkflowError("original_credit_requires_review");
+        const expired=Date.parse(source.expiresAt) <= now.getTime();
+        let restoredCreditEntryId:string|null=null;
+        if(!expired) {
+          const sourceReference="return_credit_restore:"+effect.effectId+":"+source.creditEntryId;
+          const entry=issueCreditInState(state,version.rules,{memberId,sourceType:"compensation",sourceReference,amount:source.amount,
+            metadata:{orderId:orderNumber,returnRequestId,approvedEventId:approval.eventId,settlementEffectId:effect.effectId,originalCreditEntryId:source.creditEntryId,originalExpiresAt:source.expiresAt}},now,source.expiresAt);
+          restoredCreditEntryId=entry.creditEntryId;
+          remember(state,"credit:issue:"+sourceReference,entry.creditEntryId,now);
+          event(state,"credit_issued",{amount:entry.amount,sourceType:entry.sourceType},now,{memberId,orderId:orderNumber});
+        }
+        return {creditEntryId:source.creditEntryId,amount:source.amount,expiresAt:source.expiresAt,restoredAmount:expired?0:source.amount,expiredAmount:expired?source.amount:0,restoredCreditEntryId};
+      });
+      const result={memberId,selectedAmount:entries.reduce((sum,item)=>sum+item.amount,0),restoredAmount:entries.reduce((sum,item)=>sum+item.restoredAmount,0),expiredAmount:entries.reduce((sum,item)=>sum+item.expiredAmount,0),settledAt:now.toISOString(),entries};
+      appendSettlementEvent(state,{effectId:effect.effectId,type:"APPLIED",recordedAt:now.toISOString(),creditResult:result});
+      audit(state,{actor:"system",action:"return_credit_restored",entityType:"return_request",entityId:returnRequestId,before:{},after:{restoredAmount:result.restoredAmount,expiredAmount:result.expiredAmount},reason:"Approved return original credit expiry revalidation",sourceEvent:approval.eventId},now);
+      await input.hook?.("BEFORE_CREDIT_COMMIT");
+      return returnCreditSettlementSummary(state,returnRequestId);
+    },{filePath:input.stateFilePath,now:input.now});
+    try {return await run();}
+    catch(error) {
+      await transaction(state=>{
+        const effect=projectReturnSettlements(state).find(item=>item.orderId === orderNumber && item.returnRequestId === returnRequestId && item.effectType === "member_credit_restore");
+        if(effect && !["applied","manual_review_required"].includes(effect.status))appendSettlementEvent(state,{effectId:effect.effectId,type:error instanceof ReturnWorkflowError?"MANUAL_REVIEW_REQUIRED":"FAILED",recordedAt:(input.now ?? new Date()).toISOString(),reason:error instanceof ReturnWorkflowError?error.code:"credit_commit_failed"});
+      },{filePath:input.stateFilePath,now:input.now});
+      throw error;
+    }
   });
 }

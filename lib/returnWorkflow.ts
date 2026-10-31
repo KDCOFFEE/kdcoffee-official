@@ -1,3 +1,6 @@
+import { approvedReturnCreditSelection } from "./returnCreditSelection";
+import { applyApprovedReturnInventory } from "./returnInventorySettlement";
+import { returnCreditSettlementSummary, returnInventorySummary } from "./returnSettlementLedger";
 import { readOrder, type StoredOrder } from "./adminOrders";
 import { createHash } from "node:crypto";
 import { projectReturnRewardUnits } from "./returnRewardUnits";
@@ -6,7 +9,7 @@ import { validOrderPhotoSelection } from "./orderPhotoPolicy";
 import { assertMemberOwnsOrder } from "./orderCancellation";
 import { resolveReturnLineEvidence, resolveOrderEconomicAllocation } from "./orderCompletion";
 import { projectOrderReturns, type ReturnCommand, type ReturnDomainEvent } from "./orderReturns";
-import { executeOrderReturnCommand, previewOrderReturn, readMembershipCommerceState, readReturnRewardHoldDependencies,
+import { applyApprovedReturnCredit, executeOrderReturnCommand, previewOrderReturn, readMembershipCommerceState, readReturnRewardHoldDependencies,
   projectPendingReturnRewardEntitlement, projectReturnRewardHolds, resolveTerminalReturnRewardDependencies,
   type MembershipCommerceState, type ReturnRewardReference } from "./membershipCommerce";
 import { requestCommand, originalReturnCreditSources, ReturnWorkflowError, type ReturnConfirmationPreview } from "./returnCreditPreview";
@@ -19,7 +22,8 @@ export function safeCreditPreview(preview: ReturnConfirmationPreview) {
   return { returnCreditAmount: preview.returnCreditAmount, restorableCreditAmount: preview.restorableCreditAmount,
     expiredCreditAmount: preview.expiredCreditAmount, hasExpiredReturnCredit: preview.hasExpiredReturnCredit,
     entries: preview.entries.map(({ amount, expiresAt, classification }) => ({ amount, expiresAt, classification })),
-    generatedAt: preview.generatedAt, returnDeadline: preview.returnDeadline, lines: preview.lines,
+    expiryWarning: preview.expiryWarning,
+    generatedAt: preview.generatedAt, returnDeadline: preview.returnDeadline, lines: preview.lines.map(({returnLineRef,quantity,attributedCreditAmount})=>({returnLineRef,quantity,attributedCreditAmount})),
     rewardHoldExpected: preview.rewardHoldExpected, rewardAdjustmentPreview: preview.rewardAdjustmentPreview };
 }
 function beneficiary(state: MembershipCommerceState, ref: ReturnRewardReference) {
@@ -58,9 +62,17 @@ export function projectReturnWorkflow(order: StoredOrder, state: MembershipComme
   const events = (state.returnEvents ?? []).filter(event => event.orderId === order.orderNumber);
   const deadline = projection.status === "resolved" ? projection.returnDeadline : null;
   let creditReview: string | null = null;
+
   if (projection.status === "resolved" && economic.status === "resolved") {
     try { originalReturnCreditSources(order.orderNumber, String(order.member?.memberId ?? ""), economic, state); }
     catch (error) { creditReview = error instanceof ReturnWorkflowError ? error.code : "credit_evidence_requires_review"; }
+    for(const approval of events.filter(event=>event.type === "RETURN_APPROVED")) {
+      const request=events.find(event=>event.type === "RETURN_REQUESTED" && event.returnRequestId === approval.returnRequestId);
+      if(request?.type === "RETURN_REQUESTED" && approval.type === "RETURN_APPROVED") {
+        try { approvedReturnCreditSelection(request,approval,economic.actualRedemptionUsed === 0); }
+        catch { creditReview="historical_return_credit_requires_review"; }
+      }
+    }
     if (economic.actualRedemptionUsed > 0 && projection.requests.some(request => ["pending", "processing", "approved"].includes(request.status)
       && !events.find(event => event.eventId === request.requestedEventId && event.type === "RETURN_REQUESTED" && event.confirmation))) creditReview = "historical_return_credit_requires_review";
   }
@@ -80,6 +92,8 @@ export function projectReturnWorkflow(order: StoredOrder, state: MembershipComme
     requests: projection.status === "resolved" ? projection.requests.map(request => {
       const requested = events.find(event => event.eventId === request.requestedEventId) as Extract<ReturnDomainEvent, { type: "RETURN_REQUESTED" }>;
       return { ...request, withdrawable: request.withdrawable && (!memberId || request.requestedBy === memberId),
+        inventorySettlement: memberId ? undefined : returnInventorySummary(state, request.returnRequestId),
+        creditSettlement: returnCreditSettlementSummary(state, request.returnRequestId),
         reason: requested.reason, conditionAcknowledgement: requested.conditionAcknowledgement,
         photos: requested.confirmation?.supportingPhotos ?? [],
         creditPreview: requested.confirmation ? safeCreditPreview(requested.confirmation.preview) : null,
@@ -135,11 +149,15 @@ export async function adminReturnAction(orderNumber: string, adminId: string, va
   if (typeof values.action !== "string" || !Object.hasOwn(types, values.action) || typeof values.returnRequestId !== "string") throw new ReturnWorkflowError("invalid_input", 400);
   const reason = typeof values.reason === "string" ? values.reason.trim() : "";
   if (!reason || reason.length > 200) throw new ReturnWorkflowError("review_reason_required", 400);
-  const command: ReturnCommand = { type: types[values.action as keyof typeof types], returnRequestId: values.returnRequestId };
+  const command: ReturnCommand = values.action === "approve" ? { type: "RETURN_APPROVED", returnRequestId: values.returnRequestId, ...(values.approvedLines !== undefined ? { approvedLines: values.approvedLines as import("./orderReturns").ReturnSelection[] } : {}) } : { type: types[values.action as "lock" | "reject"], returnRequestId: values.returnRequestId };
   const result = await executeOrderReturnCommand({ orderNumber, actor: { actorId: adminId, authority: "reviewer" }, command,
     reason, idempotencyKey: String(values.idempotencyKey ?? ""), authorizeOrder: () => {}, ...runtime });
   if (result.status !== "applied") throw new ReturnWorkflowError(result.reason);
+  let inventorySettlement: Awaited<ReturnType<typeof applyApprovedReturnInventory>> | null = null;
+  if (values.action === "approve") { try { inventorySettlement = await applyApprovedReturnInventory(orderNumber, result.event.returnRequestId, runtime); } catch { /* Atomic approval/outbox survives. Retry uses the same durable receipt identity. */ } }
+  let creditSettlement: Awaited<ReturnType<typeof applyApprovedReturnCredit>> | null = null;
+  if (values.action === "approve") { try { creditSettlement = await applyApprovedReturnCredit(orderNumber,result.event.returnRequestId,runtime); } catch { /* Independent durable credit effect remains retryable; inventory receipt is untouched. */ } }
   const resolution = values.action === "lock" ? null : await resolveTerminalReturnRewardDependencies(runtime);
-  return { returnRequestId: result.event.returnRequestId, replayed: result.replayed, rewardResolution: resolution?.status ?? null };
+  return { returnRequestId: result.event.returnRequestId, replayed: result.replayed, inventorySettlement, creditSettlement, rewardResolution: resolution?.status ?? null };
 }
 export type ReturnWorkflowView = ReturnType<typeof projectReturnWorkflow>;

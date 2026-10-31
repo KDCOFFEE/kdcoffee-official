@@ -7,15 +7,14 @@ import { returnTaipeiDate, returnStatusLabels } from "@/lib/returnPresentation";
 import { ReturnRequestEvidence, ReturnRewardEvidence } from "@/components/member/ReturnEvidence";
 import styles from "@/components/member/ReturnWorkflow.module.css";
 import ReturnReasonFields from "@/components/member/ReturnReasonFields";
-import { MemberCopyText } from "@/components/member/MemberCenterCopyProvider";
 
 export function AdminReturnDetail({ initial }: { initial: ReturnWorkflowView }) {
   const [view, setView] = useState(initial), [busy, setBusy] = useState(false), [error, setError] = useState("");
-  async function review(action: string, returnRequestId: string, reason: string) {
+  async function review(action: string, returnRequestId: string, reason: string, approvedLines?: Array<{ returnLineRef: string; quantity: number }>) {
     setBusy(true); setError("");
     const endpoint = `/api/admin/returns/${encodeURIComponent(view.orderNumber)}`;
     try {
-      const response = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, returnRequestId, reason, idempotencyKey: `${action}:${returnRequestId}` }) });
+      const response = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, returnRequestId, reason, ...(approvedLines ? { approvedLines } : {}), idempotencyKey: `${action}:${returnRequestId}` }) });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "審核失敗。");
       const latest = await fetch(endpoint, { cache: "no-store" });
@@ -29,16 +28,19 @@ export function AdminReturnDetail({ initial }: { initial: ReturnWorkflowView }) 
     {view.technicalReason ? <p className={styles.notice}>manual_review_required：{view.technicalReason}</p> : null}
     {error ? <p className={styles.notice} role="alert">{error}</p> : null}
     {view.requests.map(request => <article className={styles.card} key={request.returnRequestId} id={request.returnRequestId}><ReturnRequestEvidence request={request} view={view} admin />
-      {["pending", "processing"].includes(request.status) ? <ReviewControls disabled={busy} pending={request.status === "pending"} onReview={(action, reason) => review(action, request.returnRequestId, reason)} /> : null}
+      {["pending", "processing"].includes(request.status) ? <ReviewControls lines={request.lines} disabled={busy} pending={request.status === "pending"} onReview={(action, reason, approvedLines) => review(action, request.returnRequestId, reason, approvedLines)} /> : null}
+    {request.status === "approved" && request.inventorySettlement ? <section><h3>庫存回補</h3><p>已完成：{request.inventorySettlement.appliedQuantity} 件</p>{request.inventorySettlement.status !== "applied" ? <p>{request.inventorySettlement.status === "manual_review_required" ? "需人工確認原始庫存資料" : "待重試／尚未完成"}</p> : null}</section> : null}
     </article>)}<ReturnRewardEvidence rewards={view.rewards} />
   </main>;
 }
-function ReviewControls({ disabled, pending, onReview }: { disabled: boolean; pending: boolean; onReview: (action: string, reason: string) => void }) {
+function ReviewControls({ lines, disabled, pending, onReview }: { lines: Array<{ returnLineRef: string; quantity: number }>; disabled: boolean; pending: boolean; onReview: (action: string, reason: string, approvedLines?: Array<{ returnLineRef: string; quantity: number }>) => void }) {
   const [reason, setReason] = useState("");
+  const [approvedLines, setApprovedLines] = useState(lines.map(({ returnLineRef, quantity }) => ({ returnLineRef, quantity })));
   return <div><h3>Admin 審核原因／備註</h3><ReturnReasonFields admin disabled={disabled} onValue={setReason} />
-    <p><MemberCopyText copyKey="member.returns.adminSettlementNotice" /></p><div className={styles.actions}>
+    {approvedLines.map((line,index) => <label key={line.returnLineRef}>核准數量（商品 {index + 1}，申請 {lines[index].quantity} 件）<input type="number" min={0} max={lines[index].quantity} step={1} disabled={disabled} value={line.quantity} onChange={event => setApprovedLines(current => current.map((item,i) => i === index ? { ...item, quantity: Number(event.target.value) } : item))} /></label>)}
+    <p>核准後立即回補核准數量；未核准的剩餘數量不回補。款項與會員折抵額仍待後續結算。</p><div className={styles.actions}>
       {pending ? <button disabled={disabled || !reason.trim()} onClick={() => onReview("lock", reason)}>開始處理並鎖定撤回</button> : null}
-      <button disabled={disabled || !reason.trim()} onClick={() => onReview("approve", reason)}>核准退貨</button><button disabled={disabled || !reason.trim()} onClick={() => onReview("reject", reason)}>不核准</button>
+      <button disabled={disabled || !reason.trim() || !approvedLines.some(line => line.quantity > 0) || approvedLines.some((line,index) => !Number.isSafeInteger(line.quantity) || line.quantity < 0 || line.quantity > lines[index].quantity)} onClick={() => onReview("approve", reason, approvedLines.filter(line => line.quantity > 0))}>核准退貨</button><button disabled={disabled || !reason.trim()} onClick={() => onReview("reject", reason)}>不核准</button>
     </div></div>;
 }
 export type AdminReturnRow = { returnRequestId: string; orderNumber: string; customer?: string; status: string; requestedAt: string; quantity: number; returnDeadline: string | null };

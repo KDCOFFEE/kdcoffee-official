@@ -1,5 +1,6 @@
 import { percentageRewardPayout, selfPurchaseTierPayout, type MembershipCommerceState, type ReturnRewardReference,
   type PendingReturnRewardResolution } from "./membershipCommerce";
+import { approvedReturnLines } from "./orderReturns";
 import { resolveOrderRewardBasis } from "./orderRewardBasis";
 
 const valid = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value) && value >= 0;
@@ -34,11 +35,11 @@ export function projectReturnRewardUnits(state: MembershipCommerceState, referen
     } else if (referral?.selfPurchaseTierSnapshot && tier.result) {
       const terminalIndex = state.returnEvents?.findIndex(event => event.eventId === resolution.terminalReturnEventId) ?? -1;
       const prefix = state.returnEvents?.slice(0, terminalIndex + 1) ?? [];
-      const approved = new Set(prefix.filter(event => event.type === "RETURN_APPROVED").map(event => event.returnRequestId));
+      const approved = new Map(prefix.filter(event => event.type === "RETURN_APPROVED").map(event => [event.returnRequestId, event]));
       const requests = prefix.filter(event => event.type === "RETURN_REQUESTED" && event.orderId === referral.sourceOrderNumber);
       const selected = new Map<string, number>();
       for (const event of requests) if (event.type === "RETURN_REQUESTED" && approved.has(event.returnRequestId)) {
-        for (const line of event.lines) selected.set(line.returnLineRef, (selected.get(line.returnLineRef) ?? 0) + line.quantity);
+        for (const line of approvedReturnLines(event, approved.get(event.returnRequestId)!)) selected.set(line.returnLineRef, (selected.get(line.returnLineRef) ?? 0) + line.quantity);
       }
       let pv: number | null = referral.effectivePV;
       if (selected.size) {

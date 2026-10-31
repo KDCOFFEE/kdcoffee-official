@@ -175,6 +175,8 @@ export type MembershipBusinessRules = {
     maximumOrderPercent?: number;
     expiryCalendarMonths: number;
     expiryReminderDays: number;
+    /** Preview only; original credit expiry remains authoritative. */
+    returnCreditExpiryWarningDays?: number;
     expiryMonthEndPolicy: "clamp-to-last-day";
     redemption: { mode: "unlimited" } | { mode: "maximum-fixed"; amount: number } | { mode: "minimum-payable"; amount: number } | { mode: "maximum-percentage"; percent: number };
     appliesToShipping: typeof OWNER_DECISION_REQUIRED | "yes" | "no";

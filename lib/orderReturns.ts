@@ -9,7 +9,8 @@ export type ReturnConditionAcknowledgement = { itemsComplete: true; unopenedUnus
 export type ReturnSelection = { returnLineRef: string; quantity: number };
 export type ReturnCommand =
   | { type: "RETURN_REQUESTED"; lines: ReturnSelection[]; conditionAcknowledgement: ReturnConditionAcknowledgement }
-  | { type: "RETURN_PROCESSING_LOCKED" | "RETURN_WITHDRAWN" | "RETURN_APPROVED" | "RETURN_REJECTED"; returnRequestId: string };
+  | { type: "RETURN_APPROVED"; returnRequestId: string; approvedLines?: ReturnSelection[] }
+  | { type: "RETURN_PROCESSING_LOCKED" | "RETURN_WITHDRAWN" | "RETURN_REJECTED"; returnRequestId: string };
 export type ReturnCommandEvidence = ReturnCommand & { actor: ReturnActor; reason: string };
 type ReturnEventBase = {
   schemaVersion: 1; eventId: string; returnRequestId: string; orderId: string;
@@ -21,13 +22,14 @@ export type ReturnDomainEvent = ReturnEventBase & (
       lines: Array<ReturnSelection & { originalQuantity: number }>;
       confirmation?: ReturnConfirmationSnapshot;
       conditionAcknowledgement: ReturnConditionAcknowledgement }
-  | { type: "RETURN_PROCESSING_LOCKED" | "RETURN_WITHDRAWN" | "RETURN_APPROVED" | "RETURN_REJECTED" }
+  | { type: "RETURN_APPROVED"; approvedLines?: ReturnSelection[] }
+  | { type: "RETURN_PROCESSING_LOCKED" | "RETURN_WITHDRAWN" | "RETURN_REJECTED" }
 );
 export type ReturnRequestStatus = "pending" | "processing" | "approved" | "rejected" | "withdrawn";
 export type ReturnRequestProjection = {
   returnRequestId: string; requestedEventId: string; lastEventId: string; requestedBy: string;
   status: ReturnRequestStatus; withdrawable: boolean; occurredAt: string; lastOccurredAt: string;
-  lines: Array<ReturnSelection & { originalQuantity: number }>; eventIds: string[];
+  lines: Array<ReturnSelection & { originalQuantity: number }>; approvedLines?: ReturnSelection[]; rejectedLines?: ReturnSelection[]; eventIds: string[];
 };
 export type ReturnQuantityProjection = {
   returnLineRef: string; originalQuantity: number; approvedQuantity: number;
@@ -83,7 +85,21 @@ export function normalizeReturnCommand(command: ReturnCommand, actor: ReturnActo
   }
   if (!["RETURN_PROCESSING_LOCKED", "RETURN_WITHDRAWN", "RETURN_APPROVED", "RETURN_REJECTED"].includes(command.type)
     || !returnEvidenceText(command.returnRequestId, 200)) return null;
+  if (command.type === "RETURN_APPROVED" && command.approvedLines !== undefined) {
+    const selection = normalizeReturnCommand({ type: "RETURN_REQUESTED", lines: command.approvedLines, conditionAcknowledgement: { itemsComplete: true, unopenedUnusedWhereApplicable: true } }, actor, reason);
+    if (!selection || selection.type !== "RETURN_REQUESTED") return null;
+    return { ...base, type: command.type, returnRequestId: command.returnRequestId, approvedLines: selection.lines };
+  }
   return { ...base, type: command.type, returnRequestId: command.returnRequestId };
+}
+
+/** Explicit selection is terminal: requested remainder is rejected, never stock-restored.
+ * Historical approvals without a selection retain their accepted full-request semantics. */
+export function approvedReturnLines(request: { lines: Array<ReturnSelection & { originalQuantity: number }> }, approval: { approvedLines?: ReturnSelection[] }) {
+  const selected = approval.approvedLines ?? request.lines;
+  if (!Array.isArray(selected) || !selected.length || new Set(selected.map(line => line.returnLineRef)).size !== selected.length
+    || selected.some(line => !Number.isSafeInteger(line.quantity) || line.quantity < 1 || !request.lines.some(original => original.returnLineRef === line.returnLineRef && line.quantity <= original.quantity))) throw new ReturnDomainIntegrityError("Invalid approved quantities");
+  return request.lines.flatMap(original => { const line = selected.find(item => item.returnLineRef === original.returnLineRef); return line ? [{ ...original, quantity: line.quantity }] : []; });
 }
 
 /** No current rules/catalog access; review/withdrawal of an accepted request has no new deadline gate. */
@@ -159,7 +175,10 @@ function replayReturnEvents(events: readonly ReturnDomainEvent[]): Map<string, R
           && originalEconomicFingerprint(payload) === confirmationFingerprint
           && preview.lines.length === event.lines.length
           && preview.lines.every(line => event.lines.some(item => item.returnLineRef === line.returnLineRef && item.quantity === line.quantity)
-            && Number.isSafeInteger(line.attributedCreditAmount) && line.attributedCreditAmount >= 0)
+            && Number.isSafeInteger(line.attributedCreditAmount) && line.attributedCreditAmount >= 0
+            && (line.unitCreditAmounts === undefined || (Array.isArray(line.unitCreditAmounts) && line.unitCreditAmounts.length === line.quantity
+              && line.unitCreditAmounts.every(amount=>Number.isSafeInteger(amount) && amount >= 0)
+              && line.unitCreditAmounts.reduce((sum,amount)=>sum+amount,0) === line.attributedCreditAmount)))
           && preview.entries.every(entry => returnEvidenceText(entry.creditEntryId, 200) && validInstant(entry.expiresAt)
             && Number.isSafeInteger(entry.amount) && entry.amount > 0
             && entry.classification === (Date.parse(entry.expiresAt) <= Date.parse(generatedAt) ? "expired_not_restorable" : "restorable"))
@@ -195,14 +214,19 @@ function replayReturnEvents(events: readonly ReturnDomainEvent[]): Map<string, R
         integrity(event.actor.authority === "reviewer", "Reviewer authority required");
         if (event.type === "RETURN_PROCESSING_LOCKED") {
           integrity(request.status === "pending", "Processing already locked"); request.status = "processing";
-        } else if (event.type === "RETURN_APPROVED") request.status = "approved";
+        } else if (event.type === "RETURN_APPROVED") {
+          const approved = approvedReturnLines(request, event);
+          request.status = "approved";
+          request.approvedLines = approved.map(({ returnLineRef, quantity }) => ({ returnLineRef, quantity }));
+          request.rejectedLines = request.lines.flatMap(line => { const quantity = line.quantity - (approved.find(item => item.returnLineRef === line.returnLineRef)?.quantity ?? 0); return quantity ? [{ returnLineRef: line.returnLineRef, quantity }] : []; });
+        }
         else { integrity(event.type === "RETURN_REJECTED", "Unknown return event type"); request.status = "rejected"; }
       }
       if (request.status !== "processing") {
         for (const line of request.lines) {
           const original = context.projection.lines.find(item => item.returnLineRef === line.returnLineRef)!;
           original.effectivePendingQuantity -= line.quantity;
-          if (request.status === "approved") original.approvedQuantity += line.quantity;
+          if (request.status === "approved") original.approvedQuantity += request.approvedLines?.find(item => item.returnLineRef === line.returnLineRef)?.quantity ?? 0;
           original.remainingReturnableQuantity = original.originalQuantity - original.approvedQuantity - original.effectivePendingQuantity;
           integrity(original.remainingReturnableQuantity >= 0 && original.effectivePendingQuantity >= 0, "Return quantity overflow");
         }
@@ -254,5 +278,6 @@ export function returnCommandConflict(command: ReturnCommandEvidence, projection
   }
   if (command.actor.authority !== "reviewer") return "not_authorized";
   if (request.status !== "pending" && request.status !== "processing") return "invalid_transition";
+  if (command.type === "RETURN_APPROVED") { try { approvedReturnLines(request, command); } catch { return "quantity_exceeded"; } }
   return command.type === "RETURN_PROCESSING_LOCKED" && request.status !== "pending" ? "invalid_transition" : null;
 }

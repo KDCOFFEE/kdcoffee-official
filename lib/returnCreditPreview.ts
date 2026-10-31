@@ -1,3 +1,6 @@
+import { approvedReturnCreditSelection } from "./returnCreditSelection";
+import { addTaipeiCalendarDays } from "./membershipPolicies";
+import { getDateOnlyInTimeZone } from "./checkoutRules";
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
 import type { CustomerNotificationPhoto } from "./customerNotifications";
 import type { MembershipCommerceState } from "./membershipCommerce";
@@ -9,9 +12,10 @@ export const RETURN_CREDIT_ALLOCATION_POLICY = "original-consumed-later-expiry-f
 export type ReturnCreditEntry = { creditEntryId: string; amount: number; expiresAt: string; classification: "restorable" | "expired_not_restorable" };
 export type ReturnConfirmationPreview = {
   schemaVersion: 1; policy: typeof RETURN_CREDIT_ALLOCATION_POLICY; sourceOrderId: string;
-  actorId: string; lines: Array<ReturnSelection & { attributedCreditAmount: number }>;
+  actorId: string; lines: Array<ReturnSelection & { attributedCreditAmount: number; unitCreditAmounts?: number[] }>;
   returnDeadline: string; returnCreditAmount: number; restorableCreditAmount: number; expiredCreditAmount: number;
   entries: ReturnCreditEntry[]; hasExpiredReturnCredit: boolean; generatedAt: string;
+  expiryWarning?: { days: number; businessDate: string; amount: number; entries: Array<{amount:number; expiresAt:string}> };
   rewardHoldExpected: boolean; rewardAdjustmentPreview: { status: "review_on_decision"; explanation: string };
   evidenceFingerprint: string; confirmationFingerprint: string;
 };
@@ -57,7 +61,7 @@ export function allocateOriginalReturnCredit(entries: Array<{ creditEntryId: str
 
 export function buildReturnConfirmationPreview(input: {
   order: Record<string, unknown>; state: MembershipCommerceState; command: ReturnCommandEvidence;
-  memberId: string; now: Date; generatedAt?: string; rewardHoldExpected: boolean;
+  memberId: string; now: Date; generatedAt?: string; rewardHoldExpected: boolean; warningDays?: number;
 }): ReturnConfirmationPreview {
   const { order, state, command, now } = input;
   if (command.type !== "RETURN_REQUESTED" || command.reason.length > 200) fail("invalid_input");
@@ -70,6 +74,7 @@ export function buildReturnConfirmationPreview(input: {
   const original = allocation.actualRedemptionUsed;
   const sources = originalReturnCreditSources(String(order.orderNumber), input.memberId, allocation, state);
   // Active requests retain their exact source allocations. Rejected/withdrawn requests release them.
+
   const occupied = projection.requests.filter(item => ["pending", "processing", "approved"].includes(item.status));
   const usedByEntry = new Map<string, number>(), usedByLine = new Map<string, number>();
   for (const request of occupied) {
@@ -77,8 +82,15 @@ export function buildReturnConfirmationPreview(input: {
     if (!event || event.type !== "RETURN_REQUESTED") fail("missing_return_evidence");
     const saved = event.confirmation?.preview;
     if (!saved && original > 0) fail("historical_return_credit_requires_review");
-    for (const entry of saved?.entries ?? []) usedByEntry.set(entry.creditEntryId, (usedByEntry.get(entry.creditEntryId) ?? 0) + entry.amount);
-    for (const line of saved?.lines ?? []) usedByLine.set(line.returnLineRef, (usedByLine.get(line.returnLineRef) ?? 0) + line.attributedCreditAmount);
+    const approval = request.status === "approved" ? state.returnEvents?.find(item => item.type === "RETURN_APPROVED" && item.returnRequestId === request.returnRequestId) : undefined;
+    const selected = approval?.type === "RETURN_APPROVED" ? approvedReturnCreditSelection(event, approval, original === 0) : saved?.entries ?? [];
+    for (const entry of selected) usedByEntry.set(entry.creditEntryId, (usedByEntry.get(entry.creditEntryId) ?? 0) + entry.amount);
+    for (const line of saved?.lines ?? []) {
+      const approvedQuantity = request.approvedLines?.find(item=>item.returnLineRef === line.returnLineRef)?.quantity ?? 0;
+      const amount = request.status !== "approved" || approvedQuantity === line.quantity ? line.attributedCreditAmount
+        : (line.unitCreditAmounts ?? []).slice(0,approvedQuantity).reduce((sum,value)=>sum+value,0);
+      usedByLine.set(line.returnLineRef,(usedByLine.get(line.returnLineRef) ?? 0)+amount);
+    }
   }
   const lines = command.lines.map(line => {
     const basis = allocation.lines.find(item => item.returnLineRef === line.returnLineRef)!;
@@ -86,7 +98,13 @@ export function buildReturnConfirmationPreview(input: {
     const cumulative = quantities.approvedQuantity + quantities.effectivePendingQuantity + line.quantity;
     const amount = cumulativeOriginalLineContribution(basis.allocatedActualRedemption, basis.originalQuantity, cumulative) - (usedByLine.get(line.returnLineRef) ?? 0);
     if (!money(amount)) fail("historical_return_credit_requires_review");
-    return { ...line, attributedCreditAmount: amount };
+    const already = quantities.approvedQuantity + quantities.effectivePendingQuantity;
+    let previous = 0;
+    const unitCreditAmounts = Array.from({length:line.quantity},(_,index)=>{
+      const cumulativeAmount = Math.max(0,cumulativeOriginalLineContribution(basis.allocatedActualRedemption,basis.originalQuantity,already+index+1)-(usedByLine.get(line.returnLineRef) ?? 0));
+      const unit = cumulativeAmount-previous; previous=cumulativeAmount; return unit;
+    });
+    return { ...line, attributedCreditAmount: amount, unitCreditAmounts };
   });
   const available = sources.map(entry => ({ ...entry, amount: entry.amount - (usedByEntry.get(entry.creditEntryId) ?? 0) }));
   const returnCreditAmount = lines.reduce((sum, line) => sum + line.attributedCreditAmount, 0);
@@ -94,7 +112,15 @@ export function buildReturnConfirmationPreview(input: {
   const expiredCreditAmount = entries.filter(item => item.classification === "expired_not_restorable").reduce((sum, item) => sum + item.amount, 0);
   const evidenceFingerprint = originalEconomicFingerprint({ orderId: order.orderNumber, completion: order.completion,
     projection, sources, occupied: occupied.map(item => item.requestedEventId), command, memberId: input.memberId, allocation: allocation.allocationFingerprint });
-  const payload = { schemaVersion: 1 as const, policy: RETURN_CREDIT_ALLOCATION_POLICY as typeof RETURN_CREDIT_ALLOCATION_POLICY, sourceOrderId: String(order.orderNumber),
+  const days = input.warningDays ?? 7;
+  if (!Number.isInteger(days) || days < 0 || days > 365) fail("invalid_warning_days");
+  const businessDate = getDateOnlyInTimeZone(now);
+  // Expiry is exclusive. Compare the last usable Taipei date to today + N calendar days.
+  const warningEnd = addTaipeiCalendarDays(businessDate,days);
+  const warningEntries = entries.filter(item=>item.classification === "restorable"
+    && getDateOnlyInTimeZone(new Date(Date.parse(item.expiresAt)-1)) <= warningEnd).map(({amount,expiresAt})=>({amount,expiresAt}));
+  const expiryWarning = {days,businessDate,amount:warningEntries.reduce((sum,item)=>sum+item.amount,0),entries:warningEntries};
+  const payload = { expiryWarning, schemaVersion: 1 as const, policy: RETURN_CREDIT_ALLOCATION_POLICY as typeof RETURN_CREDIT_ALLOCATION_POLICY, sourceOrderId: String(order.orderNumber),
     actorId: command.actor.actorId, lines, returnDeadline: projection.returnDeadline, returnCreditAmount,
     restorableCreditAmount: returnCreditAmount - expiredCreditAmount, expiredCreditAmount, entries,
     hasExpiredReturnCredit: expiredCreditAmount > 0, rewardHoldExpected: input.rewardHoldExpected,

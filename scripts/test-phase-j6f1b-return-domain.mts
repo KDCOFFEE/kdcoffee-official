@@ -272,7 +272,7 @@ if (process.argv[2] === "--worker") {
       assert.throws(() => validateReturnEventLog(events), ReturnDomainIntegrityError);
     });
     await test("legacy commerce reads normalize absent events without writing files", async () => {
-      const legacyFile = path.join(root, "legacy-commerce.json"); const old = await state(); delete old.returnEvents;
+      const legacyFile = path.join(root, "legacy-commerce.json"); const old = await state(); delete old.returnEvents; delete old.returnSettlementEvents;
       await fs.writeFile(legacyFile, JSON.stringify(old)); const before = await fs.readFile(legacyFile, "utf8");
       assert.deepEqual((await readMembershipCommerceState(legacyFile)).returnEvents, []); assert.equal(await fs.readFile(legacyFile, "utf8"), before);
     });
@@ -299,12 +299,13 @@ if (process.argv[2] === "--worker") {
     const fulfillmentBytes = JSON.stringify({ records: { [boundary.orderNumber]: { currentState: "completed" } } });
     await fs.writeFile(inventoryFile, inventoryBytes); await fs.writeFile(fulfillmentFile, fulfillmentBytes);
     const beforeState = await state();
-    const protectedState = (value: typeof beforeState) => Object.fromEntries(Object.entries(value).filter(([key]) => !["revision", "updatedAt", "returnEvents", "audit", "idempotency"].includes(key)));
+    const protectedState = (value: typeof beforeState) => Object.fromEntries(Object.entries(value).filter(([key]) => !["revision", "updatedAt", "returnEvents", "returnSettlementEvents", "audit", "idempotency"].includes(key)));
     for (const type of ["RETURN_WITHDRAWN", "RETURN_APPROVED", "RETURN_REJECTED"] as const) {
       const entry = applied(await request(boundary)); applied(await transition(boundary, entry.event.returnRequestId, type));
       await test(`order, fulfillment, payment and inventory remain byte-identical after ${type}`, async () => assert.equal(await fs.readFile(boundary.file, "utf8"), beforeBytes));
     }
     await test("reward, consumption, credit, subscription and notification state remain unchanged", async () => assert.deepEqual(protectedState(await state()), protectedState(beforeState)));
+    await test("domain approval appends pending settlement plans without executing inventory", async () => { const saved = await state(); assert.ok((saved.returnSettlementEvents?.length ?? 0) > (beforeState.returnSettlementEvents?.length ?? 0)); assert.ok(saved.returnSettlementEvents?.every(event => event.type === "PLANNED")); });
     await test("physical inventory and fulfillment state files remain byte-identical", async () => {
       assert.equal(await fs.readFile(inventoryFile, "utf8"), inventoryBytes); assert.equal(await fs.readFile(fulfillmentFile, "utf8"), fulfillmentBytes);
     });
@@ -335,7 +336,7 @@ if (process.argv[2] === "--worker") {
 
     await test("membership selective cleanup preserves all return facts and operation identities", async () => {
       const before = await state(); await purgeMembershipCommerceForMembers([customer.actorId]); const after = await state();
-      assert.deepEqual(after.returnEvents, before.returnEvents);
+      assert.deepEqual(after.returnEvents, before.returnEvents); assert.deepEqual(after.returnSettlementEvents, before.returnSettlementEvents);
       assert.deepEqual(Object.entries(after.idempotency).filter(([key]) => key.startsWith("return-domain:")), Object.entries(before.idempotency).filter(([key]) => key.startsWith("return-domain:")));
     });
     await test("membership full cleanup preserves return history, audit and replay", async () => {

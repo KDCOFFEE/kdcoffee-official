@@ -84,3 +84,26 @@
 .empty { padding: 16px 0; text-align: center; color: #a18e7b; font-size: 13px; }
 @media(max-width:600px) { .panel { margin: 12px 12px 48px; padding: 18px; font-size: 14px; } .hero { gap: 14px; margin-bottom: 22px; } .heroIcon { width: 50px; height: 50px; border-radius: 17px; font-size: 28px; } .orderSummary,.card,.rewardCard,.form { padding: 18px; border-radius: 16px; } .orderSummary>div { align-items: flex-start; } .orderSummary strong { font-size: 13px; } .newRequest { padding: 18px; flex-wrap: wrap; } .newRequest button { width: 100%; } .credit { padding: 16px; } .dialog { padding: 22px; margin: auto; } .amounts { gap: 10px; } .amounts dd { font-size: 15px; } }
 @media(prefers-reduced-motion:reduce) { .panel * { scroll-behavior: auto; } }
+
+.settlement { padding: 22px; margin: 20px 0 12px; border: 1px solid #d6e1d2; border-radius: 16px; background: #f3f7f0; }
+.settlement h3 { color: #4f6549; font-size: 17px; }
+.resultAmounts { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: baseline; gap: 12px 18px; margin: 18px 0; }
+.resultAmounts dt { font-size: 13px; color: #736b5e; }
+.resultAmounts dd { margin: 0; font-size: 17px; font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.resultAmounts .restoredAmount { color: #3d6243; font-size: clamp(22px,4vw,28px); font-weight: 700; }
+.explanation { border-top: 1px solid #dce4d7; padding-top: 10px; font-size: 13px; color: #766d5f; }
+.explanation summary,.historicalEstimate>summary { cursor: pointer; padding: 6px 0; min-height: 30px; color: #716650; }
+.explanation summary { list-style: none; display: flex; align-items: center; gap: 7px; }
+.explanation summary::-webkit-details-marker { display: none; }
+.explanation summary span { font-size: 16px; }
+.explanationBody { padding: 14px 0 2px; }
+.explanationBody>h4 { margin: 0 0 12px; font-size: 14px; color: #53674c; }
+.sourceGroup { margin: 16px 0; }
+.sourceGroup h4 { margin: 0 0 7px; font-size: 13px; font-weight: 650; }
+.sourceGroup ul { list-style: none; padding: 0; margin: 0; }
+.sourceGroup li { padding: 5px 0; overflow-wrap: anywhere; }
+.sourceGroup p { font-size: 12px; }
+.historicalEstimate { margin: 0 0 18px; padding: 0 4px; font-size: 13px; }
+.historicalEstimate .credit { margin: 8px 0 0; background: #f8f5ef; }
+@media(max-width:600px) { .settlement { padding: 17px; } .resultAmounts { gap: 10px 12px; } .resultAmounts dt { font-size: 12px; } .resultAmounts dd { font-size: 15px; } }
+@media(max-width:400px) { .resultAmounts { grid-template-columns: minmax(0,1fr); gap: 5px; } .resultAmounts dd { text-align: left; margin-bottom: 9px; } .resultAmounts .restoredAmount { line-height: 1.3; } }

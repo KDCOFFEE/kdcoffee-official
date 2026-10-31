@@ -157,6 +157,7 @@ export const DEFAULT_MEMBERSHIP_RULES: MembershipBusinessRules = {
     maximumOrderPercent: 70,
     expiryCalendarMonths: 3,
     expiryReminderDays: 7,
+    returnCreditExpiryWarningDays: 7,
     expiryMonthEndPolicy: "clamp-to-last-day",
     redemption: { mode: "unlimited" },
     appliesToShipping: "yes",
@@ -634,6 +635,7 @@ export function validateMembershipBusinessRules(value: unknown, options: Members
   percent(rules.credit.maximumOrderPercent === undefined ? 70 : rules.credit.maximumOrderPercent, "單筆訂單最高抵用比例");
   integer(rules.credit.expiryCalendarMonths, 1, 120, "抵用金期限");
   integer(rules.credit.expiryReminderDays, 0, 365, "抵用金到期提醒");
+  integer(rules.credit.returnCreditExpiryWarningDays, 0, 365, "退貨返還到期提醒天數");
   if (rules.credit.expiryMonthEndPolicy !== "clamp-to-last-day") throw new MembershipRulesValidationError("抵用金月底到期規則不正確");
   validateOwnerChoice(rules.credit.redemption.mode, ["unlimited", "maximum-fixed", "minimum-payable", "maximum-percentage"], "每筆最高折抵");
   if (rules.credit.redemption.mode === "maximum-fixed") integer(rules.credit.redemption.amount, 0, 100_000_000, "最高折抵金額");

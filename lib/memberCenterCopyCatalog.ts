@@ -6544,8 +6544,8 @@ export const MEMBER_CENTER_COPY_CATALOG: readonly MemberCopyDefinition[] = [
   { key: "member.returns.confirmBody", group: "orders", purpose: "退貨最終確認說明", defaultText: "本次申請退貨 {quantity} 件商品。送出後將進入審核，相關待發回饋可能暫停。請確認以下金額。", tokens: { quantity: "申請件數" }, multiline: true },
   { key: "member.returns.confirmSubmit", group: "orders", purpose: "退貨第二次確認按鈕", defaultText: "確認申請退貨", tokens: {}, multiline: false },
   { key: "member.returns.returnExpiredCreditConfirmationNotice", group: "orders", purpose: "每一筆已到期抵用金確認提醒", defaultText: "本次退貨包含已到期{creditName}。{amount} 已於 {expiryDate} 到期，若退貨成立，該部分{creditName}將無法返還。請確認以上資訊後再提出退貨申請。", tokens: { amount: "該筆到期額度（含統一單位）", expiryDate: "該筆原到期日期", creditName: "會員中心統一抵用金名稱" }, multiline: true },
-  { key: "member.returns.settlementNotice", group: "orders", purpose: "抵用金預覽與後續處理界線", defaultText: "此為返還預覽，尚未入帳。款項與{creditName}將於退貨核准後，依後續流程辦理。", tokens: { creditName: "會員中心統一抵用金名稱" }, multiline: true },
-  { key: "member.returns.approvedNotice", group: "orders", purpose: "退貨核准後續處理說明", defaultText: "退貨申請已核准，相關款項／{creditName}處理將依後續流程辦理。", tokens: { creditName: "會員中心統一抵用金名稱" }, multiline: true },
+  { key: "member.returns.settlementNotice", group: "orders", purpose: "抵用金預覽與後續處理界線", defaultText: "此為預估，尚未入帳。{creditName}將於核准／結算時依原有效期限確認，若屆時已到期將無法返還。", tokens: { creditName: "會員中心統一抵用金名稱" }, multiline: true },
+  { key: "member.returns.approvedNotice", group: "orders", purpose: "退貨核准後續處理說明", defaultText: "退貨申請已核准。", tokens: { creditName: "會員中心統一抵用金名稱" }, multiline: true },
 ];
 
 export const DEFAULT_MEMBER_CENTER_COPY: Readonly<Record<string, string>> = Object.fromEntries(MEMBER_CENTER_COPY_CATALOG.map((entry) => [entry.key, entry.defaultText]));

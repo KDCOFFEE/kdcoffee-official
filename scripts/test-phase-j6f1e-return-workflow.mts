@@ -165,7 +165,13 @@ try {
   await review(approved, approvedId, "approve");
   await test("approval appends canonical event", async () => assert.equal((await state(approved)).returnEvents?.at(-1)?.type, "RETURN_APPROVED"));
   await test("partial approval invokes D pending adjustment", async () => { const reward = (await view(approved)).rewards[0]; assert.equal(reward.originalPendingAmount, 10); assert.equal(reward.effectivePendingAmount, 4); assert.equal(reward.adjustment, 6); });
-  await test("approval never restores or replaces credits", async () => assert.deepEqual((await state(approved)).creditEntries, creditBefore));
+  await test("approval restores only valid selected credits and preserves existing entries", async () => {
+    const after=(await state(approved)).creditEntries;
+    for(const [id,entry] of Object.entries(creditBefore))assert.deepEqual(after[id],entry);
+    const restored=Object.values(after).filter(entry=>entry.sourceReference.startsWith("return_credit_restore:"));
+    assert.equal(restored.reduce((sum,entry)=>sum+entry.amount,0),50);
+    assert.equal(restored[0].expiresAt,creditBefore[approved.b].expiresAt);
+  });
   await test("approval preserves original expiration", async () => assert.equal((await state(approved)).creditEntries[approved.a].expiresAt, originals[0].expiresAt));
   await test("approved request cannot withdraw", () => assert.rejects(() => withdraw(approved, approvedId), /invalid_transition/));
   const full = await fixture({ reward: true }); await review(full, await requestId(full, 20), "approve");
@@ -258,7 +264,7 @@ try {
   await test("Admin detail exposes credit confirmation snapshot", async () => { const response = await adminGET(new Request("http://localhost:3000"), context(api.orderNumber)); assert.equal((await response.json()).requests[0].creditPreview.returnCreditAmount, 0); });
   await test("Admin mutation rejects cross-origin", async () => assert.equal((await adminPOST(request({}, "https://other.test"), context(api.orderNumber))).status, 403));
   await test("Admin API lock derives actor from session", async () => { const response = await adminPOST(request({ action: "lock", returnRequestId: apiId, reason: "API審核", idempotencyKey: "api-lock", actorId: "spoof" }), context(api.orderNumber)); assert.equal(response.status, 200); assert.equal((await state(api)).returnEvents?.at(-1)?.actor.actorId, "owner"); });
-  await test("Admin page renders source/deadline/preview/review controls", async () => { const html = render(createElement(AdminReturnDetail, { initial: await getReturnWorkflow(api.orderNumber) })); for (const label of ["查看來源訂單", "最晚退貨期限", "抵用金返還預覽", "核准退貨", "Admin 審核原因"]) assert.ok(html.includes(label)); });
+  await test("Admin page renders source/deadline/preview/review controls", async () => { const html = render(createElement(AdminReturnDetail, { initial: await getReturnWorkflow(api.orderNumber) })); for (const label of ["查看來源訂單", "最晚退貨期限", "抵用金返還預估", "核准退貨", "Admin 審核原因"]) assert.ok(html.includes(label)); });
   await test("Admin list renders all five status filters", () => { const html = render(createElement(AdminReturnList, { initial: [] })); for (const label of ["申請處理中", "處理中", "已核准", "未核准", "已撤回"]) assert.ok(html.includes(label)); });
   await test("new E code contains no role-specific pricing implementation", async () => { for (const file of ["lib/returnCreditPreview.ts", "lib/returnWorkflow.ts", "components/member/MemberReturnWorkflow.tsx"]) assert.doesNotMatch(await fs.readFile(file, "utf8"), /Franchise|VIP|0\.7\b/); });
   await test("original order remains byte-identical after all workflow actions", async () => assert.equal(await fs.readFile(f.file, "utf8"), orderBytes));

@@ -110,7 +110,7 @@ try {
   await test("selection rejects oversized images using shared 5MB constant", () => assert.equal(validOrderPhotoSelection({ name: "damage.png", type: "image/png", size: MAX_ORDER_NOTIFICATION_PHOTO_BYTES + 1 }), false));
   await test("selection rejects mismatched extension and unsupported MIME", () => { assert.equal(validOrderPhotoSelection({ name: "bad.exe", type: "image/png", size: 10 }), false); assert.equal(validOrderPhotoSelection({ name: "bad.svg", type: "image/svg+xml", size: 10 }), false); });
   const compact = render(createElement(ReturnCreditEvidence, { preview: p.preview, warning: true }));
-  await test("main confirmation contains exactly the three amount labels", () => { for (const label of ["本次退貨涉及：", "可返還預覽：", "已到期無法返還："]) assert.ok(compact.includes(label)); });
+  await test("main confirmation contains exactly the three amount labels", () => { for (const label of ["本次退貨涉及：", "預計可返還：", "已到期無法返還："]) assert.ok(compact.includes(label)); });
   await test("expiry rows are inside a closed native details disclosure", () => { assert.match(compact, /<details[^>]*><summary[^>]*>查看明細／查看說明/); assert.doesNotMatch(compact, /<details[^>]*\bopen/); assert.ok(!compact.replace(/<details[\s\S]*?<\/details>/gu, "").includes("2026/10/27")); });
   await test("expired main notice has friendly editable title/body", () => { assert.ok(compact.includes("抵用金到期提醒")); assert.ok(compact.includes("該部分將無法返還")); });
   const noExpired = await preview(f, 6);
@@ -202,7 +202,7 @@ try {
       assert.ok(balance.includes(`200 ${name}`));
       const html = render(createElement(ReturnCreditEvidence, { preview: pointPreview.preview, warning: true }), savedCopy.overrides);
       for (const value of [60, 50, 10]) assert.ok(html.includes(`${value} ${name}`));
-      assert.ok(html.includes(`${name}返還預覽`)); assert.ok(html.includes(`${name}到期提醒`));
+      assert.ok(html.includes(`${name}返還預估`)); assert.ok(html.includes(`${name}到期提醒`));
       assert.ok(html.includes(`10 ${name} 已於`)); assert.ok(!html.includes("NT$"));
       if (name !== "抵用金") assert.ok(!html.includes("抵用金"));
     });

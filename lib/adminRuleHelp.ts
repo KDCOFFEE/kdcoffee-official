@@ -243,6 +243,7 @@ export const adminRuleHelpDefinitions: AdminRuleHelpDefinition[] = [
   define({ ruleKey: "gift.pool", title: "贈品候選與替代順序", summary: "設定可用贈品及缺貨時的優先替代順序。", runtimeBehavior: "期次鎖定贈品時按啟用與 priority 尋找第一個可用項目。", evaluationTiming: "gift snapshot 建立時。" }),
   define({ ruleKey: "credit.maximumOrderPercent", title: "單筆訂單最高抵用比例", summary: "啟用後獨立限制優惠後商品金額的抵用比例，預設 70%；舊規則缺少啟用開關時保持停用。", runtimeBehavior: "向下取整，與既有固定上限、最低應付、運費範圍及零元限制取較小值。比例基礎不含運費與貨到付款費。", evaluationTiming: "結帳報價與實際保留時；配送使用本期鎖定政策。" }),
   define({ ruleKey: "credit.expiryCalendarMonths", title: "抵用金有效期限", summary: "抵用金發放後可使用的台北曆月數。", runtimeBehavior: "由發放日期加曆月並處理月底，保存 expiresAt。", evaluationTiming: "抵用金 ledger entry 建立時。", historicalImpact: "舊 entry 保留原 expiresAt。" }),
+  define({ ruleKey: "credit.returnCreditExpiryWarningDays", title: "退貨返還到期提醒", summary: "申請退貨前提醒即將到期的原訂單額度，預設 7 天，可設 0–365 天整數。", runtimeBehavior: "以台北日期比較原額度最後可用日與今天加提醒天數；0 天提醒當日到期。僅影響未來預估，不延長效期或阻擋申請。", evaluationTiming: "退貨確認預估時；實際返還仍於結算執行時重新檢查原效期。" }),
   define({ ruleKey: "credit.expiryReminderDays", title: "抵用金到期提醒", summary: "抵用金到期前幾天建立提醒事件。", runtimeBehavior: "通知排程依 entry 到期日判斷。", evaluationTiming: notificationTiming }),
   define({ ruleKey: "credit.redemption", title: "每筆最高折抵", summary: "限制單筆訂單可用抵用金的方式與額度。", runtimeBehavior: "伺服器按固定上限、最低應付、百分比或不限模式計算 maximum。", evaluationTiming: "結帳預覽及建立 credit reservation 時。" }),
   define({ ruleKey: "credit.appliesToShipping", title: "抵用金是否可折運費", summary: "決定折抵基礎是否包含運費。", runtimeBehavior: "no 只以商品小計為上限；yes 可包含運費。", evaluationTiming: "結帳 credit maximum 計算時。" }),
