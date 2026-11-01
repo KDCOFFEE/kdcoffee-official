@@ -1,3 +1,4 @@
+import {supportsInternalFlex,type InternalCardContext} from './internalLineCardEvents';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import {composeLineCard} from './lineCardPresentation';
@@ -12,9 +13,10 @@ import {renderLineFlex} from './lineFlexRenderer';
 import {getCanonicalPublicSiteOrigin} from './publicSiteOrigin';
 export type CustomerLineMessage={type:'text';text:string}|Extract<ReturnType<typeof renderLineFlex>,{ok:true}>['flex']|{type:'image';originalContentUrl:string;previewImageUrl:string};
 /** Pre-send presentation only. No recipient, token, network request, enqueue or business mutation. */
-export async function prepareCustomerLinePresentation(text:string,context?:CustomerCardContext,dependencies={readConfig:readLineCardConfig,readAssets:readLineCardHeaderAssets}){
+type PresentationDependencies={readConfig:typeof readLineCardConfig;readAssets:typeof readLineCardHeaderAssets};
+async function preparePresentation(text:string,context:CustomerCardContext|InternalCardContext|undefined,dependencies:PresentationDependencies={readConfig:readLineCardConfig,readAssets:readLineCardHeaderAssets},audience:'customer'|'internal'='customer'){
  const original={message:{type:'text',text} as CustomerLineMessage,requestedPresentation:'text' as 'text'|'flex',deliveredPresentation:'text' as 'text'|'flex',fallbackReason:undefined as string|undefined};
- if(!context||!supportsCustomerFlex(context.eventKey))return original;
+ if(!context||!(audience==='internal'?supportsInternalFlex(context.eventKey):supportsCustomerFlex(context.eventKey)))return original;
  try{
   const snapshot=await dependencies.readConfig();const overrides=snapshot.events[context.eventKey]?.overrides;
   if(overrides?.presentationMode!=='flex')return original;
@@ -30,3 +32,6 @@ export async function prepareCustomerLinePresentation(text:string,context?:Custo
   return {...original,card:rendered.card,message:rendered.flex,deliveredPresentation:'flex' as const};
  }catch{return {...original,fallbackReason:'PRE_SEND_RENDER_FAILURE'};}
 }
+
+export function prepareCustomerLinePresentation(text:string,context?:CustomerCardContext,dependencies?:PresentationDependencies){return preparePresentation(text,context,dependencies,'customer');}
+export function prepareInternalLinePresentation(text:string,context?:InternalCardContext,dependencies?:PresentationDependencies){return preparePresentation(text,context,dependencies,'internal');}

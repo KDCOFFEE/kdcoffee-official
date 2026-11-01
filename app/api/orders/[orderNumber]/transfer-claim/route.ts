@@ -1,3 +1,4 @@
+import {internalOrderCardContext} from '@/lib/internalLineCardEvents';
 import { NextResponse } from "next/server";
 
 import { readOrder, withStoredOrderUpdateLock } from "@/lib/adminOrders";
@@ -119,7 +120,7 @@ export async function POST(
       const transferTime = new Date(result.claim.transferredAt).toLocaleString("zh-TW", { timeZone: "Asia/Taipei" });
       const alert = await sendInternalLineNotification(
         `【KD Coffee ATM 匯款回報】\n訂單：${orderNumber}\n應付金額：NT$ ${result.claim.amount.toLocaleString("zh-TW")}\n匯款帳號末五碼：${result.claim.accountLast5}\n匯款時間：${transferTime}\n匯款明細：${result.claim.receipt ? "已上傳" : "未上傳"}\n\n請至後台核對銀行入帳後，再確認付款。`,
-        { attempts: 1, timeoutMs: 8_000 },
+        { attempts: 1, timeoutMs: 8_000,cardContext:internalOrderCardContext('admin.order.atm_transfer_claim',orderNumber,{amount:result.claim.amount,transferredAt:result.claim.transferredAt}) },
       );
       if (!alert.sent) {
         console.warn("ATM transfer claim LINE alert was not sent", {

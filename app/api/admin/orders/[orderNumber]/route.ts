@@ -1,3 +1,4 @@
+import {internalOrderCardContext} from '@/lib/internalLineCardEvents';
 import { synchronizeCompletedOrderFulfillment } from "@/lib/fulfillment";
 import { OrderCompletionIntegrityError } from "@/lib/orderCompletion";
 import { creditSystemMessage } from "@/lib/creditDisplayCopy";
@@ -84,7 +85,7 @@ export async function PATCH(
         if (previous !== requestedStatus) {
           const { sent } = await sendInternalLineNotification(
             `【KD Coffee 訂單狀態更新】\n\n訂單編號：${order.orderNumber}\n客戶：${order.customer?.name || "未填"}\n狀態：${orderStatusLabel(requestedStatus)}\n物流編號：${order.trackingNumber || "尚未填寫"}`,
-            { attempts: 1, timeoutMs: 5_000 },
+            { attempts: 1, timeoutMs: 5_000,cardContext:internalOrderCardContext('admin.order.status_updated',order.orderNumber,{status:orderStatusLabel(requestedStatus)}) },
           );
           order = { ...order, adminLineNotification: { sent, checkedAt: new Date().toISOString() } };
           await persistOrder(order);

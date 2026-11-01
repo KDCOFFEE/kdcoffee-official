@@ -1,3 +1,4 @@
+import {internalReturnCardContext} from './internalLineCardEvents';
 import {returnCardContext} from './customerLineCardEvents';
 import {readMemberCenterCopy} from "./memberCenterCopyStore";
 import {resolveMemberCopy} from "./memberCenterCopy";
@@ -21,7 +22,7 @@ export async function deliverReturnNotice(notice:NotificationEvent,options:Retur
   const evidence=resolveReturnLineEvidence({orderNumber:order.orderNumber,status:"completed",completion:event.completion});
   const items=event.lines.map(line=>(evidence.status==="resolved"?String(evidence.lines.find(x=>x.returnLineRef===line.returnLineRef)?.snapshot.name??"原訂單商品").slice(0,80):"原訂單商品")+" × "+line.quantity).join("、");
   const text="【KD Coffee 退貨申請】\n訂單："+order.orderNumber+"\n會員："+String(order.customer?.name??"會員").slice(0,80)+"\n商品："+items.slice(0,2000)+"\n原因："+event.reason+"\n管理："+getCanonicalPublicSiteOrigin()+"/admin/returns/"+encodeURIComponent(order.orderNumber);
-  if(!delivered.includes("line")){const r=await(options.internalSender??sendInternalLineNotification)(text,{attempts:1,timeoutMs:2000,retryKey,fetcher:options.lineFetcher});if(r.sent)delivered.push("line");else throw Error("管理者 LINE 通知未送達");}if(!delivered.includes("admin"))delivered.push("admin");return {delivered};
+  if(!delivered.includes("line")){const r=await(options.internalSender??sendInternalLineNotification)(text,{attempts:1,timeoutMs:2000,retryKey,fetcher:options.lineFetcher,cardContext:internalReturnCardContext(order.orderNumber,event.lines.reduce((sum,line)=>sum+line.quantity,0),event.occurredAt)});if(r.sent)delivered.push("line");else throw Error("管理者 LINE 通知未送達");}if(!delivered.includes("admin"))delivered.push("admin");return {delivered};
  }
  const expected:Record<string,string>={return_request_received:"RETURN_REQUESTED",return_request_approved:"RETURN_APPROVED",return_request_rejected:"RETURN_REJECTED"};
  let authoritative=notice;let refundCardEvidence:{amount:number;method:string;confirmedAt:string}|undefined;

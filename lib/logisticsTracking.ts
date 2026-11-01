@@ -1,3 +1,4 @@
+import {logisticsCardContext} from './internalLineCardEvents';
 import { promises as fs } from "node:fs";
 import { createHash, randomUUID } from "node:crypto";
 import { atomicWriteJson, withFileLock } from "./jsonFileStore";
@@ -81,7 +82,7 @@ export async function trackLogisticsEmail(parsed: ParsedFulfillmentEvidence, opt
       event.notification.attemptedAt ??= options.now.toISOString();
       await persist();
       try {
-        const result = await (options.sender ?? sendInternalLineNotification)(event.notification.text, { retryKey: event.notification.retryKey });
+        const result = await (options.sender ?? sendInternalLineNotification)(event.notification.text, { retryKey: event.notification.retryKey,cardContext:logisticsCardContext(state,record,event.occurredAt) });
         event.notification.status = result.sent ? "sent" : "failed";
         event.notification.reason = result.sent ? undefined : result.reason;
       } catch { event.notification.status = "failed"; event.notification.reason = "內部 LINE 通知失敗，等待下次同步重試"; }

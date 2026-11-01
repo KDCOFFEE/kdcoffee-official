@@ -1,9 +1,9 @@
 import type {NotificationEvent} from './membershipCommerce';
 import type {StoredOrder} from './adminOrders';
 export const CUSTOMER_PUSH_CARD_KEYS=['customer.subscription.next_cycle','customer.subscription.modification_cutoff','customer.subscription.order_created','customer.subscription.shipped','customer.subscription.ready_for_pickup','customer.subscription.stock_blocked','customer.subscription.paused','customer.subscription.resumed','customer.subscription.terminated','customer.subscription.skipped','customer.reward.gift_milestone','customer.reward.credit_expiring','customer.order.confirmed','customer.order.shipped','customer.order.shipment_created','customer.order.completed','customer.order.ready_for_pickup.studio','customer.order.ready_for_pickup.711','customer.return.received','customer.return.approved','customer.return.rejected','customer.return.refund_completed'] as const;
-export type CustomerPushCardKey=typeof CUSTOMER_PUSH_CARD_KEYS[number];
+export type CustomerPushCardKey=typeof CUSTOMER_PUSH_CARD_KEYS[number]|'customer.inquiry.admin_reply';
 export type CustomerCardContext={eventKey:CustomerPushCardKey;data:Record<string,string|number>};
-export function supportsCustomerFlex(key:string):key is CustomerPushCardKey{return (CUSTOMER_PUSH_CARD_KEYS as readonly string[]).includes(key);}
+export function supportsCustomerFlex(key:string):key is CustomerPushCardKey{return key==='customer.inquiry.admin_reply'||(CUSTOMER_PUSH_CARD_KEYS as readonly string[]).includes(key);}
 export function orderCardContext(order:StoredOrder,eventType:string):CustomerCardContext|undefined{
  const keys:Record<string,CustomerPushCardKey>={order_confirmed:'customer.order.confirmed',order_shipped:'customer.order.shipped',shipment_created:'customer.order.shipment_created',order_completed:'customer.order.completed',studio_ready_for_pickup:'customer.order.ready_for_pickup.studio',seven_eleven_ready_for_pickup:'customer.order.ready_for_pickup.711'};
  const eventKey=keys[eventType];if(!eventKey)return;

@@ -116,3 +116,7 @@
 .selectedAsset { display:flex; flex-wrap:wrap; gap:12px; align-items:center; margin-bottom:14px; }
 .selectedAsset img { width:180px; height:60px; object-fit:cover; border-radius:6px; }
 .selectedAsset small { display:block; margin-top:5px; }
+
+.presentationMode { display:grid; gap:10px; margin:20px 0 24px; font-size:14px; line-height:1.7; min-width:0; }
+.presentationMode select { width:100%; min-width:0; padding:11px 12px; border:1px solid #cdbfae; border-radius:8px; background:#fff; font:inherit; }
+.presentationMode p { margin:0; color:#6d5d4c; font-size:12px; }

@@ -1,3 +1,5 @@
+import {prepareInternalLinePresentation} from './customerLinePresentation';
+import type {InternalCardContext} from './internalLineCardEvents';
 import "server-only";
 
 export type InternalLineNotificationResult = {
@@ -14,6 +16,7 @@ export async function sendInternalLineNotification(
     retryDelayMs?: number;
     fetcher?: typeof fetch;
     retryKey?: string;
+    cardContext?: InternalCardContext;
   } = {},
 ): Promise<InternalLineNotificationResult> {
   // LEGACY compatibility only: remove these fallbacks after Railway migration.
@@ -25,6 +28,7 @@ export async function sendInternalLineNotification(
     return { sent: false, reason: "LINE environment variables are not configured" };
   }
 
+  const presentation=await prepareInternalLinePresentation(text,options.cardContext);
   const attempts = Math.max(1, options.attempts ?? 2);
   const timeoutMs = options.timeoutMs ?? 12_000;
   const retryDelayMs = options.retryDelayMs ?? 800;
@@ -35,7 +39,7 @@ export async function sendInternalLineNotification(
       const response = await (options.fetcher ?? fetch)("https://api.line.me/v2/bot/message/push", {
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", ...(options.retryKey ? { "X-Line-Retry-Key": options.retryKey } : {}) },
-        body: JSON.stringify({ to, messages: [{ type: "text", text }] }),
+        body: JSON.stringify({ to, messages: [presentation.message] }),
         signal: AbortSignal.timeout(timeoutMs),
       });
       if (response.ok || (response.status === 409 && options.retryKey && response.headers.get("x-line-accepted-request-id"))) {

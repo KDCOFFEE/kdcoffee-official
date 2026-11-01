@@ -144,6 +144,7 @@ export async function POST(
     if (saved.channels.includes("line") && saved.capability.line.userId) {
       results.line = await sendCustomerLineNotification({
         userId: saved.capability.line.userId,
+        cardContext:{eventKey:'customer.inquiry.admin_reply',data:{orderNumber}},
         template,
       });
     }

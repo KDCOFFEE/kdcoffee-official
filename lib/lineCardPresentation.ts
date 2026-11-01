@@ -39,7 +39,8 @@ export function composeLineCard(card:ResolvedNotificationCard){
  const priorities=creditExpiry?['amount','creditAmount']:card.family==='RETURN'?['refundAmount','amount','orderNumber']:card.family==='REWARD'?['amount','rewardAmount','points','creditAmount','fulfillmentNumber']:card.family==='REMINDER'?['expiresAt','expiresOn','expiryDate','modificationDeadline','deliveryDate']:card.family==='FULFILLMENT'?['storeName','pickupDate','orderNumber']:['orderNumber','productName'];
  const primary=card.recipient==='admin'?undefined:priorities.map(key=>card.rows.find(row=>row.key===key)).find(Boolean);
  const adminReturn=card.eventKey==='admin.return.request_received';
- const highlight=primary?{label:primary.label,value:primary.value,key:primary.key}:{label:adminReturn?'目前進度':card.recipient==='admin'?'下一步':'為您安排',value:adminReturn?card.status.label:card.cta.label,key:null};
+ const actionState=card.eventKey==='admin.order.inquiry_received'?'待回覆':card.eventKey==='admin.order.atm_transfer_claim'?'需確認':undefined;
+ const highlight=primary?{label:primary.label,value:primary.value,key:primary.key}:{label:adminReturn||actionState?'目前進度':card.recipient==='admin'?'下一步':'為您安排',value:actionState??(adminReturn?card.status.label:card.cta.label),key:null};
  const highlightSupporting=creditExpiry?card.rows.filter(row=>['expiresAt','expiresOn','expiryDate'].includes(row.key)):[];
  const details=card.rows.filter(row=>row.key!==primary?.key&&!highlightSupporting.some(item=>item.key===row.key));
  if(card.eventKey==='customer.return.refund_completed')details.sort((a,b)=>['refundMethod','completedAt','orderNumber'].indexOf(a.key)-['refundMethod','completedAt','orderNumber'].indexOf(b.key));

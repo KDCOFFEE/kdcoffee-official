@@ -1,4 +1,4 @@
-import {supportsCustomerFlex} from './customerLineCardEvents';
+import {supportsCardPresentation} from './lineCardDeliverySupport';
 import {LINE_CARD_CATALOG} from './lineNotificationCardCatalog';
 import {LINE_CARD_HEADER_ASSETS} from './lineCardPresentation';
 import type {CardFamily} from './lineNotificationCards';
@@ -24,7 +24,7 @@ export function validateLineCardOverride(eventKey:string,input:unknown):LineCard
  for(const key of Reflect.ownKeys(input)){
   if(typeof key!=='string'||!('value'in Object.getOwnPropertyDescriptor(input,key)!))throw new LineCardValidationError('卡片包含不允許修改的欄位。');
   const value=(input as Record<string,unknown>)[key];
-  if(key==='presentationMode'){if(!supportsCustomerFlex(eventKey)||typeof value!=='string'||!['text','flex'].includes(value))throw new LineCardValidationError('此事件不支援此顯示方式。');if(value==='flex')result.presentationMode='flex';continue;}
+  if(key==='presentationMode'){if(!supportsCardPresentation(eventKey)||typeof value!=='string'||!['text','flex'].includes(value))throw new LineCardValidationError('此事件不支援此顯示方式。');if(value==='flex')result.presentationMode='flex';continue;}
   if(key==='headerImageAssetId'){if(typeof value!=='string'||! /^[A-Za-z0-9][A-Za-z0-9_-]{0,120}$/.test(value))throw new LineCardValidationError('請選擇有效的素材庫圖片。');result.headerImageAssetId=value;continue;}
   if(key==='headerAsset'){if(typeof value!=='string'||!Object.hasOwn(LINE_CARD_HEADER_ASSETS,value))throw new LineCardValidationError('請選擇已核准的抬頭圖片。');result.headerAsset=value as CardFamily;continue;}
   if(!Object.hasOwn(CARD_COPY_LIMITS,key))throw new LineCardValidationError('卡片包含不允許修改的欄位。');

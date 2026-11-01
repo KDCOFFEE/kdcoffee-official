@@ -23,7 +23,7 @@ for(const def of LINE_CARD_CATALOG){
  assert.deepEqual([...visual.details.map(row=>row.key),...visual.highlightSupporting.map(row=>row.key),...(visual.highlight.key?[visual.highlight.key]:[])].sort(),result.card.rows.map(row=>row.key).sort());
  assert.ok(!/token|fingerprint|PRIVATE-SENTINEL/.test(JSON.stringify(result.flex)));
  assert.ok(Buffer.byteLength(JSON.stringify(result.flex))<24000);
- if(def.recipient==='admin'){const review=def.eventKey==='admin.return.request_received';assert.equal(visual.highlight.label,review?'目前進度':'下一步');assert.equal(visual.highlight.value,review?result.card.status.label:result.card.cta.label);}
+ if(def.recipient==='admin'){const review=def.eventKey==='admin.return.request_received';const action=def.eventKey==='admin.order.inquiry_received'?'待回覆':def.eventKey==='admin.order.atm_transfer_claim'?'需確認':undefined;assert.equal(visual.highlight.label,review||action?'目前進度':'下一步');assert.equal(visual.highlight.value,action??(review?result.card.status.label:result.card.cta.label));}
  fallback[def.eventKey]=result.plainTextFallback;checks++;
 }
 assert.equal(checks,77);

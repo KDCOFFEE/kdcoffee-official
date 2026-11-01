@@ -1,3 +1,4 @@
+import {internalOrderCardContext} from '@/lib/internalLineCardEvents';
 import { NextResponse } from "next/server";
 
 import { readOrder, withStoredOrderUpdateLock } from "@/lib/adminOrders";
@@ -132,7 +133,7 @@ export async function POST(
     if (result.alertClaimed) {
       const alert = await sendInternalLineNotification(
         createOrderInquiryLineAlertText(orderNumber),
-        { attempts: 1, timeoutMs: 8_000 },
+        { attempts: 1, timeoutMs: 8_000,cardContext:internalOrderCardContext('admin.order.inquiry_received',orderNumber) },
       );
       if (!alert.sent) {
         console.warn("Order inquiry LINE alert was not sent", {

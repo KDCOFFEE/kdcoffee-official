@@ -6,7 +6,7 @@ import {CARD_TOKENS} from '@/lib/lineNotificationCards';
 import {renderLineFlex} from '@/lib/lineFlexRenderer';
 import type {AssetRecord} from '@/lib/assets';
 import LineCardHeaderPicker from './LineCardHeaderPicker';
-import {supportsCustomerFlex} from '@/lib/customerLineCardEvents';
+import {supportsCardPresentation,cardBoundaryLabel} from '@/lib/lineCardDeliverySupport';
 import LineDeliverySimulation from './LineDeliverySimulation';
 import Preview from './LineNotificationCardPreview';
 import css from './LineNotificationCardStudio.module.css';
@@ -19,7 +19,7 @@ export default function LineNotificationCardEditor({eventKey,store,onSaved,onDir
  const target=useRef<HTMLInputElement|HTMLTextAreaElement|null>(null),active=useRef<CardCopyField>('intro');
  const dirty=JSON.stringify(draft)!==JSON.stringify(base);
  useEffect(()=>{onDirty(dirty);return()=>onDirty(false);},[dirty,onDirty]);
- const overrides=()=>{const {headerAsset,headerImageAssetId,presentationMode,...copy}=draft;return validateLineCardOverride(eventKey,{...copy,...(supportsCustomerFlex(eventKey)?{presentationMode}:{}),...(headerImageAssetId?{headerImageAssetId}:headerAsset==='default'?{}:{headerAsset})});};
+ const overrides=()=>{const {headerAsset,headerImageAssetId,presentationMode,...copy}=draft;return validateLineCardOverride(eventKey,{...copy,...(supportsCardPresentation(eventKey)?{presentationMode}:{}),...(headerImageAssetId?{headerImageAssetId}:headerAsset==='default'?{}:{headerAsset})});};
  let error='',clean:LineCardOverride|undefined;try{clean=overrides();}catch(e){error=(e as Error).message;}
  const rendered=clean?renderLineFlex(eventKey,def.previewSample,{credit:creditLabel,points:'KD點'},clean,assets):null;
  if(!error&&rendered&&!rendered.ok)error='文案展開後無法產生有效卡片，請縮短文字或檢查動態欄位。';
@@ -34,7 +34,7 @@ export default function LineNotificationCardEditor({eventKey,store,onSaved,onDir
  return <section className={css.detail} aria-label="事件卡片預覽"><div>
   <button type="button" onClick={onClose} disabled={busy}>關閉預覽</button><h2>{draft.displayName||def.displayName}</h2>
   <p className={css.editStatus}>{entry?'已自訂':'使用預設'}{dirty?' · 尚未儲存':''}</p>
-  {supportsCustomerFlex(eventKey)?<label>LINE 顯示方式<select aria-label="LINE 顯示方式" value={draft.presentationMode} onChange={event=>setDraft(current=>({...current,presentationMode:event.target.value as 'text'|'flex'}))}><option value="text">文字訊息</option><option value="flex">卡片訊息（Flex）</option></select><p>此設定只影響正式 LINE 的呈現方式；Email 與會員中心不受影響。</p></label>:<p>此事件目前維持文字訊息。</p>}
+  {supportsCardPresentation(eventKey)?<label className={css.presentationMode}>LINE 顯示方式<select aria-label="LINE 顯示方式" value={draft.presentationMode} onChange={event=>setDraft(current=>({...current,presentationMode:event.target.value as 'text'|'flex'}))}><option value="text">文字訊息</option><option value="flex">卡片訊息（Flex）</option></select><p>{def.recipient==='admin'?'此設定只影響管理者 LINE 通知的呈現方式。':'此設定只影響正式 LINE 的呈現方式；Email 與會員中心不受影響。'}</p></label>:<p>{cardBoundaryLabel(eventKey)}</p>}
   <form onSubmit={event=>{event.preventDefault();void persist('save');}} className={css.editor}>
    {(Object.keys(CARD_COPY_LIMITS) as CardCopyField[]).map(field=><label key={field}>{CARD_COPY_LABELS[field]}{['intro','secondaryText'].includes(field)?<textarea value={draft[field]} maxLength={CARD_COPY_LIMITS[field]} rows={3} onFocus={e=>{target.current=e.currentTarget;active.current=field;}} onChange={e=>update(field,e.target.value)}/>:<input value={draft[field]} maxLength={CARD_COPY_LIMITS[field]} required={!['secondaryText','footerText'].includes(field)} onFocus={e=>{target.current=e.currentTarget;active.current=field;}} onChange={e=>update(field,e.target.value)}/>}<small>{draft[field].length} / {CARD_COPY_LIMITS[field]}</small></label>)}
    <label>抬頭圖片<select value={draft.headerImageAssetId?'custom':draft.headerAsset} onChange={event=>setDraft(current=>({...current,headerAsset:event.target.value,headerImageAssetId:''}))}>{draft.headerImageAssetId?<option value="custom" disabled>素材庫自訂圖片</option>:null}<option value="default">使用系列預設</option>{Object.keys(LINE_CARD_HEADER_ASSETS).map(key=><option key={key} value={key}>{CARD_TOKENS.families[key as keyof typeof CARD_TOKENS.families]}</option>)}</select></label>
@@ -48,6 +48,6 @@ export default function LineNotificationCardEditor({eventKey,store,onSaved,onDir
   {confirmRestore?<div role="alertdialog" aria-label="恢復預設文案" aria-modal="false" className={css.restoreConfirm}><p>恢復此卡片的預設內容、圖片與文字訊息模式？其他卡片不會受影響。</p><button type="button" disabled={busy} onClick={()=>void persist('restore')}>確認恢復預設</button><button type="button" disabled={busy} onClick={()=>setConfirmRestore(false)}>保留目前內容</button></div>:null}
   <details className={css.compare}><summary>比較預設</summary>{changed.length||draft.headerAsset!=='default'||draft.headerImageAssetId||draft.presentationMode==='flex'?<><table><thead><tr><th>欄位</th><th>系列預設</th><th>目前內容</th></tr></thead><tbody>{changed.map(field=><tr key={field}><th>{CARD_COPY_LABELS[field]}</th><td>{defaults[field]||'—'}</td><td>{draft[field]||'—'}</td></tr>)}{draft.presentationMode==='flex'?<tr><th>LINE 顯示方式</th><td>文字訊息</td><td>卡片訊息（Flex）</td></tr>:null}{draft.headerImageAssetId?<tr><th>抬頭圖片</th><td>使用系列預設</td><td>{assets.find(asset=>asset.id===draft.headerImageAssetId)?.name||'已選擇素材庫圖片'}</td></tr>:null}{draft.headerAsset!=='default'?<tr><th>抬頭圖片</th><td>使用系列預設</td><td>{CARD_TOKENS.families[draft.headerAsset as keyof typeof CARD_TOKENS.families]}</td></tr>:null}</tbody></table></>:<p>目前與系列預設相同。</p>}</details>
   {entry?<p className={css.disclaimer}>最後更新：{entry.updatedAt.replace('T',' ').replace('Z',' UTC')}</p>:null}
- {supportsCustomerFlex(eventKey)?<LineDeliverySimulation key={store.revision} eventKey={eventKey} revision={store.revision}/>:null}
+ {supportsCardPresentation(eventKey)?<LineDeliverySimulation key={store.revision} eventKey={eventKey} revision={store.revision}/>:null}
  </div><div><h2>LINE 卡片預覽</h2>{rendered?.ok&&!error?<><Preview card={rendered.card}/><details className={css.compare}><summary>純文字 fallback 預覽</summary><pre>{rendered.plainTextFallback}</pre></details></>:<p className={css.editorError}>請先修正文案格式，再預覽卡片。</p>}<p className={css.disclaimer}>實際顯示可能因 LINE 版本與裝置略有差異。預覽按鈕不會開啟範例訂單。</p></div></section>;
 }
