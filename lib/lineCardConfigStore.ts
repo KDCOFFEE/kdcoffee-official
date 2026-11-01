@@ -10,7 +10,7 @@ export class LineCardStorageError extends Error {}
 export function getLineCardConfigFile(){return path.join(getPersistentDataRoot()||path.join(process.cwd(),'data'),'line-notification-cards','configuration.json');}
 /** Reads never create, migrate or repair a file. Corruption must not become an empty overwrite. */
 export async function readLineCardConfig(file=getLineCardConfigFile()):Promise<LineCardConfigStore>{
- let content:string;try{content=await fs.readFile(file,'utf8');}catch(error){if((error as NodeJS.ErrnoException).code==='ENOENT')return structuredClone(EMPTY_LINE_CARD_CONFIG);throw new LineCardStorageError('無法讀取卡片設定。');}
+ let content:string;try{content=await fs.readFile(/* turbopackIgnore: true */ file,'utf8');}catch(error){if((error as NodeJS.ErrnoException).code==='ENOENT')return structuredClone(EMPTY_LINE_CARD_CONFIG);throw new LineCardStorageError('無法讀取卡片設定。');}
  try{const raw=JSON.parse(content);if(raw.version!==1||!Number.isSafeInteger(raw.revision)||raw.revision<0||!raw.events||typeof raw.events!=='object'||Array.isArray(raw.events))throw Error();
  const events:LineCardConfigStore['events']={};for(const [key,value]of Object.entries(raw.events)){const entry=value as LineCardConfigStore['events'][string];if(!entry||typeof entry.updatedAt!=='string'||!Number.isFinite(Date.parse(entry.updatedAt))||typeof entry.updatedBy!=='string'||!entry.updatedBy)throw Error();events[key]={overrides:validateLineCardOverride(key,entry.overrides),updatedAt:entry.updatedAt,updatedBy:entry.updatedBy};}return {version:1,revision:raw.revision,events};
  }catch{throw new LineCardStorageError('卡片設定檔案無法驗證，未覆寫任何資料。');}
