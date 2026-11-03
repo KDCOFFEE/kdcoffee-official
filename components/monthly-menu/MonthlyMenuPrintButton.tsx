@@ -292,9 +292,10 @@ async function generateMonthlyMenuImage(
   context.fillRect(0, 0, canvas.width, canvas.height);
 
   let backgroundImage: DrawableImage | null = null;
-  if (background.image) {
+  const artworkImage = background.media?.posterUrl || background.image;
+  if (artworkImage) {
     try {
-      backgroundImage = await loadDrawableImage(background.image);
+      backgroundImage = await loadDrawableImage(artworkImage);
       const themeCanvas = document.createElement("canvas");
       themeCanvas.width = CANVAS_WIDTH;
       themeCanvas.height = 460;

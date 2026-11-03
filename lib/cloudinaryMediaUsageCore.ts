@@ -1,5 +1,5 @@
 export type CloudinaryMediaReference = {
-  sourceType: "homepage" | "product" | "store-product";
+  sourceType: "homepage" | "product" | "store-product" | "monthly-menu";
   sourceLabel: string;
   section?: string;
   field: string;
@@ -107,6 +107,15 @@ function collectProductUsage(
   snapshot: CloudinaryVideoUsageSnapshot,
 ) {
   const menu = isRecord(website.menu) ? website.menu : {};
+  addReferencedVideo(
+    menu.background,
+    {
+      sourceType: "monthly-menu",
+      sourceLabel: "本月豆單",
+      field: "background.media",
+    },
+    snapshot,
+  );
   for (const product of recordArray(menu.products)) {
     const assets = isRecord(product.assets) ? product.assets : {};
     const sourceLabel = cleanLabel(product.name, "商品（名稱不可用）");

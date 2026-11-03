@@ -1,3 +1,4 @@
+import type { MediaAsset } from "./media";
 import { getCurrentMonthlyMenuPeriod } from "./monthlyMenuPeriod";
 
 export const MONTHLY_MENU_BACKGROUND_POSITIONS = [
@@ -11,6 +12,7 @@ export type MonthlyMenuBackgroundFit = (typeof MONTHLY_MENU_BACKGROUND_FITS)[num
 
 export type MonthlyMenuBackground = {
   image?: string;
+  media?: MediaAsset;
   artworkMonthKey?: string;
   opacity: number;
   position: MonthlyMenuBackgroundPosition;
@@ -29,6 +31,15 @@ export function isMonthlyMenuBackgroundImage(value: unknown): value is string {
   return typeof value === "string" && MONTHLY_MENU_IMAGE_PATH.test(value);
 }
 
+export function isMonthlyMenuVideo(value: unknown): value is MediaAsset {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const media = value as MediaAsset;
+  return media.type === "video" && media.provider === "cloudinary"
+    && typeof media.publicId === "string"
+    && /^kd-coffee\/videos\/[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(media.publicId)
+    && typeof media.url === "string" && media.url.startsWith("https://res.cloudinary.com/");
+}
+
 export function normalizeMonthlyMenuBackground(value: unknown): MonthlyMenuBackground {
   const background = value && typeof value === "object" && !Array.isArray(value)
     ? value as Record<string, unknown>
@@ -41,8 +52,9 @@ export function normalizeMonthlyMenuBackground(value: unknown): MonthlyMenuBackg
     : DEFAULT_MONTHLY_MENU_BACKGROUND.fit;
 
   return {
+    ...(isMonthlyMenuVideo(background.media) ? { media: background.media } : {}),
     image: isMonthlyMenuBackgroundImage(background.image) ? background.image : undefined,
-    artworkMonthKey: isMonthlyMenuBackgroundImage(background.image) && typeof background.artworkMonthKey === "string" && /^\d{4}-(0[1-9]|1[0-2])$/.test(background.artworkMonthKey)
+    artworkMonthKey: (isMonthlyMenuBackgroundImage(background.image) || isMonthlyMenuVideo(background.media)) && typeof background.artworkMonthKey === "string" && /^\d{4}-(0[1-9]|1[0-2])$/.test(background.artworkMonthKey)
       ? background.artworkMonthKey
       : undefined,
     // R6 stored a faint full-sheet background. R6.1 makes this a header
@@ -55,11 +67,11 @@ export function normalizeMonthlyMenuBackground(value: unknown): MonthlyMenuBackg
 
 export function getArtworkMonthForSave(previous: MonthlyMenuBackground, image: string, currentMonthKey: string) {
   if (!image) return undefined;
-  return image === previous.image ? previous.artworkMonthKey : currentMonthKey;
+  return image === (previous.media?.url || previous.image) ? previous.artworkMonthKey : currentMonthKey;
 }
 
 export function isArtworkFromAnotherMonth(background: MonthlyMenuBackground, currentMonthKey: string) {
-  return Boolean(background.image && background.artworkMonthKey && background.artworkMonthKey !== currentMonthKey);
+  return Boolean((background.media?.url || background.image) && background.artworkMonthKey && background.artworkMonthKey !== currentMonthKey);
 }
 
 export type TaiwanMonthlyTheme = {

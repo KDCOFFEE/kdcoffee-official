@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import MonthlyMenuVideo from "@/components/monthly-menu/MonthlyMenuVideo";
 import ProductVisualMedia from "@/components/commerce/ProductVisualMedia";
 import Footer from "@/components/layout/Footer";
 import Header from "@/components/layout/Header";
@@ -96,7 +97,11 @@ export default async function MonthlyMenuPage() {
         <div className={styles.sheetPreview}>
           <article className={styles.sheet} aria-labelledby="monthly-menu-title">
             <header className={styles.sheetHeader}>
-              {background.image ? (
+              {background.media ? (
+                <span className={styles.backgroundArtwork} aria-hidden="true">
+                  <MonthlyMenuVideo media={background.media} fit={background.fit} position={backgroundPositions[background.position]} />
+                </span>
+              ) : background.image ? (
                 <span
                   className={styles.backgroundArtwork}
                   aria-hidden="true"

@@ -6,6 +6,7 @@ import { isAdminAuthenticated } from "@/lib/adminAuth";
 import { atomicWriteJson, withFileLock } from "@/lib/jsonFileStore";
 import {
   isMonthlyMenuBackgroundImage,
+  isMonthlyMenuVideo,
   getArtworkMonthForSave,
   MONTHLY_MENU_BACKGROUND_FITS,
   MONTHLY_MENU_BACKGROUND_POSITIONS,
@@ -14,6 +15,7 @@ import {
   type MonthlyMenuBackgroundPosition,
 } from "@/lib/monthlyMenuBackground";
 import { getArtworkUploadDir, getWebsiteDataFile } from "@/lib/storagePaths";
+import { verifyCloudinaryVideo } from "@/lib/cloudinary";
 import { getCurrentMonthlyMenuPeriod } from "@/lib/monthlyMenuPeriod";
 
 export const dynamic = "force-dynamic";
@@ -65,6 +67,13 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: "背景呈現方式不合法" }, { status: 400 });
     }
 
+    if (background.media != null && !isMonthlyMenuVideo(background.media)) {
+      return NextResponse.json({ error: "豆單影片資料不合法" }, { status: 400 });
+    }
+    // Resolve canonical delivery URLs and poster metadata through the existing verifier.
+    const media = background.media
+      ? await verifyCloudinaryVideo(background.media.publicId, "hero")
+      : undefined;
     const image = typeof background.image === "string" ? background.image.trim() : "";
     if (image && !isMonthlyMenuBackgroundImage(image)) {
       return NextResponse.json({ error: "豆單背景圖片路徑不合法" }, { status: 400 });
@@ -83,9 +92,9 @@ export async function PUT(request: Request) {
         throw new Error("網站豆單資料格式不完整");
       }
       const previous = normalizeMonthlyMenuBackground(website.menu.background);
-      const artworkMonthKey = getArtworkMonthForSave(previous, image, getCurrentMonthlyMenuPeriod().monthKey);
+      const artworkMonthKey = getArtworkMonthForSave(previous, media?.url || image, getCurrentMonthlyMenuPeriod().monthKey);
       const savedBackground = {
-        ...(image ? { image } : {}),
+        ...(media ? { media } : image ? { image } : {}),
         ...(artworkMonthKey ? { artworkMonthKey } : {}),
         opacity,
         position: background.position,

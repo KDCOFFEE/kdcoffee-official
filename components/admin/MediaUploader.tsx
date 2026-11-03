@@ -30,6 +30,7 @@ type MediaUploaderProps = {
     sectionId?: string;
     reservedPublicIds?: string[];
   };
+  onUploadingChange?: (uploading: boolean) => void;
   onChange: (media: MediaAsset) => void;
   onImageSelect?: (file: File) => void;
   onImageUpload?: (file: File) => Promise<MediaAsset>;
@@ -170,6 +171,7 @@ export default function MediaUploader({
   videoActionLabel,
   allowCloudinaryImage = false,
   productMediaNaming,
+  onUploadingChange,
   onChange,
   onImageSelect,
   onImageUpload,
@@ -199,6 +201,7 @@ export default function MediaUploader({
 
     if (mediaType === "video") setLastVideo(file);
     setUploading(true);
+    onUploadingChange?.(true);
     setProgress(0);
     setMessage("準備安全上傳授權…");
     cancelled.current = false;
@@ -260,6 +263,7 @@ export default function MediaUploader({
     } finally {
       activeRequest.current = null;
       setUploading(false);
+      onUploadingChange?.(false);
     }
   }
 
@@ -284,6 +288,7 @@ export default function MediaUploader({
       return;
     }
     setUploading(true);
+    onUploadingChange?.(true);
     setMessage("圖片上傳中…");
     try {
       onChange(await onImageUpload(file));
@@ -292,6 +297,7 @@ export default function MediaUploader({
       setMessage(errorMessage(error));
     } finally {
       setUploading(false);
+      onUploadingChange?.(false);
     }
   }
 
