@@ -9,13 +9,14 @@ import { getAssetsDataFile, getAssetsUploadDir, getPersistentDataRoot } from "./
 import { createWebsiteImageAsset, optimizeWebsiteImage, WEBSITE_IMAGE_CATEGORY, websiteImageIdentity, validateWebsiteImageFile, inspectUploadedImage, ImageSafetyError, LINE_CARD_IMAGE_LIMITS } from "./websiteImages";
 
 /** One existing image optimizer/identity/registration flow; authorization stays in each API. */
-export async function uploadWebsiteImageAsset(file: File, options: { validateSafety?: boolean; purpose?: "line-card-header" } = {}) {
+export async function uploadWebsiteImageAsset(file: File, options: { validateSafety?: boolean; purpose?: "line-card-header" | "social-share" } = {}) {
   const header = options.purpose === "line-card-header";
-  const safe = options.validateSafety || header;
+  const social = options.purpose === "social-share";
+  const safe = options.validateSafety || header || social;
   let writtenPath = "", created = false, committed = false;
   try {
     if (!safe) validateWebsiteImageFile(file);
-    if (safe && !getPersistentDataRoot()) throw new ImageSafetyError("請先配置既有媒體儲存空間。", 503);
+    if (safe && !social && !getPersistentDataRoot()) throw new ImageSafetyError("請先配置既有媒體儲存空間。", 503);
     const original = safe ? (await inspectUploadedImage(file, header ? LINE_CARD_IMAGE_LIMITS : undefined)).bytes : Buffer.from(await file.arrayBuffer());
     const identity = websiteImageIdentity(file.name, randomUUID());
     if (header) identity.id = "ASSET-" + identity.id.slice(8);

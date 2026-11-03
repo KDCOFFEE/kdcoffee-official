@@ -13,6 +13,7 @@ import { resolveWorksPageCms, validateWorksPageCms, validateWorksSoldOutPresenta
 import { assertWorksMarkerCatalog, isWorksCardSoldOut } from "./worksCardMarker";
 import { validateWorksCardMarkers } from "./worksPageCms";
 import { getCurrentMonthlyMenuPeriod } from "./monthlyMenuPeriod";
+import { assertSocialImageAvailable } from "./socialImageAdmin";
 
 export class WorksPageVersionConflictError extends Error {
   constructor() {
@@ -95,6 +96,8 @@ export async function saveWorksPageAdminState(input: {
   const saved = await withFileLock(pagesPath, async () => {
     const store = await readPageStore();
     if (store.version !== input.version) throw new WorksPageVersionConflictError();
+    const shareImage = input.works.seo?.shareImage;
+    if (shareImage && JSON.stringify(shareImage) !== JSON.stringify(store.systemPages?.works?.seo?.shareImage)) await assertSocialImageAvailable({ path: shareImage.media.url, alt: shareImage.alt });
     store.systemPages = {
       ...(store.systemPages || {}),
       works: structuredClone(input.works),

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 
+import SocialImageField from "./SocialImageField";
 import ImageLibraryPicker from "@/components/admin/ImageLibraryPicker";
 import MediaUploader from "@/components/admin/MediaUploader";
 import SmartLinkPicker, { SmartLinkEditingProvider } from "@/components/admin/SmartLinkPicker";
@@ -71,7 +72,7 @@ type EditorCatalog = NonNullable<WorksPageCmsConfig["catalog"]> & {
 };
 type EditorDraft = Omit<WorksPageCmsConfig, "hero" | "catalog" | "soldOutPresentation"> & { hero: EditorHero; catalog: EditorCatalog; soldOutPresentation: WorksSoldOutPresentation };
 type MediaSlot = "desktopMedia" | "mobileMedia";
-type PickerTarget = MediaSlot | "seoShareImage";
+type PickerTarget = MediaSlot;
 type EditorTab = "content" | "media" | "visual" | "motion" | "seo" | "preview";
 type ContentSection = "hero" | "cta" | "catalog" | "cards" | "soldOut" | "markers";
 
@@ -131,6 +132,7 @@ export default function WorksPageManager() {
   const [baseline, setBaseline] = useState("");
   const [message, setMessage] = useState("讀取中…");
   const [saving, setSaving] = useState(false);
+  const [socialUploading, setSocialUploading] = useState(false);
   const [previewDevice, setPreviewDevice] = useState<"desktop" | "mobile">("desktop");
   const [pickerFor, setPickerFor] = useState<PickerTarget | null>(null);
   const [activeTab, setActiveTab] = useState<EditorTab>("content");
@@ -185,18 +187,13 @@ export default function WorksPageManager() {
 
   function chooseAsset(asset: AssetRecord) {
     if (!pickerFor || !draft) return;
-    if (pickerFor === "seoShareImage") {
-      const current = draft.seo?.shareImage;
-      patchSeo({ shareImage: { media: localImageMedia(asset.path), alt: current?.alt || asset.alt || asset.name } });
-    } else {
-      const current = draft.hero[pickerFor];
-      patchMedia(pickerFor, { media: localImageMedia(asset.path), alt: current?.alt || asset.alt || asset.name });
-    }
+    const current = draft.hero[pickerFor];
+    patchMedia(pickerFor, { media: localImageMedia(asset.path), alt: current?.alt || asset.alt || asset.name });
     setPickerFor(null);
   }
 
   async function save() {
-    if (!payload || !draft || !dirty) return;
+    if (!payload || !draft || !dirty || socialUploading) return;
     try {
       validateWorksPageCms(draft); validateWorksSoldOutPresentation(draft.soldOutPresentation); validateWorksCardMarkers(draft.cardMarkers); setSaving(true); setMessage("儲存中…");
       const response = await fetch("/api/admin/works-page", {
@@ -230,7 +227,7 @@ export default function WorksPageManager() {
       <div className={styles.toolbar}>
         <div className="cms-toolbar">
           <div><a href="/admin">← 返回營運中心</a><p className="eyebrow dark">WORKS PAGE</p><h1>全部咖啡 / Works</h1><p>固定公開網址：/works</p><div className={styles.toolbarStatus}><span className={styles.statusPill}>{payload.hasSavedConfig ? "已有自訂設定" : "目前使用預設版面"}</span><span className={`${styles.statusPill} ${dirty ? styles.dirtyPill : styles.savedPill}`}>{dirty ? "有尚未儲存的變更" : "所有變更已儲存"}</span>{message ? <span role="status">{message}</span> : null}</div></div>
-          <div className="cms-toolbar-actions"><a href="/works" target="_blank" rel="noreferrer">預覽 /works ↗</a><button type="button" className="cms-secondary-button" onClick={restoreDefaults}>恢復預設值</button><button type="button" onClick={save} disabled={saving || !dirty}>{saving ? "儲存中…" : "儲存全部"}</button></div>
+          <div className="cms-toolbar-actions"><a href="/works" target="_blank" rel="noreferrer">預覽 /works ↗</a><button type="button" className="cms-secondary-button" onClick={restoreDefaults}>恢復預設值</button><button type="button" onClick={save} disabled={saving || socialUploading || !dirty}>{saving ? "儲存中…" : "儲存全部"}</button></div>
         </div>
       </div>
 
@@ -253,7 +250,7 @@ export default function WorksPageManager() {
 
           {activeTab === "visual" ? <WorksVisualStylePanel value={preview.colors} onChange={patchColors} /> : null}
           {activeTab === "motion" ? <WorksMotionStudio value={preview.motion} onChange={patchMotion} onPreview={replayMotion} /> : null}
-          {activeTab === "seo" ? <section className={styles.studioPanel}><header className={styles.panelIntro}><div><p>SEARCH & SHARE</p><h2>SEO 與分享</h2><span>控制 /works 在搜尋結果與社群分享時使用的標題、說明與圖片。</span></div></header><section className={styles.contentCard}><header><div><h3>搜尋結果</h3><p>留白時會使用 Works 安全預設值。</p></div></header><div className={`cms-grid two ${styles.compactFields}`}><label className="span-two">SEO 標題<input maxLength={70} value={draft.seo?.title ?? preview.seo.title} onChange={(event) => patchSeo({ title: event.target.value })} /><small>{(draft.seo?.title ?? preview.seo.title).length}/70</small></label><label className="span-two">SEO 說明<textarea maxLength={180} value={draft.seo?.description ?? preview.seo.description} onChange={(event) => patchSeo({ description: event.target.value })} /><small>{(draft.seo?.description ?? preview.seo.description).length}/180</small></label></div></section><section className={styles.contentCard}><header><div><h3>分享圖片</h3><p>只接受圖片；用於 Open Graph 與 X/Twitter 分享預覽。</p></div></header>{draft.seo?.shareImage ? <div className={styles.mediaAlt}><b>目前圖片</b><span>{draft.seo.shareImage.media.url}</span><label>替代文字（必填）<input maxLength={240} value={draft.seo.shareImage.alt} onChange={(event) => patchSeo({ shareImage: { ...draft.seo!.shareImage!, alt: event.target.value } })} /></label><div className={styles.mediaActions}><button type="button" className="cms-secondary-button" onClick={() => setPickerFor("seoShareImage")}>更換分享圖片</button><button type="button" onClick={() => patchSeo({ shareImage: undefined })}>移除分享圖片</button></div></div> : <div className={styles.mediaActions}><button type="button" className="cms-secondary-button" onClick={() => setPickerFor("seoShareImage")}>從素材庫選擇分享圖片</button></div>}</section></section> : null}
+          {activeTab === "seo" ? <section className={styles.studioPanel}><header className={styles.panelIntro}><div><p>SEARCH & SHARE</p><h2>SEO 與分享</h2><span>控制 /works 在搜尋結果與社群分享時使用的標題、說明與圖片。</span></div></header><section className={styles.contentCard}><header><div><h3>搜尋結果</h3><p>留白時會使用 Works 安全預設值。</p></div></header><div className={`cms-grid two ${styles.compactFields}`}><label className="span-two">SEO 標題<input maxLength={70} value={draft.seo?.title ?? preview.seo.title} onChange={(event) => patchSeo({ title: event.target.value })} /><small>{(draft.seo?.title ?? preview.seo.title).length}/70</small></label><label className="span-two">SEO 說明<textarea maxLength={180} value={draft.seo?.description ?? preview.seo.description} onChange={(event) => patchSeo({ description: event.target.value })} /><small>{(draft.seo?.description ?? preview.seo.description).length}/180</small></label></div></section><SocialImageField value={draft.seo?.shareImage ? {path:draft.seo.shareImage.media.url,alt:draft.seo.shareImage.alt} : undefined} assets={assets} disabled={saving||socialUploading} onBusy={setSocialUploading} help="未設定時，將使用 Works 主視覺或全站預設分享圖。" onUploaded={asset=>setAssets(current=>[asset,...current])} onChange={image=>patchSeo({shareImage:image ? {media:localImageMedia(image.path),alt:image.alt} : undefined})}/></section> : null}
           {activeTab === "preview" ? <WorksPagePreview value={preview} draftHero={draft.hero} products={payload.previewProducts} device={previewDevice} onDevice={setPreviewDevice} target={motionPreviewTarget} replayKey={replayKey} onReplay={() => replayMotion()} /> : null}
         </main>
 

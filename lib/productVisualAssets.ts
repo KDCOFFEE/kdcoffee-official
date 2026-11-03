@@ -117,6 +117,12 @@ function firstAsset(candidates: Array<ProductVisualSource | null>) {
   return null;
 }
 
+/** Optional share override is isolated from all artwork/display assignments. */
+export function resolveWorkSocialImages(product: unknown) {
+  return [getRawAsset(product, "socialShare")?.path, resolveHeroAsset(product)?.path,
+    resolveProductAsset(product)?.path, resolveListAsset(product)?.path, resolveStaticProductImage(product)];
+}
+
 export function resolveListAsset(product: unknown, { allowProductVisual = true }: { allowProductVisual?: boolean } = {}) {
   const layout = getLayout(product);
   const selectedKey = cleanString(layout.listAsset);

@@ -1,6 +1,7 @@
 "use client";
 
 import { ChangeEvent, DragEvent, useEffect, useState } from "react";
+import GlobalSocialImageSettings from "./GlobalSocialImageSettings";
 
 type Asset = {
   id: string; category: string; name: string; usage: string; path: string; recommendedSize: string;
@@ -67,7 +68,7 @@ export default function LogoManager() {
   }
 
   if (!library) return <p className="admin-empty">{message}</p>;
-  const logos = library.assets.filter((asset) => asset.category === "logo");
+  const logos = library.assets.filter((asset) => asset.category === "logo" && asset.id !== "LOGO005");
 
   return <div className="logo-manager">
     <div className="cms-toolbar logo-toolbar">
@@ -84,6 +85,7 @@ export default function LogoManager() {
 
     {message ? <div className="cms-message">{message}</div> : null}
 
+    <GlobalSocialImageSettings onSaved={setLibrary} />
     <section className="logo-guide">
       <h2>網站需要幾種 Logo？</h2>
       <p><strong>目前必要的是 2 種：</strong>Header 深色字版與 Footer 白色版。其餘方形標誌、Apple Touch Icon、社群分享圖可之後補齊。</p>

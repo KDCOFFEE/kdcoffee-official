@@ -1,3 +1,5 @@
+import { withSiteSocialImage } from "@/lib/siteSocialImage";
+import { socialPageMetadata, monthlySocialImages } from "@/lib/socialMetadata";
 import type { Metadata } from "next";
 import Link from "next/link";
 import MonthlyMenuVideo from "@/components/monthly-menu/MonthlyMenuVideo";
@@ -14,11 +16,12 @@ import { normalizeMonthlyMenuBackground } from "@/lib/monthlyMenuBackground";
 import { getCurrentMonthlyMenuPeriod, getMonthlyMenuPresentation } from "@/lib/monthlyMenuPeriod";
 import styles from "./monthly-menu.module.css";
 
-export const metadata: Metadata = {
-  title: "本月豆單｜每月咖啡作品選集",
-  description:
-    "KD Coffee 本月精品咖啡豆單：一次閱讀本月作品、風味、規格與參考售價。",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const live = await getLiveWebsiteData();
+  const background = normalizeMonthlyMenuBackground(live.menu.background);
+  return withSiteSocialImage(socialPageMetadata({ path: "/monthly-menu", title: "本月豆單｜每月咖啡作品選集｜KD 咖啡藝術工坊",
+    description: "KD Coffee 本月精品咖啡豆單：一次閱讀本月作品、風味、規格與參考售價。", images: monthlySocialImages(background) }));
+}
 
 export const dynamic = "force-dynamic";
 

@@ -1,4 +1,5 @@
 import { promises as fs } from "fs";
+import { brandStructuredData, serializeStructuredData } from "@/lib/brandStructuredData";
 
 import { getHomepageData } from "@/data/homepageData";
 import { getWebsiteDataFile } from "@/lib/storagePaths";
@@ -72,6 +73,7 @@ export default async function Home() {
 
   return (
     <main>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeStructuredData(brandStructuredData()) }} />
       <Header />
 
       <HomepageV3

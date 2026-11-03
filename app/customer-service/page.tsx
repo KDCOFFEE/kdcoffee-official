@@ -1,3 +1,4 @@
+import { withSiteSocialImage } from "@/lib/siteSocialImage";
 import type { Metadata } from "next";
 import type { CSSProperties } from "react";
 import Link from "next/link";
@@ -9,7 +10,7 @@ import RecentServiceOrders from "@/components/customer-service/RecentServiceOrde
 import ServiceIcon from "@/components/customer-service/ServiceIcon";
 import styles from "@/components/customer-service/CustomerService.module.css";
 import { readCustomerServicePage } from "@/lib/customerServiceSources";
-import { getCanonicalPublicSiteOrigin } from "@/lib/publicSiteOrigin";
+import { socialPageMetadata } from "@/lib/socialMetadata";
 import { serviceHeroPosition } from "@/lib/customerServiceHero";
 import { resolveServiceHero } from "@/lib/customerServiceHeroServer";
 
@@ -17,7 +18,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export async function generateMetadata(): Promise<Metadata> {
   const { config } = await readCustomerServicePage();
-  return { title: config.title, description: config.intro.replace(/\s+/gu, " "), alternates: { canonical: `${getCanonicalPublicSiteOrigin()}/customer-service` }, openGraph: { title: `${config.title}｜KD Coffee`, description: config.intro.replace(/\s+/gu, " "), url: `${getCanonicalPublicSiteOrigin()}/customer-service`, locale: "zh_TW", type: "website" } };
+  return withSiteSocialImage(socialPageMetadata({ path: "/customer-service", title: `${config.title}｜KD 咖啡藝術工坊`, description: config.intro }));
 }
 export default async function CustomerServicePage() {
   const { config, cards, faqs, contentUnavailable } = await readCustomerServicePage();

@@ -1,3 +1,4 @@
+import { withSiteSocialImage } from "@/lib/siteSocialImage";
 import { readPageStore } from '@/lib/pageBuilderStore';
 import { getAssetLibrary } from '@/lib/assets';
 import { resolveGalleryAtmosphere } from '@/lib/galleryAtmosphere';
@@ -14,7 +15,8 @@ import css from '@/components/gallery/GalleryExperience.module.css';
 export const dynamic = 'force-dynamic';
 export async function generateMetadata() {
   const [store, library] = await Promise.all([readPageStore().catch(() => null), getAssetLibrary().catch(() => null)]);
-  return galleryMetadata(getCanonicalPublicSiteOrigin(), library?.assets.find(asset => asset.id === 'LOGO001'), store?.systemPages?.gallery?.seo, library?.assets || []);
+  const primaryImage = library?.assets.find(asset => asset.id === store?.systemPages?.gallery?.atmosphere?.imageAssetId);
+  return withSiteSocialImage(galleryMetadata(getCanonicalPublicSiteOrigin(), primaryImage, store?.systemPages?.gallery?.seo, library?.assets || []));
 }
 export default async function GalleryPage({ searchParams }: { searchParams: Promise<{ work?: string | string[] }> }) {
   const query = await searchParams;

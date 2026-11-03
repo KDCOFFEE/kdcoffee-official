@@ -4,6 +4,7 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { getPersistentDataRoot } from "./storagePaths";
 import { atomicWriteJson, withFileLock } from "./jsonFileStore";
+import { assertSocialImageAvailable } from "./socialImageAdmin";
 import { createStoreRepository } from "./storeRepository";
 import { giftProductFallback, GiftCmsValidationError, validateGiftCmsState, validateGiftLanding, validateGiftProduct, validateStoreLanding, type GiftCmsState, type GiftLandingDocument, type GiftProductDocument, type StoreLandingDocument } from "./giftCms";
 
@@ -47,6 +48,14 @@ export async function saveGiftCmsDocument(input: { revision: number; scope: "lan
     }
     const document = structuredClone(input.document) as GiftLandingDocument | GiftProductDocument | StoreLandingDocument;
     const previous = productId ? current.products[productId] : input.scope === "storeLanding" ? current.storeLanding : current.landing;
+    if (input.scope === "landing" || input.scope === "storeLanding") {
+      const selected = (document as GiftLandingDocument | StoreLandingDocument).seo.image;
+      const oldImage = (previous as GiftLandingDocument | StoreLandingDocument | undefined)?.seo?.image;
+      if (selected && JSON.stringify(selected) !== JSON.stringify(oldImage)) {
+        try { await assertSocialImageAvailable({ path: selected.url, alt: selected.alt }); }
+        catch { throw new GiftCmsValidationError("請從素材庫選擇安全的公開分享圖片。"); }
+      }
+    }
     if (JSON.stringify(previous) === JSON.stringify(document)) return { revision: current.revision, document, outcome: "NO_CHANGE" as const };
     if (current.revision >= Number.MAX_SAFE_INTEGER) throw new GiftCmsConflictError();
     const next: GiftCmsState = { ...current, revision: current.revision + 1, ...(productId ? { products: { ...current.products, [productId]: document as GiftProductDocument } } : input.scope === "storeLanding" ? { storeLanding: document as StoreLandingDocument } : { landing: document as GiftLandingDocument }) };

@@ -9,6 +9,7 @@ import {
   isMediaAsset,
 } from "@/lib/media";
 import type { ProductAssetUpdate } from "@/lib/productAssetUpdates";
+import { assertSocialImageAvailable } from "./socialImageAdmin";
 
 const VIDEO_ASSET_TYPES = new Set([
   "hero",
@@ -48,6 +49,14 @@ async function verifyProductAsset(
   assetType: string,
   value: UnknownRecord,
 ) {
+  if (assetType === "socialShare") {
+    if (value.path === "" && (value.media === null || value.media === undefined)) return { path: "", alt: "", media: null };
+    if (value.media && (!isRecord(value.media) || value.media.type !== "image" || value.media.url !== value.path)) throw new ProductMediaValidationError("分享縮圖只接受素材庫公開圖片。");
+    try {
+      const selected = await assertSocialImageAvailable({ path: value.path, alt: value.alt || "", ...(value.assetId ? { assetId: value.assetId } : {}) });
+      return { ...selected, media: { type: "image", provider: "local", url: selected.path } };
+    } catch { throw new ProductMediaValidationError("請從素材庫選擇安全的公開分享圖片。"); }
+  }
   if (!("media" in value) || value.media === undefined) return { ...value };
   if (value.media === null) return { ...value, media: null };
   if (!isMediaAsset(value.media)) {

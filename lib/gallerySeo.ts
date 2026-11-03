@@ -1,3 +1,4 @@
+import { socialPageMetadata, safeSocialImage } from "./socialMetadata";
 import type { Metadata } from 'next';
 import type { GalleryWork } from './galleryWorks';
 import type { AssetRecord } from './assets';
@@ -7,20 +8,15 @@ export { GALLERY_SEO_TITLE, GALLERY_SEO_DESCRIPTION } from './gallerySeoSettings
 
 export function resolveGallerySeoImage(value: unknown, assets: readonly AssetRecord[], fallback?: { path: string; alt?: string; status?: string } | null) {
   const seo = resolveGallerySeo(value);
-  const selected = assets.find(asset => asset.id === seo.ogImageAssetId && isGalleryBackgroundAsset(asset));
+  const selected = assets.find(asset => asset.id === seo.ogImageAssetId && isGalleryBackgroundAsset(asset) && safeSocialImage(asset.path));
   if (selected) return selected;
-  return fallback?.status === 'active' && /^\/uploads\/assets\/[a-z0-9/_-]+\.(?:png|jpe?g|webp|avif)$/i.test(fallback.path) && !fallback.path.includes('..') ? fallback : undefined;
+  return fallback?.status === 'active' && fallback.path.startsWith('/') && safeSocialImage(fallback.path) ? fallback : undefined;
 }
 export function galleryMetadata(origin: string, image?: { path: string; alt?: string; status?: string } | null, value?: unknown, assets: readonly AssetRecord[] = []): Metadata {
-  const url = new URL('/gallery', origin).href;
   const seo = resolveGallerySeo(value), asset = resolveGallerySeoImage(value, assets, image);
-  const safeImage = asset ? { url: new URL(asset.path, origin).href, alt: asset.alt || 'KD Coffee 咖啡藝術工坊' } : undefined;
-  return {
-    title: { absolute: seo.title }, description: seo.description,
-    alternates: { canonical: url }, robots: { index: true, follow: true },
-    openGraph: { title: seo.ogTitle, description: seo.ogDescription, type: 'website', locale: 'zh_TW', url, ...(safeImage ? { images: [safeImage] } : {}) },
-    twitter: { card: 'summary_large_image', title: seo.ogTitle, description: seo.ogDescription, ...(safeImage ? { images: [safeImage.url] } : {}) },
-  };
+  const metadata = socialPageMetadata({ path: '/gallery', title: seo.title, description: seo.description, images: [asset?.path], imageAlt: asset?.alt });
+  const social = socialPageMetadata({ path: '/gallery', title: seo.ogTitle, description: seo.ogDescription, images: [asset?.path], imageAlt: asset?.alt });
+  return { ...metadata, openGraph: social.openGraph, twitter: social.twitter, robots: { index: true, follow: true } };
 }
 export function galleryStructuredData(origin: string, works: readonly GalleryWork[], value?: unknown) {
   const url = new URL('/gallery', origin).href;

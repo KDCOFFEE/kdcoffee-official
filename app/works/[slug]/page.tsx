@@ -1,3 +1,6 @@
+import { withSiteSocialImage } from "@/lib/siteSocialImage";
+import { socialPageMetadata, safeSocialImage, DEFAULT_SOCIAL_IMAGE } from "@/lib/socialMetadata";
+import { workStructuredData, serializeStructuredData } from "@/lib/brandStructuredData";
 import Link from "next/link";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { notFound } from "next/navigation";
@@ -18,6 +21,7 @@ import MemberLink from "@/components/member/MemberLink";
 import { getHomepageData, resolveProductCampaigns } from "@/data/homepageData";
 import {
   getProductMediaAsset,
+  resolveWorkSocialImages,
   resolveGalleryAssets,
   resolveHeroAsset,
   resolveListAsset,
@@ -51,14 +55,10 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const { slug } = await params;
   const live = await getLiveWebsiteData();
   const product: any = live.menu.products.find((p: any) => p.slug === slug);
-  const image = product
-    ? resolveHeroAsset(product) || resolveProductAsset(product) || resolveListAsset(product)
-    : null;
-  return {
-    title: product ? `${product.name}｜KD Coffee 咖啡藝術工坊` : "咖啡作品｜KD Coffee",
-    description: product?.shortCopy || product?.mood,
-    openGraph: image ? { images: [{ url: image.path, alt: image.alt || product.name }] } : undefined,
-  };
+  if (!product || product.status === "hidden") notFound();
+  const images = resolveWorkSocialImages(product);
+  return withSiteSocialImage(socialPageMetadata({ path: `/works/${encodeURIComponent(slug)}`, title: `${product.name}｜KD 咖啡藝術工坊`, description: product.shortCopy || product.mood || product.subtitle,
+    images, imageAlt: product.name }));
 }
 
 function ProductBagFallback({ product, compact = false }: { product: any; compact?: boolean }) {
@@ -239,6 +239,9 @@ export default async function WorkPage({ params }: { params: Promise<{ slug: str
 
   return (
     <main className={`revenue-product-page${isGiottoPrototype ? " giotto-art-direction" : ""}`}>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeStructuredData(workStructuredData(product,
+        product.shortCopy || product.mood || product.subtitle || product.name,
+        resolveWorkSocialImages(product).map(safeSocialImage).find(Boolean) || DEFAULT_SOCIAL_IMAGE.url)) }} />
       <header className="revenue-product-nav">
         <div className="revenue-product-nav-left">
           <Link className="revenue-product-back-link" href="/works">← 返回本月作品</Link>

@@ -28,7 +28,7 @@ type RegisterHooks = (hooks: {
   },
 });
 
-const REVIEWED_SITEMAP_PATH = /^(?:\/|\/works(?:\/[^/?]+)?|\/monthly-menu|\/pages\/[^/?]+|\/store(?:\/[^/?]+)?|\/gifts)$/u;
+const REVIEWED_SITEMAP_PATH = /^(?:\/|\/works(?:\/[^/?]+)?|\/gallery|\/customer-service|\/monthly-menu|\/pages\/[^/?]+|\/store(?:\/[^/?]+)?|\/gifts)$/u;
 
 const project = process.cwd();
 async function jsonHashes() {
@@ -149,11 +149,11 @@ try {
   await test("Gate OFF keeps public detail noindex without changing content metadata", async () => {
     const meta = await detail();
     assert.deepEqual(meta.robots, { index: false, follow: true });
-    assert.deepEqual(meta.alternates, { canonical: "/store/product-0" });
+    assert.deepEqual(meta.alternates, { canonical: origin + "/store/product-0" });
   });
   await test("Gate OFF keeps Gifts noindex and outside sitemap", async () => {
     const metadata = await giftMetadata();
-    assert.deepEqual(metadata.alternates, { canonical: "/gifts" });
+    assert.deepEqual(metadata.alternates, { canonical: origin + "/gifts" });
     assert.deepEqual(metadata.robots, { index: false, follow: true });
     assert.ok(!(await sitemapPaths()).includes("/gifts"));
   });
@@ -247,7 +247,7 @@ try {
     const storePaths: string[] = [];
     for (let page = 1; page <= products.totalPages; page++)
       storePaths.push(...selectPublicStoreIndex(store, { page }).products.items.map((product: { slug: string }) => "/store/" + product.slug));
-    const expected = [...new Set(["/", "/works", "/monthly-menu",
+    const expected = [...new Set(["/", "/works", "/gallery", "/monthly-menu", "/customer-service",
       ...resolveWorksProductListing(website.menu.products).map((product: { slug: string }) => "/works/" + encodeURIComponent(product.slug)),
       ...publishedPageRegistry(pages).filter((page: { published: boolean }) => page.published).map((page: { href: string }) => page.href),
       "/store", ...storePaths])];
@@ -271,8 +271,12 @@ try {
     for (const url of urls) assert.match(url, REVIEWED_SITEMAP_PATH);
     assert.equal(new Set(urls).size, urls.length);
   });
-  await test("robots allows crawling, points to official sitemap, and does not hide noindex via Disallow", () => {
-    assert.deepEqual(robots(), { rules: { userAgent: "*", allow: "/" }, sitemap: origin + "/sitemap.xml" });
+  await test("robots allows public discovery and media, points to official sitemap and excludes private areas", () => {
+    const result = robots();
+    assert.equal(result.sitemap, origin + "/sitemap.xml");
+    const rules = result.rules as { allow: string; disallow: string[] };
+    assert.equal(rules.allow, "/"); assert.ok(rules.disallow.includes("/admin"));
+    assert.ok(!rules.disallow.includes("/store") && !rules.disallow.includes("/gifts") && !rules.disallow.includes("/uploads/"));
     assert.equal(robotsDynamic, "force-dynamic"); assert.equal(sitemapDynamic, "force-dynamic");
   });
   const privateSections = ["admin", "member", "cart", "checkout", "orders", "order-complete", "member-backup", "gmail-fulfillment"];

@@ -5,6 +5,7 @@ import { getPagesDataFile } from './storagePaths';
 import { atomicWriteJson, withFileLock } from './jsonFileStore';
 import { normalizeGalleryAtmosphere, isGalleryBackgroundAsset } from './galleryAtmosphere';
 import { normalizeGallerySeo } from './gallerySeoSettings';
+import { isSocialLibraryImage } from './socialImageSettings';
 
 export class GalleryPageVersionConflictError extends Error {}
 /** The existing systemPages storage and version/lock protocol; no new file/database. */
@@ -31,7 +32,7 @@ export async function saveGallerySeo(version: unknown, input: unknown) {
   return withFileLock(path, async () => {
     const [store, library] = await Promise.all([readPageStore(), getAssetLibrary()]);
     if (store.version !== version) throw new GalleryPageVersionConflictError('資料已更新，請重新整理後再儲存。');
-    if (seo.ogImageAssetId && !library.assets.some(asset => asset.id === seo.ogImageAssetId && isGalleryBackgroundAsset(asset))) throw new Error('分享圖片不存在或不適用，請重新從素材庫選擇。');
+    if (seo.ogImageAssetId && !library.assets.some(asset => asset.id === seo.ogImageAssetId && isSocialLibraryImage(asset))) throw new Error('分享圖片不存在或不適用，請重新從素材庫選擇。');
     store.systemPages = { ...store.systemPages, gallery: { ...store.systemPages?.gallery, seo } };
     store.version += 1; store.updatedAt = new Date().toISOString();
     await atomicWriteJson(path, store);

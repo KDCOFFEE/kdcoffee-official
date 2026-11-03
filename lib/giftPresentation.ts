@@ -1,3 +1,4 @@
+import { socialPageMetadata } from "./socialMetadata";
 import type { Metadata } from "next";
 import type { GiftCmsState, GiftLandingDocument } from "./giftCms";
 import type { StoreCatalog } from "./storeTypes";
@@ -52,13 +53,10 @@ export function selectPublicGiftCatalog(catalog: StoreCatalog, pointDisplayName 
   };
 }
 
-export function giftPageMetadata(indexable: boolean, seo?: GiftLandingDocument["seo"]): Metadata {
+export function giftPageMetadata(indexable: boolean, seo?: GiftLandingDocument["seo"], primaryImage?: string): Metadata {
   const title = seo?.title || "送禮專區｜精品咖啡禮盒｜KD Coffee";
   const description = seo?.description || "探索 KD Coffee 精品咖啡禮盒，從耳掛咖啡、咖啡豆到手沖組合與客製送禮，為日常問候、節慶與重要時刻挑選一份剛剛好的咖啡禮。";
-  return {
-    title: { absolute: title }, description,
-    alternates: { canonical: "/gifts" }, robots: { index: indexable, follow: true },
-    openGraph: { title: seo?.socialTitle || title, description: seo?.socialDescription || description, ...(seo?.image ? { images: [{ url: seo.image.url, alt: seo.image.alt }] } : {}), url: "/gifts", siteName: "KD Coffee", locale: "zh_TW", type: "website" },
-    twitter: { card: seo?.image ? "summary_large_image" : "summary", title: seo?.socialTitle || title, description: seo?.socialDescription || description, ...(seo?.image ? { images: [seo.image.url] } : {}) },
-  };
+  const metadata = socialPageMetadata({ path: "/gifts", title, description, images: [seo?.image?.url, primaryImage], imageAlt: seo?.image?.alt });
+  const social = socialPageMetadata({ path: "/gifts", title: seo?.socialTitle || title, description: seo?.socialDescription || description, images: [seo?.image?.url, primaryImage], imageAlt: seo?.image?.alt });
+  return { ...metadata, openGraph: social.openGraph, twitter: social.twitter, robots: { index: indexable, follow: true } };
 }

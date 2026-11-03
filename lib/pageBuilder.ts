@@ -1,4 +1,7 @@
 import type { GalleryPageSettings } from './galleryAtmosphere.ts';
+import type { SocialImageValue } from './socialImageSettings.ts';
+// @ts-expect-error -- Native Node tests require the explicit extension.
+import { validateSocialImageValue } from './socialImageSettings.ts';
 // @ts-expect-error -- native Node TypeScript tests require explicit extensions.
 import { validateGalleryPageSettings } from './galleryAtmosphere.ts';
 import type { MediaAsset } from "./media.ts";
@@ -64,7 +67,7 @@ export type PageBuilderSection = {
   motion: HomepageSectionMotion;
 };
 
-export type PageDraft = { title: string; seoTitle: string; seoDescription: string; sections: PageBuilderSection[] };
+export type PageDraft = { title: string; seoTitle: string; seoDescription: string; socialImage?: SocialImageValue; sections: PageBuilderSection[] };
 export type PageRecord = {
   id: string;
   slug: string;
@@ -152,6 +155,7 @@ function validateMotion(value: HomepageSectionMotion, label: string) {
 }
 
 export function validatePageDraft(value: PageDraft, productSlugs?: Set<string>, allowUnknownSections = false) {
+  if (value?.socialImage !== undefined) validateSocialImageValue(value.socialImage);
   if (!value || typeof value !== "object" || !Array.isArray(value.sections)) throw new Error("頁面草稿格式不完整。");
   assertString(value.title, "頁面名稱", 120, true); assertString(value.seoTitle, "SEO 標題", 70); assertString(value.seoDescription, "SEO 說明", 180);
   if (value.sections.length > 50) throw new Error("每頁最多 50 個區塊。");

@@ -18,7 +18,7 @@ import { uploadWebsiteImageAsset } from "@/lib/assetImageUploads";
 import { ImageSafetyError, LINE_CARD_IMAGE_LIMITS } from "@/lib/websiteImages";
 
 /** Purpose is in the URL so Owner authorization happens before multipart parsing. */
-async function uploadCardHeader(request: Request) {
+async function uploadCardHeader(request: Request, purpose: "line-card-header" | "social-share" = "line-card-header") {
   const session = await readAdminSession();
   if (!session) return NextResponse.json({error:"請先登入後台。"},{status:401});
   if (session.role !== "owner" || session.legacy) return NextResponse.json({error:"此操作限 Owner 使用。"},{status:403});
@@ -32,7 +32,7 @@ async function uploadCardHeader(request: Request) {
     const form=await new Request(request.url,{method:"POST",headers:{"Content-Type":request.headers.get("content-type")!},body:Buffer.concat(parts)}).formData();
     if([...form.keys()].some(key=>!["file","create"].includes(key)) || form.getAll("file").length!==1)throw new ImageSafetyError("圖片上傳包含不允許的欄位。");
     const file=form.get("file");if(!(file instanceof File))throw new ImageSafetyError("沒有選擇圖片。");
-    return NextResponse.json({ok:true,...await uploadWebsiteImageAsset(file,{purpose:"line-card-header"})},{status:201,headers:{"Cache-Control":"no-store"}});
+    return NextResponse.json({ok:true,...await uploadWebsiteImageAsset(file,{purpose})},{status:201,headers:{"Cache-Control":"no-store"}});
   }catch(error){return NextResponse.json({error:error instanceof ImageSafetyError?error.message:"圖片無法上傳，請稍後再試。"},{status:error instanceof ImageSafetyError?error.status:400});}
 }
 
@@ -95,6 +95,7 @@ const allowedExtensions = new Set([
 export async function POST(request: Request) {
   const purpose = new URL(request.url).searchParams.get("purpose");
   if (purpose === "line-card-header") return uploadCardHeader(request);
+  if (purpose === "social-share") return uploadCardHeader(request, "social-share");
   if (purpose !== null) return NextResponse.json({error:"不支援的素材用途。"},{status:400});
   if (!(await isAdminAuthenticated())) {
     return NextResponse.json(

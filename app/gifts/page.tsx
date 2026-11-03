@@ -1,3 +1,4 @@
+import { withSiteSocialImage } from "@/lib/siteSocialImage";
 import { readGiftCmsState } from "@/lib/giftCmsStore";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
@@ -10,7 +11,8 @@ import { isStoreSeoPublicEnabled } from "@/lib/storeSeoPublication";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export async function generateMetadata() {
-  return giftPageMetadata(isStoreSeoPublicEnabled(), (await readGiftCmsState()).landing?.seo);
+  const landing = (await readGiftCmsState()).landing;
+  return withSiteSocialImage(giftPageMetadata(isStoreSeoPublicEnabled(), landing?.seo, landing?.hero.image?.url));
 }
 export default async function GiftsPage() {
   const [model, cms] = await Promise.all([readPublicGiftCatalog(), readGiftCmsState()]);

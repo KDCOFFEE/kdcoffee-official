@@ -1,3 +1,4 @@
+import { withSiteSocialImage } from "@/lib/siteSocialImage";
 import { readStoreProductEditorial } from "@/lib/giftCmsStore";
 import GiftEditorialSections from "@/components/gifts/GiftEditorialSections";
 import Link from "next/link";
@@ -28,7 +29,7 @@ const loadProduct = cache(async (slug: string) => {
 
 export async function generateMetadata({ params }: DetailProps): Promise<Metadata> {
   const { slug } = await params;
-  return storeProductMetadata(await loadProduct(slug));
+  return withSiteSocialImage(storeProductMetadata(await loadProduct(slug)));
 }
 
 const money = new Intl.NumberFormat("zh-TW", { maximumSignificantDigits: 21 });

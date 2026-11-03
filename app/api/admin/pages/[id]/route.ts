@@ -6,6 +6,7 @@ import { pageReferenceCount, publishedPageRegistry, validatePageDraft, type Page
 import { validateWebsiteVisualStyle, type WebsiteVisualStyle } from "@/lib/pageBuilderVisualStyle";
 import { readPageStore } from "@/lib/pageBuilderStore";
 import { getHomepageDataFile, getPagesDataFile, getWebsiteDataFile } from "@/lib/storagePaths";
+import { assertSocialImageAvailable } from "@/lib/socialImageAdmin";
 
 export const dynamic = "force-dynamic";
 type Context = { params: Promise<{ id: string }> };
@@ -36,7 +37,7 @@ export async function PUT(request: Request, context: Context) {
       const publishedVisualStyle = body.operation === "publish" && body.visualStyle !== undefined
         ? validateWebsiteVisualStyle(body.visualStyle)
         : undefined;
-      if (body.draft) { validatePageDraft(body.draft, await productSlugs()); page.draft = structuredClone(body.draft); }
+      if (body.draft) { validatePageDraft(body.draft, await productSlugs()); if (body.draft.socialImage) await assertSocialImageAvailable(body.draft.socialImage); page.draft = structuredClone(body.draft); }
       const now = new Date().toISOString();
       if (body.operation === "publish") { validatePageDraft(page.draft, await productSlugs()); if (publishedVisualStyle) store.visualStyle = publishedVisualStyle; page.publishedSnapshot = structuredClone(page.draft); page.status = "published"; page.publishedAt = now; }
       if (body.operation === "unpublish") page.status = "unpublished";

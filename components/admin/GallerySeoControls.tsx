@@ -2,17 +2,17 @@
 import Image from 'next/image';
 import { useState } from 'react';
 import type { AssetRecord } from '@/lib/assets';
-import { isGalleryBackgroundAsset } from '@/lib/galleryAtmosphere';
 import { GALLERY_SEO_TITLE, GALLERY_SEO_DESCRIPTION, normalizeGallerySeo, resolveGallerySeo, type GallerySeoSettings } from '@/lib/gallerySeoSettings';
 import { resolveGallerySeoImage } from '@/lib/gallerySeo';
 import { getCanonicalPublicSiteOrigin } from '@/lib/publicSiteOrigin';
-import ImageLibraryPicker from './ImageLibraryPicker';
+import SocialImageField from './SocialImageField';
 import css from './GallerySeoControls.module.css';
 
 export default function GallerySeoControls({ value, version, assets, onSaved }: { value?: GallerySeoSettings; version: number; assets: AssetRecord[]; onSaved: () => Promise<void> }) {
   const [draft, setDraft] = useState<GallerySeoSettings>({ ...value });
-  const [picker, setPicker] = useState(false), [saving, setSaving] = useState(false), [message, setMessage] = useState('');
-  const effective = resolveGallerySeo(draft), image = resolveGallerySeoImage(draft, assets, assets.find(asset => asset.id === 'LOGO001'));
+  const [saving, setSaving] = useState(false), [uploading, setUploading] = useState(false), [message, setMessage] = useState('');
+  const [availableAssets, setAvailableAssets] = useState(assets);
+  const effective = resolveGallerySeo(draft), image = resolveGallerySeoImage(draft, availableAssets, availableAssets.find(asset => asset.id === 'LOGO005' && asset.status === 'active') || availableAssets.find(asset => asset.id === 'LOGO001'));
   const url = `${getCanonicalPublicSiteOrigin()}/gallery`;
   async function save() {
     setSaving(true); setMessage('');
@@ -39,7 +39,7 @@ export default function GallerySeoControls({ value, version, assets, onSaved }: 
           : <textarea aria-label={label} rows={3} value={draft[key] ?? (key === 'description' ? GALLERY_SEO_DESCRIPTION : '')} placeholder={fallback} onChange={event => setDraft(current => ({ ...current, [key]: event.target.value }))}/>}
         <small>{Array.from(draft[key] ?? (key === 'title' ? GALLERY_SEO_TITLE : key === 'description' ? GALLERY_SEO_DESCRIPTION : '')).length} 字元</small>
       </label>)}
-      <div className={css.imageField}><strong>社群分享圖片（選填）</strong><p>從既有素材庫選取圖片；未設定或圖片已不可用時，沿用網站預設分享圖片。</p><button type="button" className="cms-secondary-button" onClick={() => setPicker(true)}>選擇分享圖片</button>{draft.ogImageAssetId ? <button type="button" className="cms-secondary-button" onClick={() => setDraft(current => { const next = { ...current }; delete next.ogImageAssetId; return next; })}>移除自選圖片</button> : null}</div>
+      <SocialImageField value={draft.ogImageAssetId && availableAssets.find(asset=>asset.id===draft.ogImageAssetId) ? {path:availableAssets.find(asset=>asset.id===draft.ogImageAssetId)!.path,alt:availableAssets.find(asset=>asset.id===draft.ogImageAssetId)!.alt} : undefined} assets={availableAssets} disabled={saving||uploading} onBusy={setUploading} help="未設定時，將使用全站預設分享圖，最後使用安全 Logo。" onUploaded={asset=>setAvailableAssets(current=>[asset,...current])} onChange={image=>setDraft(current=>({...current,ogImageAssetId:image?.assetId}))}/>
       </div>
       <aside className={css.previews}>
         <section className={css.search} aria-label="搜尋預覽"><h3>搜尋預覽</h3><small>{url}</small><p className={css.searchTitle}>{effective.title}</p><p>{effective.description}</p></section>
@@ -47,7 +47,7 @@ export default function GallerySeoControls({ value, version, assets, onSaved }: 
         <p className={css.notice}>預覽僅供參考，搜尋引擎與分享平台可能自行調整呈現。公開網址由網站固定管理。</p>
       </aside>
     </div>
-    <footer><button type="button" onClick={() => void save()} disabled={saving}>{saving ? '儲存中…' : '儲存 Gallery SEO'}</button><small>只儲存本頁 SEO，不影響展間背景、作品或其他頁面。</small>{message ? <p role="alert">{message}</p> : null}</footer>
-    {picker ? <ImageLibraryPicker title="選擇社群分享圖片" assets={assets.filter(isGalleryBackgroundAsset)} onClose={() => setPicker(false)} onChoose={asset => { setDraft(current => ({ ...current, ogImageAssetId: asset.id })); setPicker(false); }}/> : null}
+    <footer><button type="button" onClick={() => void save()} disabled={saving||uploading}>{saving ? '儲存中…' : '儲存 Gallery SEO'}</button><small>只儲存本頁 SEO，不影響展間背景、作品或其他頁面。</small>{message ? <p role="alert">{message}</p> : null}</footer>
+
   </section>;
 }

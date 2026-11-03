@@ -1,3 +1,4 @@
+import { withSiteSocialImage } from "@/lib/siteSocialImage";
 import { studioSectionById } from "@/lib/storeContentPresentation";
 import { StudioText } from "@/components/store/StudioResponsiveContent";
 import StoreLandingSections, { storeCardStyle } from "@/components/store/StoreLandingSections";
@@ -21,8 +22,8 @@ type StorePageProps = { searchParams: Promise<StoreSearchParams> };
 
 export async function generateMetadata({ searchParams }: StorePageProps): Promise<Metadata> {
   const document=(await readStoreContentPresentation()).document;
-  if(document)return storeContentMetadata(storeLandingMetadata(await searchParams),document);
-  return storeLandingMetadata(await searchParams);
+  if(document)return withSiteSocialImage(storeContentMetadata(storeLandingMetadata(await searchParams),document));
+  return withSiteSocialImage(storeLandingMetadata(await searchParams));
 }
 
 export default async function StorePage({ searchParams }: StorePageProps) {

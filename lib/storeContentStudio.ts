@@ -1,3 +1,4 @@
+import { socialPageMetadata } from "./socialMetadata";
 import { studioCardEditorial } from "./storeContentPresentation";
 import "server-only";
 import type { Metadata } from "next";
@@ -18,6 +19,11 @@ export async function readStoreContentPresentation(publicSlugs: string[] = []) {
 }
 /** Canonical/robots/filter rules remain owned by the Store SEO gate. */
 export function storeContentMetadata(base: Metadata, doc?: StoreLandingDocument): Metadata {
- if(!doc)return base;const seo=doc.seo;
- return {...base,title:seo.title||base.title,description:seo.description||base.description,openGraph:{...base.openGraph,title:seo.socialTitle||seo.title||base.openGraph?.title,description:seo.socialDescription||seo.description||base.openGraph?.description,...(seo.image?{images:[{url:seo.image.url,alt:seo.image.alt}]}:{})}};
+ if (!doc) return base;
+ const seo = doc.seo;
+ const title = seo.title || (typeof base.openGraph?.title === "string" ? base.openGraph.title : "商店｜KD 咖啡藝術工坊");
+ const description = seo.description || base.description || undefined;
+ const social = socialPageMetadata({ path: "/store", title: seo.socialTitle || title,
+   description: seo.socialDescription || description, images: [seo.image?.url, doc.hero.image?.url], imageAlt: seo.image?.alt });
+ return { ...base, title: { absolute: title }, description, openGraph: social.openGraph, twitter: social.twitter };
 }

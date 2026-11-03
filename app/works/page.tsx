@@ -1,3 +1,5 @@
+import { withSiteSocialImage } from "@/lib/siteSocialImage";
+import { socialPageMetadata } from "@/lib/socialMetadata";
 import Link from "next/link";
 import type { Metadata } from "next";
 import type { CSSProperties } from "react";
@@ -26,25 +28,8 @@ export async function generateMetadata(): Promise<Metadata> {
   const seoTitle = works.seo.title.trim() || DEFAULT_WORKS_PAGE_CMS_CONFIG.seo!.title!;
   const seoDescription = works.seo.description.trim() || DEFAULT_WORKS_PAGE_CMS_CONFIG.seo!.description!;
   const image = works.seo.shareImage;
-  const images = image ? [{ url: image.media.url, alt: image.alt || seoTitle }] : undefined;
-  return {
-    title: { absolute: seoTitle },
-    description: seoDescription,
-    alternates: { canonical: "/works" },
-    openGraph: {
-      title: seoTitle,
-      description: seoDescription,
-      url: "/works",
-      type: "website",
-      images,
-    },
-    twitter: {
-      card: image ? "summary_large_image" : "summary",
-      title: seoTitle,
-      description: seoDescription,
-      images: image ? [image.media.url] : undefined,
-    },
-  };
+  return withSiteSocialImage(socialPageMetadata({ path: "/works", title: seoTitle, description: seoDescription,
+    images: [image?.media.url, works.hero.desktopMedia?.media.type === "image" ? works.hero.desktopMedia.media.url : works.hero.desktopMedia?.media.posterUrl], imageAlt: image?.alt }));
 }
 
 export default async function WorksPage(){

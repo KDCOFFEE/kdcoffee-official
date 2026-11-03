@@ -1,3 +1,4 @@
+import { socialPageMetadata } from "./socialMetadata";
 import type { Metadata } from "next";
 import type { PublicStoreProductReadModel } from "./storePublicReadModel";
 import { storeSeoPreview } from "./storeSeo";
@@ -38,17 +39,7 @@ export function storeBrowseHref(options: PublicStoreIndexOptions = {}): string {
 
 export function storeLandingMetadata(query: StoreSearchParams = {}): Metadata {
   const description = "探索 KD Coffee 精選商品。";
-  return {
-    title: "商店",
-    description,
-    alternates: { canonical: "/store" },
-    robots: { index: Object.keys(query).length === 0, follow: true },
-    openGraph: {
-      title: "商店｜KD Coffee", description, url: "/store",
-      siteName: "KD Coffee", locale: "zh_TW", type: "website",
-    },
-    twitter: { card: "summary", title: "商店｜KD Coffee", description },
-  };
+  return { ...socialPageMetadata({ path: "/store", title: "商店｜KD 咖啡藝術工坊", description }), robots: { index: Object.keys(query).length === 0, follow: true } };
 }
 
 /** Slugs arrive already decoded from Next; do not normalize product identities. */
@@ -57,15 +48,6 @@ export function isStoreProductSlug(value: unknown): value is string {
 }
 export function storeProductHref(slug: string): string {
   return `/store/${encodeURIComponent(slug)}`;
-}
-
-function safeShareImage(url: string | undefined): string | undefined {
-  if (!url || /[\\\s]/u.test(url) || url.startsWith("//")) return undefined;
-  if (url.startsWith("/")) return /[?#]/u.test(url) ? undefined : url;
-  try {
-    const parsed = new URL(url);
-    return parsed.protocol === "https:" && !parsed.username && !parsed.password ? url : undefined;
-  } catch { return undefined; }
 }
 
 /** Pure metadata projection. Only the server uses the manual SEO wrapper. */
@@ -78,14 +60,5 @@ export function storeProductMetadata(model: PublicStoreProductReadModel): Metada
     product.heroMedia?.type === "image" ? product.heroMedia.url : product.heroMedia?.type === "video" ? product.heroMedia.posterUrl : undefined,
     ...product.gallery.filter(media => media.type === "image").map(media => media.url),
   ];
-  const image = imageCandidates.map(safeShareImage).find(Boolean);
-  return {
-    title: seo.title, description,
-    alternates: { canonical },
-    robots: { index: true, follow: true },
-    openGraph: { title: seo.title, description, url: canonical, siteName: "KD Coffee", locale: "zh_TW", type: "website",
-      images: image ? [{ url: image, alt: product.name }] : [] },
-    twitter: { card: image ? "summary_large_image" : "summary", title: seo.title, description,
-      ...(image ? { images: [image] } : {}) },
-  };
+  return { ...socialPageMetadata({ path: canonical, title: seo.title, description, images: imageCandidates, imageAlt: product.name }), robots: { index: true, follow: true } };
 }
