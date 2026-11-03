@@ -1,4 +1,5 @@
 import { isLocalAssetImagePath } from "./media";
+import { validateSocialImageValue, type SocialImageValue } from "./socialImageSettings";
 import { DEFAULT_SERVICE_HERO, SERVICE_HERO_POSITIONS, type ServiceHero } from "./customerServiceHero";
 /** Presentation schema only. Policy answers are resolved from existing sources on the server. */
 export const SERVICE_CATEGORIES = [
@@ -35,6 +36,7 @@ export type ServiceCard = {
   id: string; title: string; description: string; link: string; enabled: boolean; sortOrder: number;
 };
 export type ServiceConfig = {
+  socialImage?: SocialImageValue;
   hero?: ServiceHero | null;
   title: string; subtitle: string; intro: string; announcement: string;
   serviceHours: string; line: string; facebook: string; email: string; phone: string;
@@ -110,8 +112,12 @@ const protectedSources: Partial<Record<ServiceCategory, ServiceSource[]>> = {
 };
 export function validateServiceDocument(value: unknown): asserts value is ServiceDocument {
   fields(value, ["config", "cards", "faqs"]);
-  fields(value.config, ["title", "subtitle", "intro", "announcement", "serviceHours", "line", "facebook", "email", "phone", ...(record(value.config) && Object.hasOwn(value.config, "hero") ? ["hero"] : [])]);
+  fields(value.config, ["title", "subtitle", "intro", "announcement", "serviceHours", "line", "facebook", "email", "phone", ...(record(value.config) && Object.hasOwn(value.config, "hero") ? ["hero"] : []), ...(record(value.config) && Object.hasOwn(value.config, "socialImage") ? ["socialImage"] : [])]);
   const config = value.config;
+  if (config.socialImage !== undefined) {
+    try { validateSocialImageValue(config.socialImage); }
+    catch { throw new ServiceValidationError("請從素材庫選擇安全的客服分享圖片。"); }
+  }
   if (config.hero != null) {
     fields(config.hero, ["src", "alt", "position"]);
     if (!isLocalAssetImagePath(config.hero.src)) throw new ServiceValidationError("請選擇素材庫中的安全圖片。");

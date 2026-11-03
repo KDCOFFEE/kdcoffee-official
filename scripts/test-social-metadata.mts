@@ -88,6 +88,9 @@ try {
   assert.ok(file.startsWith(temporary));
   await fs.mkdir(path.dirname(file), { recursive: true });
   await fs.writeFile(file, JSON.stringify({ assets: [{ id: "LOGO005", status: "active", path: "/uploads/assets/logo/owner-card.jpg", alt: "品牌分享卡" }] }));
+  const imageFile = path.join(temporary, "uploads/assets/logo/owner-card.jpg");
+  await fs.mkdir(path.dirname(imageFile), { recursive: true });
+  await fs.writeFile(imageFile, await (await import("sharp")).default({ create: { width: 1200, height: 630, channels: 3, background: "#82664a" } }).jpeg().toBuffer());
   const metadata = await withSiteSocialImage(rootMetadata);
   test("existing global LOGO005 CMS slot supplies root OG and Twitter fallback", () => {
     complete(metadata, "/");

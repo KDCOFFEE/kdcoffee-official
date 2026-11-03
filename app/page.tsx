@@ -1,4 +1,5 @@
 import { promises as fs } from "fs";
+import { homepageSocialMetadata } from "@/lib/systemPageSocialMetadata";
 import { brandStructuredData, serializeStructuredData } from "@/lib/brandStructuredData";
 
 import { getHomepageData } from "@/data/homepageData";
@@ -12,6 +13,11 @@ import { publishedPageRegistry } from "@/lib/pageBuilder";
 import { readPageStore } from "@/lib/pageBuilderStore";
 
 export const dynamic = "force-dynamic";
+
+export async function generateMetadata() {
+  const store = await readPageStore();
+  return homepageSocialMetadata(store.systemPages?.homepage?.seo?.socialImage);
+}
 
 /**
  * ============================================================

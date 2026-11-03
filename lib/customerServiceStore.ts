@@ -7,6 +7,7 @@ import { getPersistentDataRoot } from "./storagePaths";
 import { DEFAULT_SERVICE_HERO } from "./customerServiceHero";
 import { isMeaningfulAssetText } from "./assetMetadata";
 import { assertServiceHeroAvailable } from "./customerServiceHeroServer";
+import { assertSocialImageAvailable } from "./socialImageAdmin";
 import { DEFAULT_SERVICE_DOCUMENT, ServiceValidationError, validateServiceDocument, validateServiceState, type ServiceState } from "./customerServiceContent";
 
 export class ServiceConflictError extends Error {}
@@ -45,6 +46,10 @@ export async function saveCustomerServiceState(input: { revision: number; docume
   document.config.hero ??= { ...DEFAULT_SERVICE_HERO };
   if (!isMeaningfulAssetText(document.config.hero.alt)) throw new ServiceValidationError("請填寫圖片描述，不能使用素材識別碼或儲存路徑作為 ALT。");
   await assertServiceHeroAvailable(document.config.hero);
+  if (document.config.socialImage) {
+    try { document.config.socialImage = await assertSocialImageAvailable(document.config.socialImage); }
+    catch { throw new ServiceValidationError("客服分享圖片無法使用，請重新從素材庫選擇。"); }
+  }
   if (Buffer.byteLength(JSON.stringify(document), "utf8") > 900_000) throw new ServiceValidationError("客服內容超過儲存上限。");
   const file = getCustomerServiceFile(), directory = path.dirname(file);
   await assertDirectory(directory); await fs.mkdir(directory, { recursive: true }); await assertDirectory(directory);

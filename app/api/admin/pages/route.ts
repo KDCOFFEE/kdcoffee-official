@@ -2,6 +2,7 @@ import { readAdminSession } from '@/lib/adminAuth';
 import { isSameOriginRequest } from '@/lib/requestSecurity';
 import { saveGalleryAtmosphere, saveGallerySeo, GalleryPageVersionConflictError } from '@/lib/galleryPageAdminStore';
 import { NextResponse } from "next/server";
+import { saveHomepageSocialImage, HomepageSeoVersionConflictError } from "@/lib/homepageSeo";
 import { promises as fs } from "fs";
 import { isAdminAuthenticated } from "@/lib/adminAuth";
 import { getAssetLibrary } from "@/lib/assets";
@@ -53,10 +54,14 @@ export async function PUT(request: Request) {
   if (!request.headers.get('origin') || !isSameOriginRequest(request)) return NextResponse.json({ error: '無法確認操作來源。' }, { status: 403 });
   try {
     const body = await request.json() as Record<string, unknown>;
+    if (body.scope === 'homepageSeo') {
+      if (Object.keys(body).some(key => !['scope', 'version', 'image'].includes(key))) throw new Error('首頁分享圖包含不支援的欄位。');
+      return NextResponse.json(await saveHomepageSocialImage(body.version, body.image));
+    }
     if (body.scope === 'galleryAtmosphere') return NextResponse.json(await saveGalleryAtmosphere(body.version, body.atmosphere));
     if (body.scope === 'gallerySeo') return NextResponse.json(await saveGallerySeo(body.version, body.seo));
     throw new Error('不支援的頁面設定範圍。');
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : '儲存失敗。' }, { status: error instanceof GalleryPageVersionConflictError ? 409 : 400 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : '儲存失敗。' }, { status: error instanceof GalleryPageVersionConflictError || error instanceof HomepageSeoVersionConflictError ? 409 : 400 });
   }
 }

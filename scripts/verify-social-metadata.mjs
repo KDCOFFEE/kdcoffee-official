@@ -10,7 +10,7 @@ const relativeOutput = path.relative(path.resolve("qa-output"), outputDirectory)
 assert.ok(relativeOutput && !relativeOutput.startsWith("..") && !path.isAbsolute(relativeOutput), "Evidence must remain under qa-output");
 assert.match(local, /^http:\/\/(?:127\.0\.0\.1|localhost):\d+$/);
 const production = "https://www.kdcoffee1962.com";
-const paths = ["/", "/works", "/works/giotto-awakening", "/monthly-menu", "/gallery", "/gifts", "/store"];
+const paths = ["/", "/works", "/works/giotto-awakening", "/monthly-menu", "/gallery", "/gifts", "/store", "/customer-service"];
 const agents = ["Mozilla/5.0", "facebookexternalhit/1.1", "Twitterbot/1.0", "Line/1.0"];
 const evidence = [];
 const images = new Set();

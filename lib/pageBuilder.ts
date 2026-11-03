@@ -85,6 +85,7 @@ export type PageStore = {
   visualStyle?: WebsiteVisualStyle;
   pages: PageRecord[];
   systemPages?: Record<string, unknown> & {
+    homepage?: { seo?: { socialImage?: SocialImageValue } };
     works?: WorksPageCmsConfig;
     gallery?: GalleryPageSettings;
   };
@@ -190,6 +191,14 @@ export function validatePageStore(store: PageStore) {
   if (store.visualStyle !== undefined) validateWebsiteVisualStyle(store.visualStyle);
   if (store.systemPages !== undefined) {
     if (!store.systemPages || typeof store.systemPages !== "object" || Array.isArray(store.systemPages)) throw new Error("系統頁面設定格式不正確。");
+    const homepage = store.systemPages.homepage;
+    if (homepage !== undefined) {
+      if (!homepage || typeof homepage !== "object" || Array.isArray(homepage)) throw new Error("首頁設定格式不正確。");
+      if (homepage.seo !== undefined) {
+        if (!homepage.seo || typeof homepage.seo !== "object" || Array.isArray(homepage.seo)) throw new Error("首頁 SEO 格式不正確。");
+        if (homepage.seo.socialImage !== undefined) validateSocialImageValue(homepage.seo.socialImage);
+      }
+    }
     if (store.systemPages.gallery !== undefined) validateGalleryPageSettings(store.systemPages.gallery);
     if (store.systemPages.works !== undefined) validateWorksPageCms(store.systemPages.works);
   }

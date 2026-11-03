@@ -1,4 +1,3 @@
-import { withSiteSocialImage } from "@/lib/siteSocialImage";
 import type { Metadata } from "next";
 import type { CSSProperties } from "react";
 import Link from "next/link";
@@ -10,7 +9,7 @@ import RecentServiceOrders from "@/components/customer-service/RecentServiceOrde
 import ServiceIcon from "@/components/customer-service/ServiceIcon";
 import styles from "@/components/customer-service/CustomerService.module.css";
 import { readCustomerServicePage } from "@/lib/customerServiceSources";
-import { socialPageMetadata } from "@/lib/socialMetadata";
+import { customerServiceSocialMetadata } from "@/lib/systemPageSocialMetadata";
 import { serviceHeroPosition } from "@/lib/customerServiceHero";
 import { resolveServiceHero } from "@/lib/customerServiceHeroServer";
 
@@ -18,7 +17,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export async function generateMetadata(): Promise<Metadata> {
   const { config } = await readCustomerServicePage();
-  return withSiteSocialImage(socialPageMetadata({ path: "/customer-service", title: `${config.title}｜KD 咖啡藝術工坊`, description: config.intro }));
+  return customerServiceSocialMetadata(config);
 }
 export default async function CustomerServicePage() {
   const { config, cards, faqs, contentUnavailable } = await readCustomerServicePage();

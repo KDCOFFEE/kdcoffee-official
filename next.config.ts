@@ -2,6 +2,8 @@ import type { NextConfig } from "next";
 
 const qaOutputDirectory = "qa-output";
 const nextConfig: NextConfig = {
+  // Preserve Next 16.4.3's default list and keep LINE previews in the initial head.
+  htmlLimitedBots: /[\w-]+-Google|Google-[\w-]+|Chrome-Lighthouse|Slurp|DuckDuckBot|baiduspider|yandex|sogou|bitlybot|tumblr|vkShare|quora link preview|redditbot|ia_archiver|Bingbot|BingPreview|applebot|facebookexternalhit|facebookcatalog|Twitterbot|LinkedInBot|Slackbot|Discordbot|WhatsApp|SkypeUriPreview|Yeti|googleweblight|Line\/|LineBot/i,
   // Local verification JSON must never enter server deployment traces.
   outputFileTracingExcludes: {
     "*": [`./${qaOutputDirectory}/**/*`, "./dependency-install.log"],

@@ -1,12 +1,14 @@
 "use client";
 
-import { cloneElement, useId, useRef, useState, type ReactElement, type KeyboardEvent } from "react";
+import { cloneElement, useEffect, useId, useRef, useState, type ReactElement, type KeyboardEvent } from "react";
+import type { AssetRecord } from "@/lib/assets";
+import SocialImageField from "./SocialImageField";
 import { SERVICE_CATEGORIES, SERVICE_SOURCES, validateServiceDocument, type ServiceCard, type ServiceCategory, type ServiceConfig, type ServiceDocument, type ServiceFaq, type ServiceSource, type ServiceState } from "@/lib/customerServiceContent";
 import ServiceIcon from "@/components/customer-service/ServiceIcon";
 import CustomerServiceHeroEditor from "./CustomerServiceHeroEditor";
 import styles from "./CustomerServiceManager.module.css";
 
-type TextConfig = Exclude<keyof ServiceConfig, "hero">;
+type TextConfig = Exclude<keyof ServiceConfig, "hero" | "socialImage">;
 const configFields: Array<[TextConfig, string, number]> = [["title", "頁面標題", 100], ["subtitle", "英文小標", 100], ["intro", "簡介", 1200], ["announcement", "公告", 1200], ["serviceHours", "客服時間", 300], ["line", "LINE 網址", 600], ["facebook", "Facebook 網址", 600], ["email", "客服 Email", 160], ["phone", "客服電話", 40]];
 const sections = [["page", "頁面 / Hero"], ["cards", "快速服務"], ["faqs", "FAQ"], ["contact", "聯絡方式"], ["status", "預覽 / 狀態"]] as const;
 type Section = typeof sections[number][0];
@@ -25,6 +27,13 @@ export default function CustomerServiceManager({ initial }: { initial: ServiceSt
   const [faqQuery, setFaqQuery] = useState(""), [faqCategory, setFaqCategory] = useState("all"), [faqPage, setFaqPage] = useState(0);
   const [saving, setSaving] = useState(false), [uploading, setUploading] = useState(false), [message, setMessage] = useState(""), [failed, setFailed] = useState(false);
   const uploadLock = useRef(false), saveLock = useRef(false);
+  const [assets, setAssets] = useState<AssetRecord[]>([]);
+  useEffect(() => {
+    void fetch("/api/admin/assets", { cache: "no-store" }).then(async response => {
+      const data = await response.json(); if (!response.ok) throw new Error(data.error || "素材庫無法讀取。");
+      setAssets(data.assets || []);
+    }).catch(error => { setFailed(true); setMessage(error.message); });
+  }, []);
   const dirty = JSON.stringify(document) !== JSON.stringify(state.document), busy = saving || uploading;
   const config = (key: TextConfig, value: string) => setDocument(current => ({ ...current, config: { ...current.config, [key]: value } }));
   const card = (id: string, patch: Partial<ServiceCard>) => setDocument(current => ({ ...current, cards: current.cards.map(item => item.id === id ? { ...item, ...patch } : item) }));
@@ -76,7 +85,7 @@ export default function CustomerServiceManager({ initial }: { initial: ServiceSt
         <fieldset className={styles.editor} disabled={busy}>
           {sections.filter(([id]) => id !== section).map(([id]) => <section hidden key={id} role="tabpanel" id={"service-panel-" + id} aria-labelledby={"service-tab-" + id}/>)}
           <section className={styles.section} role="tabpanel" id={"service-panel-" + section} aria-labelledby={"service-tab-" + section}>
-            {section === "page" && <><h2>頁面與 Hero</h2>{configEditor(false)}<CustomerServiceHeroEditor value={document.config.hero} saved={state.document.config.hero} disabled={busy} onChange={hero => setDocument(current => ({ ...current, config: { ...current.config, hero } }))} onUploadingChange={active => { uploadLock.current = active; setUploading(active); }}/></>}
+            {section === "page" && <><h2>頁面與 Hero</h2>{configEditor(false)}<CustomerServiceHeroEditor value={document.config.hero} saved={state.document.config.hero} disabled={busy} onChange={hero => setDocument(current => ({ ...current, config: { ...current.config, hero } }))} onUploadingChange={active => { uploadLock.current = active; setUploading(active); }}/><SocialImageField label="客服中心社群分享縮圖（Open Graph）" help="分享客服中心頁面時使用。未設定時將使用客服主視覺或全站預設分享圖。" value={document.config.socialImage} assets={assets} disabled={busy} onBusy={active=>{uploadLock.current=active;setUploading(active);}} onUploaded={asset=>setAssets(current=>[asset,...current])} onChange={socialImage=>setDocument(current=>({...current,config:{...current.config,socialImage}}))}/></>}
             {section === "contact" && <><h2>聯絡方式</h2><p>留空的管道不會顯示；客服時間未設定時沿用留言提示。</p>{configEditor(true)}</>}
             {section === "cards" && <><div className={styles.sectionHeader}><div><h2>快速服務卡</h2><p>選擇一張服務卡編輯，上下移動調整順序。</p></div><button type="button" disabled={document.cards.length >= 30} onClick={() => { const item: ServiceCard = { id: "service-" + crypto.randomUUID(), title: "新服務卡", description: "請填寫服務說明", link: "#contact", enabled: false, sortOrder: Math.min(10000, Math.max(0, ...document.cards.map(entry => entry.sortOrder)) + 10) }; setDocument(current => ({ ...current, cards: [...current.cards, item] })); setOpenCard(item.id); }}>新增服務卡</button></div>
               <div className={styles.list}>{sortedCards.map((item, index) => <article className={styles.listItem} key={item.id}>
