@@ -4,7 +4,8 @@ import { useRef, useState, type ChangeEvent } from "react";
 import type { AssetRecord } from "@/lib/assets";
 
 /** Shared Asset Library entry point. File rules and persistence stay in its API. */
-export default function AssetUploadButton({ assetId, uploadUrl = "/api/admin/assets/upload", label = "上傳新圖片", className, accept = "image/*", disabled = false, onUploaded, onUploadingChange, onError }: {
+export default function AssetUploadButton({ assetId, uploadUrl = "/api/admin/assets/upload", label = "上傳新圖片", className, accept = "image/*", disabled = false, showStatus = true, onUploaded, onUploadingChange, onError }: {
+  showStatus?: boolean;
   uploadUrl?: string; accept?: string;
   assetId?: string; label?: string; className?: string; disabled?: boolean;
   onUploaded: (asset: AssetRecord) => void | Promise<void>;
@@ -35,6 +36,6 @@ export default function AssetUploadButton({ assetId, uploadUrl = "/api/admin/ass
   return <span style={{ display: "inline-flex", flexDirection: "column", gap: 6, maxWidth: "100%" }}>
     <button type="button" className={className} style={{ minHeight: 42 }} disabled={disabled || uploading} onClick={() => input.current?.click()}>{uploading ? "上傳中…" : label}</button>
     <input ref={input} type="file" accept={accept} hidden disabled={disabled || uploading} aria-label={label} onChange={event => { void upload(event); }} />
-    {message ? <span role="status" aria-live="polite">{message}</span> : null}
+    {showStatus && message ? <span role="status" aria-live="polite">{message}</span> : null}
   </span>;
 }

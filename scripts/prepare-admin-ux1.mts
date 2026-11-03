@@ -1,0 +1,26 @@
+// Disposable Owner UI fixture. Never reads private runtime content or changes repository data.
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import sharp from 'sharp';
+import {createAdminSessionValue} from '../lib/adminAuth';
+import {DEFAULT_SERVICE_DOCUMENT} from '../lib/customerServiceContent';
+const qa=path.resolve('qa-output/admin-ux1'),root=path.join(qa,'runtime');
+process.env.ADMIN_SESSION_SECRET='admin-ux1-disposable-owner-session-secret';
+const write=async(file:string,value:unknown)=>{await fs.mkdir(path.dirname(file),{recursive:true});await fs.writeFile(file,JSON.stringify(value,null,2));};
+await fs.mkdir(path.join(root,'store'),{recursive:true});
+for(const name of ['website-data.json','homepage.json','monthly-menus.json','pages.json'])await fs.copyFile(path.join('public/data',name),path.join(root,'store',name));
+const image='/uploads/assets/page-builder/admin-ux1.png';
+await fs.mkdir(path.dirname(path.join(root,image)),{recursive:true});
+const svg='<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630"><rect width="1200" height="630" fill="#e5d5bb"/><rect x="24" y="24" width="1152" height="582" rx="24" fill="#795d42"/><circle cx="310" cy="280" r="140" fill="#d3b389"/><circle cx="310" cy="280" r="96" fill="#382a20"/><path d="M450 225h50a55 55 0 0 1 0 110h-50" fill="none" stroke="#d3b389" stroke-width="28"/><text x="600" y="280" fill="#fff5e6" font-size="64" font-family="sans-serif">KD COFFEE</text><text x="600" y="360" fill="#e5d5bb" font-size="34" font-family="sans-serif">SHARE IMAGE QA</text><path d="M100 520h1000" stroke="#d3b389" stroke-width="5"/></svg>';
+await sharp(Buffer.from(svg)).png().toFile(path.join(root,image));
+const asset={id:'QA_SHARE',path:image,name:'畫面測試圖片',alt:'咖啡分享圖片',category:'page-builder',status:'active',format:'PNG',recommendedSize:'1200×630',displaySize:'',usage:'畫面測試',seoStem:'admin-ux1'};
+await write(path.join(root,'store/assets.json'),{version:1,updatedAt:'',assets:[asset,{...asset,id:'LOGO001',name:'品牌圖片'}]});
+const pages=JSON.parse(await fs.readFile(path.join(root,'store/pages.json'),'utf8'));
+pages.systemPages??={};pages.systemPages.homepage={...pages.systemPages.homepage,seo:{}};
+await write(path.join(root,'store/pages.json'),pages);
+const document=structuredClone(DEFAULT_SERVICE_DOCUMENT);document.config.hero={src:image,alt:asset.alt,position:'center'};delete document.config.socialImage;
+await write(path.join(root,'customer-service/content.json'),{schemaVersion:1,revision:0,document});
+await write(path.join(root,'store-domain/catalog.json'),{schemaVersion:1,revision:0,updatedAt:null,sections:[],categories:[],products:[]});
+await write(path.join(root,'gift-cms/content.json'),{schemaVersion:1,revision:0,products:{}});
+await write(path.join(qa,'ui-private-session.json'),{root,port:3111,cookie:createAdminSessionValue({role:'owner'}),asset});
+console.log('Prepared isolated admin UX fixture.');

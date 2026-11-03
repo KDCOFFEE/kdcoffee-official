@@ -10,7 +10,7 @@ import styles from "./CustomerServiceManager.module.css";
 
 type TextConfig = Exclude<keyof ServiceConfig, "hero" | "socialImage">;
 const configFields: Array<[TextConfig, string, number]> = [["title", "頁面標題", 100], ["subtitle", "英文小標", 100], ["intro", "簡介", 1200], ["announcement", "公告", 1200], ["serviceHours", "客服時間", 300], ["line", "LINE 網址", 600], ["facebook", "Facebook 網址", 600], ["email", "客服 Email", 160], ["phone", "客服電話", 40]];
-const sections = [["page", "頁面 / Hero"], ["cards", "快速服務"], ["faqs", "FAQ"], ["contact", "聯絡方式"], ["status", "預覽 / 狀態"]] as const;
+const sections = [["page", "頁面與主視覺"], ["cards", "快速服務"], ["faqs", "常見問題"], ["contact", "聯絡方式"], ["status", "預覽 / 狀態"]] as const;
 type Section = typeof sections[number][0];
 const defaultSources: Partial<Record<ServiceCategory, ServiceSource>> = { orders: "orders", delivery: "delivery", cancellation: "cancellation", kd: "kd", subscription: "subscription", coffee: "coffee" };
 const sourceCategory: Partial<Record<ServiceSource, ServiceCategory>> = { orders: "orders", delivery: "delivery", cancellation: "cancellation", returns: "cancellation", kd: "kd", credit: "kd", subscription: "subscription", coffee: "coffee" };
@@ -77,7 +77,7 @@ export default function CustomerServiceManager({ initial }: { initial: ServiceSt
     setDocument(current => ({ ...current, faqs: [...current.faqs, item] })); setFaqQuery(""); setFaqCategory("all"); setFaqPage(Math.floor(document.faqs.length / 20)); setOpenFaq(item.id);
   };
   return <div className={styles.manager}>
-    <header className={styles.header}><div><p className={styles.eyebrow}>CUSTOMER SERVICE CONTENT</p><h1>客服中心內容</h1><p>編輯客服頁面、服務說明與聯絡管道。</p></div><a href="/customer-service" target="_blank" rel="noreferrer">查看公開頁面 ↗</a></header>
+    <header className={styles.header}><div><p className={styles.eyebrow}>網站客服管理</p><h1>客服中心內容</h1><p>編輯客服頁面、服務說明與聯絡管道。</p></div><a href="/customer-service" target="_blank" rel="noreferrer">查看公開頁面 ↗</a></header>
     <div className={styles.workspace}>
       <nav className={styles.navigation} role="tablist" aria-label="客服管理區域">{sections.map(([id, label]) => <button type="button" role="tab" id={"service-tab-" + id} key={id} aria-selected={section === id} aria-controls={"service-panel-" + id} tabIndex={section === id ? 0 : -1} disabled={busy} onClick={() => chooseSection(id)} onKeyDown={tabKeys}>{label}{id === "faqs" && <span>{document.faqs.length}</span>}{id === "cards" && <span>{document.cards.length}</span>}</button>)}</nav>
       <div className={styles.content}>
@@ -85,7 +85,7 @@ export default function CustomerServiceManager({ initial }: { initial: ServiceSt
         <fieldset className={styles.editor} disabled={busy}>
           {sections.filter(([id]) => id !== section).map(([id]) => <section hidden key={id} role="tabpanel" id={"service-panel-" + id} aria-labelledby={"service-tab-" + id}/>)}
           <section className={styles.section} role="tabpanel" id={"service-panel-" + section} aria-labelledby={"service-tab-" + section}>
-            {section === "page" && <><h2>頁面與 Hero</h2>{configEditor(false)}<CustomerServiceHeroEditor value={document.config.hero} saved={state.document.config.hero} disabled={busy} onChange={hero => setDocument(current => ({ ...current, config: { ...current.config, hero } }))} onUploadingChange={active => { uploadLock.current = active; setUploading(active); }}/><SocialImageField label="客服中心社群分享縮圖（Open Graph）" help="分享客服中心頁面時使用。未設定時將使用客服主視覺或全站預設分享圖。" value={document.config.socialImage} assets={assets} disabled={busy} onBusy={active=>{uploadLock.current=active;setUploading(active);}} onUploaded={asset=>setAssets(current=>[asset,...current])} onChange={socialImage=>setDocument(current=>({...current,config:{...current.config,socialImage}}))}/></>}
+            {section === "page" && <><h2>頁面基本資料</h2>{configEditor(false)}<CustomerServiceHeroEditor value={document.config.hero} saved={state.document.config.hero} disabled={busy} onChange={hero => setDocument(current => ({ ...current, config: { ...current.config, hero } }))} onUploadingChange={active => { uploadLock.current = active; setUploading(active); }}/><SocialImageField label="客服中心分享圖片" help="未設定時，會自動使用客服主視覺；若無主視覺，再使用全站預設分享圖片。" value={document.config.socialImage} assets={assets} disabled={busy} onBusy={active=>{uploadLock.current=active;setUploading(active);}} onUploaded={asset=>setAssets(current=>[asset,...current])} onChange={socialImage=>setDocument(current=>({...current,config:{...current.config,socialImage}}))}/></>}
             {section === "contact" && <><h2>聯絡方式</h2><p>留空的管道不會顯示；客服時間未設定時沿用留言提示。</p>{configEditor(true)}</>}
             {section === "cards" && <><div className={styles.sectionHeader}><div><h2>快速服務卡</h2><p>選擇一張服務卡編輯，上下移動調整順序。</p></div><button type="button" disabled={document.cards.length >= 30} onClick={() => { const item: ServiceCard = { id: "service-" + crypto.randomUUID(), title: "新服務卡", description: "請填寫服務說明", link: "#contact", enabled: false, sortOrder: Math.min(10000, Math.max(0, ...document.cards.map(entry => entry.sortOrder)) + 10) }; setDocument(current => ({ ...current, cards: [...current.cards, item] })); setOpenCard(item.id); }}>新增服務卡</button></div>
               <div className={styles.list}>{sortedCards.map((item, index) => <article className={styles.listItem} key={item.id}>
@@ -111,10 +111,10 @@ export default function CustomerServiceManager({ initial }: { initial: ServiceSt
               {!filteredFaqs.length && <p className={styles.hint}>找不到符合的問題，請調整搜尋或分類。</p>}
               {pages > 1 && <div className={styles.pagination}><button type="button" disabled={currentPage === 0} onClick={() => { setFaqPage(currentPage - 1); setOpenFaq(null); }}>上一頁</button><span>{currentPage + 1} / {pages}</span><button type="button" disabled={currentPage === pages - 1} onClick={() => { setFaqPage(currentPage + 1); setOpenFaq(null); }}>下一頁</button></div>}
             </>}
-            {section === "status" && <><h2>預覽 / 發布狀態</h2><dl className={styles.overview}><dt>已儲存版本</dt><dd>{state.revision}</dd><dt>目前草稿</dt><dd>{dirty ? "有未儲存變更" : "已同步"}</dd><dt>套用方式</dt><dd>儲存成功後即套用客服公開頁面。</dd></dl><a className={styles.previewLink} href="/customer-service" target="_blank" rel="noreferrer">查看已儲存公開頁面 ↗</a><p className={styles.hint}>圖片預覽在「頁面 / Hero」。儲存失敗或版本衝突時，草稿會保留。</p></>}
+            {section === "status" && <><h2>預覽 / 發布狀態</h2><dl className={styles.overview}><dt>設定版本</dt><dd>{state.revision}</dd><dt>目前草稿</dt><dd>{dirty ? "有未儲存變更" : "已儲存"}</dd><dt>套用方式</dt><dd>儲存成功後即套用客服公開頁面。</dd></dl><a className={styles.previewLink} href="/customer-service" target="_blank" rel="noreferrer">查看已儲存公開頁面 ↗</a><p className={styles.hint}>圖片預覽在「頁面與主視覺」。儲存失敗或版本衝突時，草稿會保留。</p></>}
           </section>
         </fieldset>
-        <div className={styles.toolbar}><span>版本 {state.revision}・{dirty ? "有未儲存變更" : "已同步"}{uploading ? "・圖片上傳中" : ""}</span><button type="button" disabled={busy} onClick={() => { if (!dirty || window.confirm("重新載入會捨棄尚未儲存的客服內容，確定繼續？")) window.location.reload(); }}>重新載入</button><button type="button" className={styles.save} disabled={busy || !dirty} onClick={() => void save()}>{saving ? "儲存中…" : "儲存客服內容"}</button></div>
+        <div className={styles.toolbar}><span>版本 {state.revision}・{dirty ? "有未儲存變更" : "已儲存"}{uploading ? "・圖片上傳中" : ""}</span><button type="button" disabled={busy} onClick={() => { if (!dirty || window.confirm("重新整理會捨棄尚未儲存的客服內容，確定繼續？")) window.location.reload(); }}>重新整理</button><button type="button" className={styles.save} disabled={busy || !dirty} onClick={() => void save()}>{saving ? "儲存中…" : "儲存客服內容"}</button></div>
       </div>
     </div>
   </div>;

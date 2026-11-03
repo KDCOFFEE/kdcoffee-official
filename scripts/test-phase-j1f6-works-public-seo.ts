@@ -38,7 +38,7 @@ check("public /works uses dynamic generateMetadata from the same Works resolver"
 check("metadata publishes title description canonical and Open Graph", page.includes('socialPageMetadata({ path: "/works"') && page.includes("title: seoTitle") && page.includes("description: seoDescription"));
 check("CMS share image feeds shared Open Graph and Twitter with safe brand fallback", page.includes("const image = works.seo.shareImage") && page.includes("images: [image?.media.url,"));
 check("blank saved title/description have safe public fallback", page.includes("works.seo.title.trim() || DEFAULT_WORKS_PAGE_CMS_CONFIG.seo!.title!") && page.includes("works.seo.description.trim() || DEFAULT_WORKS_PAGE_CMS_CONFIG.seo!.description!"));
-check("Admin Works exposes dedicated SEO controls", admin.includes('["seo", "SEO"]') && admin.includes("SEO 與分享") && admin.includes("SEO 標題") && admin.includes("SEO 說明"));
+check("Admin Works exposes dedicated SEO controls", admin.includes('["seo", "搜尋與分享"]') && admin.includes("搜尋與分享") && admin.includes("搜尋結果標題") && admin.includes("搜尋結果說明"));
 check("Admin share image reuses Asset Library instead of a second media authority", admin.includes("<SocialImageField") && admin.includes("localImageMedia(image.path)"));
 check("SEO integration does not replace the accepted Hero motion runtime", page.includes("<WorksMotionRuntime") && page.includes("<WorksHeroMedia"));
 check("SEO integration leaves canonical product listing authority intact", page.includes("resolveWorksProductListing(live.menu.products)") && page.includes("resolveListAsset(product)") && page.includes("ProductVisualMedia"));

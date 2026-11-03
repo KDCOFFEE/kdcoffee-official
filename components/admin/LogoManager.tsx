@@ -37,7 +37,7 @@ export default function LogoManager() {
       body: JSON.stringify(library),
     });
     const result = await response.json();
-    setMessage(response.ok ? "Logo 設定已儲存。" : result.error || "儲存失敗");
+    setMessage(response.ok ? "設定已儲存。" : result.error || "儲存失敗");
   }
 
   async function uploadFile(file: File | undefined, asset: Asset) {
@@ -73,13 +73,13 @@ export default function LogoManager() {
   return <div className="logo-manager">
     <div className="cms-toolbar logo-toolbar">
       <div>
-        <p className="eyebrow dark">BRAND LOGO CONTROL</p>
+        <p className="eyebrow dark">品牌圖片管理</p>
         <h1>Logo 管理</h1>
-        <p>每一種 Logo 都有固定用途。直接拖曳或選擇檔案，上傳後會自動命名並套用到對應位置。</p>
+        <p>依網站用途管理品牌標誌；選擇或拖曳圖片即可更新。</p>
       </div>
       <div className="cms-toolbar-actions">
         <a href="/" target="_blank">預覽網站 ↗</a>
-        <button onClick={saveText}>儲存 ALT 與 SEO 設定</button>
+        <button onClick={saveText}>儲存圖片說明與檔名</button>
       </div>
     </div>
 
@@ -88,18 +88,18 @@ export default function LogoManager() {
     <GlobalSocialImageSettings onSaved={setLibrary} />
     <section className="logo-guide">
       <h2>網站需要幾種 Logo？</h2>
-      <p><strong>目前必要的是 2 種：</strong>Header 深色字版與 Footer 白色版。其餘方形標誌、Apple Touch Icon、社群分享圖可之後補齊。</p>
+      <p><strong>目前必要的是 2 種：</strong>頁首深色標誌與頁尾白色標誌。其餘方形標誌、Apple Touch Icon、社群分享圖可之後補齊。</p>
     </section>
 
     <div className="logo-grid">
       {logos.map((asset) => <article className="logo-card" key={asset.id}>
         <header className="logo-card-head">
-          <div><span className="asset-id">{asset.id}</span><h2>{asset.name}</h2><p>{asset.usage}</p></div>
+          <div><h2>{asset.name}</h2><p>{asset.usage}</p></div>
           <span className={`asset-status ${asset.path ? "ready" : "missing"}`}>{asset.path ? "已套用" : "尚未上傳"}</span>
         </header>
 
         <div className={`logo-preview ${asset.id === "LOGO002" ? "dark" : "light"}`}>
-          {asset.path ? <img src={asset.path} alt={asset.alt || asset.name}/> : <div><b>{asset.id}</b><span>請拖曳 Logo 到下方上傳區</span></div>}
+          {asset.path ? <img src={asset.path} alt={asset.alt || asset.name}/> : <div><b>尚未設定圖片</b><span>請拖曳 Logo 到下方上傳區</span></div>}
         </div>
 
         <div
@@ -117,20 +117,20 @@ export default function LogoManager() {
           </label>
         </div>
 
-        <dl className="logo-spec-list">
+        <details><summary>圖片規格與進階設定</summary><dl className="logo-spec-list">
           <div><dt>建議尺寸</dt><dd>{asset.recommendedSize}</dd></div>
           <div><dt>網站顯示</dt><dd>{asset.displaySize}</dd></div>
           <div><dt>檔案格式</dt><dd>{asset.format}</dd></div>
-          <div><dt>SEO 檔名</dt><dd><code>{asset.seoStem}-v01.ext</code></dd></div>
+          <div><dt>圖片檔名</dt><dd><code>{asset.seoStem}-v01.ext</code></dd></div>
           {asset.path ? <div><dt>目前檔案</dt><dd><code>{asset.path}</code></dd></div> : null}
         </dl>
 
-        <label className="logo-field">圖片 ALT
+        <label className="logo-field">圖片描述
           <input value={asset.alt} onChange={(event) => patch(asset.id, { alt: event.target.value })}/>
         </label>
-        <label className="logo-field">SEO 檔名主體
+        <label className="logo-field">圖片檔名
           <input value={asset.seoStem} onChange={(event) => patch(asset.id, { seoStem: event.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "-") })}/>
-        </label>
+        </label></details>
       </article>)}
     </div>
   </div>;

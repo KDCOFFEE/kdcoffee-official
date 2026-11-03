@@ -159,9 +159,9 @@ try {
     const withoutImage = { ...store, seo: { ...store.seo, image: null } };
     await saveGiftCmsDocument({ scope: "storeLanding", revision: 1, document: withoutImage });
     assert.deepEqual((await readGiftCmsState()).storeLanding, withoutImage);
-    const modern = createElement(SocialImageField, { value: value("STORE"), assets, onChange: () => {}, help: "分享商店首頁至 LINE、Facebook、Messenger 等平台時使用。建議尺寸 1200 × 630 px。" });
+    const modern = createElement(SocialImageField, { value: value("STORE"), assets, onChange: () => {}, help: "未設定時，會使用商店主視覺；若無主視覺，再使用全站預設分享圖片。" });
     const html = renderToStaticMarkup(createElement(StoreLandingFields, { document: store, selected: 0, tab: "seo", onChange: () => {}, imageFields: () => { throw Error("Legacy SEO control used"); }, socialImageField: modern }));
-    for (const label of ["社群分享縮圖（Open Graph）", "上傳替換圖片", "更換素材庫圖片", "移除分享圖片", "1200 × 630"]) assert.ok(html.includes(label));
+    for (const label of ["社群分享圖片", "更換圖片", "從素材庫選擇", "移除設定", "1200 × 630"]) assert.ok(html.includes(label));
   });
   await test("L Monthly Menu poster/image choice unchanged", async () => {
     const poster = "https://res.cloudinary.com/test/video/upload/kd-coffee/videos/test.jpg";

@@ -171,8 +171,8 @@ export default function HomepageContentStudio() {
   return <SmartLinkEditingProvider pages={data.publishedPages}><HomepagePresentationProvider presentation={h.presentation} device={device} content={{ homepage: h, products: data.products, pages: data.publishedPages, draft: dirty }} onEdit={editPresentation} onMobileEdit={editMobile} onMobileToggle={toggleMobile} onValidityChange={setPresentationInvalid}>
     <div className={styles.studio} style={{ "--homepage-toolbar-height": `${toolbarHeight}px` } as React.CSSProperties}>
       <header className={styles.toolbar} ref={toolbar}>
-        <div><small>HOMEPAGE CONTENT STUDIO</small><h1>首頁內容工作室</h1><span>{currentArea.label}</span></div>
-        <div className={styles.actions}><div role="group" aria-label="編輯與預覽裝置">{(["desktop", "mobile"] as const).map(mode => <button key={mode} type="button" aria-pressed={device === mode} disabled={presentationInvalid} onClick={() => setDevice(mode)}>{mode === "desktop" ? "Desktop 桌機" : "Mobile 手機"}</button>)}</div><a href="/" target="_blank" rel="noopener noreferrer">開啟正式首頁 ↗</a><button className={styles.save} type="button" onClick={() => void save()} disabled={saving || !dirty || presentationInvalid}>{saving ? "儲存中…" : "儲存全部"}</button></div>
+        <div><small>首頁內容管理</small><h1>首頁內容工作室</h1><span>{currentArea.label}</span></div>
+        <div className={styles.actions}><div role="group" aria-label="編輯與預覽裝置">{(["desktop", "mobile"] as const).map(mode => <button key={mode} type="button" aria-pressed={device === mode} disabled={presentationInvalid} onClick={() => setDevice(mode)}>{mode === "desktop" ? "桌機版" : "手機版"}</button>)}</div><a href="/" target="_blank" rel="noopener noreferrer">開啟正式首頁 ↗</a><button className={styles.save} type="button" onClick={() => void save()} disabled={saving || !dirty || presentationInvalid}>{saving ? "儲存中…" : "儲存全部"}</button></div>
         <p className={styles.status} role="status" aria-live="polite">{message.startsWith("儲存失敗") ? message : saving ? "儲存中…" : dirty ? "● 尚有未儲存變更" : "✓ 已儲存"}{message && !message.startsWith("儲存失敗") && !saving ? ` · ${message}` : ""}</p>
       </header>
       <div className={styles.workspace}>
@@ -186,11 +186,11 @@ export default function HomepageContentStudio() {
           {!ready ? <p role="status">正在載入真實首頁預覽…</p> : null}
           {previewError ? <p role="alert">{previewError} <button onClick={() => { setReady(false); frame.current?.contentWindow?.location.reload(); }}>重新載入預覽</button></p> : null}
           <div className={styles.previewViewport} ref={previewHost}><div className={styles.previewScroll} ref={previewBox}>{previewWidth > 0 ? <iframe ref={frame} title="首頁未儲存即時預覽" src="/admin/homepage/preview" className={device === "mobile" ? styles.mobileFrame : styles.desktopFrame} style={{ zoom: Math.min(1, previewWidth / (device === "mobile" ? 390 : 1280)), height: `calc((100dvh - ${toolbarHeight + 165}px) / ${Math.min(1, previewWidth / (device === "mobile" ? 390 : 1280))})` }} /> : null}</div></div>
-          <p className={styles.note}>採用公開首頁元件。隱藏、未開始或缺少內容的區塊依正式規則隱藏；SEO 資料請在左側確認。</p>
+          <p className={styles.note}>採用公開首頁元件。隱藏、未開始或缺少內容的區塊依正式規則隱藏；搜尋設定請在左側確認。</p>
         </aside>
       </div>
-      {seoPicker ? <ImageLibraryPicker assets={data.assets} title="選擇首頁 SEO 分享圖片" onClose={() => setSeoPicker(false)} onChoose={asset => { setPath(["seo", "shareImage"], { media: localImageMedia(asset.path), alt: asset.alt || asset.name }); setSeoPicker(false); }} /> : null}
-      {heroPicker ? <HeroMediaLibraryPicker assets={data.assets} title={heroPicker === "desktop" ? "選擇桌機 Hero 素材" : "選擇手機 Hero 素材"} onClose={() => setHeroPicker(null)} onChoose={media => { setPath(["hero", heroPicker === "desktop" ? "desktopMedia" : "mobileMedia"], media); setHeroPicker(null); }} /> : null}
+      {seoPicker ? <ImageLibraryPicker assets={data.assets} title="選擇首頁分享圖片" onClose={() => setSeoPicker(false)} onChoose={asset => { setPath(["seo", "shareImage"], { media: localImageMedia(asset.path), alt: asset.alt || asset.name }); setSeoPicker(false); }} /> : null}
+      {heroPicker ? <HeroMediaLibraryPicker assets={data.assets} title={heroPicker === "desktop" ? "選擇桌機版主視覺素材" : "選擇手機版主視覺素材"} onClose={() => setHeroPicker(null)} onChoose={media => { setPath(["hero", heroPicker === "desktop" ? "desktopMedia" : "mobileMedia"], media); setHeroPicker(null); }} /> : null}
     </div>
   </HomepagePresentationProvider></SmartLinkEditingProvider>;
 }

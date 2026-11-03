@@ -19,19 +19,19 @@ export default function GallerySeoControls({ value, version, assets, onSaved }: 
     try {
       const seo = normalizeGallerySeo(draft);
       const response = await fetch('/api/admin/pages', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ scope: 'gallerySeo', version, seo }) });
-      const result = await response.json(); if (!response.ok) throw new Error(result.error || '儲存 SEO 設定失敗。');
+      const result = await response.json(); if (!response.ok) throw new Error(result.error || '設定尚未儲存，請稍後再試。');
       await onSaved();
     } catch (error) { setMessage(error instanceof Error ? error.message : '儲存失敗。'); }
     finally { setSaving(false); }
   }
   const fields = [
-    ['title', 'SEO 標題', '搜尋引擎可能顯示的頁面標題。建議約 25–60 字元；留空使用預設。', GALLERY_SEO_TITLE],
-    ['description', 'SEO 描述', 'Google 等搜尋結果可能顯示的頁面摘要。建議約 70–160 個中文字元；留空使用預設。', GALLERY_SEO_DESCRIPTION],
-    ['ogTitle', '社群分享標題', '選填；留空沿用 SEO 標題。', effective.title],
-    ['ogDescription', '社群分享描述', '選填；留空沿用 SEO 描述。', effective.description],
+    ['title', '搜尋結果標題', '搜尋引擎可能顯示的頁面標題。建議約 25–60 字元；留空使用預設。', GALLERY_SEO_TITLE],
+    ['description', '搜尋結果說明', 'Google 等搜尋結果可能顯示的頁面摘要。建議約 70–160 個中文字元；留空使用預設。', GALLERY_SEO_DESCRIPTION],
+    ['ogTitle', '社群分享標題', '選填；留空沿用搜尋結果標題。', effective.title],
+    ['ogDescription', '社群分享描述', '選填；留空沿用搜尋結果說明。', effective.description],
   ] as const;
-  return <section className={css.section} aria-label="Gallery SEO 設定">
-    <header><h2>Gallery SEO 設定</h2><p>調整搜尋摘要與 LINE、Facebook 等平台分享時可能使用的標題、描述與圖片。預覽不會自動儲存。</p></header>
+  return <section className={css.section} aria-label="藝廊搜尋與分享設定">
+    <header><h2>藝廊搜尋與分享設定</h2><p>調整搜尋摘要與 LINE、Facebook 等平台分享時可能使用的標題、描述與圖片。預覽不會自動儲存。</p></header>
     <div className={css.grid}>
       <div className={css.fields}>{fields.map(([key, label, help, fallback]) => <label key={key}>
         <span>{label}{key.startsWith('og') ? '（選填）' : ''}</span><small>{help}</small>
@@ -39,7 +39,7 @@ export default function GallerySeoControls({ value, version, assets, onSaved }: 
           : <textarea aria-label={label} rows={3} value={draft[key] ?? (key === 'description' ? GALLERY_SEO_DESCRIPTION : '')} placeholder={fallback} onChange={event => setDraft(current => ({ ...current, [key]: event.target.value }))}/>}
         <small>{Array.from(draft[key] ?? (key === 'title' ? GALLERY_SEO_TITLE : key === 'description' ? GALLERY_SEO_DESCRIPTION : '')).length} 字元</small>
       </label>)}
-      <SocialImageField value={draft.ogImageAssetId && availableAssets.find(asset=>asset.id===draft.ogImageAssetId) ? {path:availableAssets.find(asset=>asset.id===draft.ogImageAssetId)!.path,alt:availableAssets.find(asset=>asset.id===draft.ogImageAssetId)!.alt} : undefined} assets={availableAssets} disabled={saving||uploading} onBusy={setUploading} help="未設定時，將使用全站預設分享圖，最後使用安全 Logo。" onUploaded={asset=>setAvailableAssets(current=>[asset,...current])} onChange={image=>setDraft(current=>({...current,ogImageAssetId:image?.assetId}))}/>
+      <SocialImageField label="藝廊分享圖片" value={draft.ogImageAssetId && availableAssets.find(asset=>asset.id===draft.ogImageAssetId) ? {path:availableAssets.find(asset=>asset.id===draft.ogImageAssetId)!.path,alt:availableAssets.find(asset=>asset.id===draft.ogImageAssetId)!.alt} : undefined} assets={availableAssets} disabled={saving||uploading} onBusy={setUploading} help="未設定時，會使用藝廊背景圖片；若無可用圖片，再使用全站預設分享圖片。" onUploaded={asset=>setAvailableAssets(current=>[asset,...current])} onChange={image=>setDraft(current=>({...current,ogImageAssetId:image?.assetId}))}/>
       </div>
       <aside className={css.previews}>
         <section className={css.search} aria-label="搜尋預覽"><h3>搜尋預覽</h3><small>{url}</small><p className={css.searchTitle}>{effective.title}</p><p>{effective.description}</p></section>
@@ -47,7 +47,7 @@ export default function GallerySeoControls({ value, version, assets, onSaved }: 
         <p className={css.notice}>預覽僅供參考，搜尋引擎與分享平台可能自行調整呈現。公開網址由網站固定管理。</p>
       </aside>
     </div>
-    <footer><button type="button" onClick={() => void save()} disabled={saving||uploading}>{saving ? '儲存中…' : '儲存 Gallery SEO'}</button><small>只儲存本頁 SEO，不影響展間背景、作品或其他頁面。</small>{message ? <p role="alert">{message}</p> : null}</footer>
+    <footer><button type="button" onClick={() => void save()} disabled={saving||uploading}>{saving ? '儲存中…' : '儲存設定'}</button><small>此設定只用於藝廊的搜尋結果與社群分享。</small>{message ? <p role="alert">{message}</p> : null}</footer>
 
   </section>;
 }

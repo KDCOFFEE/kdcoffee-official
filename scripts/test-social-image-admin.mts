@@ -159,7 +159,7 @@ try {
   });
   await test("Admin field renders preview, recommendation, upload/select/remove with no URL input", () => {
     const html = renderToStaticMarkup(createElement(SocialImageField, { value: image, assets: [uploaded], onChange: () => {} }));
-    for (const text of ["社群分享縮圖（Open Graph）", "1200 × 630", "上傳替換圖片", "更換素材庫圖片", "移除分享圖片"]) assert.ok(html.includes(text));
+    for (const text of ["社群分享圖片", "1200 × 630", "更換圖片", "從素材庫選擇", "移除設定"]) assert.ok(html.includes(text));
     assert.ok(html.includes('type="file"')); assert.ok(!html.includes('type="url"')); assert.ok(html.includes(image.path));
   });
   console.log(`SEO.1B: ${count} PASS; all writes isolated in TEMP.`);
