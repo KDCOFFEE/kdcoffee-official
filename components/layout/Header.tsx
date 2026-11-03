@@ -9,8 +9,9 @@ import { getLiveWebsiteData } from "@/data/websiteData";
 import { publishedPageRegistry } from "@/lib/pageBuilder";
 import { readPageStore } from "@/lib/pageBuilderStore";
 import { resolveHomepageNavigation } from "@/lib/homepageCms";
+import { resolveWorksProductListing } from "@/lib/productListing";
 
-export default async function Header() {
+export default async function Header({ publicProductsOnly = false }: { publicProductsOnly?: boolean } = {}) {
   const [member, logo, homepage, website, pageStore] = await Promise.all([
     getCurrentMember(),
     getAsset("LOGO001"),
@@ -21,7 +22,9 @@ export default async function Header() {
   const navigation = resolveHomepageNavigation(homepage?.navigation)
     .filter((item) => item.enabled !== false && item.label.trim())
     .map((item) => ({ id: item.id, label: item.label, href: item.href }));
-  const products = website?.menu?.products || [];
+  const products = publicProductsOnly
+    ? resolveWorksProductListing(website?.menu?.products || []).map(({ slug, name, active, status }) => ({ slug, name, active, status }))
+    : website?.menu?.products || [];
   const pages = pageStore ? publishedPageRegistry(pageStore) : [];
   const memberName = member?.pickupName?.trim() || member?.displayName?.trim() || "KD Coffee 會員";
   return <header className="v2-header">

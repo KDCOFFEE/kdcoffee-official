@@ -1,0 +1,8 @@
+.section { padding:22px; margin:22px 0; border:1px solid #ddd2c6; border-radius:12px; background:#fff; }
+.section h3 { margin:0 0 8px; font-size:19px; }
+.section > p { font-size:13px; color:#75675a; line-height:1.8; margin:0 0 20px; }
+.field { display:grid; gap:7px; margin-top:18px; }
+.field > span { color:#302720; font-size:14px; font-weight:600; }
+.field small { color:#75675a; font-size:12px; line-height:1.7; }
+.field textarea { width:100%; padding:11px 12px; resize:vertical; border:1px solid #bfb09e; background:#fcfaf6; color:#302720; font:inherit; font-size:14px; line-height:1.8; }
+.field textarea:focus-visible { outline:2px solid #8b714d; outline-offset:2px; }

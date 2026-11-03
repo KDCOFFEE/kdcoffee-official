@@ -77,8 +77,9 @@ export const DEFAULT_HOMEPAGE_NAVIGATION: HomepageNavigationItem[] = [
   { id: "NAV-FIRST", label: "第一次怎麼選", href: "/#home003", enabled: true, order: 0 },
   { id: "NAV-MONTHLY", label: "本月推薦", href: "/#home004", enabled: true, order: 1 },
   { id: "NAV-WORKS", label: "全部咖啡", href: "/works", enabled: true, order: 2 },
-  { id: "NAV-WHY-KD", label: "為什麼是 KD", href: "/#home002", enabled: true, order: 3 },
-  { id: "NAV-GIFT", label: "耳掛與送禮", href: "/#home003", enabled: true, order: 4 },
+  { id: "NAV-GALLERY", label: "作品詮釋", href: "/gallery", enabled: true, order: 3 },
+  { id: "NAV-WHY-KD", label: "為什麼是 KD", href: "/#home002", enabled: true, order: 4 },
+  { id: "NAV-GIFT", label: "耳掛與送禮", href: "/#home003", enabled: true, order: 5 },
 ];
 
 export function resolveHomepageNavigation(value: unknown): HomepageNavigationItem[] {
@@ -94,14 +95,23 @@ export function resolveHomepageNavigation(value: unknown): HomepageNavigationIte
     }))
     .sort((a, b) => Number(a.order ?? 0) - Number(b.order ?? 0));
   // Upgrade only the original Gift shortcut. Custom CMS targets stay untouched.
-  const navigation = items.map(item => item.id === "NAV-GIFT" && item.href === "/#home003"
+  const navigation: HomepageNavigationItem[] = items.map(item => item.id === "NAV-GIFT" && item.href === "/#home003"
     ? { ...item, label: "送禮", href: "/gifts" as CmsLinkValue } : item);
   if (!navigation.some(item => item.href === "/gifts" ||
     (isRecord(item.href) && item.href.type === "internal" && item.href.target === "gifts"))) {
     const works = navigation.find(item => item.href === "/works");
     navigation.push({ id: "NAV-GIFTS", label: "送禮", href: "/gifts", enabled: true, order: (works?.order ?? navigation.length) + 0.5 });
   }
-  return navigation.sort((a, b) => Number(a.order ?? 0) - Number(b.order ?? 0));
+  navigation.sort((a, b) => Number(a.order ?? 0) - Number(b.order ?? 0));
+  // Older saved navigation gains the public Gallery entry without rewriting CMS data.
+  if (!navigation.some(item => item.href === "/gallery" ||
+    (isRecord(item.href) && item.href.type === "custom" && item.href.url === "/gallery"))) {
+    const worksIndex = navigation.findIndex(item => item.id === "NAV-WORKS" || item.href === "/works");
+    const whyIndex = navigation.findIndex(item => item.id === "NAV-WHY-KD");
+    const index = worksIndex >= 0 ? worksIndex + 1 : whyIndex >= 0 ? whyIndex : navigation.length;
+    navigation.splice(index, 0, { id: "NAV-GALLERY", label: "作品詮釋", href: "/gallery", enabled: true });
+  }
+  return navigation;
 }
 
 

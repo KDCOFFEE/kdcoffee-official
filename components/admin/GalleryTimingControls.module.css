@@ -1,0 +1,16 @@
+.section { padding:20px 0; border-top:1px solid #d9cbbd; margin:24px 0; min-width:0; }
+.section h3 { font-size:18px; margin:0 0 8px; }
+.section > p { font-size:13px; line-height:1.8; color:#75675a; margin:8px 0 16px; }
+.actions { display:flex; flex-wrap:wrap; gap:10px; margin-top:16px; }
+.actions button { min-height:44px; padding:9px 14px; border:1px solid #9b8875; background:#f8f4ee; color:#302720; cursor:pointer; }
+.actions button[aria-pressed="true"] { border-color:#725832; background:#eee3d1; }
+.preview { background:#15110e; padding:12px; margin-top:18px; color:#eee6da; max-width:100%; }
+.preview small { display:block; line-height:1.8; padding:8px 0; }
+
+.motionGrid { display:grid; gap:10px; }
+.motionRow { display:grid; grid-template-columns:110px 125px minmax(0,1fr); align-items:center; gap:14px; font-size:13px; }
+.motionRow select { min-width:0; min-height:44px; padding:7px; border:1px solid #cabbab; background:#fffdf8; }
+.timePair { display:grid; grid-template-columns:minmax(0,1fr) 92px; align-items:center; gap:12px; min-height:44px; }
+.timePair input[type="range"] { width:100%; }
+.timePair input[type="number"] { width:64px; padding:7px; border:1px solid #cabbab; text-align:right; margin-right:6px; }
+@media(max-width:750px) { .motionRow { grid-template-columns:1fr 125px; gap:6px 12px; } .timePair { grid-column:1/-1; } }

@@ -1,3 +1,6 @@
+import type { GalleryPageSettings } from './galleryAtmosphere.ts';
+// @ts-expect-error -- native Node TypeScript tests require explicit extensions.
+import { validateGalleryPageSettings } from './galleryAtmosphere.ts';
 import type { MediaAsset } from "./media.ts";
 // @ts-expect-error -- see above.
 import { isMediaAsset } from "./media.ts";
@@ -80,6 +83,7 @@ export type PageStore = {
   pages: PageRecord[];
   systemPages?: Record<string, unknown> & {
     works?: WorksPageCmsConfig;
+    gallery?: GalleryPageSettings;
   };
 };
 
@@ -182,6 +186,7 @@ export function validatePageStore(store: PageStore) {
   if (store.visualStyle !== undefined) validateWebsiteVisualStyle(store.visualStyle);
   if (store.systemPages !== undefined) {
     if (!store.systemPages || typeof store.systemPages !== "object" || Array.isArray(store.systemPages)) throw new Error("系統頁面設定格式不正確。");
+    if (store.systemPages.gallery !== undefined) validateGalleryPageSettings(store.systemPages.gallery);
     if (store.systemPages.works !== undefined) validateWorksPageCms(store.systemPages.works);
   }
   assertUniqueIds(store.pages, "頁面");

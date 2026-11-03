@@ -12,6 +12,8 @@ import type { ProductAssetUpdate } from "@/lib/productAssetUpdates";
 
 const VIDEO_ASSET_TYPES = new Set([
   "hero",
+  "galleryDesktopAnimation",
+  "galleryMobileAnimation",
   "productPhoto",
   "mainVisual",
   "artworkCover",
@@ -76,7 +78,7 @@ async function verifyProductAsset(
 
   const publicId = String(value.media.publicId || "").trim();
   const publicIdValid =
-    assetType === "roastedBeanPhoto"
+    (assetType === "roastedBeanPhoto" || assetType === "galleryDesktopAnimation" || assetType === "galleryMobileAnimation")
       ? publicId.startsWith(`${CLOUDINARY_VIDEO_FOLDER}/`)
       : PRODUCT_PUBLIC_ID.test(publicId);
   if (!publicIdValid) {

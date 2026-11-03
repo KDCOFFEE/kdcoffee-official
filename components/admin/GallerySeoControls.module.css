@@ -1,0 +1,31 @@
+.section { margin-top:24px; padding:24px; border:1px solid #d8cbbb; border-radius:12px; background:#fffdf9; color:#34271e; }
+.section header { margin-bottom:22px; }
+.section h2 { margin:0 0 8px; font-size:22px; }
+.section p { font-size:13px; line-height:1.8; color:#75675a; }
+.grid { display:grid; grid-template-columns:minmax(0,1.15fr) minmax(0,1fr); gap:28px; }
+.grid > * { min-width:0; }
+.fields { display:grid; gap:16px; }
+.fields label { display:grid; gap:6px; font-size:14px; }
+.fields label > span,.imageField strong { font-weight:600; }
+.fields small,.section footer small { font-size:12px; color:#75675a; line-height:1.6; }
+.fields input,.fields textarea { box-sizing:border-box; width:100%; min-width:0; border:1px solid #cabbab; border-radius:4px; background:#fff; padding:10px 12px; font:inherit; line-height:1.6; color:#34271e; }
+.fields textarea { resize:vertical; }
+.fields input:focus-visible,.fields textarea:focus-visible,.section button:focus-visible { outline:2px solid #947342; outline-offset:2px; }
+.imageField p { margin:6px 0 10px; }
+.imageField button { margin:0 8px 8px 0; }
+.previews { display:flex; flex-direction:column; gap:20px; }
+.previews h3 { margin:0 0 14px; font-size:14px; font-weight:600; }
+.search { padding:20px; border:1px solid #ded5ca; border-radius:8px; background:#fff; overflow-wrap:anywhere; }
+.search small { font-size:11px; color:#4a6352; }
+.search .searchTitle { margin:8px 0; color:#354a8a; font-size:18px; line-height:1.5; }
+.social { padding:18px; border:1px solid #ded5ca; border-radius:8px; background:#f7f3ed; overflow:hidden; overflow-wrap:anywhere; }
+.social > img { display:block; width:100%; height:180px; object-fit:cover; background:#e8e0d5; }
+.social > div { padding-top:12px; }
+.social small { font-size:11px; color:#75675a; }
+.social strong { display:block; margin:5px 0; font-size:16px; line-height:1.6; }
+.previews .notice { font-size:12px; }
+.section footer { display:flex; align-items:center; flex-wrap:wrap; gap:14px; margin-top:24px; }
+.section footer button { min-height:44px; border:1px solid #5a432b; background:#3f2e21; color:#fff6e9; padding:11px 18px; font:inherit; font-size:13px; cursor:pointer; }
+.section footer button:disabled { opacity:.6; cursor:wait; }
+.section footer [role="alert"] { color:#a12e27; flex-basis:100%; }
+@media(max-width:850px) { .grid { grid-template-columns:minmax(0,1fr); } .section { padding:18px; } }

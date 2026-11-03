@@ -1,0 +1,31 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import { normalizeGalleryRevealTiming, resolveGalleryRevealTiming, DEFAULT_GALLERY_REVEAL_TIMING, type GalleryRevealTiming } from '../lib/galleryRevealTiming';
+import { createGalleryRevealClock, galleryParts, galleryRevealSchedule } from '../lib/galleryReveal';
+import { buildProductChanges, applyProductChanges } from '../lib/productCommerceUpdates';
+import { mergeProductAssetUpdates } from '../lib/productAssetUpdates';
+import { resolveGalleryWorks } from '../lib/galleryWorks';
+let checks=0;function test(name:string,fn:()=>void){fn();checks++;console.log('PASS '+name);}
+const custom={titleHookAt:3,interpretationAt:4.3,coffeeBridgeAt:5,ctaAt:5.6};
+test('old records remain optional and use 1E defaults',()=>{assert.equal(normalizeGalleryRevealTiming(undefined),undefined);assert.deepEqual(resolveGalleryRevealTiming(undefined),DEFAULT_GALLERY_REVEAL_TIMING);});
+for(const value of [-1,NaN,Infinity,'3',null,100])test('reject invalid timing '+String(value),()=>assert.throws(()=>normalizeGalleryRevealTiming({ctaAt:value})));
+test('reject malformed objects and strip unknown fields',()=>{for(const value of ['3',[],2])assert.throws(()=>normalizeGalleryRevealTiming(value));assert.deepEqual(normalizeGalleryRevealTiming({ctaAt:0,unrelated:5}),{ctaAt:0});});
+test('finite tenths normalized and partial defaults retained',()=>{assert.deepEqual(normalizeGalleryRevealTiming({ctaAt:5.64}),{ctaAt:5.6});assert.equal(resolveGalleryRevealTiming({ctaAt:6}).titleHookAt,3.5);});
+function fixture(timing?:GalleryRevealTiming){let now=0,id=0,parts=galleryParts(false);const timers=new Map<number,{at:number;fn:()=>void}>();const clock=createGalleryRevealClock(()=>{},{now:()=>now,set:(fn,delay)=>{const key=++id;timers.set(key,{at:now+delay,fn});return key as unknown as ReturnType<typeof setTimeout>;},clear:key=>{timers.delete(key as unknown as number);}},timing,p=>{parts=p;});return{clock,get parts(){return parts;},advance(ms:number){const end=now+ms;for(;;){const next=[...timers.entries()].sort((a,b)=>a[1].at-b[1].at)[0];if(!next||next[1].at>end)break;now=next[1].at;timers.delete(next[0]);next[1].fn();}now=end;}};}
+const f=fixture(custom);f.clock.update({mode:'playing',duration:8});
+for(const[key,at]of Object.entries(custom))test('custom '+key+' reveals independently',()=>{const part={titleHookAt:'titleHook',interpretationAt:'interpretation',coffeeBridgeAt:'coffeeBridge',ctaAt:'cta'}[key] as keyof typeof f.parts;const x=fixture(custom);x.clock.update({mode:'playing',duration:8});x.advance(at*1000-1);assert.equal(x.parts[part],false);x.advance(1);assert.equal(x.parts[part],true);});
+test('switching to another work uses its own fresh timing',()=>{f.advance(6000);f.clock.dispose();const next=fixture({titleHookAt:1});next.clock.update({mode:'playing',duration:8});assert.equal(next.parts.titleHook,false);next.advance(1000);assert.equal(next.parts.titleHook,true);});
+test('custom short-video schedule scales before clip end',()=>{const s=galleryRevealSchedule(2,custom);assert.ok(Math.max(...Object.values(s))<=1400);assert.ok(s.titleHook<s.cta);});
+test('default short-video adaptation stays identical to 1E',()=>{assert.deepEqual(galleryRevealSchedule(2),{sequence:200,titleHook:700,interpretation:1200,coffeeBridge:1200,cta:1200});});
+for(const mode of ['static image','reduced-motion','save-data','autoplay failure'])test(mode+' uses the authoritative H clock rule',()=>{const x=fixture(custom);x.clock.update({mode:mode==='reduced-motion'?'reduced':'static'});if(mode==='reduced-motion')assert.deepEqual(x.parts,galleryParts(true));else{assert.deepEqual(x.parts,galleryParts(false));x.advance(5600);assert.deepEqual(x.parts,galleryParts(true));}});
+test('early reveal also supports Back-restored visible state',()=>{const x=fixture(custom);x.clock.reveal();x.clock.update({mode:'playing',duration:8});assert.deepEqual(x.parts,galleryParts(true));});
+const site=JSON.parse(await fs.readFile('public/data/website-data.json','utf8')),base={...site.menu.products[0],id:'TIMING-QA',skus:[],galleryEditorial:{hook:'安靜地，看見作品。'}};
+const changed={...base,galleryRevealTiming:custom};
+test('metadata patch contains only timing; no SKU operations',()=>{const changes=buildProductChanges([base],[changed]);assert.ok(changes[0].operation==='updateProduct');assert.deepEqual(changes[0].fields,[{field:'galleryRevealTiming',nextValue:custom}]);assert.deepEqual(changes[0].skuOperations,[]);});
+test('server normalization saves/reloads timings without commerce changes',()=>{const saved=applyProductChanges([base],buildProductChanges([base],[changed]))[0];assert.deepEqual(JSON.parse(JSON.stringify(saved)).galleryRevealTiming,custom);for(const key of ['assets','galleryEditorial','skus','stock','price','purchase','status','active','purchasable'])assert.deepEqual(saved[key],base[key]);});
+test('server rejects invalid timing even without client validation',()=>assert.throws(()=>applyProductChanges([base],[{operation:'updateProduct',id:base.id,fields:[{field:'galleryRevealTiming',nextValue:{ctaAt:Infinity}}],skuOperations:[]}])));
+test('unrelated product save preserves timing/editorial/media',()=>{const saved=applyProductChanges([changed],buildProductChanges([changed],[{...changed,tag:'推薦'}]))[0];for(const key of ['galleryRevealTiming','galleryEditorial','assets'])assert.deepEqual(saved[key],changed[key]);});
+test('unrelated asset save preserves timing',()=>assert.deepEqual(mergeProductAssetUpdates([changed],[{id:base.id,assets:{hero:{path:'/images/test.webp'}}}])[0].galleryRevealTiming,custom));
+test('old record save does not invent timing',()=>assert.equal(applyProductChanges([base],buildProductChanges([base],[{...base,tag:'推薦'}]))[0].galleryRevealTiming,undefined));
+test('public adapter reads each work timing without rewriting source',()=>{const before=JSON.stringify(changed),work=resolveGalleryWorks([changed])[0];assert.deepEqual(work.revealTiming,custom);assert.equal(JSON.stringify(changed),before);});
+console.log('GALLERY TIMING '+checks+' PASS; virtual time/in-memory persistence only.');

@@ -1,3 +1,5 @@
+import { normalizeGalleryRevealAnimation, GalleryAnimationValidationError } from '@/lib/galleryRevealAnimation';
+import { normalizeGalleryRevealTiming, GalleryTimingValidationError } from '@/lib/galleryRevealTiming';
 import {
   DEFAULT_OPTIONAL_SECTION_LAYOUT,
   PRODUCT_SECTION_REGISTRY,
@@ -19,7 +21,12 @@ import {
   ProductCustomSectionsValidationError,
 } from "@/lib/productCustomSectionsValidation";
 
+import { normalizeGalleryEditorial, GalleryEditorialValidationError } from '@/lib/galleryEditorial';
+
 export const PRODUCT_METADATA_FIELDS = [
+  'galleryEditorial',
+  'galleryRevealTiming',
+  'galleryRevealAnimation',
   "name",
   "nameEn",
   "artist",
@@ -257,6 +264,24 @@ function normalizeProductPageAnimations(value: unknown) {
 }
 
 function normalizeMetadataField(field: ProductMetadataField, value: unknown) {
+  if (field === 'galleryRevealAnimation') {
+    try { return normalizeGalleryRevealAnimation(value); } catch (error) {
+      if (error instanceof GalleryAnimationValidationError) throw new ProductCommerceUpdateError(error.message);
+      throw error;
+    }
+  }
+  if (field === 'galleryRevealTiming') {
+    try { return normalizeGalleryRevealTiming(value); } catch (error) {
+      if (error instanceof GalleryTimingValidationError) throw new ProductCommerceUpdateError(error.message);
+      throw error;
+    }
+  }
+  if (field === 'galleryEditorial') {
+    try { return normalizeGalleryEditorial(value); } catch (error) {
+      if (error instanceof GalleryEditorialValidationError) throw new ProductCommerceUpdateError(error.message);
+      throw error;
+    }
+  }
   if (field === "flavors") {
     if (!Array.isArray(value) || value.some((item) => typeof item !== "string")) {
       throw new ProductCommerceUpdateError("商品風味格式不正確。");

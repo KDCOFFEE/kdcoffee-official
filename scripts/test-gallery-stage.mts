@@ -1,0 +1,8 @@
+import assert from 'node:assert/strict';import fs from 'node:fs/promises';
+const css=await fs.readFile('components/gallery/GalleryExperience.module.css','utf8');let count=0;
+function test(name:string,fn:()=>void){fn();count++;console.log('PASS '+name);}
+test('approved mobile/preview base surface remains intact',()=>{const surface=css.match(/^\.media \{([^}]+)\}/m)?.[1]||'';for(const value of ['background:#211a14','height:64vh','width:100%','border:1px solid #ae8e5866'])assert.ok(surface.includes(value));assert.ok(!surface.includes('filter:'));assert.ok(!surface.includes('gradient'));});
+test('public desktop has no player surface or artificial fixed height',()=>{assert.ok(css.includes('.exhibition .media { height:auto; min-height:0; max-height:none; background:transparent; border:0; }'));assert.ok(css.includes('.exhibition .media > img { position:relative!important; inset:auto!important; width:auto!important; height:auto!important;'));});
+test('native video and image keep fit and no additional tint layer',()=>{assert.ok(css.includes('.media > img,.media > video { object-fit:contain; }'));assert.ok(css.includes('.media > img,.media > video { object-fit:cover; object-position:center; }'));assert.ok(!/\.media::(?:before|after)/.test(css));});
+test('intrinsic desktop and approved mobile dimensions retained',()=>{assert.ok(css.includes('max-height:min(78vh,920px)'));assert.ok(!css.includes('--stage-height'));assert.ok(css.includes('height:57vh; min-height:360px; max-height:640px'));assert.ok(css.includes('flex:0 0 78vw'));});
+console.log('GALLERY STAGE '+count+' PASS; surface only, no media processing.');

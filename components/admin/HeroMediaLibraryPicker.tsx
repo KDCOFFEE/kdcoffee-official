@@ -31,12 +31,14 @@ export default function HeroMediaLibraryPicker({
   assets,
   title,
   usage = "hero",
+  videoOnly = false,
   onChoose,
   onClose,
 }: {
   assets: AssetRecord[];
   title: string;
   usage?: "hero" | "product";
+  videoOnly?: boolean;
   onChoose: (media: MediaAsset) => void;
   onClose: () => void;
 }) {
@@ -82,8 +84,8 @@ export default function HeroMediaLibraryPicker({
       previewUrl: video.posterUrl,
       publicId: video.publicId,
     }));
-    return [...imageItems, ...videoItems];
-  }, [assets, videos]);
+    return videoOnly ? videoItems : [...imageItems, ...videoItems];
+  }, [assets, videos, videoOnly]);
 
   const filtered = useMemo(() => {
     const keyword = query.trim().toLocaleLowerCase("zh-TW");
@@ -116,7 +118,7 @@ export default function HeroMediaLibraryPicker({
 
   return <div className="page-asset-picker" role="dialog" aria-modal="true" aria-label={title}>
     <header>
-      <div><h3>{title}</h3><p>可直接選擇既有圖片或已上傳至 Cloudinary 的影片，不會重新上傳檔案。</p></div>
+      <div><h3>{title}</h3><p>{videoOnly ? "選擇已上傳的作品影片，沿用既有伺服器驗證，不會重新上傳。" : "可直接選擇既有圖片或已上傳至 Cloudinary 的影片，不會重新上傳檔案。"}</p></div>
       <button type="button" onClick={onClose} aria-label="關閉素材庫">×</button>
     </header>
     <label>搜尋素材<input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder="名稱、圖片說明或影片格式" /></label>

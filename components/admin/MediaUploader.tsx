@@ -19,6 +19,8 @@ type MediaUploaderProps = {
   showPreview?: boolean;
   /** Optional image-only presentation; existing Homepage/media callers retain video controls. */
   imageOnly?: boolean;
+  /** Restricts this instance to the existing verified video workflow. */
+  videoOnly?: boolean;
   imageActionLabel?: string;
   videoActionLabel?: string;
   allowCloudinaryImage?: boolean;
@@ -163,6 +165,7 @@ export default function MediaUploader({
   disabled = false,
   showPreview = true,
   imageOnly = false,
+  videoOnly = false,
   imageActionLabel = "選擇圖片",
   videoActionLabel,
   allowCloudinaryImage = false,
@@ -180,7 +183,7 @@ export default function MediaUploader({
   const cancelled = useRef(false);
 
   async function uploadCloudinary(file: File, mediaType: "image" | "video") {
-    if (imageOnly && mediaType !== "image") return;
+    if ((imageOnly && mediaType !== "image") || (videoOnly && mediaType !== "video")) return;
     const limits = mediaType === "image" ? CUSTOM_SECTION_IMAGE_LIMITS : VIDEO_UPLOAD_LIMITS[usage];
     const allowed = mediaType === "image"
       ? isAllowedImageUpload(file.name, file.type)
@@ -267,7 +270,7 @@ export default function MediaUploader({
   async function chooseImage(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     event.target.value = "";
-    if (!file) return;
+    if (!file || videoOnly) return;
     if (onImageSelect) {
       onImageSelect(file);
       return;
@@ -306,7 +309,7 @@ export default function MediaUploader({
   return (
     <section className="kd-media-uploader" aria-busy={uploading}>
       <header>
-        <div><strong>{label}</strong><small>{imageOnly ? "圖片沿用既有網站上傳流程。" : productMediaNaming?.mediaPurpose === "custom-section" ? "圖片與影片皆使用 Cloudinary 安全上傳並完成伺服器驗證。" : "圖片沿用既有上傳；影片直接上傳 Cloudinary。"}</small></div>
+        <div><strong>{label}</strong><small>{videoOnly ? "影片沿用作品既有 Cloudinary 上傳與驗證流程。" : imageOnly ? "圖片沿用既有網站上傳流程。" : productMediaNaming?.mediaPurpose === "custom-section" ? "圖片與影片皆使用 Cloudinary 安全上傳並完成伺服器驗證。" : "圖片沿用既有上傳；影片直接上傳 Cloudinary。"}</small></div>
         {value && onRemove ? (
           <button type="button" className="kd-media-remove" onClick={onRemove} disabled={uploading || disabled}>移除目前媒體</button>
         ) : null}
@@ -325,7 +328,7 @@ export default function MediaUploader({
       ) : null}
 
       <div className="kd-media-upload-actions">
-        <label>{imageActionLabel}<input type="file" accept="image/*" onChange={chooseImage} disabled={uploading || disabled} /></label>
+        {!videoOnly ? <label>{imageActionLabel}<input type="file" accept="image/*" onChange={chooseImage} disabled={uploading || disabled} /></label> : null}
         {!imageOnly ? <label>{videoActionLabel || (value?.type === "video" ? "更換影片" : "選擇影片")}<input type="file" accept="video/mp4,video/quicktime,video/webm,.mp4,.mov,.webm" onChange={chooseVideo} disabled={uploading || disabled} /></label> : null}
         {uploading ? (
           <button type="button" onClick={cancelUpload}>取消上傳</button>

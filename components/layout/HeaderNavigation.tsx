@@ -2,6 +2,7 @@
 
 import CmsLink from "@/components/CmsLink";
 import type { CmsLinkProduct, CmsLinkValue, PublishedCmsPage } from "@/lib/cmsLinks";
+import { resolveCmsLink } from "@/lib/cmsLinks";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
@@ -16,6 +17,10 @@ export default function HeaderNavigation({ items, products = [], pages = [] }: {
   const isOpen = menuState.isOpen && menuState.pathname === pathname;
 
   const closeMenu = () => setMenuState({ isOpen: false, pathname });
+  const currentPage = (item: NavigationItem) => {
+    const resolved = resolveCmsLink(item.href, { products, pages });
+    return resolved.valid && !resolved.external && resolved.href === pathname ? "page" as const : undefined;
+  };
 
   useEffect(() => {
     if (!isOpen) return;
@@ -40,7 +45,7 @@ export default function HeaderNavigation({ items, products = [], pages = [] }: {
   return (
     <div className="header-navigation" ref={navigationRef}>
       <nav className="desktop-navigation" aria-label="主要導覽">
-        {items.map((item) => <CmsLink key={item.id} value={item.href} registry={{ products, pages }}>{item.label}</CmsLink>)}
+        {items.map((item) => <CmsLink key={item.id} value={item.href} registry={{ products, pages }} aria-current={currentPage(item)}>{item.label}</CmsLink>)}
       </nav>
 
       <button
@@ -59,7 +64,7 @@ export default function HeaderNavigation({ items, products = [], pages = [] }: {
       <div className="mobile-navigation-panel" hidden={!isOpen}>
         <nav id={mobileNavigationId} aria-label="手機主要導覽">
           {items.map((item) => (
-            <CmsLink key={item.id} value={item.href} registry={{ products, pages }} onClick={closeMenu}>{item.label}</CmsLink>
+            <CmsLink key={item.id} value={item.href} registry={{ products, pages }} aria-current={currentPage(item)} onClick={closeMenu}>{item.label}</CmsLink>
           ))}
         </nav>
       </div>

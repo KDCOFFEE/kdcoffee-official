@@ -15,6 +15,8 @@ type JsonRecord = Record<string, unknown>;
 
 const PRODUCT_VIDEO_FIELDS = [
   ["hero", "Hero"],
+  ["galleryDesktopAnimation", "作品詮釋桌機動畫"],
+  ["galleryMobileAnimation", "作品詮釋手機動畫"],
   ["productPhoto", "Product Photo"],
   ["mainVisual", "Main Visual"],
   ["artworkCover", "Artwork Cover"],

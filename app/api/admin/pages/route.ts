@@ -1,3 +1,6 @@
+import { readAdminSession } from '@/lib/adminAuth';
+import { isSameOriginRequest } from '@/lib/requestSecurity';
+import { saveGalleryAtmosphere, saveGallerySeo, GalleryPageVersionConflictError } from '@/lib/galleryPageAdminStore';
 import { NextResponse } from "next/server";
 import { promises as fs } from "fs";
 import { isAdminAuthenticated } from "@/lib/adminAuth";
@@ -39,5 +42,21 @@ export async function POST(request: Request) {
   } catch (error) {
     const message = error instanceof Error ? error.message : "建立頁面失敗。";
     return NextResponse.json({ error: message === "VERSION_CONFLICT" ? "頁面資料已在其他視窗更新，請重新整理。" : message }, { status: message === "VERSION_CONFLICT" ? 409 : 400 });
+  }
+}
+
+/** Page-wide Gallery appearance uses the existing systemPages store. */
+export async function PUT(request: Request) {
+  const session = await readAdminSession();
+  if (!session) return NextResponse.json({ error: '尚未登入管理後台。' }, { status: 401 });
+  if (session.role !== 'owner' || session.legacy) return NextResponse.json({ error: '此操作限 Owner 使用。' }, { status: 403 });
+  if (!request.headers.get('origin') || !isSameOriginRequest(request)) return NextResponse.json({ error: '無法確認操作來源。' }, { status: 403 });
+  try {
+    const body = await request.json() as Record<string, unknown>;
+    if (body.scope === 'galleryAtmosphere') return NextResponse.json(await saveGalleryAtmosphere(body.version, body.atmosphere));
+    if (body.scope === 'gallerySeo') return NextResponse.json(await saveGallerySeo(body.version, body.seo));
+    throw new Error('不支援的頁面設定範圍。');
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : '儲存失敗。' }, { status: error instanceof GalleryPageVersionConflictError ? 409 : 400 });
   }
 }
