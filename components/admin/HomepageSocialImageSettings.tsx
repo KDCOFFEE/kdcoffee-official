@@ -34,9 +34,8 @@ export default function HomepageSocialImageSettings() {
     } catch (error) { setMessage(error instanceof Error ? error.message : "儲存失敗。"); }
     finally { lock.current = false; setBusy(false); }
   }
-  return <section id="homepage-social-share" className={styles.settings} aria-label="首頁分享設定">
-    <h2 className={styles.sectionTitle}>首頁分享設定</h2>
-    <SocialImageField label="首頁分享圖片" help="未設定時，會使用全站預設分享圖片。"
+  return <section id="homepage-social-share" className={`${styles.settings} ${styles.homepageSettings}`} aria-label="首頁分享設定">
+    <SocialImageField variant="compact" label="首頁分享圖片" help="未設定時，會使用全站預設分享圖片。"
       value={image} assets={assets} disabled={busy || version === undefined} onChange={next => { setImage(next); setMessage(""); }}
       onBusy={active => { lock.current = active; setBusy(active); }} onUploaded={asset => setAssets(current => [asset, ...current])} />
     <div className={styles.footer}><button type="button" className={styles.primary} disabled={busy || version === undefined || !dirty} onClick={() => void save()}>儲存設定</button>

@@ -153,6 +153,26 @@ export default function HomepageContentStudio() {
     const shortcut = (event: KeyboardEvent) => { if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") { event.preventDefault(); void save(); } };
     window.addEventListener("keydown", shortcut); return () => window.removeEventListener("keydown", shortcut);
   }, [save]);
+  const studioLoaded = Boolean(data);
+  useEffect(() => {
+    if (!studioLoaded || window.location.hash !== "#homepage-social-share") return;
+    const target = document.getElementById("homepage-social-share");
+    const studio = toolbar.current?.parentElement;
+    if (!target || !studio) return;
+
+    // The preview can resize the studio after the browser resolves the fragment.
+    const align = () => target.scrollIntoView({ block: "start", behavior: "instant" });
+    const observer = new ResizeObserver(align);
+    observer.observe(studio);
+    const events = ["wheel", "pointerdown", "keydown", "touchstart", "hashchange"] as const;
+    const stop = () => {
+      observer.disconnect();
+      for (const event of events) window.removeEventListener(event, stop);
+    };
+    for (const event of events) window.addEventListener(event, stop, { passive: true });
+    return stop;
+  }, [studioLoaded]);
+
   if (!data) return <div role={loadingError ? "alert" : "status"}>{loadingError || "正在載入首頁工作室…"}{loadingError ? <button onClick={() => window.location.reload()}>重新載入</button> : null}</div>;
   const h = data.homepage, original = baseline ? JSON.parse(baseline) : {};
   const common = { setPath, uploadImage, assets: data.assets, products: data.products };

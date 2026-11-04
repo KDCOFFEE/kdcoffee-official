@@ -7,9 +7,10 @@ import AssetUploadButton from "./AssetUploadButton";
 import ImageLibraryPicker from "./ImageLibraryPicker";
 import styles from "./SocialImageField.module.css";
 
-export default function SocialImageField({ value, assets, onChange, onUploaded, onBusy, label = "社群分享圖片", help = "未設定時，會使用作品主視覺或全站預設分享圖片。", disabled = false }: {
+export default function SocialImageField({ value, assets, onChange, onUploaded, onBusy, label = "社群分享圖片", help = "未設定時，會使用作品主視覺或全站預設分享圖片。", disabled = false, variant = "default" }: {
   value?: SocialImageValue | null; assets: AssetRecord[]; onChange: (value: SocialImageValue | undefined) => void;
   onUploaded?: (asset: AssetRecord) => void | Promise<void>; onBusy?: (busy: boolean) => void; label?: string; help?: string; disabled?: boolean;
+  variant?: "default" | "compact";
 }) {
   const [picker, setPicker] = useState(false), [message, setMessage] = useState("");
   const [uploading, setUploading] = useState(false);
@@ -32,8 +33,9 @@ export default function SocialImageField({ value, assets, onChange, onUploaded, 
     if (picker) closePicker(); else setPicker(false);
     setMessage("已選取圖片，請儲存設定。");
   }
-  return <section className={styles.card} aria-labelledby={titleId} aria-describedby={helpId} data-social-image-field>
-    <h3 id={titleId} className={styles.heading}>{label}</h3>
+  const Heading = variant === "compact" ? "h2" : "h3";
+  return <section className={variant === "compact" ? `${styles.card} ${styles.compact}` : styles.card} aria-labelledby={titleId} aria-describedby={helpId} data-social-image-field>
+    <Heading id={titleId} className={styles.heading}>{label}</Heading>
     <p className={styles.description}>分享網站連結到 LINE、Facebook、Messenger 等平台時顯示。</p>
     <div className={styles.content}>
     <div className={styles.preview}>{value?.path ? <img src={value.path} alt={value.alt || "分享圖片預覽"} /> : <div className={styles.empty}>尚未設定專屬分享圖片</div>}</div>
