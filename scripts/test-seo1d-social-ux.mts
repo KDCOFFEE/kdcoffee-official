@@ -9,7 +9,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import type { AssetRecord } from "../lib/assets";
 import SocialImageField from "../components/admin/SocialImageField";
 import StoreLandingFields from "../components/admin/StoreLandingFields";
-import { DEFAULT_SOCIAL_IMAGE, socialPageMetadata, monthlySocialImages } from "../lib/socialMetadata";
+import { BRAND_DESCRIPTION, DEFAULT_SOCIAL_IMAGE, socialPageMetadata, monthlySocialImages } from "../lib/socialMetadata";
 import { homepageSocialMetadata, customerServiceSocialMetadata } from "../lib/systemPageSocialMetadata";
 import { withSiteSocialImage } from "../lib/siteSocialImage";
 import { DEFAULT_SERVICE_DOCUMENT, validateServiceDocument } from "../lib/customerServiceContent";
@@ -49,7 +49,7 @@ function imageUrl(metadata: Awaited<ReturnType<typeof homepageSocialMetadata>>) 
   return og.images[0].url;
 }
 try {
-  const { getAssetsDataFile, getPagesDataFile } = await import("../lib/storagePaths");
+  const { getAssetsDataFile, getHomepageDataFile, getPagesDataFile, getWebsiteDataFile } = await import("../lib/storagePaths");
   const assetsFile = getAssetsDataFile(), pagesFile = getPagesDataFile();
   assert.ok(assetsFile.startsWith(root) && pagesFile.startsWith(root));
   await fs.mkdir(path.dirname(assetsFile), { recursive: true });
@@ -67,7 +67,7 @@ try {
   }
   await library();
   await fs.writeFile(pagesFile, JSON.stringify({ version: 1, updatedAt: "", pages: [], systemPages: { other: { preserved: true } } }));
-  const { PUT: savePageSettings } = await import("../app/api/admin/pages/route");
+  const { GET: readPageSettings, PUT: savePageSettings } = await import("../app/api/admin/pages/route");
   const { PUT: saveService } = await import("../app/api/admin/customer-service/route");
   const { readCustomerServiceState, getCustomerServiceFile } = await import("../lib/customerServiceStore");
   const { createAdminSessionValue, adminCookieName } = await import("../lib/adminAuth");
@@ -81,7 +81,7 @@ try {
   await test("A Homepage override saves/reloads in PageStore and beats global", async () => {
     const response = await savePageSettings(request("/api/admin/pages", { scope: "homepageSeo", version: 1, image: value("HOME") })); assert.equal(response.status, 200, await response.clone().text());
     const store = await json(pagesFile); assert.deepEqual(store.systemPages.homepage.seo.socialImage, value("HOME")); assert.deepEqual(store.systemPages.other, { preserved: true });
-    assert.equal(imageUrl(await homepageSocialMetadata(store.systemPages.homepage.seo.socialImage)), origin + asset("HOME").path);
+    assert.equal(imageUrl(await homepageSocialMetadata(store.systemPages.homepage.seo)), origin + asset("HOME").path);
   });
   await test("Homepage removal and optimistic version conflict preserve unrelated settings", async () => {
     assert.equal((await savePageSettings(request("/api/admin/pages", { scope: "homepageSeo", version: 1, image: null }))).status, 409);
@@ -172,6 +172,94 @@ try {
     const model = { product: { name: "商品", slug: "product", shortDescription: "", description: "商品內容", price: 100, inStock: true, featured: false, section: { slug: "section", name: "專區" }, specifications: [], gallery: [], heroMedia: { type: "image" as const, url: asset("STORE").path, alt: "商品主圖" } }, manualSeo: {} };
     assert.equal(imageUrl(await withSiteSocialImage(storeProductMetadata(model))), origin + asset("STORE").path);
     assert.ok(!("socialImage" in model.product));
+  });
+  const readSeo = () => readPageSettings(new Request("http://localhost/api/admin/pages?scope=homepageSeo"));
+  const writeSeo = (version: number, fields: Record<string, unknown>) =>
+    savePageSettings(request("/api/admin/pages", { scope: "homepageSeo", version, ...fields }));
+  const title = "高雄咖啡｜單品與風味", description = "精品咖啡，烘焙與杯測。";
+  await test("SEO 3B scoped read is Owner-only and defaults match the former resolver", async () => {
+    state.__returnCookies = {}; assert.equal((await readSeo()).status, 401);
+    owner("admin"); assert.equal((await readSeo()).status, 403);
+    owner();
+    const response = await readSeo();
+    assert.equal(response.headers.get("cache-control"), "private, no-store");
+    const expected = await withSiteSocialImage(socialPageMetadata({
+      path: "/", title: "KD 咖啡藝術工坊｜KD Coffee 精品咖啡", description: BRAND_DESCRIPTION,
+    }));
+    assert.deepEqual(await homepageSocialMetadata(), expected);
+    assert.deepEqual((await response.json()).effective.image, (expected.openGraph as { images: unknown[] }).images[0]);
+  });
+  await test("SEO 3B atomic update, sparse edits, legacy image payload and metadata parity", async () => {
+    const baseline = await json(pagesFile);
+    assert.equal((await writeSeo(3, { title: " " + title + " ", description, image: value("HOME") })).status, 200);
+    const updated = await json(pagesFile);
+    assert.deepEqual(updated, { ...baseline, version: 4, updatedAt: updated.updatedAt, systemPages: {
+      ...baseline.systemPages, homepage: { seo: { title, description, socialImage: value("HOME") } },
+    } });
+    const metadata = await homepageSocialMetadata(updated.systemPages.homepage.seo);
+    assert.deepEqual(metadata.title, { absolute: title });
+    assert.equal(metadata.description, description);
+    for (const tags of [metadata.openGraph, metadata.twitter]) {
+      assert.equal(tags?.title, title);
+      assert.equal(tags?.description, description);
+    }
+    assert.equal(imageUrl(metadata), origin + asset("HOME").path);
+    const settings = await readSeo().then(r => r.json());
+    assert.equal(settings.defaults.image.url, origin + asset("LOGO005").path);
+    assert.equal(settings.effective.image.url, origin + asset("HOME").path);
+    assert.equal(metadata.alternates?.canonical, origin + "/");
+    assert.equal((await writeSeo(4, { title: null })).status, 200);
+    assert.deepEqual((await readSeo().then(r => r.json())).seo, { description, socialImage: value("HOME") });
+    assert.equal((await writeSeo(5, { description: "   " })).status, 200);
+    assert.deepEqual((await readSeo().then(r => r.json())).seo, { socialImage: value("HOME") });
+    assert.equal((await writeSeo(6, { title, description })).status, 200);
+    assert.equal((await writeSeo(7, { image: null })).status, 200);
+    const effective = await readSeo().then(r => r.json());
+    assert.deepEqual(effective.seo, { title, description });
+    assert.equal(effective.effective.image.url, origin + asset("LOGO005").path);
+  });
+  await test("SEO 3B rejects invalid/overlong or unrelated fields and stale writes without changing bytes", async () => {
+    const before = await fs.readFile(pagesFile);
+    for (const patch of [{ title: "<b>標題</b>" }, { description: "甲\n乙" }, { title: "甲".repeat(71) }, { description: "甲".repeat(181) }, { title: 42 }, { pages: [] }]) {
+      assert.equal((await writeSeo(8, patch)).status, 400);
+    }
+    assert.equal((await writeSeo(7, { title: "過期修改" })).status, 409);
+    assert.deepEqual(await fs.readFile(pagesFile), before);
+    assert.equal((await writeSeo(8, { title: "甲".repeat(70), description: "乙".repeat(180) })).status, 200);
+  });
+  await test("SEO 3B unusable homepage image falls back without mutating configuration", async () => {
+    const configured = { socialImage: value("HOME") };
+    const file = path.join(root, asset("HOME").path.slice(1)), held = path.join(root, "held-home.png");
+    await fs.rename(file, held);
+    try {
+      assert.equal(imageUrl(await homepageSocialMetadata(configured)), origin + asset("LOGO005").path);
+      assert.equal(imageUrl(await homepageSocialMetadata({ socialImage: { path: "/uploads/assets/test.svg", alt: "" } })), origin + asset("LOGO005").path);
+    } finally { await fs.rename(held, file); }
+  });
+  await test("SEO 3B Homepage Studio API preserves legacy SEO including media and leaves PageStore byte-identical", async () => {
+    const homepageFile = getHomepageDataFile(), websiteFile = getWebsiteDataFile();
+    assert.ok(homepageFile.startsWith(root) && websiteFile.startsWith(root));
+    const homepage = await json("public/data/homepage.json");
+    const legacy = { title: "舊搜尋標題", description: "舊搜尋描述。", shareImage: {
+      media: { type: "image", provider: "local", url: asset("HOME").path }, alt: "舊分享圖",
+    } };
+    homepage.seo = legacy;
+    for (const item of homepage.home008.images) {
+      if (item.media?.provider !== "cloudinary") continue;
+      item.image = asset("HOME").path;
+      item.media = legacy.shareImage.media;
+    }
+    await fs.writeFile(homepageFile, JSON.stringify(homepage));
+    await fs.copyFile("public/data/website-data.json", websiteFile);
+    const { GET: readStudio, PUT: saveStudio } = await import("../app/api/admin/homepage/route");
+    const document = (await (await readStudio()).json()).homepage;
+    assert.deepEqual(document.seo, legacy);
+    document.hero.eyebrow = "隔離測試";
+    const before = await fs.readFile(pagesFile);
+    const response = await saveStudio(request("/api/admin/homepage", { homepage: document }));
+    assert.equal(response.status, 200, await response.clone().text());
+    assert.deepEqual((await json(homepageFile)).seo, legacy);
+    assert.deepEqual(await fs.readFile(pagesFile), before);
   });
   await test("N protected runtime data and excluded page/media sources remain byte-identical", async () => assert.deepEqual(await fingerprints(), before));
   await test("LINE gets blocking head metadata while the installed Next default bot list is preserved", async () => {

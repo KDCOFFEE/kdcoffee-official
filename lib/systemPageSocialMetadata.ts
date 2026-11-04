@@ -1,14 +1,34 @@
 import "server-only";
-import type { SocialImageValue } from "./socialImageSettings";
+import type { HomepageSeo } from "./pageBuilder";
 import type { ServiceConfig } from "./customerServiceContent";
 import { resolveServiceHero } from "./customerServiceHeroServer";
 import { assertAssetImageAvailable } from "./assetImages";
-import { BRAND_DESCRIPTION, socialPageMetadata } from "./socialMetadata";
+import { BRAND_DESCRIPTION, safeSocialImage, socialPageMetadata } from "./socialMetadata";
 import { withSiteSocialImage } from "./siteSocialImage";
 
-export function homepageSocialMetadata(image?: SocialImageValue) {
-  return withSiteSocialImage(socialPageMetadata({ path: "/", title: "KD 咖啡藝術工坊｜KD Coffee 精品咖啡",
-    description: BRAND_DESCRIPTION, images: [image?.path], imageAlt: image?.alt }));
+const HOMEPAGE_TITLE = "KD 咖啡藝術工坊｜KD Coffee 精品咖啡";
+
+export async function resolveHomepageSearchAndShare(seo?: HomepageSeo) {
+  const title = seo?.title?.trim() || HOMEPAGE_TITLE;
+  const description = seo?.description?.trim() || BRAND_DESCRIPTION;
+  let image = safeSocialImage(seo?.socialImage?.path) ? seo?.socialImage : undefined;
+  if (image) {
+    try { await assertAssetImageAvailable(image.path, false); }
+    catch { image = undefined; }
+  }
+  const metadata = await withSiteSocialImage(socialPageMetadata({
+    path: "/", title, description, images: [image?.path], imageAlt: image?.alt,
+  }));
+  const share = metadata.openGraph as { images: { url: string; alt?: string }[] };
+  return {
+    metadata,
+    effective: { title, description: metadata.description || BRAND_DESCRIPTION, image: share.images[0], imageIsCustom: Boolean(image) },
+    defaults: { title: HOMEPAGE_TITLE, description: BRAND_DESCRIPTION },
+  };
+}
+
+export async function homepageSocialMetadata(seo?: HomepageSeo) {
+  return (await resolveHomepageSearchAndShare(seo)).metadata;
 }
 
 export async function customerServiceSocialMetadata(config: ServiceConfig) {

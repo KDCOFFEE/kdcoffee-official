@@ -16,7 +16,7 @@ export const dynamic = "force-dynamic";
 
 export async function generateMetadata() {
   const store = await readPageStore();
-  return homepageSocialMetadata(store.systemPages?.homepage?.seo?.socialImage);
+  return homepageSocialMetadata(store.systemPages?.homepage?.seo);
 }
 
 /**

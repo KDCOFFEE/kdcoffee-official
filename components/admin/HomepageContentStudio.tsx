@@ -2,8 +2,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { HomepagePresentationEditor, HomepagePresentationProvider } from "./HomepagePresentationEditor";
-import { HeroEditor, CampaignEditor, ContentSectionEditor, Home004Editor, Home006Editor, Home008Editor, ReviewsEditor, Home010Editor, HomepageSectionOrderEditor, HomepageNavigationEditor, HomepageCtaVisibility, HomepageVisualEditor, HomepageSeoEditor } from "./HomepageEditors";
-import ImageLibraryPicker from "./ImageLibraryPicker";
+import { HeroEditor, CampaignEditor, ContentSectionEditor, Home004Editor, Home006Editor, Home008Editor, ReviewsEditor, Home010Editor, HomepageSectionOrderEditor, HomepageNavigationEditor, HomepageCtaVisibility, HomepageVisualEditor } from "./HomepageEditors";
 import HeroMediaLibraryPicker from "./HeroMediaLibraryPicker";
 import { SmartLinkEditingProvider } from "./SmartLinkPicker";
 import { updateHomepageBasePresentation, updateHomepageMobilePresentation, updateHomepageMobileEnabled, type HomepageBasePresentationEdit } from "@/lib/homepagePresentationAdmin";
@@ -23,7 +22,7 @@ export default function HomepageContentStudio() {
   const [saving, setSaving] = useState(false), [presentationInvalid, setPresentationInvalid] = useState(false);
   const [area, setArea] = useState<HomepageStudioArea>("hero"), [device, setDevice] = useState<HomepageStudioDevice>("desktop");
   const [group, setGroup] = useState<"content" | "presentation">("content");
-  const [seoPicker, setSeoPicker] = useState(false), [heroPicker, setHeroPicker] = useState<"desktop" | "mobile" | null>(null);
+  const [heroPicker, setHeroPicker] = useState<"desktop" | "mobile" | null>(null);
   const [ready, setReady] = useState(false), [previewError, setPreviewError] = useState("");
   const frame = useRef<HTMLIFrameElement>(null), saveLock = useRef(false), toolbar = useRef<HTMLElement>(null), saveAction = useRef<() => void>(() => {});
   const [toolbarHeight, setToolbarHeight] = useState(130), [previewWidth, setPreviewWidth] = useState(0);
@@ -187,7 +186,7 @@ export default function HomepageContentStudio() {
     : area === "sections" ? <HomepageSectionOrderEditor homepage={h} setPath={setPath} />
     : area === "navigation" ? <HomepageNavigationEditor value={h.navigation} products={data.products} pages={data.publishedPages} setPath={setPath} />
     : area === "visual" ? <HomepageVisualEditor value={h.visual} setPath={setPath} />
-    : <HomepageSeoEditor value={h.seo} assets={data.assets} setPath={setPath} onOpenPicker={() => setSeoPicker(true)} />;
+    : <p>首頁搜尋與分享請至<a href="#homepage-social-share">頁面底部的首頁搜尋與分享設定</a>編輯。</p>;
   return <SmartLinkEditingProvider pages={data.publishedPages}><HomepagePresentationProvider presentation={h.presentation} device={device} content={{ homepage: h, products: data.products, pages: data.publishedPages, draft: dirty }} onEdit={editPresentation} onMobileEdit={editMobile} onMobileToggle={toggleMobile} onValidityChange={setPresentationInvalid}>
     <div className={styles.studio} style={{ "--homepage-toolbar-height": `${toolbarHeight}px` } as React.CSSProperties}>
       <header className={styles.toolbar} ref={toolbar}>
@@ -209,7 +208,6 @@ export default function HomepageContentStudio() {
           <p className={styles.note}>採用公開首頁元件。隱藏、未開始或缺少內容的區塊依正式規則隱藏；搜尋設定請在左側確認。</p>
         </aside>
       </div>
-      {seoPicker ? <ImageLibraryPicker assets={data.assets} title="選擇首頁分享圖片" onClose={() => setSeoPicker(false)} onChoose={asset => { setPath(["seo", "shareImage"], { media: localImageMedia(asset.path), alt: asset.alt || asset.name }); setSeoPicker(false); }} /> : null}
       {heroPicker ? <HeroMediaLibraryPicker assets={data.assets} title={heroPicker === "desktop" ? "選擇桌機版主視覺素材" : "選擇手機版主視覺素材"} onClose={() => setHeroPicker(null)} onChoose={media => { setPath(["hero", heroPicker === "desktop" ? "desktopMedia" : "mobileMedia"], media); setHeroPicker(null); }} /> : null}
     </div>
   </HomepagePresentationProvider></SmartLinkEditingProvider>;

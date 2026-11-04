@@ -68,6 +68,18 @@ export type PageBuilderSection = {
 };
 
 export type PageDraft = { title: string; seoTitle: string; seoDescription: string; socialImage?: SocialImageValue; sections: PageBuilderSection[] };
+
+export type HomepageSeo = { title?: string; description?: string; socialImage?: SocialImageValue | null };
+export const HOMEPAGE_SEO_LIMITS = { title: 70, description: 180 } as const;
+
+export function normalizeHomepageSeoText(field: keyof typeof HOMEPAGE_SEO_LIMITS, value: unknown) {
+  if (value === null) return undefined;
+  const limit = HOMEPAGE_SEO_LIMITS[field];
+  if (typeof value !== "string" || /[<>\u0000-\u001f\u007f-\u009f]/u.test(value) || value.trim().length > limit) {
+    throw new Error(`首頁${field === "title" ? "搜尋標題" : "搜尋描述"}須為不含標記或控制字元的文字，最多 ${limit} 字。`);
+  }
+  return value.trim() || undefined;
+}
 export type PageRecord = {
   id: string;
   slug: string;
@@ -85,7 +97,7 @@ export type PageStore = {
   visualStyle?: WebsiteVisualStyle;
   pages: PageRecord[];
   systemPages?: Record<string, unknown> & {
-    homepage?: { seo?: { socialImage?: SocialImageValue } };
+    homepage?: { seo?: HomepageSeo };
     works?: WorksPageCmsConfig;
     gallery?: GalleryPageSettings;
   };
@@ -196,7 +208,10 @@ export function validatePageStore(store: PageStore) {
       if (!homepage || typeof homepage !== "object" || Array.isArray(homepage)) throw new Error("首頁設定格式不正確。");
       if (homepage.seo !== undefined) {
         if (!homepage.seo || typeof homepage.seo !== "object" || Array.isArray(homepage.seo)) throw new Error("首頁 SEO 格式不正確。");
-        if (homepage.seo.socialImage !== undefined) validateSocialImageValue(homepage.seo.socialImage);
+        for (const key of ["title", "description"] as const) {
+          if (homepage.seo[key] !== undefined) normalizeHomepageSeoText(key, homepage.seo[key]);
+        }
+        if (homepage.seo.socialImage != null) validateSocialImageValue(homepage.seo.socialImage);
       }
     }
     if (store.systemPages.gallery !== undefined) validateGalleryPageSettings(store.systemPages.gallery);

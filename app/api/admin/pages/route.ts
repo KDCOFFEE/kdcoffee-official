@@ -2,7 +2,8 @@ import { readAdminSession } from '@/lib/adminAuth';
 import { isSameOriginRequest } from '@/lib/requestSecurity';
 import { saveGalleryAtmosphere, saveGallerySeo, GalleryPageVersionConflictError } from '@/lib/galleryPageAdminStore';
 import { NextResponse } from "next/server";
-import { saveHomepageSocialImage, HomepageSeoVersionConflictError } from "@/lib/homepageSeo";
+import { saveHomepageSeo, HomepageSeoVersionConflictError } from "@/lib/homepageSeo";
+import { resolveHomepageSearchAndShare } from "@/lib/systemPageSocialMetadata";
 import { promises as fs } from "fs";
 import { isAdminAuthenticated } from "@/lib/adminAuth";
 import { getAssetLibrary } from "@/lib/assets";
@@ -18,7 +19,20 @@ async function products() {
   return (website.menu?.products || []).map((product) => ({ slug: String(product.slug || ""), name: String(product.name || ""), active: product.active === false ? false : undefined, status: typeof product.status === "string" ? product.status : undefined })).filter((product) => product.slug && product.name);
 }
 
-export async function GET() {
+export async function GET(request: Request) {
+  if (new URL(request.url).searchParams.get("scope") === "homepageSeo") {
+    const session = await readAdminSession();
+    if (!session) return NextResponse.json({ error: "尚未登入管理後台。" }, { status: 401 });
+    if (session.role !== "owner" || session.legacy) return NextResponse.json({ error: "此操作限 Owner 使用。" }, { status: 403 });
+    const [store, library] = await Promise.all([readPageStore(), getAssetLibrary()]);
+    const seo = store.systemPages?.homepage?.seo;
+    const { effective, defaults } = await resolveHomepageSearchAndShare(seo);
+    const defaultImage = effective.imageIsCustom ? (await resolveHomepageSearchAndShare()).effective.image : effective.image;
+    const assets = library.assets.filter(asset => asset.status === "active" && Boolean(asset.path));
+    return NextResponse.json({ version: store.version, seo, effective, defaults: { ...defaults, image: defaultImage }, assets }, {
+      headers: { "Cache-Control": "private, no-store" },
+    });
+  }
   if (!(await isAdminAuthenticated())) return NextResponse.json({ error: "尚未登入管理後台。" }, { status: 401 });
   const [store, productList, assetLibrary] = await Promise.all([readPageStore(), products(), getAssetLibrary()]);
   const assets = assetLibrary.assets.filter((asset) => asset.status === "active" && Boolean(asset.path));
@@ -55,8 +69,8 @@ export async function PUT(request: Request) {
   try {
     const body = await request.json() as Record<string, unknown>;
     if (body.scope === 'homepageSeo') {
-      if (Object.keys(body).some(key => !['scope', 'version', 'image'].includes(key))) throw new Error('首頁分享圖包含不支援的欄位。');
-      return NextResponse.json(await saveHomepageSocialImage(body.version, body.image));
+      const { scope: _, version, ...fields } = body;
+      return NextResponse.json(await saveHomepageSeo(version, fields));
     }
     if (body.scope === 'galleryAtmosphere') return NextResponse.json(await saveGalleryAtmosphere(body.version, body.atmosphere));
     if (body.scope === 'gallerySeo') return NextResponse.json(await saveGallerySeo(body.version, body.seo));
