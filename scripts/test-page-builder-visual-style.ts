@@ -98,7 +98,7 @@ assert.match(manager,/⚠ 更新失敗/u,"publish failure has a global message")
 assert.match(manager,/role="status" aria-live="polite"/u,"global action feedback is an accessible live region");
 assert.match(manager,/setTimeout\(\(\)=>setToast\(null\),4500\)/u,"toast auto-dismisses within the required interval");
 assert.match(manager,/requestAnimationFrame\(\(\)=>window\.scrollTo\(\{top:scrollPosition,left:0\}\)\)/u,"save and publish restore the owner's editing position after state refresh");
-assert.match(manager,/operation==="publish"\?\{visualStyle\}/u,"publish carries the validated visual settings through the authoritative request");
+assert.match(manager,/operation\s*===\s*"publish"\s*\?\s*\{\s*visualStyle\s*\}/u,"publish carries the validated visual settings through the authoritative request");
 assert.match(manager,/publishedMatchesDraft/u,"publish state compares the real draft and published snapshot");
 assert.match(manager,/publishedMatchesDraft&&!visualStyleDirty\?"✓ 已發布"/u,"new page or visual edits immediately return the publish action to update state");
 assert.match(pageApi,/body\.operation === "publish" && body\.visualStyle !== undefined/u,"publish validates visual settings in the authoritative server transaction");

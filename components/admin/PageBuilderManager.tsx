@@ -52,13 +52,22 @@ export default function PageBuilderManager({ pageId }:{pageId:string}) {
     const scrollPosition=window.scrollY;
     setSaving(true);setActiveAction(operation);setCompletedAction(null);setMessage(operation==="publish"?"發布中…":operation==="unpublish"?"取消發布中…":"儲存中…");
     try {
-      const response=await fetch(`/api/admin/pages/${page.id}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({version:store.version,operation,draft:page.draft,...(operation==="publish"?{visualStyle}: {})})});
+      const payload = operation === "unpublish"
+        ? { version: store.version, operation }
+        : { version: store.version, operation, draft: page.draft, ...(operation === "publish" ? { visualStyle } : {}) };
+      const response=await fetch(`/api/admin/pages/${page.id}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
       const data=await response.json();
       if(!response.ok)throw new Error(data.error||"更新失敗，請重新嘗試。");
       const savedStyle=data.visualStyle?resolveWebsiteVisualStyle(data.visualStyle):visualStyle;
-      setPage(data.page);setBaseline(JSON.stringify(data.page.draft));setStore({...store,version:data.version,visualStyle:savedStyle,pages:store.pages.map(item=>item.id===data.page.id?data.page:item)});setPages(data.publishedPages||[]);
-      if(data.visualStyle){setVisualStyle(savedStyle);setVisualStyleBaseline(JSON.stringify(savedStyle));}
-      const nextMessage=operation==="publish"?"頁面已發布，頁面連結已同步更新。":operation==="unpublish"?"頁面已取消發布；草稿與媒體均已保留。":"草稿已安全儲存；公開頁面未被變更。";
+      if (operation === "unpublish") {
+        // Keep unsaved edits in the editor while updating its publication state.
+        setPage(current => current ? { ...data.page, draft: current.draft } : data.page);
+      } else {
+        setPage(data.page);
+      }
+      setBaseline(JSON.stringify(data.page.draft));setStore({...store,version:data.version,visualStyle:savedStyle,pages:store.pages.map(item=>item.id===data.page.id?data.page:item)});setPages(data.publishedPages||[]);
+      if(operation!=="unpublish" && data.visualStyle){setVisualStyle(savedStyle);setVisualStyleBaseline(JSON.stringify(savedStyle));}
+      const nextMessage=operation==="publish"?"頁面已發布，頁面連結已同步更新。":operation==="unpublish"?"頁面已取消發布。已儲存的草稿與媒體均已保留，尚未儲存的編輯仍留在編輯器。":"草稿已安全儲存；公開頁面未被變更。";
       setMessage(nextMessage);
       if(operation==="publish"){setCompletedAction("publish");showToast({tone:"success",title:"✓ 網頁已更新發布",detail:"正式網站已套用最新內容"});}
       if(operation==="save"){setCompletedAction("save");showToast({tone:"success",title:"✓ 草稿已儲存",detail:"公開頁面沒有變更"});}
@@ -66,7 +75,7 @@ export default function PageBuilderManager({ pageId }:{pageId:string}) {
       return true;
     } catch(error) {
       const detail=error instanceof Error?error.message:"更新失敗，請重新嘗試。";
-      setMessage(detail);showToast({tone:"error",title:"⚠ 更新失敗",detail:"目前內容尚未發布，請重新嘗試"});return false;
+      setMessage(detail);showToast({tone:"error",title:"⚠ 更新失敗",detail:operation==="unpublish"?"未能確認取消發布，請重新整理後確認頁面狀態。":"目前內容尚未發布，請重新嘗試"});return false;
     } finally {setSaving(false);setActiveAction(null);}
   }
   async function saveVisualStyle(){if(!page||!store)return;setSavingVisualStyle(true);setMessage("儲存網站視覺設定中…");const response=await fetch(`/api/admin/pages/${page.id}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({version:store.version,operation:"saveVisualStyle",visualStyle})});const data=await response.json();setSavingVisualStyle(false);if(!response.ok){setMessage(data.error);return;}const saved=resolveWebsiteVisualStyle(data.visualStyle);setVisualStyle(saved);setVisualStyleBaseline(JSON.stringify(saved));setStore({...store,version:data.version,visualStyle:saved});setMessage("網站視覺設定已儲存；頁面草稿與發布內容未被變更。");}
@@ -81,7 +90,7 @@ export default function PageBuilderManager({ pageId }:{pageId:string}) {
   const publishLabel=activeAction==="publish"?"發布中…":publishedMatchesDraft&&!visualStyleDirty?"✓ 已發布":page.status==="published"?"更新發布":"發布頁面";
   return <SmartLinkEditingProvider><section className="page-admin-shell page-editor-shell"><header className="page-editor-heading page-editor-toolbar"><div><div className="page-editor-status-line"><span className={`owner-status status-${page.status}`}>{statusLabel[page.status]}</span><span className={`page-dirty-state ${anyDirty?"is-dirty":"is-saved"}`}>{anyDirty?"尚未儲存":"所有變更已儲存"}</span></div><h1>{page.draft.title}</h1><small>公開網址由系統管理・{page.draft.sections.length} 個區塊</small></div><div><button className="cms-secondary-button" type="button" onClick={preview} disabled={saving||socialUploading}>預覽草稿</button>{publicHref?<Link className="cms-secondary-button page-public-link" href={publicHref} target="_blank" rel="noreferrer">查看正式頁 ↗</Link>:null}<button className="cms-secondary-button" type="button" onClick={()=>save("save")} disabled={saving||socialUploading||!dirty}>{saveLabel}</button><button className="cms-primary-button" type="button" onClick={()=>save("publish")} disabled={saving}>{publishLabel}</button></div></header>
     {message?<p className="cms-feedback" role="status">{message}</p>:null}
-    <div className="page-settings-card"><h2>頁面基本資料</h2><label>頁面名稱<input value={page.draft.title} maxLength={120} onChange={event=>setDraft(d=>({...d,title:event.target.value}))}/></label><details className="page-seo-settings"><summary>搜尋與分享設定</summary><div className="cms-grid two"><label>搜尋結果標題<input value={page.draft.seoTitle} maxLength={70} placeholder="留白時使用頁面名稱" onChange={event=>setDraft(d=>({...d,seoTitle:event.target.value}))}/></label><label className="span-two">搜尋結果說明<textarea value={page.draft.seoDescription} maxLength={180} onChange={event=>setDraft(d=>({...d,seoDescription:event.target.value}))}/></label></div><SocialImageField label="分享圖片" value={page.draft.socialImage} assets={assets} onBusy={setSocialUploading} disabled={saving||socialUploading} help="未設定時，會使用頁面中的圖片；若無可用圖片，再使用全站預設分享圖片。" onChange={socialImage=>setDraft(d=>({...d,socialImage}))} onUploaded={asset=>setAssets(current=>[asset,...current])}/></details>{page.status==="published"?<div className="page-secondary-publish-action"><span>要暫停公開頁面？草稿與媒體不會刪除。</span><button className="cms-danger-button" type="button" onClick={()=>confirm("取消發布後，公開頁面將立即停止顯示。內容不會刪除。")&&save("unpublish")} disabled={saving}>取消發布</button></div>:null}</div>
+    <div className="page-settings-card"><h2>頁面基本資料</h2><label>頁面名稱<input value={page.draft.title} maxLength={120} onChange={event=>setDraft(d=>({...d,title:event.target.value}))}/></label><details className="page-seo-settings"><summary>搜尋與分享設定</summary><div className="cms-grid two"><label>搜尋結果標題<input value={page.draft.seoTitle} maxLength={70} placeholder="留白時使用頁面名稱" onChange={event=>setDraft(d=>({...d,seoTitle:event.target.value}))}/></label><label className="span-two">搜尋結果說明<textarea value={page.draft.seoDescription} maxLength={180} onChange={event=>setDraft(d=>({...d,seoDescription:event.target.value}))}/></label></div><SocialImageField label="分享圖片" value={page.draft.socialImage} assets={assets} onBusy={setSocialUploading} disabled={saving||socialUploading} help="未設定時，會使用頁面中的圖片；若無可用圖片，再使用全站預設分享圖片。" onChange={socialImage=>setDraft(d=>({...d,socialImage}))} onUploaded={asset=>setAssets(current=>[asset,...current])}/></details>{page.status==="published"?<div className="page-secondary-publish-action"><span>要暫停公開頁面？草稿與媒體不會刪除。</span><button className="cms-danger-button" type="button" onClick={()=>confirm("取消發布後，公開頁面將停止顯示。已儲存的內容會保留，尚未儲存的編輯不會一併儲存。確定取消發布？")&&save("unpublish")} disabled={saving}>取消發布</button></div>:null}</div>
     <VisualStyleStudio value={visualStyle} sections={page.draft.sections} dirty={visualStyleDirty} saving={savingVisualStyle} onChange={setVisualStyle} onSave={saveVisualStyle}/>
     <details className="page-live-preview"><summary>頁面即時預覽</summary><div className="visual-device-switch"><button type="button" className={previewDevice==="desktop"?"is-selected":""} onClick={()=>setPreviewDevice("desktop")}>▰ 桌機</button><button type="button" className={previewDevice==="mobile"?"is-selected":""} onClick={()=>setPreviewDevice("mobile")}>▯ 手機</button></div><p>下方直接使用正式頁面的共用呈現方式；調整後立即更新，但不會自動儲存或發布。</p><div className={`page-live-preview-frame is-${previewDevice}`}><PageBuilderRenderer page={page.draft} products={products} registry={{products,pages}} visualStyle={visualStyle}/></div></details>
     <header className="page-content-heading"><div><p className="eyebrow dark">頁面編排</p><h2>頁面內容</h2></div><button className="cms-primary-button" type="button" onClick={()=>setChooser(true)}>＋新增區塊</button></header>
