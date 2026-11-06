@@ -9,7 +9,7 @@ type StoreCardEditorial = { label?: string; summary?: string; cta?: string; comp
 export default function StoreProductCard({ product, className = "", editorial, id }: { product: PublicStoreProductCard; className?: string; editorial?: StoreCardEditorial; id?: string }) {
   const media = product.heroMedia;
   const imageUrl = media?.type === "image" ? media.url : media?.type === "video" ? media.posterUrl : undefined;
-  const alt = media?.alt.trim() ? media.alt : product.name;
+  const alt = media?.decorative === true ? "" : media?.alt.trim() ? media.alt : product.name;
   const onSale = product.salePrice !== undefined && product.salePrice < product.price;
   const currentPrice = product.salePrice !== undefined && product.salePrice < product.price ? product.salePrice : product.price;
   return (

@@ -5,6 +5,7 @@ import type { HomepagePreviewMode } from "./HomepagePreviewContext";
 type FutureMediaItem = {
   id?: string;
   alt?: string;
+  decorative?: boolean;
   caption?: string;
   enabled?: boolean;
   order?: number;
@@ -54,7 +55,7 @@ export function resolveHomepageMediaCollection({
       return resolved
         ? {
             id: item.id || `media-${resolved.url}`,
-            alt: item.alt?.trim() || alt,
+            alt: item.decorative === true ? "" : item.alt?.trim() || alt,
             ...(item.caption ? { caption: item.caption } : {}),
             ...(item.primary ? { primary: true } : {}),
             ...(item.title ? { title: item.title } : {}),

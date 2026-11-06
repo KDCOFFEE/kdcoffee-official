@@ -112,10 +112,11 @@ function mediaUrl(value: unknown, label: string): asserts value is string {
   }
 }
 function media(input: unknown) {
-  const value = storeInputRecord(input, ["type", "url", "provider", "publicId", "videoId", "posterUrl", "width", "height", "duration", "format", "bytes", "alt"], "media");
+  const value = storeInputRecord(input, ["type", "url", "provider", "publicId", "videoId", "posterUrl", "width", "height", "duration", "format", "bytes", "alt", "decorative"], "media");
   ensure(typeof value.type === "string" && ["image", "video", "youtube"].includes(value.type), "media.type: invalid type");
   mediaUrl(value.url, "media.url");
   text(value.alt, "media.alt", 300);
+  if ("decorative" in value) ensure(typeof value.decorative === "boolean" && (value.decorative !== true || value.alt === ""), "media.decorative: invalid description");
   if ("provider" in value) ensure(value.provider === "local" || value.provider === "cloudinary", "media.provider: invalid provider");
   if (value.provider === "local") ensure(value.url.startsWith("/"), "media: local provider requires local path");
   if ("posterUrl" in value) mediaUrl(value.posterUrl, "media.posterUrl");

@@ -10,6 +10,8 @@ export type MediaAsset = {
   duration?: number;
   format?: string;
   bytes?: number;
+  /** Optional description passed from a trusted library or upload response. */
+  alt?: string;
 };
 
 export type CloudinaryMediaUsage = "hero" | "content" | "product";

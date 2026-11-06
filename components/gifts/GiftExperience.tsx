@@ -4,7 +4,7 @@ import studioStyles from "@/components/store/StoreContentPresentation.module.css
 import { cloneElement, type CSSProperties, type ReactElement } from "react";
 import StoreProductCard from "@/components/store/StoreProductCard";
 import type { GiftCatalog } from "@/lib/giftPresentation";
-import { DEFAULT_GIFT_LANDING, DEFAULT_GIFT_CUSTOM_BODY, giftTargetHref, giftContactHref, type GiftLandingDocument, type GiftSectionId } from "@/lib/giftCms";
+import { DEFAULT_GIFT_LANDING, DEFAULT_GIFT_CUSTOM_BODY, giftHeroAlt, giftTargetHref, giftContactHref, type GiftLandingDocument, type GiftSectionId } from "@/lib/giftCms";
 import styles from "./GiftExperience.module.css";
 
 const pointNumber = new Intl.NumberFormat("zh-TW", { maximumSignificantDigits: 21 });
@@ -15,7 +15,7 @@ export default function GiftExperience({ model, cms = DEFAULT_GIFT_LANDING }: { 
   const sections: Record<GiftSectionId, ReactElement<{ className: string; style?: CSSProperties }>> = {
     hero: <header className={styles.hero}>
       <div className={styles.heroVisual}>
-        {heroImage ? <img src={heroImage.url} alt={cms.hero.alt || heroImage.alt || "KD Coffee 咖啡禮盒"} fetchPriority="high" decoding="async" /> : <div className={styles.heroPlaceholder} aria-hidden="true" />}
+        {heroImage ? <img src={heroImage.url} alt={cms.hero.image ? giftHeroAlt(cms.hero) : heroImage.decorative ? "" : heroImage.alt || "KD Coffee 咖啡禮盒"} fetchPriority="high" decoding="async" /> : <div className={styles.heroPlaceholder} aria-hidden="true" />}
       </div>
       <div className={styles.heroCopy}>
         <p className={styles.eyebrow}><StudioText value={cms.hero.eyebrow} presentation={presentation("hero")} field="eyebrow"/></p>

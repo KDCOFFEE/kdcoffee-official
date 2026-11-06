@@ -38,7 +38,7 @@ export const PAGE_MOBILE_MEDIA_LAYOUTS = ["text-first","media-first","media-full
 export type PageMobileMediaLayout = (typeof PAGE_MOBILE_MEDIA_LAYOUTS)[number];
 
 export type PageBuilderCta = { id: string; enabled: boolean; label: string; stylePreset: CtaStylePreset; link: CmsLinkValue };
-export type PageBuilderMedia = { id: string; enabled: boolean; media: MediaAsset; alt: string; title?: string };
+export type PageBuilderMedia = { id: string; enabled: boolean; media: MediaAsset; alt: string; decorative?: boolean; title?: string };
 export type PageBuilderItem = { id: string; enabled: boolean; title: string; body: string; media?: MediaAsset };
 export type PageBuilderProduct = { id: string; enabled: boolean; productSlug: string };
 
@@ -187,7 +187,7 @@ export function validatePageDraft(value: PageDraft, productSlugs?: Set<string>, 
     for (const [index, cta] of section.ctas.entries()) { if (typeof cta.enabled !== "boolean" || !CTA_STYLES.has(cta.stylePreset)) throw new Error(`${label}按鈕設定不正確。`); assertString(cta.label, `${label}第 ${index + 1} 個按鈕文字`, 80, true); validateCmsLinkValue(cta.link, `${label}第 ${index + 1} 個按鈕`); }
     if (!Array.isArray(section.media) || section.media.length > 30) throw new Error(`${label}最多 30 個媒體。`);
     assertUniqueIds(section.media, `${label}媒體`);
-    for (const item of section.media) { if (typeof item.enabled !== "boolean" || !isMediaAsset(item.media)) throw new Error(`${label}媒體格式不正確。`); assertString(item.alt, `${label}媒體替代文字`, 240); assertString(item.title || "", `${label}媒體標題`, 180); }
+    for (const item of section.media) { if (typeof item.enabled !== "boolean" || !isMediaAsset(item.media)) throw new Error(`${label}媒體格式不正確。`); assertString(item.alt, `${label}媒體替代文字`, 240); if (item.decorative !== undefined && (typeof item.decorative !== "boolean" || (item.decorative && item.alt !== ""))) throw new Error(`${label}裝飾設定不正確。`); assertString(item.title || "", `${label}媒體標題`, 180); }
     if (!Array.isArray(section.items) || section.items.length > 30) throw new Error(`${label}最多 30 個項目。`);
     assertUniqueIds(section.items, `${label}項目`);
     for (const item of section.items) { if (typeof item.enabled !== "boolean") throw new Error(`${label}項目顯示狀態不正確。`); assertString(item.title, `${label}項目標題`, 180, true); assertString(item.body, `${label}項目內容`, 1000); if (item.media && !isMediaAsset(item.media)) throw new Error(`${label}項目媒體格式不正確。`); }

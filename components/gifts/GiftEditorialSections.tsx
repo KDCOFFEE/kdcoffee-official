@@ -13,7 +13,7 @@ function Copy({section}:{section:GiftEditorialSection}){
 }
 function Picture({image,presentation,gallery=false}:{image:NonNullable<GiftEditorialSection["image"]>;presentation?:StudioPresentation;gallery?:boolean}){
  const caption=gallery?presentation?.mobile?.content?.galleryCaptions?.[image.url]:presentation?.mobile?.content?.caption;
- return <figure><img src={image.url} alt={image.alt} loading="lazy" decoding="async"/>{image.caption||caption!==undefined?<figcaption><StudioText value={image.caption} mobileValue={caption}/></figcaption>:null}</figure>;
+ return <figure><img src={image.url} alt={image.decorative ? "" : image.alt} loading="lazy" decoding="async"/>{image.caption||caption!==undefined?<figcaption><StudioText value={image.caption} mobileValue={caption}/></figcaption>:null}</figure>;
 }
 function Rows({rows}:{rows:GiftEditorialSection["rows"]}){return <dl className={styles.specs}>{rows?.map((row,index)=><div key={index}><dt>{row.label}</dt><dd>{row.value}</dd></div>)}</dl>;}
 export default function GiftEditorialSections({document,label="禮盒介紹"}:{document:GiftProductDocument;label?:string}){

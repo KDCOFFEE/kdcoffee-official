@@ -1,3 +1,4 @@
+import { resolveAssetAlt } from "./assetMetadata";
 import { validateStudioPresentation, type StudioPresentation } from "./storeContentPresentation";
 import type { StoreProduct } from "./storeTypes";
 import { resolveCmsLink, validateCmsLinkValue } from "./cmsLinks";
@@ -8,7 +9,18 @@ export const GIFT_SECTION_TYPES = ["rich_text", "image", "text_image", "gallery"
 export const STORE_CONTENT_SECTION_TYPES = [...GIFT_SECTION_TYPES, "banner", "specs"] as const;
 export const GIFT_CATEGORY_IDS = ["drip-gift", "bean-gift", "coffee-gear-gift", "custom-gift"] as const;
 export type GiftSectionId = typeof GIFT_SECTION_IDS[number];
-export type GiftImage = { url: string; alt: string; caption: string };
+export type GiftImage = { url: string; alt: string; caption: string; decorative?: boolean };
+
+export function giftHeroAlt(hero: GiftLandingDocument["hero"]) {
+  return hero.image?.decorative === true ? "" : hero.alt || hero.image?.alt || "KD Coffee 咖啡禮盒";
+}
+
+export function replaceGiftHeroImage(hero: GiftLandingDocument["hero"], image: GiftImage | null) {
+  if (!image) return { ...hero, image: null, alt: "" };
+  if (hero.image?.url === image.url) return hero;
+  const alt = image.decorative === true ? "" : resolveAssetAlt(image) || "KD Coffee 禮盒專區主視覺";
+  return { ...hero, image: { ...image, alt }, alt };
+}
 export type GiftVisual = { alignment: "left" | "center"; width: "normal" | "wide"; background: "default" | "soft" | "contrast"; presentation?: StudioPresentation };
 export type GiftEditorialSection = GiftVisual & {
   id: string; type: typeof STORE_CONTENT_SECTION_TYPES[number]; enabled: boolean;
@@ -76,7 +88,7 @@ function unique(values: unknown[]) { ensure(new Set(values).size === values.leng
 function validateVisual(v: Record<string, unknown>) { if(v.presentation !== undefined) { try { validateStudioPresentation(v.presentation); } catch { throw new GiftCmsValidationError("視覺設定格式不正確，請檢查字級、色彩與間距。"); } } enumeration(v.alignment, ["left", "center"]); enumeration(v.width, ["normal", "wide"]); enumeration(v.background, ["default", "soft", "contrast"]); }
 function image(v: unknown) {
   if (v === null) return;
-  const r = record(v, ["url", "alt", "caption"]); text(r.url, 2048, true); text(r.alt, 300, true); text(r.caption, 2000);
+  const r = record(v, ["url", "alt", "caption", "decorative"]); if (r.decorative !== undefined) { ensure(typeof r.decorative === "boolean"); ensure(r.decorative !== true || r.alt === ""); } text(r.url, 2048, true); text(r.alt, 300, r.decorative !== true); text(r.caption, 2000);
   const url = r.url as string; ensure(!/[\\\s]/u.test(url) && !url.startsWith("//"));
   if (url.startsWith("/")) { ensure(!/[?#]/u.test(url) && url.startsWith("/uploads/assets/")); for (const part of url.split("/")) { let decoded; try { decoded = decodeURIComponent(part); } catch { throw new GiftCmsValidationError(); } ensure(![".", ".."].includes(decoded) && !/[\\/\u0000-\u0020]/u.test(decoded)); } }
   else { let parsed: URL; try { parsed = new URL(url); } catch { throw new GiftCmsValidationError(); } ensure(parsed.protocol === "https:" && !parsed.username && !parsed.password); }

@@ -78,6 +78,7 @@ function mediaDto(media: StoreMediaReference): StoreMediaReference {
   // Copy only the established media shape, never arbitrary persistence fields.
   return {
     type: media.type, url: media.url, alt: media.alt,
+    ...(media.decorative !== undefined ? { decorative: media.decorative } : {}),
     ...(media.provider !== undefined ? { provider: media.provider } : {}),
     ...(media.publicId !== undefined ? { publicId: media.publicId } : {}),
     ...(media.videoId !== undefined ? { videoId: media.videoId } : {}),

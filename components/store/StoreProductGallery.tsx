@@ -28,7 +28,7 @@ export default function StoreProductGallery({ name, heroMedia, gallery }: Galler
   const selected = mediaItems[index];
   const preview = selected ? storeProductMediaPreview(selected) : undefined;
   const imageFallback = mediaItems.find(media => media.type === "image")?.url;
-  const alt = selected?.alt.trim() ? selected.alt : name;
+  const alt = selected?.decorative === true ? "" : selected?.alt.trim() ? selected.alt : name;
   const placeholder = <div className={styles.placeholder} role="img" aria-label={`${name}：商品圖片尚未提供`}>商品圖片尚未提供</div>;
   const choose = (next: number) => setSelection({ index: next, activated: false });
 

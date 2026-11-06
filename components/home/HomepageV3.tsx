@@ -59,6 +59,7 @@ type Product = {
 };
 
 type HomepageContentItem = {
+  decorative?: boolean;
   id?: string;
   imageId: string;
   image?: string;
@@ -410,7 +411,7 @@ export default function HomepageV3({
               c: HomepageContentItem,
               index: number,
             ) => {
-              const cardMedia = resolveHomepageMediaCollection({ alt: c.alt || c.title, media: c.media, mediaItems: c.mediaItems, src: c.image });
+              const cardMedia = resolveHomepageMediaCollection({ alt: c.decorative ? "" : c.alt || c.title, media: c.media, mediaItems: c.mediaItems, src: c.image });
 
               return (
               <article
@@ -421,7 +422,7 @@ export default function HomepageV3({
               >
                 {cardMedia.length ? (
                   <div className="v3-value-media">
-                    <HomepageMediaCollection alt={c.alt || c.title} media={c.media} mediaItems={c.mediaItems} src={c.image} previewMode={previewMode} />
+                    <HomepageMediaCollection alt={c.decorative ? "" : c.alt || c.title} media={c.media} mediaItems={c.mediaItems} src={c.image} previewMode={previewMode} />
                   </div>
                 ) : null}
 
@@ -491,7 +492,7 @@ export default function HomepageV3({
               index: number,
             ) => {
               const sceneCta = resolveHomepageCta({ label: c.button, href: c.href, enabled: c.ctaEnabled, legacyLabel: "開始" }, ctaRegistry);
-              const sceneMediaItems = resolveHomepageMediaCollection({ alt: c.alt || c.title, media: c.media, mediaItems: c.mediaItems, src: c.image });
+              const sceneMediaItems = resolveHomepageMediaCollection({ alt: c.decorative ? "" : c.alt || c.title, media: c.media, mediaItems: c.mediaItems, src: c.image });
               const sceneMedia = sceneMediaItems.find((item) => item.primary) || sceneMediaItems[0];
               return <article
                 key={c.id}
@@ -508,10 +509,7 @@ export default function HomepageV3({
 
                   media={sceneMedia?.media || c.media}
 
-                  alt={
-                    c.alt ||
-                    c.title
-                  }
+                  alt={sceneMedia ? sceneMedia.alt : c.decorative ? "" : c.alt || c.title}
 
                   imageId={
                     c.imageId
@@ -723,9 +721,9 @@ export default function HomepageV3({
 
         <div className="v3-process-grid v3-process-journey home-mobile-rail" {...homepagePresentationProps(presentation.home005.contentStyle())} data-home-reveal="editorial-media" tabIndex={processSteps.length > 1 ? 0 : undefined} aria-label="KD Coffee 咖啡製作旅程，可左右滑動瀏覽">
           {processSteps.map((s: HomepageContentItem, i: number) => {
-            const hasMedia = resolveHomepageMediaCollection({ alt: s.alt || s.title, media: s.media, mediaItems: s.mediaItems, src: s.image }).length > 0;
+            const hasMedia = resolveHomepageMediaCollection({ alt: s.decorative ? "" : s.alt || s.title, media: s.media, mediaItems: s.mediaItems, src: s.image }).length > 0;
             return <article key={s.id} className={hasMedia ? "" : "is-text-led"} data-home-motion-item style={motionItemStyle(i + 2)}>
-              {hasMedia ? <Media src={s.image} media={s.media} mediaItems={s.mediaItems} alt={s.alt || s.title} id={s.imageId} previewMode={previewMode} /> : null}
+              {hasMedia ? <Media src={s.image} media={s.media} mediaItems={s.mediaItems} alt={s.decorative ? "" : s.alt || s.title} id={s.imageId} previewMode={previewMode} /> : null}
               <div className="v3-process-copy"><span {...homepagePresentationProps(presentation.home005.textStyle("metadata"))}>{String(i + 1).padStart(2, "0")}</span><h3 {...homepagePresentationProps(presentation.home005.textStyle("cardTitle"))}>{s.title}</h3><p {...homepagePresentationProps(presentation.home005.textStyle("cardBody"))}>{s.text}</p></div>
             </article>;
           })}
@@ -774,7 +772,7 @@ export default function HomepageV3({
         </div>
 
         <div data-home-reveal="media" data-home-motion-part style={motionItemStyle(1)}>
-          <Media src={roast.image} media={roast.media} mediaItems={roast.mediaItems} alt={roast.alt || roast.title} id={roast.imageId || "IMG0601"} previewMode={previewMode} />
+          <Media src={roast.image} media={roast.media} mediaItems={roast.mediaItems} alt={roast.decorative ? "" : roast.alt || roast.title} id={roast.imageId || "IMG0601"} previewMode={previewMode} />
         </div>
         </HomepageContentWidth>
       </section> : null}
@@ -811,7 +809,7 @@ export default function HomepageV3({
                   media={c.media}
                   mediaItems={c.mediaItems}
                   alt={
-                    c.alt ||
+                    c.decorative ? "" : c.alt ||
                     c.title
                   }
                   id={

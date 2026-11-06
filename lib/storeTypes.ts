@@ -36,7 +36,7 @@ export type StoreCategory = StoreEntity & {
 };
 
 /** Existing media shape, with Store-owned accessibility text and strict validation. */
-export type StoreMediaReference = MediaAsset & { alt: string };
+export type StoreMediaReference = MediaAsset & { alt: string; decorative?: boolean };
 
 export type StoreSpecification = {
   key: string;

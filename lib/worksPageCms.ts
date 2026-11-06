@@ -171,6 +171,7 @@ export type WorksEntranceMotion = HomepageSectionMotion & { triggerOnViewport?: 
 export type WorksPageMediaReference = {
   media: MediaAsset;
   alt: string;
+  decorative?: boolean;
 };
 
 export type WorksPageCta = {
@@ -410,8 +411,8 @@ function resolveMediaReference(value: unknown, shareImage = false): WorksPageMed
   if (!isRecord(value) || !isMediaAsset(value.media) || !isSafeMediaUrl(value.media.url)) return undefined;
   if (shareImage && value.media.type !== "image") return undefined;
   if (typeof value.alt !== "string" || value.alt.length > 240) return undefined;
-  if (value.media.type === "image" && !value.alt.trim()) return undefined;
-  return { media: { ...value.media }, alt: value.alt };
+  if (value.media.type === "image" && !value.alt.trim() && (shareImage || value.decorative !== true)) return undefined;
+  return { media: { ...value.media }, alt: value.decorative === true ? "" : value.alt, ...(typeof value.decorative === "boolean" ? { decorative: value.decorative } : {}) };
 }
 
 /**
@@ -428,7 +429,7 @@ export function resolveWorksPagePreviewMedia(
     : hero?.desktopMedia;
   if (!candidate || !isMediaAsset(candidate.media) || !isSafeMediaUrl(candidate.media.url)) return undefined;
   const alt = typeof candidate.alt === "string" && candidate.alt.length <= 240 ? candidate.alt : "";
-  return { media: { ...candidate.media }, alt };
+  return { media: { ...candidate.media }, alt: candidate.decorative === true ? "" : alt, ...(candidate.decorative !== undefined ? { decorative: candidate.decorative } : {}) };
 }
 
 function resolveMotion(value: unknown, triggerOnViewport = false): Required<WorksEntranceMotion> {
@@ -646,10 +647,11 @@ function validateCta(value: unknown, label: string) {
 function validateMediaReference(value: unknown, label: string, shareImage = false) {
   if (value === undefined) return;
   if (!isRecord(value)) throw new Error(`${label}格式不正確。`);
-  assertOnlyKeys(value, ["media", "alt"], label);
+  assertOnlyKeys(value, ["media", "alt", "decorative"], label);
+  if (value.decorative !== undefined && (typeof value.decorative !== "boolean" || (value.decorative === true && (shareImage || value.alt !== "")))) throw new Error(`${label}裝飾設定不正確。`);
   if (!isMediaAsset(value.media) || !isSafeMediaUrl(value.media.url)) throw new Error(`${label}媒體格式或網址不安全。`);
   if (shareImage && value.media.type !== "image") throw new Error(`${label}必須是圖片。`);
-  validateOptionalText(value.alt, `${label}替代文字`, 240, value.media.type === "image");
+  validateOptionalText(value.alt, `${label}替代文字`, 240, value.media.type === "image" && value.decorative !== true);
 }
 
 function validateMotion(value: unknown, label: string) {

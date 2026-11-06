@@ -249,6 +249,7 @@ export type HomepageMediaReference = {
   image?: string;
   media?: MediaAsset;
   alt?: string;
+  decorative?: boolean;
   title?: string;
   caption?: string;
 };
@@ -416,6 +417,7 @@ function validateMediaReferences(value: unknown, label: string) {
     validateBoolean(entry.primary, `${label}第 ${index + 1} 項主媒體設定`);
     if (entry.primary === true && entry.enabled !== false) primaryCount += 1;
     validateText(entry.alt, `${label}第 ${index + 1} 項替代文字`, 300);
+    validateBoolean(entry.decorative, `${label}第 ${index + 1} 項裝飾設定`);
     validateText(entry.title, `${label}第 ${index + 1} 項標題`, 200);
     validateText(entry.caption, `${label}第 ${index + 1} 項說明`, 500);
     if (entry.media !== undefined) validateMediaAsset(entry.media, `${label}第 ${index + 1} 項`);
