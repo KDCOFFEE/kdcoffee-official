@@ -41,8 +41,8 @@ export default function AssetManager() {
       <div className="asset-card-head"><div><span className="asset-id">{asset.id}</span><h2>{asset.name}</h2></div><span className={`asset-status ${asset.path ? "ready" : "missing"}`}>{asset.path ? "使用中" : "待補"}</span></div>
       <dl className="asset-spec"><div><dt>前台位置</dt><dd>{asset.usage}</dd></div><div><dt>建議原圖</dt><dd>{asset.recommendedSize}</dd></div><div><dt>網站顯示</dt><dd>{asset.displaySize}</dd></div><div><dt>格式</dt><dd>{asset.format}</dd></div><div><dt>SEO 檔名</dt><dd><code>{asset.seoStem}-v01.ext</code></dd></div>{asset.originalFileName ? <div><dt>原始檔名</dt><dd>{asset.originalFileName}</dd></div> : null}</dl>
       <label>替代文字（ALT）<textarea value={asset.alt} onChange={(event) => patch(asset.id, { alt: event.target.value })}/></label>
-      <label>SEO 檔名主體<input value={asset.seoStem} onChange={(event) => patch(asset.id, { seoStem: event.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "-") })}/></label>
-      <AssetUploadButton assetId={asset.id} className="upload-label asset-upload" label={asset.path ? "上傳新版本" : "上傳照片"} onUploadingChange={busy => { if (busy) setMessage(`${asset.id} 上傳中…`); }} onError={setMessage} onUploaded={updated => { patch(asset.id, updated); setMessage(`上傳完成：${updated.path.split("/").pop()}`); }} />
+      {!asset.alt?.trim() ? <p role="status">請依圖片內容填寫繁體中文 ALT。原始檔名僅供技術記錄參考。</p> : null}<label>SEO 檔名主體<input value={asset.seoStem} onChange={(event) => patch(asset.id, { seoStem: event.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "-") })}/></label>
+      <AssetUploadButton contextKey={JSON.stringify(asset)} assetId={asset.id} className="upload-label asset-upload" label={asset.path ? "上傳新版本" : "上傳照片"} onUploadingChange={busy => { if (busy) setMessage(`${asset.id} 上傳中…`); }} onError={setMessage} onUploaded={updated => { patch(asset.id, updated); setMessage(`上傳完成：${updated.path.split("/").pop()}`); }} />
       {asset.path ? <small className="asset-path">目前路徑：{asset.path}</small> : null}
     </article>)}</div>
   </div>;

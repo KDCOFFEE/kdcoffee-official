@@ -12,12 +12,14 @@ import {
   CLOUDINARY_VIDEO_FOLDER,
   isCloudinaryMediaUsage,
 } from "@/lib/media";
-import { isProductMediaPublicId } from "@/lib/productMediaNaming";
+import { isStoredInterpretationWork } from "@/lib/interpretationMediaNaming";
+import { extractProductMediaSequence, isProductMediaPublicId } from "@/lib/productMediaNaming";
 import {
   CUSTOM_SECTION_MEDIA_PURPOSE,
   isCustomSectionMediaPublicId,
   isCustomSectionMediaType,
   isCustomSectionStableId,
+  isStoreMediaSlot,
 } from "@/lib/customSectionMediaNaming";
 import { isCanonicalProductSlug } from "@/lib/productMediaNaming";
 
@@ -59,17 +61,30 @@ export async function POST(request: Request) {
       const productSlug = typeof body.productSlug === "string" ? body.productSlug.trim() : "";
       const sectionId = typeof body.sectionId === "string" ? body.sectionId : "";
       const mediaType = body.mediaType;
+      const storeSlot = body.storeSlot;
       if (isCustomSectionMediaType(mediaType)) customSectionMediaType = mediaType;
       const valid =
         isCanonicalProductSlug(productSlug) &&
+        (storeSlot === undefined || isStoreMediaSlot(storeSlot)) &&
         isCustomSectionStableId(sectionId) &&
         isCustomSectionMediaType(mediaType) &&
-        publicId.startsWith(`${mediaType === "image" ? CLOUDINARY_IMAGE_FOLDER : CLOUDINARY_VIDEO_FOLDER}/`) &&
-        isCustomSectionMediaPublicId({ publicId, productSlug, sectionId, mediaType });
+        publicId.slice(0, publicId.lastIndexOf("/")) === (mediaType === "image" ? CLOUDINARY_IMAGE_FOLDER : CLOUDINARY_VIDEO_FOLDER) &&
+        isCustomSectionMediaPublicId({ publicId, productSlug, sectionId, mediaType, storeSlot });
       if (!valid) return finalizeResponse("FINALIZE_RESOURCE_INVALID", 400, "自訂 Section 媒體命名資料不正確。");
       const media = await verifyCloudinaryCustomSectionMedia(publicId, mediaType);
       return NextResponse.json({ ok: true, media }, { headers: noStoreHeaders });
     }
+    if (mediaPurpose === "interpretation") {
+      const productSlug = body.productSlug;
+      const valid = isCanonicalProductSlug(productSlug) && usage === "product" && body.mediaType === "video" &&
+        publicId.slice(0, publicId.lastIndexOf("/")) === CLOUDINARY_VIDEO_FOLDER &&
+        extractProductMediaSequence({ publicId, productSlug, mediaPurpose }) !== undefined &&
+        await isStoredInterpretationWork(productSlug);
+      if (!valid) return finalizeResponse("FINALIZE_RESOURCE_INVALID", 400, "作品詮釋影片與作品 Slug 不符。");
+      const media = await verifyCloudinaryVideo(publicId, usage);
+      return NextResponse.json({ ok: true, media }, { headers: noStoreHeaders });
+    }
+
     const legacyPublicId = new RegExp(
       `^${CLOUDINARY_VIDEO_FOLDER.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}/[a-f0-9-]{36}$`,
     );

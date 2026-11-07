@@ -1,6 +1,6 @@
 "use client";
 
-import { ChangeEvent, useRef, useState } from "react";
+import { ChangeEvent, useEffect, useRef, useState } from "react";
 import {
   CUSTOM_SECTION_IMAGE_LIMITS,
   isAllowedImageUpload,
@@ -24,10 +24,12 @@ type MediaUploaderProps = {
   imageActionLabel?: string;
   videoActionLabel?: string;
   allowCloudinaryImage?: boolean;
+  contextKey?: string;
   productMediaNaming?: {
     productSlug: string;
-    mediaPurpose: "clean-roasting" | "custom-section";
+    mediaPurpose: "clean-roasting" | "custom-section" | "interpretation";
     sectionId?: string;
+    storeSlot?: "product-hero" | "product-gallery";
     reservedPublicIds?: string[];
   };
   onUploadingChange?: (uploading: boolean) => void;
@@ -45,7 +47,7 @@ type SignedUploadResponse = {
   params: Record<string, string | number>;
 };
 
-type CloudinaryUploadResponse = { public_id?: string; done?: boolean };
+type CloudinaryUploadResponse = { public_id?: string; done?: boolean; existing?: boolean };
 
 const CHUNK_SIZE = 10 * 1024 * 1024;
 const SINGLE_UPLOAD_LIMIT = 95 * 1024 * 1024;
@@ -170,6 +172,7 @@ export default function MediaUploader({
   imageActionLabel = "選擇圖片",
   videoActionLabel,
   allowCloudinaryImage = false,
+  contextKey,
   productMediaNaming,
   onUploadingChange,
   onChange,
@@ -183,6 +186,11 @@ export default function MediaUploader({
   const [lastVideo, setLastVideo] = useState<File | null>(null);
   const activeRequest = useRef<XMLHttpRequest | null>(null);
   const cancelled = useRef(false);
+  const uploadContext = JSON.stringify([contextKey, value?.type, value?.provider, value?.publicId || value?.url]);
+  const currentContext = useRef(uploadContext);
+  currentContext.current = uploadContext;
+  const operation = useRef(0);
+  useEffect(() => () => { operation.current += 1; cancelled.current = true; activeRequest.current?.abort(); }, []);
 
   async function uploadCloudinary(file: File, mediaType: "image" | "video") {
     if ((imageOnly && mediaType !== "image") || (videoOnly && mediaType !== "video")) return;
@@ -199,6 +207,7 @@ export default function MediaUploader({
       return;
     }
 
+    const startedContext = uploadContext, startedOperation = ++operation.current;
     if (mediaType === "video") setLastVideo(file);
     setUploading(true);
     onUploadingChange?.(true);
@@ -215,6 +224,7 @@ export default function MediaUploader({
               productSlug: productMediaNaming.productSlug,
               sectionId: productMediaNaming.sectionId,
               mediaType,
+              storeSlot: productMediaNaming.storeSlot,
             }),
           }
         : productMediaNaming;
@@ -242,7 +252,9 @@ export default function MediaUploader({
         (request) => { activeRequest.current = request; },
         () => cancelled.current,
       );
-      if (!uploaded.public_id) throw new Error("Cloudinary 未回傳完整媒體資料。");
+      if (uploaded.existing) throw new Error("媒體名稱已被其他上傳使用，請重試。");
+      if (cancelled.current) throw new Error("已取消媒體上傳。");
+      if (!uploaded.public_id || uploaded.public_id !== signed.params.public_id) throw new Error("Cloudinary 回傳的媒體名稱與上傳授權不符。");
 
       setMessage("正在驗證媒體資料…");
       const finalizeResponse = await fetch("/api/admin/media/finalize", {
@@ -255,6 +267,8 @@ export default function MediaUploader({
         throw new Error(finalized.error || "媒體驗證失敗，請稍後再試。");
       }
 
+      if (cancelled.current) throw new Error("已取消媒體上傳。");
+      if (currentContext.current !== startedContext || operation.current !== startedOperation) throw new Error("編輯內容已有變更，請重新選取媒體。");
       onChange(finalized.media);
       setProgress(100);
       setMessage(`${mediaType === "image" ? "圖片" : "影片"}已上傳並完成驗證。請儲存頁面變更。`);
@@ -290,8 +304,11 @@ export default function MediaUploader({
     setUploading(true);
     onUploadingChange?.(true);
     setMessage("圖片上傳中…");
+    const startedContext = uploadContext, startedOperation = ++operation.current;
     try {
-      onChange(await onImageUpload(file));
+      const media = await onImageUpload(file);
+      if (currentContext.current !== startedContext || operation.current !== startedOperation) throw new Error("編輯內容已有變更，請重新選取圖片。");
+      onChange(media);
       setMessage("圖片上傳完成。請儲存頁面變更。");
     } catch (error) {
       setMessage(errorMessage(error));

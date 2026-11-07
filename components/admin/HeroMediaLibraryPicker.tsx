@@ -2,8 +2,9 @@
 
 /* eslint-disable @next/next/no-img-element -- runtime-managed local and Cloudinary media paths are not known at build time. */
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
+import { resolveAssetAlt } from "@/lib/assetMetadata";
 import type { AssetRecord } from "@/lib/assets";
 import { localImageMedia, type MediaAsset } from "@/lib/media";
 
@@ -32,6 +33,7 @@ export default function HeroMediaLibraryPicker({
   title,
   usage = "hero",
   videoOnly = false,
+  contextKey,
   onChoose,
   onClose,
 }: {
@@ -39,9 +41,13 @@ export default function HeroMediaLibraryPicker({
   title: string;
   usage?: "hero" | "product";
   videoOnly?: boolean;
+  contextKey?: string;
   onChoose: (media: MediaAsset) => void;
   onClose: () => void;
 }) {
+  const currentContext = useRef(contextKey), mounted = useRef(true);
+  currentContext.current = contextKey;
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const [query, setQuery] = useState("");
   const [videos, setVideos] = useState<CloudinaryVideoAsset[]>([]);
   const [loadingVideos, setLoadingVideos] = useState(true);
@@ -74,7 +80,7 @@ export default function HeroMediaLibraryPicker({
         name: asset.name,
         subtitle: asset.alt || asset.category || "網站圖片",
         previewUrl: asset.path,
-        media: localImageMedia(asset.path),
+        media: { ...localImageMedia(asset.path), alt: resolveAssetAlt({ alt: asset.alt }) },
       }));
     const videoItems: LibraryItem[] = videos.map((video) => ({
       kind: "video",
@@ -98,6 +104,7 @@ export default function HeroMediaLibraryPicker({
       onChoose(item.media);
       return;
     }
+    const startedContext = contextKey;
     setChoosingId(item.id);
     setMessage("正在驗證既有 Cloudinary 影片…");
     try {
@@ -108,6 +115,7 @@ export default function HeroMediaLibraryPicker({
       });
       const result = await response.json() as { error?: string; media?: MediaAsset };
       if (!response.ok || !result.media) throw new Error(result.error || "影片驗證失敗");
+      if (!mounted.current || currentContext.current !== startedContext) throw new Error("編輯內容已有變更，請重新選取媒體。");
       onChoose(result.media);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "影片驗證失敗");

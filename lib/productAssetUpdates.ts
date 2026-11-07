@@ -1,3 +1,5 @@
+import { extractProductMediaSequence, isCanonicalProductSlug, isProductMediaPublicId } from "./productMediaNaming";
+
 export type ProductAssetUpdate = {
   id?: unknown;
   slug?: unknown;
@@ -108,7 +110,22 @@ export function mergeProductAssetUpdates(
     const current = products[index];
     const next: ProductRecord = { ...current };
     if ("cover" in update) next["cover"] = String(update.cover ?? "").trim();
-    if ("assets" in update) next["assets"] = mergeAssets(current["assets"], update.assets);
+    if ("assets" in update) {
+      const updates = normalizeAssets(update.assets);
+      const currentAssets = isRecord(current.assets) ? current.assets : {};
+      for (const [slot, asset] of Object.entries(updates)) {
+        const publicId = isRecord(asset.media) ? asset.media.publicId : undefined;
+        if (typeof publicId !== "string" || !isProductMediaPublicId({ publicId, mediaPurpose: "interpretation" })) continue;
+        const previous = currentAssets[slot];
+        if (isRecord(previous) && isRecord(previous.media) && previous.media.publicId === publicId) continue;
+        if ((slot !== "galleryDesktopAnimation" && slot !== "galleryMobileAnimation") ||
+          !isCanonicalProductSlug(current.slug) ||
+          extractProductMediaSequence({ publicId, productSlug: current.slug, mediaPurpose: "interpretation" }) === undefined) {
+          throw new ProductAssetUpdateError("作品詮釋影片與作品 Slug 或媒體欄位不符。");
+        }
+      }
+      next["assets"] = mergeAssets(current.assets, updates);
+    }
     if ("pageLayout" in update) next["pageLayout"] = normalizePageLayout(update.pageLayout);
     if ("showRoastedBeanPhoto" in update) {
       if (typeof update.showRoastedBeanPhoto !== "boolean") throw new ProductAssetUpdateError("烘焙豆照片顯示設定格式不正確。");

@@ -17,12 +17,14 @@ import {
   isCloudinaryMediaUsage,
   VIDEO_UPLOAD_LIMITS,
 } from "@/lib/media";
+import { isStoredInterpretationWork } from "@/lib/interpretationMediaNaming";
 import { isCanonicalProductSlug } from "@/lib/productMediaNaming";
 import {
   CUSTOM_SECTION_MEDIA_PURPOSE,
   isCustomSectionMediaType,
   isCustomSectionMediaPublicId,
   isCustomSectionStableId,
+  isStoreMediaSlot,
 } from "@/lib/customSectionMediaNaming";
 
 export const dynamic = "force-dynamic";
@@ -48,19 +50,21 @@ export async function POST(request: Request) {
     const mediaPurpose = typeof body.mediaPurpose === "string" ? body.mediaPurpose : "";
     const sectionId = typeof body.sectionId === "string" ? body.sectionId : "";
     const mediaType = body.mediaType;
+    const storeSlot = body.storeSlot;
     const reservedPublicIds = Array.isArray(body.reservedPublicIds) ? body.reservedPublicIds : [];
 
     if (mediaPurpose === CUSTOM_SECTION_MEDIA_PURPOSE) {
       if (
         !isCanonicalProductSlug(productSlug) ||
+        (storeSlot !== undefined && !isStoreMediaSlot(storeSlot)) ||
         !isCustomSectionStableId(sectionId) ||
         !isCustomSectionMediaType(mediaType) ||
-        reservedPublicIds.length > 16 ||
+        reservedPublicIds.length > (storeSlot === "product-gallery" ? 24 : 16) ||
         reservedPublicIds.some((publicId) => {
           if (typeof publicId !== "string" || !publicId.trim() || publicId.length > 220 || !isCustomSectionMediaType(mediaType)) return true;
           const cleanPublicId = publicId.trim();
           const folder = mediaType === "image" ? CLOUDINARY_IMAGE_FOLDER : CLOUDINARY_VIDEO_FOLDER;
-          return !cleanPublicId.startsWith(`${folder}/`) || !isCustomSectionMediaPublicId({ publicId: cleanPublicId, productSlug, sectionId, mediaType });
+          return cleanPublicId.slice(0, cleanPublicId.lastIndexOf("/")) !== folder || !isCustomSectionMediaPublicId({ publicId: cleanPublicId, productSlug, sectionId, mediaType, storeSlot: isStoreMediaSlot(storeSlot) ? storeSlot : undefined });
         })
       ) {
         return NextResponse.json({ error: "自訂 Section 媒體命名資料不正確。" }, { status: 400, headers: noStoreHeaders });
@@ -85,6 +89,7 @@ export async function POST(request: Request) {
         productSlug,
         sectionId,
         mediaType,
+        storeSlot,
         reservedPublicIds: reservedPublicIds.map((publicId) => String(publicId).trim()),
       });
       return NextResponse.json(
@@ -117,7 +122,7 @@ export async function POST(request: Request) {
       usesProductMediaNaming &&
       (
         !isCanonicalProductSlug(productSlug) ||
-        mediaPurpose !== "clean-roasting" ||
+        (mediaPurpose !== "clean-roasting" && mediaPurpose !== "interpretation") ||
         reservedPublicIds.length > 8 ||
         reservedPublicIds.some((publicId) =>
           typeof publicId !== "string" || !publicId.trim() || publicId.length > 220
@@ -130,10 +135,14 @@ export async function POST(request: Request) {
       );
     }
 
+    if (mediaPurpose === "interpretation" && (usage !== "product" || mediaType !== "video" || !(await isStoredInterpretationWork(productSlug)))) {
+      return NextResponse.json({ error: "請先儲存具有有效 Slug 的咖啡作品。" }, { status: 400, headers: noStoreHeaders });
+    }
+
     const signedUpload = usesProductMediaNaming
       ? await createSignedProductVideoUpload({
           productSlug,
-          mediaPurpose: "clean-roasting",
+          mediaPurpose: mediaPurpose === "interpretation" ? "interpretation" : "clean-roasting",
           reservedPublicIds: reservedPublicIds.map((publicId) => String(publicId).trim()),
         })
       : createSignedVideoUpload(crypto.randomUUID());

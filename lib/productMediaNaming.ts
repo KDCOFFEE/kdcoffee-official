@@ -3,6 +3,7 @@ export const PRODUCT_MEDIA_PURPOSES = [
   "hero",
   "campaign",
   "gallery",
+  "interpretation",
 ] as const;
 
 export type ProductMediaPurpose = (typeof PRODUCT_MEDIA_PURPOSES)[number];
@@ -42,7 +43,8 @@ export function buildProductMediaPublicId({
   if (!Number.isInteger(sequence) || sequence < 1 || sequence > MAX_MEDIA_SEQUENCE) {
     throw new Error("Product media sequence is unavailable");
   }
-  return `kdcoffee-${productSlug}-${mediaPurpose}-${String(sequence).padStart(2, "0")}`;
+  const versionMarker = mediaPurpose === "interpretation" ? "v" : "";
+  return `kdcoffee-${productSlug}-${mediaPurpose}-${versionMarker}${String(sequence).padStart(2, "0")}`;
 }
 
 export function productMediaPublicIdPrefix({
@@ -101,7 +103,7 @@ export function isProductMediaPublicId({
   mediaPurpose: ProductMediaPurpose;
 }) {
   const fileName = publicId.slice(publicId.lastIndexOf("/") + 1);
-  const suffix = `-${mediaPurpose}-`;
+  const suffix = `-${mediaPurpose}-${mediaPurpose === "interpretation" ? "v" : ""}`;
   if (!fileName.startsWith("kdcoffee-") || !fileName.includes(suffix)) return false;
   const sequenceText = fileName.slice(fileName.lastIndexOf(suffix) + suffix.length);
   const productSlug = fileName.slice("kdcoffee-".length, fileName.lastIndexOf(suffix));

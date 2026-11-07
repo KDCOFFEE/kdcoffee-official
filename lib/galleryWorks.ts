@@ -1,3 +1,4 @@
+import { resolveAssetAlt } from "./assetMetadata";
 import { normalizeGalleryRevealAnimation, type GalleryRevealAnimation } from './galleryRevealAnimation';
 import { normalizeGalleryRevealTiming, type GalleryRevealTiming } from './galleryRevealTiming';
 import { readGalleryEditorial } from './galleryEditorial';
@@ -13,7 +14,7 @@ export type GalleryWork = {
   revealTiming?: GalleryRevealTiming;
   hook: string; interpretation: string; coffeeBridge: string;
   stageImage: string; stageVideo: string; mobileVideo: string; mobilePosterImage: string; posterImage: string; thumbnailImage: string;
-  imageAlt: string; published: true; sortOrder: number;
+  imageAlt: string; posterAlt?: string; published: true; sortOrder: number;
 };
 
 function publicMedia(value: unknown, kind: 'image' | 'video') {
@@ -46,6 +47,7 @@ export function resolveGalleryWorks(products: readonly CoffeeArtwork[]): Gallery
     try { revealAnimation = normalizeGalleryRevealAnimation(product.galleryRevealAnimation); } catch { /* Use the approved default motion. */ }
     const hook = editorial.hook || hero.lead || product.shortCopy || product.subtitle || '';
     const story = hero.storyLead || product.mood || '';
+    const imageAlt = resolveAssetAlt(Object.values(product.assets || {}).find(asset => asset?.path === stageImage || (asset?.media?.type === "image" && asset.media.url === stageImage)) || {}) || `${hero.title || product.name || "咖啡作品"}作品視覺`;
     return {
       slug: product.slug, title: hero.title || product.name || '咖啡作品', englishTitle: hero.englishTitle || '', artist: hero.artist || '',
       ...(revealAnimation ? { revealAnimation } : {}),
@@ -54,7 +56,8 @@ export function resolveGalleryWorks(products: readonly CoffeeArtwork[]): Gallery
       stageImage, stageVideo: media?.type === 'video' ? publicMedia(media.url, 'video') : '',
       mobileVideo: mobile?.type === 'video' ? publicMedia(mobile.url, 'video') : '', mobilePosterImage: publicMedia(mobile?.posterUrl, 'image'), posterImage: posterImage || stageImage,
       thumbnailImage: publicMedia(list?.path, 'image') || posterImage || stageImage,
-      imageAlt: image?.alt || list?.alt || `${hero.title || product.name || '咖啡作品'}作品視覺`,
+      imageAlt,
+      posterAlt: publicMedia(media?.posterUrl, "image") ? `${hero.title || product.name || "咖啡作品"}作品詮釋影片封面` : imageAlt,
       published: true, sortOrder: Number(product.sort || 0),
     };
   });

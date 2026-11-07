@@ -1,6 +1,12 @@
 import { isCanonicalProductSlug } from "./productMediaNaming";
 
 export const CUSTOM_SECTION_MEDIA_PURPOSE = "custom-section" as const;
+export type StoreMediaSlot = "product-hero" | "product-gallery";
+
+export function isStoreMediaSlot(value: unknown): value is StoreMediaSlot {
+  return value === "product-hero" || value === "product-gallery";
+}
+
 export const CUSTOM_SECTION_MEDIA_TYPES = ["image", "video"] as const;
 export type CustomSectionMediaType = (typeof CUSTOM_SECTION_MEDIA_TYPES)[number];
 
@@ -26,15 +32,18 @@ export function buildCustomSectionMediaPublicId({
   sectionId,
   mediaType,
   sequence,
+  storeSlot,
 }: {
   productSlug: string;
   sectionId: string;
   mediaType: CustomSectionMediaType;
   sequence: number;
+  storeSlot?: StoreMediaSlot;
 }) {
   if (!isCanonicalProductSlug(productSlug)) throw new Error("Custom Section media requires a canonical product slug");
   if (!isCustomSectionMediaType(mediaType)) throw new Error("Custom Section media type is invalid");
   if (!Number.isInteger(sequence) || sequence < 1 || sequence > MAX_SEQUENCE) throw new Error("Custom Section media sequence is unavailable");
+  if (storeSlot) return `kdcoffee-${productSlug}-${storeSlot}-${customSectionMediaToken(sectionId)}-${mediaType}-v${String(sequence).padStart(2, "0")}`;
   return `kdcoffee-${productSlug}-custom-section-${customSectionMediaToken(sectionId)}-${mediaType}-${String(sequence).padStart(2, "0")}`;
 }
 
@@ -75,8 +84,9 @@ export function isCustomSectionMediaPublicId({
   productSlug,
   sectionId,
   mediaType,
+  storeSlot,
 }: Omit<Parameters<typeof buildCustomSectionMediaPublicId>[0], "sequence"> & { publicId: string }) {
-  return extractCustomSectionMediaSequence({ publicId, productSlug, sectionId, mediaType }) !== undefined;
+  return extractCustomSectionMediaSequence({ publicId, productSlug, sectionId, mediaType, storeSlot }) !== undefined;
 }
 
 export function isAnyCustomSectionMediaPublicId({
@@ -102,8 +112,10 @@ export function filterCustomSectionMediaReservedPublicIds({
   productSlug,
   sectionId,
   mediaType,
+  storeSlot,
 }: {
   publicIds: readonly string[];
+  storeSlot?: StoreMediaSlot;
   productSlug: string;
   sectionId: string;
   mediaType: CustomSectionMediaType;
@@ -113,5 +125,6 @@ export function filterCustomSectionMediaReservedPublicIds({
     productSlug,
     sectionId,
     mediaType,
+    storeSlot,
   }));
 }

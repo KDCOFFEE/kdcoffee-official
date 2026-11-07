@@ -15,6 +15,7 @@ import {
 import {
   buildCustomSectionMediaPublicId,
   customSectionMediaPublicIdPrefix,
+  type StoreMediaSlot,
   nextAvailableCustomSectionMediaSequence,
   type CustomSectionMediaType,
 } from "@/lib/customSectionMediaNaming";
@@ -276,16 +277,18 @@ export async function createSignedCustomSectionMediaUpload({
   productSlug,
   sectionId,
   mediaType,
+  storeSlot,
   reservedPublicIds = [],
 }: {
   productSlug: string;
   sectionId: string;
   mediaType: CustomSectionMediaType;
+  storeSlot?: StoreMediaSlot;
   reservedPublicIds?: string[];
 }): Promise<SignedMediaUpload> {
   const credentials = configureCloudinary();
   const folder = mediaType === "image" ? CLOUDINARY_IMAGE_FOLDER : CLOUDINARY_VIDEO_FOLDER;
-  const prefix = `${folder}/${customSectionMediaPublicIdPrefix({ productSlug, sectionId, mediaType })}`;
+  const prefix = `${folder}/${customSectionMediaPublicIdPrefix({ productSlug, sectionId, mediaType, storeSlot })}`;
   const existingPublicIds = new Set(reservedPublicIds);
   let nextCursor: string | undefined;
   do {
@@ -311,9 +314,10 @@ export async function createSignedCustomSectionMediaUpload({
     productSlug,
     sectionId,
     mediaType,
+    storeSlot,
     existingPublicIds,
   });
-  const publicId = buildCustomSectionMediaPublicId({ productSlug, sectionId, mediaType, sequence });
+  const publicId = buildCustomSectionMediaPublicId({ productSlug, sectionId, mediaType, storeSlot, sequence });
   return mediaType === "image"
     ? signedImageUpload(publicId, credentials)
     : signedVideoUpload(publicId, credentials, true);

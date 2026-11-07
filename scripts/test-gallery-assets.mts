@@ -71,7 +71,7 @@ await test('existing image-only uploader remains image-only',()=>{
   assert.ok(html.includes('accept="image/*"'));assert.ok(!html.includes('video/mp4'));
 });
 await test('Gallery controls reuse video-only uploader and explain optional mobile fallback',()=>{
-  const html=renderToStaticMarkup(createElement(GalleryAnimationControls,{assets:{},libraryAssets:[],onChange:()=>{},onRemove:()=>{}}));
+  const html=renderToStaticMarkup(createElement(GalleryAnimationControls,{artworkSlug:"giotto-awakening",assets:{},libraryAssets:[],onChange:()=>{},onRemove:()=>{}}));
   assert.ok(html.includes('桌機動畫'));assert.ok(html.includes('手機動畫（選填）'));assert.ok(html.includes('自動沿用桌機動畫'));
   assert.equal((html.match(/video\/mp4/g)||[]).length,2);assert.ok(!html.includes('accept="image/*"'));
 });

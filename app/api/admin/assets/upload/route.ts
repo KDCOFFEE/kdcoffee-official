@@ -5,6 +5,7 @@ import { randomUUID } from "node:crypto";
 
 import { isAdminAuthenticated, readAdminSession } from "@/lib/adminAuth";
 import {
+  AssetLibraryVersionConflictError,
   getAssetLibrary,
   saveAssetLibrary,
   type AssetRecord,
@@ -110,8 +111,11 @@ export async function POST(request: Request) {
   const assetId = String(
     form.get("assetId") || "",
   );
-  // Explicit generic creation, not a Gifts-specific record or upload path.
+  const namingContext = form.get("namingContext");
   const create = !assetId && form.get("create") === "true";
+  if (namingContext !== null && (!create || namingContext !== "gifts-hero")) {
+    return NextResponse.json({ error: "不支援的圖片命名用途。" }, { status: 400 });
+  }
 
   /**
    * 基本資料檢查。
@@ -199,7 +203,7 @@ export async function POST(request: Request) {
   if (create) {
     const id = randomUUID();
     const name = path.parse(file.name).name.replace(/[\u0000-\u001f\u007f]/g, "").trim().slice(0, 300) || "網站共用圖片";
-    asset = { id: `ASSET-${id}`, category: "misc", name, usage: "網站共用圖片", path: "", recommendedSize: "", displaySize: "", format: ext.slice(1).toUpperCase(), alt: name, seoStem: `kd-coffee-${clean(name).slice(0, 80) || "image"}-${id}`, status: "draft" };
+    asset = { id: `ASSET-${id}`, category: "misc", name, usage: "網站共用圖片", path: "", recommendedSize: "", displaySize: "", format: ext.slice(1).toUpperCase(), alt: namingContext === "gifts-hero" ? "KD Coffee 禮盒專區主視覺" : "", seoStem: namingContext === "gifts-hero" ? "kdcoffee-gifts-hero" : `kdcoffee-library-image-${id}`, status: "draft" };
   } else {
     asset = library.assets[index];
   }
@@ -286,15 +290,13 @@ export async function POST(request: Request) {
   /**
    * 將實際圖片寫入 storage。
    */
-  await fs.writeFile(
-    path.join(
-      uploadDir,
-      fileName,
-    ),
-    Buffer.from(
-      await file.arrayBuffer(),
-    ),
-  );
+  const uploadedFile = path.join(uploadDir, fileName);
+  try {
+    await fs.writeFile(uploadedFile, Buffer.from(await file.arrayBuffer()), { flag: "wx" });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+    return NextResponse.json({ error: "此素材版本已存在，請重新上傳。" }, { status: 409 });
+  }
 
   /**
    * 重要：
@@ -328,9 +330,13 @@ export async function POST(request: Request) {
   /**
    * assets.json 已經接上 Persistent Storage。
    */
-  await saveAssetLibrary(
-    library,
-  );
+  try {
+    await saveAssetLibrary(library);
+  } catch (error) {
+    if (!(error instanceof AssetLibraryVersionConflictError)) throw error;
+    await fs.unlink(uploadedFile);
+    return NextResponse.json({ error: "素材庫已有新變更，請重新上傳。" }, { status: 409 });
+  }
 
   return NextResponse.json({
     ok: true,

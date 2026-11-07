@@ -12,5 +12,6 @@ export default async function StorePage({ searchParams }: { searchParams?: Promi
   if (!session) redirect("/admin/login");
   if (session.role !== "owner") forbidden();
   const [catalog, pointDisplayName] = await Promise.all([createStoreRepository().read(), readPointDisplayName()]);
-  return <StoreWorkspace initialCatalog={catalog} pointDisplayName={pointDisplayName} initialProductId={(await searchParams)?.product} />;
+  const productId = (await searchParams)?.product;
+  return <StoreWorkspace key={productId || "store"} initialCatalog={catalog} pointDisplayName={pointDisplayName} initialProductId={productId} />;
 }

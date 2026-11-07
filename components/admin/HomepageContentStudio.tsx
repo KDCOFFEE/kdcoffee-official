@@ -126,7 +126,7 @@ export default function HomepageContentStudio() {
     setMessage("素材已上傳，首頁引用尚未儲存。"); return localImageMedia(result.path);
   };
   const uploadImage = async (file: File, path: Array<string | number>, id: string, name?: string, assetGroup?: string) => {
-    const media = await uploadHeroImage(file, id, name, assetGroup); setPath(path, media.url); return media;
+    return uploadHeroImage(file, id, name, assetGroup);
   };
   const save = useCallback(async () => {
     const submitted = latest.current;

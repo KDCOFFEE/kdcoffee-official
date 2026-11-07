@@ -2,6 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 
+import MediaAltEditor from "./MediaAltEditor";
+import { resolveAssetAlt } from "@/lib/assetMetadata";
+import { replacementMediaDescription } from "@/lib/mediaAlt";
 import SocialImageField from "./SocialImageField";
 import ImageLibraryPicker from "@/components/admin/ImageLibraryPicker";
 import MediaUploader from "@/components/admin/MediaUploader";
@@ -166,7 +169,7 @@ export default function WorksPageManager() {
   const preview = useMemo(() => payload && draft ? resolveWorksPageCms(draft, payload.live) : null, [payload, draft]);
 
   function change(next: EditorDraft) { setDraft(next); if (message === "已儲存") setMessage(""); }
-  function patchHero(next: Partial<EditorHero>) { if (draft) change({ ...draft, hero: { ...draft.hero, ...next } }); }
+  function patchHero(next: Partial<EditorHero>) { setDraft(current => current ? { ...current, hero: { ...current.hero, ...next } } : current); if (message === "已儲存") setMessage(""); }
   function patchCatalog(next: Partial<EditorCatalog>) { if (draft) change({ ...draft, catalog: { ...draft.catalog, ...next } }); }
   function patchPresentation(next: Partial<EditorCatalog["presentation"]>) { if (draft) patchCatalog({ presentation: { ...draft.catalog.presentation, ...next } }); }
   function patchCta(key: "primaryCta" | "secondaryCta", next: Partial<EditorHero[typeof key]>) { if (draft) patchHero({ [key]: { ...draft.hero[key], ...next } }); }
@@ -182,13 +185,13 @@ export default function WorksPageManager() {
     const data = await response.json() as { error?: string; asset?: AssetRecord; media?: MediaAsset };
     if (!response.ok || !data.asset || !data.media) throw new Error(data.error || "圖片上傳失敗。");
     setAssets((current) => current.some((asset) => asset.id === data.asset!.id) ? current : [data.asset!, ...current]);
-    return data.media;
+    return { ...data.media, alt: resolveAssetAlt({ alt: data.asset.alt }) };
   }
 
   function chooseAsset(asset: AssetRecord) {
     if (!pickerFor || !draft) return;
     const current = draft.hero[pickerFor];
-    patchMedia(pickerFor, { media: localImageMedia(asset.path), alt: current?.alt || asset.alt || asset.name });
+    patchMedia(pickerFor, replacementMediaDescription(current, { ...localImageMedia(asset.path), alt: resolveAssetAlt({ alt: asset.alt }) }, "本月咖啡作品主視覺"));
     setPickerFor(null);
   }
 
@@ -284,9 +287,9 @@ function CtaCard({ title, value, products, pages, editorId, onChange }: { title:
 function MediaCard({ title, description, value, uploadImage, onOpenLibrary, onChange }: { title: string; description?: string; value?: WorksPageMediaReference; uploadImage: (file: File) => Promise<MediaAsset>; onOpenLibrary: () => void; onChange: (value: WorksPageMediaReference | undefined) => void }) {
   return <article className={styles.mediaCard}>
     <header><div><h3>{title}</h3>{description ? <p>{description}</p> : null}</div></header>
-    <MediaUploader label={`${title}預覽與替換`} value={value?.media} usage="hero" onImageUpload={uploadImage} imageActionLabel="上傳新圖片" videoActionLabel="上傳新影片" onChange={(media) => onChange({ media, alt: value?.alt || "" })} onRemove={value ? () => onChange(undefined) : undefined} />
+    <MediaUploader label={`${title}預覽與替換`} contextKey={JSON.stringify(value)} value={value?.media} usage="hero" onImageUpload={uploadImage} imageActionLabel="上傳新圖片" videoActionLabel="上傳新影片" onChange={(media) => onChange(replacementMediaDescription(value, media, `${title}圖片`))} onRemove={value ? () => onChange(undefined) : undefined} />
     <div className={styles.mediaActions}><button type="button" className="cms-secondary-button" onClick={onOpenLibrary}>從素材庫選擇圖片</button></div>
-    {value ? <label className={styles.mediaAlt}>替代文字{value.media.type === "image" ? "（必填）" : "（選填）"}<input maxLength={240} value={value.alt} onChange={(event) => onChange({ ...value, alt: event.target.value })} /></label> : <p>目前未指定媒體，可從素材庫選擇或上傳新素材。</p>}
+    {value ? <MediaAltEditor alt={value.alt} decorative={value.decorative} onChange={description => onChange({ ...value, ...description })} /> : <p>目前未指定媒體，可從素材庫選擇或上傳新素材。</p>}
     {value ? <div className={styles.referenceDanger}><span>移除設定不會刪除素材庫中的原始圖片。</span><button type="button" onClick={() => confirm("確定移除此頁面的媒體引用？素材庫與 Cloudinary 原檔不會被刪除。") && onChange(undefined)}>移除引用</button></div> : null}
   </article>;
 }
