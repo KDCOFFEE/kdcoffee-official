@@ -20,11 +20,8 @@ import {
   getWebsiteDataFile,
   type StorageRootContract,
 } from "./storagePaths";
-import {
-  buildOfflineMemberIndex,
-  buildOfflineOrganizationHtml,
-  type OfflineMemberIndexEntry,
-} from "./memberBackupOffline";
+import { buildBackupIndexViewer, buildBackupOrganizationViewer } from "./memberBackupViewer";
+import { buildBackupOrderViewerData } from "./memberBackupViewerOrders";
 
 export {
   buildOfflineMemberIndex,
@@ -655,24 +652,6 @@ function memberReadableRows(identity: JsonRecord, profiles: Map<string, JsonReco
   }).sort((a, b) => a.memberNumber.localeCompare(b.memberNumber) || a.memberId.localeCompare(b.memberId));
 }
 
-function escapeHtml(value: unknown) {
-  return String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
-}
-
-function buildOrganizationHtml(tree: OrganizationTreeSnapshot, members?: OfflineMemberIndexEntry[]) {
-  if (members) return buildOfflineOrganizationHtml(tree, members);
-  const embedded = JSON.stringify({ roots: tree.roots, nodes: tree.nodes }).replaceAll("<", "\\u003c");
-  return `<!doctype html>
-<html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>KD Coffee 會員組織圖備份 ${escapeHtml(tree.createdAt)}</title>
-<style>
-:root{font-family:Inter,"Noto Sans TC","Microsoft JhengHei",sans-serif;color:#1d1a16;background:#f3efe7}*{box-sizing:border-box}body{margin:0;overflow:hidden}
-.top{height:116px;padding:16px 22px;background:#f8f4ed;border-bottom:1px solid #d8d0c3;display:grid;gap:10px}.title{display:flex;justify-content:space-between;gap:16px;align-items:center}.title h1{font-size:20px;margin:0}.title p{margin:4px 0 0;color:#72695d;font-size:12px}.tools{display:flex;gap:8px;flex-wrap:wrap}.tools input{min-width:260px;padding:9px 12px;border:1px solid #c8bcaa;border-radius:8px;background:white}.tools button{border:1px solid #a99880;background:#fffaf2;border-radius:8px;padding:8px 11px;cursor:pointer}.tools output{min-width:56px;text-align:center;padding:8px;color:#665b4d}
-.viewport{height:calc(100vh - 116px);overflow:auto;cursor:grab;touch-action:none}.viewport.dragging{cursor:grabbing}.stage{transform-origin:0 0;min-width:max-content;padding:44px}.forest{display:flex;gap:76px;align-items:flex-start}.tree,.tree ul{display:flex;justify-content:center;gap:26px;position:relative;margin:0;padding:34px 0 0}.tree{padding-top:0}.tree li{list-style:none;text-align:center;position:relative;padding:34px 8px 0}.tree>li{padding-top:0}.tree ul:before{content:"";position:absolute;top:0;left:50%;height:34px;border-left:1px solid #a99f92}.tree li:before,.tree li:after{content:"";position:absolute;top:0;width:50%;height:34px;border-top:1px solid #a99f92}.tree li:before{right:50%}.tree li:after{left:50%;border-left:1px solid #a99f92}.tree li:only-child:before,.tree li:only-child:after{display:none}.tree li:first-child:before,.tree li:last-child:after{border:0}.node{width:220px;padding:15px;border:1px solid #ddd2c4;border-radius:16px;background:#fff;box-shadow:0 10px 28px #382d2014}.node.root{background:#241f19;color:#fff}.node strong,.node small,.node em{display:block}.node strong{font-size:14px}.node small{margin-top:7px;color:#766d62}.node.root small{color:#d7cec0}.node em{margin-top:6px;font-size:10px;font-style:normal;opacity:.66}.node button{margin-top:10px;border:0;background:transparent;text-decoration:underline;cursor:pointer;color:inherit}.node.match{outline:3px solid #b98a3c;outline-offset:3px}.collapsed>ul{display:none}.empty{padding:30px;color:#756b5f}.legend{position:fixed;right:14px;bottom:12px;background:#fffdf8e8;border:1px solid #d8d0c3;border-radius:9px;padding:8px 10px;font-size:11px;color:#73695e}
-</style></head><body><header class="top"><div class="title"><div><h1>KD Coffee 會員組織圖備份</h1><p>快照：${escapeHtml(tree.createdAt)} · 關係來源：Membership Commerce referrals · 完全離線</p></div><span>${tree.nodes.length} 位會員 · ${tree.roots.length} 個 root</span></div><div class="tools"><input id="search" type="search" placeholder="搜尋會員編號或 member ID"><button id="find">搜尋</button><button id="minus">縮小</button><output id="zoom">100%</output><button id="plus">放大</button><button id="reset">回到 root</button><button id="expand">全部展開</button></div></header><main class="viewport" id="viewport"><div class="stage" id="stage"><div class="forest" id="forest"></div></div></main><div class="legend">拖曳／捲動瀏覽 · 節點可展開收合 · organization-tree.json 才是復原資料</div>
-<script>const DATA=${embedded};const byId=new Map(DATA.nodes.map(n=>[n.memberId,n]));const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]));function branch(id,seen=new Set()){const n=byId.get(id);if(!n||seen.has(id))return "";const next=new Set(seen);next.add(id);const kids=n.childrenIds.filter(x=>byId.has(x)&&!next.has(x));return '<li data-id="'+esc(id)+'"><article class="node '+(n.depth===0?'root':'')+'"><strong>會員 '+esc(n.memberNumber||"未編號")+'</strong><small>'+esc(n.memberId)+'</small><small>直推 '+n.directReferralCount+' 人 · 團隊 '+n.teamCount+' 人</small><em>'+esc(n.relationshipStatus)+'</em>'+(kids.length?'<button type="button">收合分支</button>':'')+'</article>'+(kids.length?'<ul>'+kids.map(x=>branch(x,next)).join("")+'</ul>':'')+'</li>'}const forest=document.getElementById("forest");forest.innerHTML=DATA.roots.length?DATA.roots.map(id=>'<ul class="tree">'+branch(id)+'</ul>').join(""):'<p class="empty">沒有可顯示的 root；請查看 organization-tree.json 的 validation findings。</p>';forest.addEventListener("click",e=>{const b=e.target.closest(".node button");if(!b)return;const li=b.closest("li");li.classList.toggle("collapsed");b.textContent=li.classList.contains("collapsed")?"展開分支":"收合分支"});let scale=1,ox=0,oy=0;const stage=document.getElementById("stage"),vp=document.getElementById("viewport"),out=document.getElementById("zoom");function paint(){stage.style.transform='translate('+ox+'px,'+oy+'px) scale('+scale+')';out.textContent=Math.round(scale*100)+'%'}function setScale(v){scale=Math.max(.25,Math.min(2.5,v));paint()}document.getElementById("minus").onclick=()=>setScale(scale-.1);document.getElementById("plus").onclick=()=>setScale(scale+.1);function reset(){scale=1;ox=0;oy=0;vp.scrollTo(0,0);paint()}document.getElementById("reset").onclick=reset;document.getElementById("expand").onclick=()=>{document.querySelectorAll("li.collapsed").forEach(x=>x.classList.remove("collapsed"));document.querySelectorAll(".node button").forEach(x=>x.textContent="收合分支")};let drag=null;vp.addEventListener("pointerdown",e=>{if(e.target.closest("button,input"))return;drag={x:e.clientX,y:e.clientY,ox,oy};vp.setPointerCapture(e.pointerId);vp.classList.add("dragging")});vp.addEventListener("pointermove",e=>{if(!drag)return;ox=drag.ox+e.clientX-drag.x;oy=drag.oy+e.clientY-drag.y;paint()});function stop(){drag=null;vp.classList.remove("dragging")}vp.addEventListener("pointerup",stop);vp.addEventListener("pointercancel",stop);vp.addEventListener("wheel",e=>{if(!e.ctrlKey)return;e.preventDefault();setScale(scale+(e.deltaY < 0 ? 0.08 : -0.08))},{passive:false});function find(){document.querySelectorAll(".node.match").forEach(x=>x.classList.remove("match"));const q=document.getElementById("search").value.trim().toLowerCase();if(!q)return;const n=DATA.nodes.find(x=>x.memberId.toLowerCase().includes(q)||x.memberNumber.toLowerCase().includes(q));if(!n)return alert("找不到會員");let id=n.memberId;while(id){const li=document.querySelector('li[data-id="'+CSS.escape(id)+'"]');if(li){li.classList.remove("collapsed");const card=li.querySelector(":scope > .node");if(id===n.memberId){card.classList.add("match");card.scrollIntoView({behavior:"smooth",block:"center",inline:"center"})}}id=byId.get(id)?.parentId||null}}document.getElementById("find").onclick=find;document.getElementById("search").addEventListener("keydown",e=>{if(e.key==="Enter")find()});paint();</script></body></html>`;
-}
-
 async function writeTracked(root: string, relativePath: string, content: string | Buffer, tracked: MemberBackupManifest["files"]) {
   const destination = joinBackupPath(root, relativePath);
   const payload = typeof content === "string" ? Buffer.from(content, "utf8") : content;
@@ -739,12 +718,12 @@ export async function createMemberBackup(options: MemberBackupOptions = {}) {
     const profiles = profileRecords(catalog);
     const organization = buildOrganizationTree({ identity, commerce, profiles: profiles.members, duplicateProfileIds: profiles.duplicates, createdAt: now.toISOString() });
     const members = memberReadableRows(identity, profiles.members, organization);
-    const offlineMembers = buildOfflineMemberIndex({ tree: organization, identity, commerce, fulfillment, profiles: profiles.members, parsedOrders: catalog.parsedJson });
 
     await writeTracked(staging, "readable/members.csv", rowsToCsv(["memberId", "memberNumber", "displayName", "email", "phone", "status", "parentId", "directReferralCount", "teamCount", "createdAt", "updatedAt"], members), tracked);
     await writeTracked(staging, "readable/organization.csv", rowsToCsv(["relationshipId", "referrerMemberId", "referrerMemberNumber", "referredMemberId", "referredMemberNumber", "status", "createdAt"], organization.relationships), tracked);
     await writeTracked(staging, "organization-tree.json", `${JSON.stringify(organization, null, 2)}\n`, tracked);
-    await writeTracked(staging, "organization.html", buildOrganizationHtml(organization, offlineMembers), tracked);
+    const orderViewer = buildBackupOrderViewerData(organization, members.map((member) => member.memberId), catalog.parsedJson, commerce);
+    await writeTracked(staging, "organization.html", buildBackupOrganizationViewer(organization, members, orderViewer), tracked);
 
     await options.beforeStabilityCheck?.();
     const after = await captureCatalog(specs);
@@ -787,7 +766,7 @@ export async function createMemberBackup(options: MemberBackupOptions = {}) {
       },
       sourceRevisions: { identityRevision: revision(identity.revision), commerceRevision: revision(commerce.revision), businessRulesRevision: revision(rules.revision), fulfillmentRevision: revision(fulfillment.revision) },
       datasets: manifestDatasetRows(catalog),
-      files: tracked.sort((a, b) => a.path.localeCompare(b.path)),
+      files: tracked,
       validation: {
         criticalDatasetsPresent: catalog.datasets.every((dataset) => dataset.present),
         criticalDatasetsSatisfied: true,
@@ -802,6 +781,8 @@ export async function createMemberBackup(options: MemberBackupOptions = {}) {
           : `Backup bytes are verified; organization graph contains ${organization.validation.findings.length} recorded finding(s).`,
       },
     };
+    await writeTracked(staging, "index.html", buildBackupIndexViewer(manifest), tracked);
+    tracked.sort((a, b) => a.path.localeCompare(b.path));
     const manifestText = `${JSON.stringify(manifest, null, 2)}\n`;
     await fs.writeFile(path.join(staging, "manifest.json"), manifestText, { flag: "wx" });
     const checksumRows = [...manifest.files, { path: "manifest.json", sha256: sha256(manifestText), bytes: Buffer.byteLength(manifestText) }].sort((a, b) => a.path.localeCompare(b.path)).map((file) => `${file.sha256}  ${file.path}`);
