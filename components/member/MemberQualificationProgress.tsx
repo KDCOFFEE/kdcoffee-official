@@ -528,7 +528,7 @@ export default function MemberQualificationProgress({
             </div>
           )}
 
-          <div className="member-qualification-path-grid">
+          <div className={`member-qualification-path-grid${paths.length === 1 ? " is-single" : ""}`}>
             {paths.map((path) => (
               <article
                 className={`member-qualification-path ${
