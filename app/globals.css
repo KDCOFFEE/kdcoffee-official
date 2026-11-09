@@ -8149,3 +8149,17 @@ button.member-lifecycle-action:disabled,
 .works-sold-out-dim{position:absolute;pointer-events:none;background:rgb(25,20,17)}
 .works-sold-out-dim--band{left:0;right:0}
 .works-sold-out-dim--full{inset:0}
+/* KD Coffee member qualification UI-only fix: one-column progress + centered dialog */
+.member-qualification-path-grid.is-single {
+  grid-template-columns: minmax(0, 1fr);
+}
+.member-qualification-dialog[open] {
+  position: fixed;
+  inset: 0;
+  margin: auto;
+}
+@media (max-width: 700px) {
+  .member-qualification-dialog[open] {
+    margin: 0;
+  }
+}
