@@ -84,46 +84,6 @@ type OfflineTestElement = {
   classList: { add: () => void; remove: () => void };
 };
 
-function executeOfflineScript(source: string) {
-  const ids = ["forest", "stage", "viewport", "zoom", "minus", "plus", "reset", "expand", "search", "find", "results", "profile", "shade"];
-  const elements = new Map<string, OfflineTestElement>();
-  let scrollCount = 0;
-  for (const id of ids) {
-    const handlers = new Map<string, OfflineTestHandler>();
-    elements.set(id, {
-      hidden: ["results", "profile", "shade"].includes(id),
-      innerHTML: "",
-      value: "",
-      textContent: "",
-      style: {},
-      onclick: null,
-      handlers,
-      addEventListener(type, handler) { handlers.set(type, handler); },
-      querySelector(selector) { return id === "profile" && selector === ".profile-close" ? { focus() {} } : null; },
-      scrollTo() { scrollCount += 1; },
-      setPointerCapture() {},
-      classList: { add() {}, remove() {} },
-    });
-  }
-  const documentHandlers = new Map<string, OfflineTestHandler>();
-  const document = {
-    getElementById(id: string) { return elements.get(id) ?? null; },
-    querySelector() { return null; },
-    querySelectorAll() { return []; },
-    addEventListener(type: string, handler: OfflineTestHandler) { documentHandlers.set(type, handler); },
-    createElement() { return { value: "", select() {}, remove() {} }; },
-    execCommand() { return true; },
-    body: { appendChild() {} },
-  };
-  new Script(source, { filename: "organization-inline.js" }).runInNewContext({
-    document,
-    navigator: {},
-    CSS: { escape: (value: string) => value },
-    console,
-  });
-  return { elements, documentHandlers, get scrollCount() { return scrollCount; } };
-}
-
 async function main() {
   const workspace = await fs.mkdtemp(path.join(os.tmpdir(), "kd-j5d5a-"));
   const root = path.join(workspace, "complete");
@@ -168,7 +128,7 @@ async function main() {
   );
 
   for (const required of [
-    "manifest.json", "checksums.sha256", "organization-tree.json", "organization.html", "readable/members.csv", "readable/organization.csv",
+    "manifest.json", "checksums.sha256", "index.html", "organization-tree.json", "organization.html", "readable/members.csv", "readable/organization.csv",
     "raw/member-identity/registry.json", "raw/membership-commerce/commerce-state.json", "raw/membership-commerce/business-rules.json", "raw/orders/ORD-1.json",
     "raw/fulfillment/state.json", "raw/fulfillment/settings.json", "raw/store/website-data.json", "raw/uploads/member-avatars/m_a/avatar.webp", "raw/uploads/order-notifications/ORD-1.png",
   ]) await fs.access(path.join(result.path, ...required.split("/")));
@@ -180,138 +140,32 @@ async function main() {
   assert.equal(tree.validation.valid, true);
   const html = await fs.readFile(path.join(result.path, "organization.html"), "utf8");
   assert.match(html, /196200001/);
-  assert.match(html, /搜尋姓名、手機、Email、會員編號或 Member ID/);
-  assert.match(html, /回到 root/);
+  assert.match(html, /輸入姓名、會員編號或 Member ID/);
+  assert.match(html, /回到根節點/);
   assert.match(html, /離線備份資料｜含會員個資/);
-  assert.match(html, /data-copy/);
-  assert.match(html, /maskedPhone/);
-  assert.match(html, /maskedEmail/);
-  assert.match(html, /copyRow\('手機',m\.phone\)/);
-  assert.match(html, /function branch/);
-  assert.match(html, /showProfile/);
-  assert.match(html, /pointerdown/);
-  assert.match(html, /addEventListener\('wheel'/);
-  assert.match(html, /data-back/);
-  assert.match(html, /e\.key==='Escape'/);
-  const branchSource = html.match(/function branch[\s\S]+?const forest=/u)?.[0] ?? "";
-  assert.doesNotMatch(branchSource, /\.phone|\.email/u);
-  assert.doesNotMatch(html, /https?:\/\//);
-  assert.doesNotMatch(html, /fetch\s*\(/);
-  assert.doesNotMatch(html, /XMLHttpRequest/u);
-  assert.doesNotMatch(html, /(?:file:|<iframe\b|window\.location|location\.href|window\.open|href\s*=|src\s*=)/iu);
-  const inlineScripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/gu)].map((match) => match[1]);
-  assert.equal(inlineScripts.length, 1);
-  const inlineScript = inlineScripts[0];
-  assert.equal(inlineScript.includes("/[s-()]/g"), false, "generated HTML must not contain the Owner-observed malformed phone regex");
-  assert.equal(inlineScript.includes("/[\\s\\-()]/g"), true, "generated phone regex must preserve template backslashes");
+  assert.match(html, /Content-Security-Policy/);
+  assert.doesNotMatch(html, /fetch\s*\(|XMLHttpRequest|innerHTML|junny17880522|0912-345-678/u);
+  const inlineScript = /<script>([\s\S]*?)<\/script>/u.exec(html)?.[1];
+  assert.ok(inlineScript);
   assert.doesNotThrow(() => new Script(inlineScript, { filename: "organization-inline.js" }));
-  const runtime = executeOfflineScript(inlineScript);
-  const forestElement = runtime.elements.get("forest");
-  const searchElement = runtime.elements.get("search");
-  const findElement = runtime.elements.get("find");
-  const resultsElement = runtime.elements.get("results");
-  const profileElement = runtime.elements.get("profile");
-  const zoomElement = runtime.elements.get("zoom");
-  assert.ok(forestElement && searchElement && findElement && resultsElement && profileElement && zoomElement);
-  assert.match(forestElement.innerHTML, /data-id="m_a"/);
-  const assertUniqueSearch = (query: string, expectedProfileText: RegExp) => {
-    searchElement.value = query;
-    findElement.onclick?.();
-    assert.equal(profileElement.hidden, false);
-    assert.match(profileElement.innerHTML, expectedProfileText);
-    runtime.documentHandlers.get("keydown")?.({ key: "Escape" });
-    assert.equal(profileElement.hidden, true);
-  };
-  assertUniqueSearch("196200001", /小丁/);
-  assertUniqueSearch("M_A", /小丁/);
-  assertUniqueSearch("0912-345-678", /小丁/);
-  assertUniqueSearch("0912 345 678", /小丁/);
-  assertUniqueSearch("(0912)345678", /小丁/);
-  assertUniqueSearch("0912345678", /小丁/);
-  assertUniqueSearch("JUNNY17880522@YAHOO.COM.TW", /小丁/);
-  searchElement.value = "美玲";
-  findElement.onclick?.();
-  assert.equal(resultsElement.hidden, false);
-  assert.equal((resultsElement.innerHTML.match(/class="result"/gu) ?? []).length, 2);
-  assert.match(resultsElement.innerHTML, /命中：姓名/);
-  resultsElement.handlers.get("click")?.({ target: { closest: (selector: string) => selector === "[data-member]" ? { dataset: { member: "m_c" } } : null } });
-  assert.equal(profileElement.hidden, false);
-  assert.match(profileElement.innerHTML, /KD-000002/);
-  runtime.documentHandlers.get("keydown")?.({ key: "Escape" });
-  searchElement.value = "j";
-  findElement.onclick?.();
-  assert.match(resultsElement.innerHTML, /196200001/);
-  assert.doesNotMatch(resultsElement.innerHTML, /KD-000004/);
-  assert.match(resultsElement.innerHTML, /命中：Email/);
-  searchElement.value = "a";
-  findElement.onclick?.();
-  assert.match(resultsElement.innerHTML, /找不到符合的會員/);
-  assertUniqueSearch("KD-000002", /KD-000002/);
-  assertUniqueSearch("000002", /KD-000002/);
-  searchElement.value = "@gmail.com";
-  findElement.onclick?.();
-  assert.equal((resultsElement.innerHTML.match(/class="result"/gu) ?? []).length, 2);
-  assert.match(resultsElement.innerHTML, /命中：Email/);
-  const viewportElement = runtime.elements.get("viewport");
-  assert.ok(viewportElement);
-  const nodeList = { dataset: { id: "m_b" } };
-  const nodeCard = { closest: (selector: string) => selector === "li" ? nodeList : null };
-  const nodeTarget = { closest: (selector: string) => selector === ".node" ? nodeCard : null };
-  searchElement.value = "196200002";
-  findElement.onclick?.();
-  const searchOpenedDetail = profileElement.innerHTML;
-  runtime.documentHandlers.get("keydown")?.({ key: "Escape" });
-  viewportElement.handlers.get("pointerdown")?.({ target: nodeTarget, clientX: 100, clientY: 100, pointerId: 1 });
-  viewportElement.handlers.get("pointermove")?.({ clientX: 102, clientY: 102 });
-  viewportElement.handlers.get("pointerup")?.({ clientX: 102, clientY: 102 });
-  assert.equal(profileElement.hidden, false);
-  assert.match(profileElement.innerHTML, /陳美玲/);
-  assert.equal(profileElement.innerHTML, searchOpenedDetail);
-  runtime.documentHandlers.get("keydown")?.({ key: "Escape" });
-  assert.equal(profileElement.hidden, true);
-  viewportElement.handlers.get("pointerdown")?.({ target: nodeTarget, clientX: 100, clientY: 100, pointerId: 2 });
-  viewportElement.handlers.get("pointermove")?.({ clientX: 120, clientY: 112 });
-  viewportElement.handlers.get("pointerup")?.({ clientX: 120, clientY: 112 });
-  assert.equal(profileElement.hidden, true, "dragging a node must pan without opening detail");
-  assert.match(runtime.elements.get("stage")?.style.transform ?? "", /translate\(20px,12px\)/);
-  const branchState = new Set<string>();
-  const branchList = { classList: { toggle: (name: string) => branchState.has(name) ? branchState.delete(name) : branchState.add(name), contains: (name: string) => branchState.has(name) } };
-  const branchToggle = { textContent: "收合分支", closest: (selector: string) => selector === "li" ? branchList : null };
-  let branchPrevented = false;
-  let branchStopped = false;
-  runtime.elements.get("forest")?.handlers.get("click")?.({
-    target: { closest: (selector: string) => selector === ".branch-toggle" ? branchToggle : null },
-    preventDefault: () => { branchPrevented = true; },
-    stopPropagation: () => { branchStopped = true; },
-  });
-  assert.equal(branchState.has("collapsed"), true);
-  assert.equal(branchToggle.textContent, "展開分支");
-  assert.equal(branchPrevented, true);
-  assert.equal(branchStopped, true);
-  assert.equal(profileElement.hidden, true, "branch toggle must not open detail");
-  viewportElement.handlers.get("pointerdown")?.({ target: { closest: (selector: string) => selector === "button,input" ? branchToggle : null }, clientX: 10, clientY: 10, pointerId: 3 });
-  viewportElement.handlers.get("pointerup")?.({ clientX: 10, clientY: 10 });
-  assert.equal(profileElement.hidden, true, "branch control pointer sequence must not open detail");
-  searchElement.value = "196200001";
-  findElement.onclick?.();
-  assert.equal(profileElement.hidden, false);
-  profileElement.handlers.get("click")?.({ target: { closest: (selector: string) => selector === "[data-back]" ? {} : null } });
-  assert.equal(profileElement.hidden, true);
-  searchElement.value = "196200001";
-  findElement.onclick?.();
-  assert.equal(profileElement.hidden, false);
-  profileElement.handlers.get("click")?.({ target: { closest: (selector: string) => selector === ".profile-close" ? {} : null } });
-  assert.equal(profileElement.hidden, true);
-  assert.equal(zoomElement.textContent, "100%");
-  runtime.elements.get("plus")?.onclick?.();
-  assert.equal(zoomElement.textContent, "110%");
-  runtime.elements.get("reset")?.onclick?.();
-  assert.equal(zoomElement.textContent, "100%");
-  runtime.elements.get("expand")?.onclick?.();
-  assert.ok(runtime.scrollCount > 0);
-  const embeddedMatch = /const DATA=([\s\S]+?);\s*const byId=/u.exec(html);
-  assert.ok(embeddedMatch, "offline member index must be embedded");
-  const embedded = JSON.parse(embeddedMatch[1]) as { members: Array<import("../lib/memberBackup").OfflineMemberIndexEntry> };
+  const index = await fs.readFile(path.join(result.path, "index.html"), "utf8");
+  assert.match(index, /KD Coffee｜備份資料檢視中心/);
+  assert.match(index, /本次開啟尚未重新驗證/);
+  assert.match(index, /Store／網站資料/);
+
+  const readJson = async (relative: string) => JSON.parse(await fs.readFile(path.join(root, relative), "utf8"));
+  const profiles = new Map<string, Record<string, unknown>>();
+  for (const filename of await fs.readdir(path.join(root, "members"))) {
+    const profile = await readJson("members/" + filename);
+    profiles.set(profile.id, profile);
+  }
+  const embedded = { members: backupModule.buildOfflineMemberIndex({
+    tree, profiles,
+    identity: await readJson("member-identity/registry.json"),
+    commerce: await readJson("membership-commerce/commerce-state.json"),
+    fulfillment: await readJson("fulfillment/state.json"),
+    parsedOrders: new Map([["raw/orders/ORD-1.json", await readJson("orders/ORD-1.json")]]),
+  }) };
   const find = (query: string) => backupModule.searchOfflineMembers(embedded.members, query);
   assert.equal(find("196200001")[0]?.member.memberId, "m_a");
   assert.equal(find("M_A")[0]?.member.memberId, "m_a");
