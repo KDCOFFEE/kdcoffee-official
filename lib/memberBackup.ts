@@ -33,8 +33,8 @@ export {
 const packageJson = createRequire(import.meta.url)("../package.json") as { version: string };
 
 export const MEMBER_BACKUP_FORMAT_VERSION = 2 as const;
-export const MEMBER_BACKUP_VERSION = "J.5D.5A-H2-v1" as const;
-export const MEMBER_BACKUP_LEGACY_VERSIONS = ["J.5D.5A-H1-v1"] as const;
+export const MEMBER_BACKUP_VERSION = "J.5D.5A-H3-v1" as const;
+export const MEMBER_BACKUP_LEGACY_VERSIONS = ["J.5D.5A-H1-v1", "J.5D.5A-H2-v1"] as const;
 type MemberBackupVersion = typeof MEMBER_BACKUP_VERSION | (typeof MEMBER_BACKUP_LEGACY_VERSIONS)[number];
 
 type JsonRecord = Record<string, unknown>;
@@ -95,7 +95,8 @@ type DatasetId =
   | "fulfillment_settings"
   | "member_avatars"
   | "order_notifications"
-  | "website_data";
+  | "website_data"
+  | "store_catalog";
 
 export type MemberBackupManifest = {
   formatVersion: typeof MEMBER_BACKUP_FORMAT_VERSION;
@@ -337,6 +338,7 @@ function criticalDatasets(dataRoot: string): DatasetSpec[] {
     { id: "member_avatars", sourcePath: path.join(getUploadsRoot(), "member-avatars"), backupPath: "raw/uploads/member-avatars", kind: "directory", validateJson: "none" },
     { id: "order_notifications", sourcePath: getOrderNotificationUploadsDir(), backupPath: "raw/uploads/order-notifications", kind: "directory", validateJson: "none" },
     { id: "website_data", sourcePath: getWebsiteDataFile(), backupPath: "raw/store/website-data.json", kind: "file", validateJson: "single" },
+    { id: "store_catalog", sourcePath: path.join(dataRoot, "store-domain", "catalog.json"), backupPath: "raw/store-domain/catalog.json", kind: "file", validateJson: "single" },
   ];
   return specs.map((spec) => {
     if (!pathInside(dataRoot, spec.sourcePath)) throw new Error(`Critical dataset is outside the persistent data root: ${spec.id}`);

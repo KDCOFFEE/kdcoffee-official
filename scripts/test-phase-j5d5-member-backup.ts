@@ -19,7 +19,7 @@ async function writeJson(filePath: string, value: unknown) {
 }
 
 async function prepareFixture(root: string) {
-  const requiredDirs = ["members", "member-identity", "membership-commerce", "orders", "fulfillment", "uploads/member-avatars/m_a", "uploads/order-notifications", "store"];
+  const requiredDirs = ["members", "member-identity", "membership-commerce", "orders", "fulfillment", "uploads/member-avatars/m_a", "uploads/order-notifications", "store", "store-domain"];
   await Promise.all(requiredDirs.map((item) => fs.mkdir(path.join(root, item), { recursive: true })));
   for (const member of [
     { id: "m_a", displayName: "小丁", phone: "0912-345-678", email: "junny17880522@yahoo.com.tw", loginEmail: "login-a@example.test", authProvider: "email", pictureUrl: "https://profile.example.test/a.jpg", createdAt: now, lastLoginAt: now, updatedAt: now },
@@ -55,10 +55,11 @@ async function prepareFixture(root: string) {
     creditReservations: { cr1: { reservationId: "cr1", memberId: "m_b", orderId: "ORD-1", status: "reserved" } }, events: [], notifications: [], audit: [], idempotency: {},
   });
   await writeJson(path.join(root, "membership-commerce", "business-rules.json"), { schemaVersion: 1, revision: 3 });
-  await writeJson(path.join(root, "orders", "ORD-1.json"), { orderNumber: "ORD-1", member: { memberId: "m_b" }, createdAt: now, status: "completed", orderMode: "711_cod", total: 475, store: { id: "S1", name: "港明", address: "測試地址" }, items: [{ name: "莫內花語", optionLabel: "半磅", quantity: 1 }] });
+  await writeJson(path.join(root, "orders", "ORD-1.json"), { orderNumber: "ORD-1", member: { memberId: "m_b" }, createdAt: now, status: "completed", orderMode: "711_cod", total: 475, store: { id: "S1", name: "港明", address: "測試地址" }, items: [{ productId: "store-coffee", sku: "STORE-COFFEE-250", name: "莫內花語", optionLabel: "半磅", quantity: 1 }] });
   await writeJson(path.join(root, "fulfillment", "state.json"), { schemaVersion: 1, revision: 5, records: { "ORD-1": { orderId: "ORD-1", currentState: "completed", updatedAt: now, events: [{ state: "completed", occurredAt: now, source: "admin" }] } } });
   await writeJson(path.join(root, "fulfillment", "settings.json"), { schemaVersion: 1, revision: 2, pickupDeadlineDays: 7 });
   await writeJson(path.join(root, "store", "website-data.json"), { menu: { products: [] }, revision: 9 });
+  await writeJson(path.join(root, "store-domain", "catalog.json"), { schemaVersion: 1, revision: 4, products: [{ id: "store-coffee", slug: "store-coffee", sku: "STORE-COFFEE-250", price: 475, inventory: 20, published: true }] });
   await fs.writeFile(path.join(root, "uploads", "member-avatars", "m_a", "avatar.webp"), Buffer.from([1, 2, 3, 4]));
   await fs.writeFile(path.join(root, "uploads", "order-notifications", "ORD-1.png"), Buffer.from([5, 6, 7]));
 }
@@ -95,6 +96,7 @@ async function main() {
   const backupModule = await import("../lib/memberBackup");
   assert.equal(backupModule.isSupportedMemberBackupVersion("J.5D.5A-H1-v1"), true);
   assert.equal(backupModule.isSupportedMemberBackupVersion("J.5D.5A-H2-v1"), true);
+  assert.equal(backupModule.isSupportedMemberBackupVersion("J.5D.5A-H3-v1"), true);
   assert.equal(backupModule.isSupportedMemberBackupVersion("unknown"), false);
   assert.deepEqual(backupModule.validateProductionBackupProvenance({ nodeEnv: "production", kdDataDir: "/data", railwayVolumeMountPath: "/data", contract: { root: "/data", source: "KD_DATA_DIR", railwayMountPath: "/data" } }), []);
   assert.ok(backupModule.validateProductionBackupProvenance({ nodeEnv: "production", kdDataDir: root, railwayVolumeMountPath: "/data", contract: { root, source: "KD_DATA_DIR", railwayMountPath: "/data" } }).length >= 1);
@@ -104,7 +106,7 @@ async function main() {
   const result = await backupModule.createMemberBackup({ source: "test", now: new Date(now), testOnlyAllowNonProduction: true });
   const manifest = result.manifest;
   assert.equal(manifest.status, "verified");
-  assert.equal(manifest.backupVersion, "J.5D.5A-H2-v1");
+  assert.equal(manifest.backupVersion, "J.5D.5A-H3-v1");
   assert.equal(manifest.environment, "test");
   assert.equal(manifest.dataRoot.replaceAll("\\", "/"), root.replaceAll("\\", "/"));
   assert.equal(manifest.gitCommit, "e7bf9d5-test");
@@ -119,8 +121,8 @@ async function main() {
   assert.equal(manifest.sourceRevisions.commerceRevision, 11);
   assert.equal(manifest.sourceRevisions.businessRulesRevision, 3);
   assert.equal(manifest.sourceRevisions.fulfillmentRevision, 5);
-  assert.equal(manifest.datasets.length, 10);
-  assert.deepEqual(new Set(manifest.datasets.map((item) => item.id)), new Set(["members", "member_identity", "membership_commerce", "membership_business_rules", "orders", "fulfillment_state", "fulfillment_settings", "member_avatars", "order_notifications", "website_data"]));
+  assert.equal(manifest.datasets.length, 11);
+  assert.deepEqual(new Set(manifest.datasets.map((item) => item.id)), new Set(["members", "member_identity", "membership_commerce", "membership_business_rules", "orders", "fulfillment_state", "fulfillment_settings", "member_avatars", "order_notifications", "website_data", "store_catalog"]));
   const capturedAvatars = manifest.datasets.find((item) => item.id === "member_avatars");
   assert.deepEqual(
     { required: capturedAvatars?.required, present: capturedAvatars?.present, empty: capturedAvatars?.empty, status: capturedAvatars?.status, fileCount: capturedAvatars?.fileCount },
@@ -131,7 +133,11 @@ async function main() {
     "manifest.json", "checksums.sha256", "index.html", "organization-tree.json", "organization.html", "readable/members.csv", "readable/organization.csv",
     "raw/member-identity/registry.json", "raw/membership-commerce/commerce-state.json", "raw/membership-commerce/business-rules.json", "raw/orders/ORD-1.json",
     "raw/fulfillment/state.json", "raw/fulfillment/settings.json", "raw/store/website-data.json", "raw/uploads/member-avatars/m_a/avatar.webp", "raw/uploads/order-notifications/ORD-1.png",
+    "raw/store-domain/catalog.json",
   ]) await fs.access(path.join(result.path, ...required.split("/")));
+  const catalog = JSON.parse(await fs.readFile(path.join(result.path, "raw", "store-domain", "catalog.json"), "utf8"));
+  const order = JSON.parse(await fs.readFile(path.join(result.path, "raw", "orders", "ORD-1.json"), "utf8"));
+  assert.equal(catalog.products[0]?.sku, order.items[0]?.sku);
 
   const tree = JSON.parse(await fs.readFile(path.join(result.path, "organization-tree.json"), "utf8"));
   assert.deepEqual(tree.roots, ["m_a", "member_7ob_5Y2A97lrj159ucZ-GQ"]);
@@ -151,7 +157,7 @@ async function main() {
   const index = await fs.readFile(path.join(result.path, "index.html"), "utf8");
   assert.match(index, /KD Coffee｜備份資料檢視中心/);
   assert.match(index, /本次開啟尚未重新驗證/);
-  assert.match(index, /Store／網站資料/);
+  assert.match(index, /Store 商品 catalog/);
 
   const readJson = async (relative: string) => JSON.parse(await fs.readFile(path.join(root, relative), "utf8"));
   const profiles = new Map<string, Record<string, unknown>>();
@@ -232,12 +238,18 @@ async function main() {
   assert.equal(zip.readUInt32LE(0), 0x04034b50);
   assert.match(zip.toString("latin1"), /organization-tree\.json/);
   assert.match(zip.toString("latin1"), /raw\/orders\/ORD-1\.json/);
+  assert.match(zip.toString("latin1"), /raw\/store-domain\/catalog\.json/);
   assert.match(zip.toString("latin1"), /checksums\.sha256/);
 
   const originalOrganization = await fs.readFile(path.join(result.path, "organization-tree.json"));
   await fs.appendFile(path.join(result.path, "organization-tree.json"), "tampered");
   await expectReject(() => backupModule.getVerifiedMemberBackupForDownload(manifest.backupId, { testOnlyAllowNonProduction: true }), /changed|checksum mismatch/);
   await fs.writeFile(path.join(result.path, "organization-tree.json"), originalOrganization);
+
+  const originalCatalog = await fs.readFile(path.join(result.path, "raw", "store-domain", "catalog.json"));
+  await fs.appendFile(path.join(result.path, "raw", "store-domain", "catalog.json"), "tampered");
+  await expectReject(() => backupModule.getVerifiedMemberBackupForDownload(manifest.backupId, { testOnlyAllowNonProduction: true }), /changed|checksum mismatch/);
+  await fs.writeFile(path.join(result.path, "raw", "store-domain", "catalog.json"), originalCatalog);
 
   const graph = backupModule.buildOrganizationTree({
     identity: { members: { a: { memberNumber: "1" }, b: { memberNumber: "2" }, c: { memberNumber: "3" } } },
@@ -301,6 +313,20 @@ async function main() {
   process.env.KD_DATA_DIR = corruptRoot;
   await expectReject(() => backupModule.createMemberBackup({ source: "test", testOnlyAllowNonProduction: true }), /Critical backup JSON is unavailable or invalid/);
 
+  const corruptCatalogRoot = path.join(workspace, "corrupt-catalog");
+  await fs.mkdir(corruptCatalogRoot, { recursive: true });
+  await prepareFixture(corruptCatalogRoot);
+  await fs.writeFile(path.join(corruptCatalogRoot, "store-domain", "catalog.json"), "{broken");
+  process.env.KD_DATA_DIR = corruptCatalogRoot;
+  await expectReject(() => backupModule.createMemberBackup({ source: "test", testOnlyAllowNonProduction: true }), /Critical backup JSON is unavailable or invalid/);
+
+  const missingCatalogRoot = path.join(workspace, "missing-catalog");
+  await fs.mkdir(missingCatalogRoot, { recursive: true });
+  await prepareFixture(missingCatalogRoot);
+  await fs.rm(path.join(missingCatalogRoot, "store-domain", "catalog.json"));
+  process.env.KD_DATA_DIR = missingCatalogRoot;
+  await expectReject(() => backupModule.createMemberBackup({ source: "test", testOnlyAllowNonProduction: true }), /Critical backup dataset is missing/);
+
   const tornRoot = path.join(workspace, "torn");
   await fs.mkdir(tornRoot, { recursive: true });
   await prepareFixture(tornRoot);
@@ -309,6 +335,14 @@ async function main() {
   const tornEntries = await fs.readdir(path.join(tornRoot, "backups", "members")).catch(() => [] as string[]);
   assert.equal(tornEntries.some((entry) => !entry.startsWith(".staging-")), false);
   assert.equal(tornEntries.some((entry) => entry.startsWith(".staging-")), false);
+
+  const tornCatalogRoot = path.join(workspace, "torn-catalog");
+  await fs.mkdir(tornCatalogRoot, { recursive: true });
+  await prepareFixture(tornCatalogRoot);
+  process.env.KD_DATA_DIR = tornCatalogRoot;
+  await expectReject(() => backupModule.createMemberBackup({ source: "test", testOnlyAllowNonProduction: true, beforeStabilityCheck: async () => writeJson(path.join(tornCatalogRoot, "store-domain", "catalog.json"), { changed: true }) }), /Critical source changed during member backup: store_catalog/);
+  const tornCatalogEntries = await fs.readdir(path.join(tornCatalogRoot, "backups", "members")).catch(() => [] as string[]);
+  assert.equal(tornCatalogEntries.length, 0);
 
   const routeSource = await fs.readFile(path.join(process.cwd(), "app/api/admin/member-backups/[backupId]/download/route.ts"), "utf8");
   assert.match(routeSource, /isAdminAuthenticated/);

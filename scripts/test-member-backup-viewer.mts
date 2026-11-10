@@ -9,7 +9,7 @@ import { Readable } from "node:stream";
 import { setTimeout as delay } from "node:timers/promises";
 import { pathToFileURL } from "node:url";
 import { buildOrganizationTree, createMemberBackup, createMemberBackupZipArtifact, getVerifiedMemberBackupForDownload } from "../lib/memberBackup";
-import { buildBackupOrganizationViewer } from "../lib/memberBackupViewer";
+import { buildBackupIndexViewer, buildBackupOrganizationViewer } from "../lib/memberBackupViewer";
 import { buildBackupOrderViewerData } from "../lib/memberBackupViewerOrders";
 import { snapshotReturnLineEvidence, type OrderCompletionSnapshot } from "../lib/orderCompletion";
 import type { ReturnDomainEvent } from "../lib/orderReturns";
@@ -110,6 +110,7 @@ for (const [name, order] of Object.entries(orders)) await seed("orders/" + name 
 await seed("fulfillment/settings.json", { schemaVersion: 1 });
 await seed("fulfillment/state.json", { schemaVersion: 1, records: {} });
 await seed("store/website-data.json", { qa: true });
+await seed("store-domain/catalog.json", { schemaVersion: 1, revision: 1, products: [{ id:"synthetic-store", sku:"SYNTHETIC-STORE-001", price: 120, inventory: 10 }] });
 await seed("uploads/order-notifications/SYNTHETIC-01.png", Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/l2cAAAAASUVORK5CYII=", "base64"));
 Object.assign(process.env, {NODE_ENV:"test", KD_DATA_DIR:root, RAILWAY_GIT_COMMIT_SHA:"backup-ui-synthetic"});
 delete process.env.RAILWAY_VOLUME_MOUNT_PATH;
@@ -149,7 +150,7 @@ assert.equal(backup.manifest.counts.orders, Object.keys(orders).length);
 const legacyRoot = path.join(workspace, "legacy");
 const legacyDir = path.join(legacyRoot, "backups", "members", backup.manifest.backupId);
 const legacyOrganization = "<!doctype html><meta charset=utf-8><title>KD Coffee 會員組織圖備份</title>";
-const legacy = { ...backup.manifest, backupVersion:"J.5D.5A-H1-v1", files:backup.manifest.files.filter(f => f.path !== "index.html").map(f => f.path === "organization.html" ?
+const legacy = { ...backup.manifest, backupVersion:"J.5D.5A-H1-v1", datasets:backup.manifest.datasets.filter(item => item.id !== "store_catalog"), files:backup.manifest.files.filter(f => f.path !== "index.html" && f.path !== "raw/store-domain/catalog.json").map(f => f.path === "organization.html" ?
   { path:f.path, bytes:Buffer.byteLength(legacyOrganization), sha256:digest(legacyOrganization) } : f) };
 for (const file of legacy.files) {
   const content = file.path === "organization.html" ? legacyOrganization : await fs.readFile(path.join(extracted, file.path));
@@ -163,6 +164,26 @@ const old = await getVerifiedMemberBackupForDownload(legacy.backupId, { testOnly
 assert.equal(old.manifest.backupVersion, "J.5D.5A-H1-v1");
 assert.ok(old.files.some(f => f.archivePath === "organization.html"));
 assert.ok(!old.files.some(f => f.archivePath === "index.html"));
+assert.ok(!old.manifest.datasets.some(item => item.id === "store_catalog"));
+
+// H2 stays readable too.  Re-rendering its manifest through the current offline
+// viewer must explicitly identify the absent Store catalog rather than treating
+// website-data as Store catalog coverage.
+const legacyH2Id = "20261108T020001Z_a1b2c3d4";
+const legacyH2Dir = path.join(legacyRoot, "backups", "members", legacyH2Id);
+const legacyH2 = { ...legacy, backupId: legacyH2Id, backupVersion: "J.5D.5A-H2-v1" as const, backupLocation: legacyH2Dir };
+for (const file of legacyH2.files) {
+  await write(path.join(legacyH2Dir, file.path), await fs.readFile(path.join(legacyDir, file.path)));
+}
+const legacyH2Manifest = encode(legacyH2);
+await write(path.join(legacyH2Dir, "manifest.json"), legacyH2Manifest);
+await write(path.join(legacyH2Dir, "checksums.sha256"), [...legacyH2.files, {path:"manifest.json", sha256:digest(legacyH2Manifest)}].map(file => file.sha256 + "  " + file.path).join("\n") + "\n");
+const h2 = await getVerifiedMemberBackupForDownload(legacyH2Id, { testOnlyAllowNonProduction: true });
+assert.equal(h2.manifest.backupVersion, "J.5D.5A-H2-v1");
+assert.ok(!h2.manifest.datasets.some(item => item.id === "store_catalog"));
+const h2Coverage = buildBackupIndexViewer(h2.manifest);
+assert.match(h2Coverage, /Store 商品 catalog/u);
+assert.match(h2Coverage, /包含未備份的資料集/u);
 
 const tampered = path.join(workspace, "tampered");
 await fs.cp(extracted, tampered, { recursive:true });
