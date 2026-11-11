@@ -11,6 +11,7 @@ import {
 } from "./memberBackup";
 import {
   applyLocalCronRetention,
+  ensureManualBackupStorage,
   ensureAutomaticBackupStorage,
   planGoogleDriveMemberBackupRetention,
   readMemberBackupStorageMetrics,
@@ -18,11 +19,22 @@ import {
   type LocalRetentionResult,
   type MemberBackupStorageMetrics,
 } from "./memberBackupRetention";
+import {
+  memberBackupEncryptionEnabled,
+  MEMBER_BACKUP_ENVELOPE_FORMAT,
+} from "./memberBackupEncryption";
+import { createHash } from "node:crypto";
+import {preparedEncryptedBackup} from './memberBackupOffsiteIntent';
+import {withFileLock} from './jsonFileStore';
 
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const GOOGLE_DRIVE_FILES_URL = "https://www.googleapis.com/drive/v3/files";
 const GOOGLE_DRIVE_UPLOAD_URL = "https://www.googleapis.com/upload/drive/v3/files";
 const ZIP_MIME_TYPE = "application/zip";
+const ENCRYPTED_MIME_TYPE = "application/vnd.kdcoffee.member-backup";
+const sha256 = (value: Uint8Array) => createHash("sha256").update(value).digest("hex");
+const ENCRYPTION_CERTIFICATE_ENV = "KD_MEMBER_BACKUP_ENCRYPTION_CERTIFICATE_PATH";
+const ENCRYPTION_OPENSSL_ENV = "KD_MEMBER_BACKUP_ENCRYPTION_OPENSSL_PATH";
 const DRIVE_FILE_FIELDS = "id,name,size,createdTime,webViewLink,mimeType,parents,appProperties,md5Checksum";
 const DRIVE_ENV_NAMES = [
   "GOOGLE_DRIVE_CLIENT_ID",
@@ -173,17 +185,40 @@ function parseDriveFile(value: unknown): DriveFile | null {
   };
 }
 
-function expectedFileName(backupId: string) {
-  return `kdcoffee-member-backup_${backupId}.zip`;
+type DriveUploadArtifact = {
+  name: string;
+  bytes: number;
+  body: ReadableStream<Uint8Array> | Uint8Array;
+  mimeType: string;
+  archiveFormat: "zip" | typeof MEMBER_BACKUP_ENVELOPE_FORMAT;
+  sha256?: string;
+  keyId?: string;
+  plaintextZipSha256?: string;
+};
+
+function encryptionOptions(environment: DriveEnvironment, supplied?: { certificatePath: string; opensslPath: string }) {
+  if (supplied) return supplied;
+  const certificatePath = environment[ENCRYPTION_CERTIFICATE_ENV]?.trim();
+  const opensslPath = environment[ENCRYPTION_OPENSSL_ENV]?.trim();
+  if (!certificatePath || !opensslPath) throw new GoogleDriveMemberBackupError("verification-failed", "Encrypted member backup is enabled but its public certificate or OpenSSL path is not configured");
+  return { certificatePath, opensslPath };
 }
 
-function matchesCanonicalBackup(file: DriveFile, input: { backupId: string; folderId: string; name: string; bytes: number }) {
+function expectedFileName(backupId: string, encrypted = false) {
+  return `kdcoffee-member-backup_${backupId}.${encrypted ? "kdcbak" : "zip"}`;
+}
+
+function matchesCanonicalBackup(file: DriveFile, input: { backupId: string; folderId: string; name: string; bytes: number; mimeType?: string; archiveFormat?: string; sha256?: string; keyId?:string; plaintextZipSha256?:string }) {
   return file.name === input.name
     && file.size === input.bytes
-    && file.mimeType === ZIP_MIME_TYPE
+    && file.mimeType === (input.mimeType ?? ZIP_MIME_TYPE)
     && file.parents.includes(input.folderId)
     && file.appProperties.kdBackupId === input.backupId
-    && file.appProperties.kdBackupType === "member-backup";
+    && file.appProperties.kdBackupType === "member-backup"
+    && (!input.archiveFormat || file.appProperties.kdArchiveFormat === input.archiveFormat || (input.archiveFormat === "zip" && !file.appProperties.kdArchiveFormat))
+    && (!input.sha256 || file.appProperties.kdCipherSha256 === input.sha256)
+    && (!input.keyId || file.appProperties.kdKeyId === input.keyId)
+    && (!input.plaintextZipSha256 || file.appProperties.kdZipSha256 === input.plaintextZipSha256);
 }
 
 async function findExistingDriveFile(input: {
@@ -192,14 +227,14 @@ async function findExistingDriveFile(input: {
   folderId: string;
   backupId: string;
   name: string;
-  bytes: number;
+  bytes: number; mimeType?: string; archiveFormat?: string; sha256?: string; keyId?:string; plaintextZipSha256?:string;
 }) {
   const query = `'${escapeDriveQuery(input.folderId)}' in parents and trashed = false and appProperties has { key='kdBackupId' and value='${escapeDriveQuery(input.backupId)}' } and appProperties has { key='kdBackupType' and value='member-backup' }`;
   const url = new URL(GOOGLE_DRIVE_FILES_URL);
   url.searchParams.set("q", query);
   url.searchParams.set("spaces", "drive");
   url.searchParams.set("pageSize", "10");
-  url.searchParams.set("fields", `files(${DRIVE_FILE_FIELDS})`);
+  url.searchParams.set("fields", `nextPageToken,files(${DRIVE_FILE_FIELDS})`);
   const response = await timedFetch(input.fetcher, url.toString(), {
     headers: { Authorization: `Bearer ${input.accessToken}` },
   }, 20_000).catch((error) => {
@@ -208,6 +243,7 @@ async function findExistingDriveFile(input: {
   if (!response.ok) throw new GoogleDriveMemberBackupError("folder-unavailable", "Google Drive backup folder is unavailable", { googleStatus: response.status });
   const payload = await jsonObject(response);
   if (!payload || !Array.isArray(payload.files)) throw new GoogleDriveMemberBackupError("folder-unavailable", "Google Drive folder lookup response was invalid", { googleStatus: response.status });
+  if(payload.nextPageToken || payload.files.some(file=>!parseDriveFile(file)))throw new GoogleDriveMemberBackupError('verification-failed','Ambiguous or incomplete remote backup inventory');
   const candidates = payload.files.map(parseDriveFile).filter((file): file is DriveFile => Boolean(file));
   const matching = candidates.filter((file) => matchesCanonicalBackup(file, input));
   if (matching.length > 1) throw new GoogleDriveMemberBackupError("verification-failed", "Multiple Drive files claim the same canonical backup identity");
@@ -226,6 +262,8 @@ async function resolveVerifiedDriveIdentity(
     testOnlyAllowNonProduction?: boolean;
     resolveVerifiedBackup?: (backupId: string) => Promise<VerifiedMemberBackup>;
     createZipArtifact?: (verified: VerifiedMemberBackup) => Promise<MemberBackupZipArtifact>;
+    encryption?: { certificatePath: string; opensslPath: string };
+    lookupOnly?: boolean;
   } = {},
 ) {
   if (!isValidMemberBackupId(backupId)) throw new GoogleDriveMemberBackupError("verification-failed", "Member backup ID is invalid");
@@ -238,10 +276,20 @@ async function resolveVerifiedDriveIdentity(
   if (verified.manifest.backupId !== backupId || verified.manifest.status !== "verified") {
     throw new GoogleDriveMemberBackupError("verification-failed", "Local member backup identity is invalid", { backupId });
   }
-  const artifact = await (options.createZipArtifact ?? createMemberBackupZipArtifact)(verified).catch((error) => {
+  const zipArtifact = await (options.createZipArtifact ?? createMemberBackupZipArtifact)(verified).catch((error) => {
     throw new GoogleDriveMemberBackupError("verification-failed", "Verified member backup ZIP could not be generated", { cause: error, backupId });
   });
-  if (!Number.isSafeInteger(artifact.bytes) || artifact.bytes < 1) throw new GoogleDriveMemberBackupError("verification-failed", "Verified member backup ZIP size is invalid", { backupId });
+  if (!Number.isSafeInteger(zipArtifact.bytes) || zipArtifact.bytes < 1) throw new GoogleDriveMemberBackupError("verification-failed", "Verified member backup ZIP size is invalid", { backupId });
+  const encrypted = memberBackupEncryptionEnabled(options.environment ?? process.env);
+  let artifact:DriveUploadArtifact;
+  try {
+    if(encrypted){
+      const chunks:Uint8Array[]=[];const reader=zipArtifact.body.getReader();for(;;){const next=await reader.read();if(next.done)break;chunks.push(next.value);}
+      const zip=Buffer.concat(chunks.map(chunk=>Buffer.from(chunk)));if(zip.length!==zipArtifact.bytes)throw Error('ZIP length mismatch');
+      const value=await preparedEncryptedBackup(verified,zip,{...encryptionOptions(options.environment??process.env,options.encryption),signingSecret:(options.environment??process.env).AUTH_SESSION_SECRET??'',readOnly:options.lookupOnly});
+      artifact={...value,mimeType:ENCRYPTED_MIME_TYPE,archiveFormat:value.format};
+    } else artifact={...zipArtifact,name:expectedFileName(backupId),mimeType:ZIP_MIME_TYPE,archiveFormat:'zip'};
+  } catch(error){throw new GoogleDriveMemberBackupError('verification-failed','Encrypted backup identity or artifact preparation failed',{cause:error,backupId});}
   return { environment, fetcher, verified, artifact };
 }
 
@@ -249,17 +297,18 @@ export async function findVerifiedMemberBackupOnGoogleDrive(
   backupId: string,
   options: Parameters<typeof resolveVerifiedDriveIdentity>[1] = {},
 ) {
-  const resolved = await resolveVerifiedDriveIdentity(backupId, options);
+  const resolved = await resolveVerifiedDriveIdentity(backupId, {...options,lookupOnly:true});
   const accessToken = await refreshAccessToken(resolved.fetcher, resolved.environment);
-  const name = expectedFileName(backupId);
+  const name = resolved.artifact.name;
   const file = await findExistingDriveFile({
     fetcher: resolved.fetcher,
     accessToken,
     folderId: resolved.environment.GOOGLE_DRIVE_BACKUP_FOLDER_ID,
     backupId,
     name,
-    bytes: resolved.artifact.bytes,
+    bytes: resolved.artifact.bytes, mimeType: resolved.artifact.mimeType, archiveFormat: resolved.artifact.archiveFormat, sha256: resolved.artifact.sha256,keyId:resolved.artifact.keyId,plaintextZipSha256:resolved.artifact.plaintextZipSha256,
   });
+  if(file&&resolved.artifact.sha256)await verifyEncryptedReadback(file,resolved.artifact,resolved.fetcher,accessToken);
   return file ? safeResult(file, "already-uploaded", backupId, new Date().toISOString()) : null;
 }
 
@@ -267,7 +316,7 @@ async function listDriveFolderFiles(input: { fetcher: Fetcher; accessToken: stri
   const files: unknown[] = [];
   let pageToken = "";
   do {
-    const url = new URL(GOOGLE_DRIVE_FILES_URL);
+  const url = new URL(GOOGLE_DRIVE_FILES_URL);
     url.searchParams.set("q", `'${escapeDriveQuery(input.folderId)}' in parents and trashed = false`);
     url.searchParams.set("spaces", "drive");
     url.searchParams.set("pageSize", "1000");
@@ -292,8 +341,9 @@ function retentionIdentity(file: DriveFile, folderId: string) {
   if (!file.parents.includes(folderId)) return { valid: false as const, reason: "wrong-folder" };
   if (file.appProperties.kdBackupType !== "member-backup") return { valid: false as const, reason: "missing-or-wrong-backup-type" };
   if (!isValidMemberBackupId(backupId)) return { valid: false as const, reason: "invalid-backup-id" };
-  if (file.name !== expectedFileName(backupId)) return { valid: false as const, reason: "filename-identity-mismatch" };
-  if (file.mimeType !== ZIP_MIME_TYPE || file.size < 1) return { valid: false as const, reason: "invalid-zip-metadata" };
+  const encrypted = file.appProperties.kdArchiveFormat === MEMBER_BACKUP_ENVELOPE_FORMAT;
+  if (file.name !== expectedFileName(backupId, encrypted)) return { valid: false as const, reason: "filename-identity-mismatch" };
+  if ((encrypted ? file.mimeType !== ENCRYPTED_MIME_TYPE : file.mimeType !== ZIP_MIME_TYPE) || file.size < 1) return { valid: false as const, reason: "invalid-archive-metadata" };
   if (file.appProperties.kdSource !== "railway_cron") return { valid: false as const, reason: "non-cron-or-legacy-source" };
   if (file.appProperties.kdEnvironment !== "production") return { valid: false as const, reason: "non-production-environment" };
   if (!file.appProperties.kdGitCommit || !file.appProperties.kdCreatedAt) return { valid: false as const, reason: "incomplete-system-metadata" };
@@ -364,6 +414,20 @@ async function readDriveFile(input: { fetcher: Fetcher; accessToken: string; fil
   return file;
 }
 
+async function readDriveFileBytes(input: { fetcher: Fetcher; accessToken: string; fileId: string }) {
+  const url = new URL(`${GOOGLE_DRIVE_FILES_URL}/${encodeURIComponent(input.fileId)}`); url.searchParams.set("alt", "media");
+  const response = await timedFetch(input.fetcher, url.toString(), { headers: { Authorization: `Bearer ${input.accessToken}` } }, 120_000).catch((error) => {
+    throw new GoogleDriveMemberBackupError("verification-failed", "Google Drive encrypted backup readback failed", { cause: error });
+  });
+  if (!response.ok) throw new GoogleDriveMemberBackupError("verification-failed", "Google Drive encrypted backup readback was rejected", { googleStatus: response.status });
+  return new Uint8Array(await response.arrayBuffer());
+}
+
+async function verifyEncryptedReadback(file:DriveFile,artifact:DriveUploadArtifact,fetcher:Fetcher,accessToken:string){
+ const bytes=await readDriveFileBytes({fetcher,accessToken,fileId:file.id});
+ if(bytes.length!==artifact.bytes||sha256(bytes)!==artifact.sha256)throw new GoogleDriveMemberBackupError('verification-failed','Google Drive encrypted backup readback checksum does not match');
+}
+
 async function uploadResumable(input: {
   fetcher: Fetcher;
   accessToken: string;
@@ -371,12 +435,12 @@ async function uploadResumable(input: {
   backupId: string;
   manifest: MemberBackupManifest;
   name: string;
-  artifact: MemberBackupZipArtifact;
+  artifact: DriveUploadArtifact;
 }) {
   const metadata = {
     name: input.name,
     parents: [input.folderId],
-    mimeType: ZIP_MIME_TYPE,
+    mimeType: input.artifact.mimeType,
     appProperties: {
       kdBackupId: input.backupId,
       kdBackupType: "member-backup",
@@ -386,6 +450,10 @@ async function uploadResumable(input: {
       kdCreatedAt: input.manifest.createdAt,
       kdMemberCount: String(input.manifest.counts.canonicalMembers),
       kdOrderCount: String(input.manifest.counts.orders),
+      ...(input.artifact.archiveFormat === "zip" ? {} : { kdArchiveFormat: input.artifact.archiveFormat }),
+      ...(input.artifact.sha256 ? { kdCipherSha256: input.artifact.sha256 } : {}),
+      ...(input.artifact.keyId ? { kdKeyId: input.artifact.keyId } : {}),
+      ...(input.artifact.plaintextZipSha256 ? { kdZipSha256: input.artifact.plaintextZipSha256 } : {}),
     },
   };
   const initUrl = new URL(GOOGLE_DRIVE_UPLOAD_URL);
@@ -396,7 +464,7 @@ async function uploadResumable(input: {
     headers: {
       Authorization: `Bearer ${input.accessToken}`,
       "Content-Type": "application/json; charset=UTF-8",
-      "X-Upload-Content-Type": ZIP_MIME_TYPE,
+      "X-Upload-Content-Type": input.artifact.mimeType,
       "X-Upload-Content-Length": String(input.artifact.bytes),
     },
     body: JSON.stringify(metadata),
@@ -413,7 +481,7 @@ async function uploadResumable(input: {
   }
   const uploadInit = {
     method: "PUT",
-    headers: { "Content-Type": ZIP_MIME_TYPE, "Content-Length": String(input.artifact.bytes) },
+    headers: { "Content-Type": input.artifact.mimeType, "Content-Length": String(input.artifact.bytes) },
     body: input.artifact.body as BodyInit,
     duplex: "half",
   } satisfies RequestInit & { duplex: "half" };
@@ -439,32 +507,22 @@ async function uploadVerifiedMemberBackupToGoogleDriveOnce(
     testOnlyAllowNonProduction?: boolean;
     resolveVerifiedBackup?: (backupId: string) => Promise<VerifiedMemberBackup>;
     createZipArtifact?: (verified: VerifiedMemberBackup) => Promise<MemberBackupZipArtifact>;
+    encryption?: { certificatePath: string; opensslPath: string };
   } = {},
 ) {
-  if (!isValidMemberBackupId(backupId)) throw new GoogleDriveMemberBackupError("verification-failed", "Member backup ID is invalid");
-  const environment = configuredEnvironment(options.environment ?? process.env);
-  const fetcher = options.fetcher ?? fetch;
-  const resolveVerified = options.resolveVerifiedBackup ?? ((id: string) => getVerifiedMemberBackupForDownload(id, { testOnlyAllowNonProduction: options.testOnlyAllowNonProduction }));
-  let verified: VerifiedMemberBackup;
-  try { verified = await resolveVerified(backupId); }
-  catch (error) { throw new GoogleDriveMemberBackupError("verification-failed", "Local member backup is not verified", { cause: error, backupId }); }
-  if (verified.manifest.backupId !== backupId || verified.manifest.status !== "verified") {
-    throw new GoogleDriveMemberBackupError("verification-failed", "Local member backup identity is invalid", { backupId });
-  }
-  const artifact = await (options.createZipArtifact ?? createMemberBackupZipArtifact)(verified).catch((error) => {
-    throw new GoogleDriveMemberBackupError("verification-failed", "Verified member backup ZIP could not be generated", { cause: error, backupId });
-  });
-  if (!Number.isSafeInteger(artifact.bytes) || artifact.bytes < 1) throw new GoogleDriveMemberBackupError("verification-failed", "Verified member backup ZIP size is invalid", { backupId });
+  const {environment,fetcher,verified,artifact}=await resolveVerifiedDriveIdentity(backupId,options);
   const accessToken = await refreshAccessToken(fetcher, environment);
-  const name = expectedFileName(backupId);
-  const existing = await findExistingDriveFile({ fetcher, accessToken, folderId: environment.GOOGLE_DRIVE_BACKUP_FOLDER_ID, backupId, name, bytes: artifact.bytes });
+  const name = artifact.name;
+  const identity={backupId,folderId:environment.GOOGLE_DRIVE_BACKUP_FOLDER_ID,name,bytes:artifact.bytes,mimeType:artifact.mimeType,archiveFormat:artifact.archiveFormat,sha256:artifact.sha256,keyId:artifact.keyId,plaintextZipSha256:artifact.plaintextZipSha256};
+  const existing = await findExistingDriveFile({fetcher,accessToken,...identity});
   const uploadedAt = (options.now ?? new Date()).toISOString();
-  if (existing) return safeResult(existing, "already-uploaded", backupId, uploadedAt);
+  if (existing) {if(artifact.sha256)await verifyEncryptedReadback(existing,artifact,fetcher,accessToken);return safeResult(existing, "already-uploaded", backupId, uploadedAt);}
   const uploaded = await uploadResumable({ fetcher, accessToken, folderId: environment.GOOGLE_DRIVE_BACKUP_FOLDER_ID, backupId, manifest: verified.manifest, name, artifact });
   const confirmed = await readDriveFile({ fetcher, accessToken, fileId: uploaded.id });
-  if (!matchesCanonicalBackup(confirmed, { backupId, folderId: environment.GOOGLE_DRIVE_BACKUP_FOLDER_ID, name, bytes: artifact.bytes })) {
+  if (!matchesCanonicalBackup(uploaded,identity)||!matchesCanonicalBackup(confirmed,identity)||uploaded.id!==confirmed.id) {
     throw new GoogleDriveMemberBackupError("verification-failed", "Google Drive file metadata does not match the verified local backup", { backupId });
   }
+  if(artifact.sha256)await verifyEncryptedReadback(confirmed,artifact,fetcher,accessToken);
   return safeResult(confirmed, "uploaded", backupId, uploadedAt);
 }
 
@@ -475,6 +533,10 @@ export function uploadVerifiedMemberBackupToGoogleDrive(
   if (!isValidMemberBackupId(backupId)) {
     return Promise.reject(new GoogleDriveMemberBackupError("verification-failed", "Member backup ID is invalid"));
   }
+  if(memberBackupEncryptionEnabled(options.environment??process.env))return (async()=>{
+    const verified=await (options.resolveVerifiedBackup??((id:string)=>getVerifiedMemberBackupForDownload(id,{testOnlyAllowNonProduction:options.testOnlyAllowNonProduction})))(backupId);
+    return withFileLock(`${verified.directory}/.encrypted-offsite-upload`,()=>uploadVerifiedMemberBackupToGoogleDriveOnce(backupId,{...options,resolveVerifiedBackup:async()=>verified}));
+  })();
   const active = uploadInFlight.get(backupId);
   if (active) return active;
   const operation = uploadVerifiedMemberBackupToGoogleDriveOnce(backupId, options);
@@ -486,6 +548,9 @@ export function uploadVerifiedMemberBackupToGoogleDrive(
 }
 
 export async function runScheduledMemberBackupOffsiteWorkflow(options: {
+  /** Code-only single-call switch. Never read from request data or environment. */
+  cleanupMode?: 'first-encrypted-acceptance';
+  acceptanceStorageCheck?: typeof ensureManualBackupStorage;
   createBackup?: typeof createMemberBackup;
   uploadBackup?: typeof uploadVerifiedMemberBackupToGoogleDrive;
   preflightStorage?: () => Promise<LocalRetentionResult | null>;
@@ -505,7 +570,9 @@ export async function runScheduledMemberBackupOffsiteWorkflow(options: {
     ?? (customCreate ? async () => null : () => getGoogleDriveMemberBackupRetentionPlan());
   const finalStorage = options.finalStorage
     ?? (customCreate ? async () => null : () => readMemberBackupStorageMetrics());
-  const preflight = await preflightStorage();
+  const noCleanup=options.cleanupMode==='first-encrypted-acceptance';
+  if(noCleanup&&!memberBackupEncryptionEnabled())throw new GoogleDriveMemberBackupError('verification-failed','First encrypted acceptance requires encryption enabled');
+  const preflight = noCleanup ? {cleanupDisabled:true,storage:await (options.acceptanceStorageCheck??ensureManualBackupStorage)()} : await preflightStorage();
   const local = await createBackup({ source: "railway_cron" });
   let offsite: GoogleDriveBackupMetadata;
   try { offsite = await uploadBackup(local.manifest.backupId); }
@@ -515,9 +582,9 @@ export async function runScheduledMemberBackupOffsiteWorkflow(options: {
     }
     throw new GoogleDriveMemberBackupError("upload-failed", "Google Drive offsite backup failed", { cause: error, backupId: local.manifest.backupId });
   }
-  const retention = await pruneBackups();
+  const retention = noCleanup ? {removed:[],cleanupDisabled:true} : await pruneBackups();
   let driveRetention: DriveRetentionPlan | { dryRun: true; status: "unavailable"; code: GoogleDriveMemberBackupFailureCode } | null;
-  try { driveRetention = await driveRetentionPlan(); }
+  try { driveRetention = noCleanup ? null : await driveRetentionPlan(); }
   catch (error) {
     driveRetention = {
       dryRun: true,

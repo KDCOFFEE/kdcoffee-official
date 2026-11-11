@@ -137,7 +137,8 @@ const categories = [
   { title: "推薦制度設定", ids: ["membership_business_rules"], description: "備份當時適用的會員商務與推薦規則。", caution: "核對規則版本，避免覆蓋後續正式調整。", sensitive: true },
   { title: "訂單資料", ids: ["orders"], description: "備份所涵蓋的原始訂單檔案。", caution: "核對訂單與履約狀態，避免重複處理。", sensitive: true },
   { title: "履約資料", ids: ["fulfillment_state", "fulfillment_settings"], description: "履約狀態、物流設定與排程同步紀錄。", caution: "與訂單一併核對，先在隔離環境驗證。", sensitive: true },
-  { title: "Store／網站資料", ids: ["website_data"], description: "此備份涵蓋的網站營運 JSON。", caution: "確認欄位及版本相容，依核准範圍還原。", sensitive: true },
+  { title: "網站資料", ids: ["website_data"], description: "此備份涵蓋的咖啡作品與網站營運 JSON。", caution: "確認欄位及版本相容，依核准範圍還原。", sensitive: true },
+  { title: "Store 商品 catalog", ids: ["store_catalog"], description: "Store 商品、SKU、價格及庫存的原始 catalog JSON。H1／H2 舊版備份不包含此資料集。", caution: "還原前核對 catalog 的 SKU、價格、庫存與同時間訂單；確認欄位及版本相容後依核准範圍還原。", sensitive: true },
   { title: "媒體附件", ids: ["member_avatars", "order_notifications"], description: "本機備份範圍內的會員頭像與訂單通知附件。", caution: "保留原路徑，核對資料中的媒體引用。", sensitive: true },
 ] as const;
 
