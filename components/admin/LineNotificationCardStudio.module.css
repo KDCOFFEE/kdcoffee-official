@@ -92,6 +92,9 @@
 .editorActions button[type=submit] { background:#705038; color:#fff; }
 .page button:disabled { opacity:.5; cursor:not-allowed; }
 .editStatus { font-size:12px; color:#756348; }
+.modeBadge { display:inline-block; padding:6px 9px; background:#eee8dc; border-radius:7px; font-size:12px; line-height:1.6; }
+.bulkException { display:flex; align-items:center; gap:8px; font-size:12px; line-height:1.7; }
+.bulkException input { flex:0 0 auto; width:18px; height:18px; }
 .placeholders { padding:14px; background:#f3eee5; border-radius:8px; }
 .placeholders h3 { font-size:13px; margin:0; }
 .placeholders p { font-size:12px; line-height:1.7; }

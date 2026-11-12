@@ -7,7 +7,7 @@ export const CARD_COPY_LIMITS={displayName:80,title:60,intro:240,secondaryText:2
 export const CARD_COPY_LABELS={displayName:'卡片名稱',title:'卡片標題',intro:'上方說明',secondaryText:'補充說明',ctaLabel:'按鈕文字',altText:'LINE altText',footerText:'頁尾文字'} as const;
 export type CardCopyField=keyof typeof CARD_COPY_LIMITS;
 export type LineCardOverride=Partial<Record<CardCopyField,string>>&{presentationMode?:'text'|'flex';headerAsset?:CardFamily;headerImageAssetId?:string};
-export type LineCardConfigStore={version:1;revision:number;events:Record<string,{overrides:LineCardOverride;updatedAt:string;updatedBy:string}>};
+export type LineCardConfigStore={version:1;revision:number;events:Record<string,{overrides:LineCardOverride;updatedAt:string;updatedBy:string}>;bulkExcludedEventKeys?:string[]};
 export const EMPTY_LINE_CARD_CONFIG:LineCardConfigStore={version:1,revision:0,events:{}};
 export class LineCardValidationError extends Error {}
 export function resolveCardPlaceholders(text:string,allowed:readonly string[],values:Readonly<Record<string,string>>){
