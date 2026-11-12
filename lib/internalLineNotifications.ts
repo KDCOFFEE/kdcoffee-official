@@ -6,6 +6,11 @@ export type InternalLineNotificationResult = {
   sent: boolean;
   requestId?: string;
   reason?: string;
+  diagnostics?: {
+    requestedPresentation: 'text' | 'flex';
+    deliveredPresentation: 'text' | 'flex';
+    fallbackReason?: string;
+  };
 };
 
 export async function sendInternalLineNotification(
@@ -29,6 +34,11 @@ export async function sendInternalLineNotification(
   }
 
   const presentation=await prepareInternalLinePresentation(text,options.cardContext);
+  const diagnostics = {
+    requestedPresentation: presentation.requestedPresentation,
+    deliveredPresentation: presentation.deliveredPresentation,
+    ...(presentation.fallbackReason ? { fallbackReason: presentation.fallbackReason } : {}),
+  };
   const attempts = Math.max(1, options.attempts ?? 2);
   const timeoutMs = options.timeoutMs ?? 12_000;
   const retryDelayMs = options.retryDelayMs ?? 800;
@@ -46,6 +56,7 @@ export async function sendInternalLineNotification(
         return {
           sent: true,
           requestId: response.headers.get("x-line-request-id") || undefined,
+          diagnostics,
         };
       }
       const responseText = await response.text();
@@ -59,5 +70,5 @@ export async function sendInternalLineNotification(
     }
   }
 
-  return { sent: false, reason: lastError };
+  return { sent: false, reason: lastError, diagnostics };
 }

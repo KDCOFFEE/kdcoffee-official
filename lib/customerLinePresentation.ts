@@ -22,7 +22,7 @@ async function preparePresentation(text:string,context:CustomerCardContext|Inter
   if(overrides?.presentationMode!=='flex')return original;
   original.requestedPresentation='flex';
   let assets:Awaited<ReturnType<typeof readLineCardHeaderAssets>>=[];try{if(overrides.headerImageAssetId)assets=await dependencies.readAssets();}catch{/* Family default remains safe. */}
-  const labels=context.eventKey==='customer.reward.credit_expiring'?{credit:(await readCreditDisplayCopy())(CREDIT_NAME_KEY),points:'KD點'}:undefined;
+  const labels=['customer.reward.credit_expiring','customer.reward.credit_issued','customer.reward.referral'].includes(context.eventKey)?{credit:(await readCreditDisplayCopy())(CREDIT_NAME_KEY),points:'KD點'}:undefined;
   const rendered=renderLineFlex(context.eventKey,context.data,labels,overrides,assets);
   if(!rendered.ok)throw Error('invalid-card');
   const origin=getCanonicalPublicSiteOrigin(),hero=rendered.flex.contents.hero as {url?:string};
