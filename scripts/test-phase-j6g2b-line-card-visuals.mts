@@ -24,7 +24,10 @@ for(const def of LINE_CARD_CATALOG){
  assert.ok(!/token|fingerprint|PRIVATE-SENTINEL/.test(JSON.stringify(result.flex)));
  assert.ok(Buffer.byteLength(JSON.stringify(result.flex))<24000);
  if(def.recipient==='admin'){const review=def.eventKey==='admin.return.request_received';const action=def.eventKey==='admin.order.inquiry_received'?'待回覆':def.eventKey==='admin.order.atm_transfer_claim'?'需確認':undefined;assert.equal(visual.highlight.label,review||action?'目前進度':'下一步');assert.equal(visual.highlight.value,action??(review?result.card.status.label:result.card.cta.label));}
- fallback[def.eventKey]=result.plainTextFallback;checks++;
+ // Preserve the original 77-card fallback hash for legacy inputs without the
+ // new optional detail. The full preview above still exercises both new rows.
+ const legacyData:Record<string,string|number>={...def.previewSample};delete legacyData.messagePreview;
+ const legacy=renderLineFlex(def.eventKey,legacyData);assert.ok(legacy.ok);if(legacy.ok)fallback[def.eventKey]=legacy.plainTextFallback;checks++;
 }
 assert.equal(checks,77);
 assert.equal(createHash('sha256').update(JSON.stringify(fallback)).digest('hex'),'43a94e605707dc840c9c1573fcb1d141ca74959bdab4a1c0fb4530fea45b8706');

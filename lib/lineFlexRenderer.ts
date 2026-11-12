@@ -1,4 +1,5 @@
 import type {AssetRecord} from './assets';
+import {createOrderMessagePreview} from './orderMessagePreview';
 import {resolveLineCardHeaderAsset} from './lineCardHeaderAssets';
 import {resolveLineCardConfig,resolveCardPlaceholders,type LineCardOverride} from './lineCardConfiguration';
 export {resolveCardPlaceholders} from './lineCardConfiguration';
@@ -14,7 +15,7 @@ export function resolveNotificationCard(eventKey:string,input:unknown,labels:{cr
  const data=input as Record<string,unknown>;const allowed=new Set(def.fields.map(f=>f.key));for(const key of Reflect.ownKeys(data)){if(typeof key!=='string'||!allowed.has(key)||!('value'in Object.getOwnPropertyDescriptor(data,key)!))throw Error('unsupported-field');}
  for(const label of [labels.credit,labels.points]){bounded(label,16);if(!/^[\p{L}\p{N} ·]+$/u.test(label))throw Error('invalid-unit');}
  const formatted:Record<string,string>={},rows:ResolvedNotificationCard['rows']=[];
- for(const field of def.fields){const value=data[field.key];if(value===undefined){if(field.required)throw Error('missing-field');continue;}let text:string;
+ for(const field of def.fields){let value=data[field.key];if(field.key==='messagePreview'&&['admin.order.inquiry_received','customer.inquiry.admin_reply'].includes(eventKey))value=createOrderMessagePreview(value);if(value===undefined){if(field.required)throw Error('missing-field');continue;}let text:string;
  if(['money','credit','points','quantity','count'].includes(field.formatter)){if(typeof value!=='number'||!Number.isSafeInteger(value)||value<0)throw Error('invalid-number');text=(field.formatter==='money'?'NT$':'')+value.toLocaleString('zh-TW')+(field.formatter==='credit'?' '+labels.credit:field.formatter==='points'?' '+labels.points:field.formatter==='quantity'?' 件':field.formatter==='count'?' 次':'');}
  else if(field.formatter==='date'){const raw=bounded(value,40);if(!/^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z)?$/.test(raw)||(!Number.isFinite(Date.parse(raw))||new Date(raw).toISOString().slice(0,10)!==raw.slice(0,10)))throw Error('invalid-date');const taipei=new Date(Date.parse(raw)+(raw.length===10?0:8*60*60*1000)).toISOString();text=taipei.slice(0,10).replaceAll('-','/')+(raw.length===10?'':' '+taipei.slice(11,19));}
  else text=bounded(value,field.key==='items'?500:160);

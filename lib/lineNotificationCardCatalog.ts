@@ -1316,6 +1316,13 @@ export const LINE_CARD_CATALOG = [
     "formatter": "text",
     "required": true,
     "visibility": "visible"
+   },
+   {
+    "key": "messagePreview",
+    "label": "顧客詢問內容",
+    "formatter": "text",
+    "required": false,
+    "visibility": "visible"
    }
   ],
   "cta": {
@@ -1326,7 +1333,8 @@ export const LINE_CARD_CATALOG = [
    "orderNumber"
   ],
   "previewSample": {
-   "orderNumber": "KD20261031-1234"
+   "orderNumber": "KD20261031-1234",
+   "messagePreview": "【合成示範】請問這筆訂單的自取時段？"
   }
  },
  {
@@ -1353,6 +1361,13 @@ export const LINE_CARD_CATALOG = [
     "formatter": "text",
     "required": true,
     "visibility": "visible"
+   },
+   {
+    "key": "messagePreview",
+    "label": "KD Coffee 回覆內容",
+    "formatter": "text",
+    "required": false,
+    "visibility": "visible"
    }
   ],
   "cta": {
@@ -1363,7 +1378,8 @@ export const LINE_CARD_CATALOG = [
    "orderNumber"
   ],
   "previewSample": {
-   "orderNumber": "KD20261031-1234"
+   "orderNumber": "KD20261031-1234",
+   "messagePreview": "【合成示範】工作室已確認，請至訂單頁查看安排。"
   }
  },
  {

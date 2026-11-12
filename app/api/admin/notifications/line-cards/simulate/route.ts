@@ -15,7 +15,7 @@ export async function GET(request:Request){
  const def=LINE_CARD_CATALOG.find(item=>item.eventKey===key)!;
  if(supportsInternalFlex(key)||key==='customer.inquiry.admin_reply'){
   const originalText=key==='customer.inquiry.admin_reply'?createOrderReplyNotificationTemplate('KD20261031-1234').text:key==='admin.order.inquiry_received'?createOrderInquiryLineAlertText('KD20261031-1234'):'【隔離範例】'+def.displayName+'\n請至後台查看。';
-  const result=supportsInternalFlex(key)?await prepareInternalLinePresentation(originalText,{eventKey:key as InternalPushCardKey,data:{...def.previewSample}}):await prepareCustomerLinePresentation(originalText,{eventKey:'customer.inquiry.admin_reply',data:{orderNumber:'KD20261031-1234'}});
+  const result=supportsInternalFlex(key)?await prepareInternalLinePresentation(originalText,{eventKey:key as InternalPushCardKey,data:{...def.previewSample}}):await prepareCustomerLinePresentation(originalText,{eventKey:'customer.inquiry.admin_reply',data:{...def.previewSample}});
   return Response.json({...result,eventKey:key,originalText,boundary:cardBoundaryLabel(key)},{headers:{'Cache-Control':'no-store'}});
  }
  const types:Record<string,string>={'customer.order.confirmed':'order_confirmed','customer.order.shipped':'order_shipped','customer.order.shipment_created':'shipment_created','customer.order.completed':'order_completed','customer.order.ready_for_pickup.studio':'studio_ready_for_pickup','customer.order.ready_for_pickup.711':'seven_eleven_ready_for_pickup'};

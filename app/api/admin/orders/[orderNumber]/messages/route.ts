@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import {orderConversationCardData} from '@/lib/orderMessagePreview';
 
 import { isAdminAuthenticated } from "@/lib/adminAuth";
 import { readOrder, withStoredOrderUpdateLock, type StoredOrder } from "@/lib/adminOrders";
@@ -144,7 +145,7 @@ export async function POST(
     if (saved.channels.includes("line") && saved.capability.line.userId) {
       results.line = await sendCustomerLineNotification({
         userId: saved.capability.line.userId,
-        cardContext:{eventKey:'customer.inquiry.admin_reply',data:{orderNumber}},
+        cardContext:{eventKey:'customer.inquiry.admin_reply',data:orderConversationCardData(orderNumber,saved.message)},
         template,
       });
     }
