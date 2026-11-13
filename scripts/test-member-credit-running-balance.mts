@@ -26,7 +26,7 @@ const reservation = (id: string, source: string, amount: number, start: number, 
   allocations: [{ creditEntryId: source, amount }], status, createdAt: date(start), updatedAt: date(end),
 });
 const balance = (input: PassbookBalanceState, id: string) => selectMemberCreditPassbook(input, member).entries
-  .find((row) => row.date === input.creditEntries[id].createdAt)?.balanceAfter;
+  .find((row) => !row.transaction && row.date === input.creditEntries[id].createdAt)?.balanceAfter;
 let checks = 0;
 function check(label: string, assertion: () => void) { assertion(); checks++; console.log(`PASS ${checks}: ${label}`); }
 const rewards = state([entry("a", 5, 1), entry("b", 15, 2), entry("c", 120, 3)]);
@@ -39,12 +39,12 @@ check("whole ledger is chronological even when dictionary timestamps are out of 
 });
 check("same-millisecond rows use canonical append order, not random ID order", () => {
   const result = selectMemberCreditPassbook(state([entry("z_random", 5, 1), entry("a_random", 15, 1)]), member);
-  assert.deepEqual(result.entries.map((row) => row.balanceAfter), [20, 5]);
+  assert.deepEqual(result.entries.filter((row) => !row.transaction).map((row) => row.balanceAfter), [20, 5]);
 });
 check("known source remainder reduction is explained by reservations, not subtracted twice", () => {
   const grant = { ...entry("a", 100, 1), remainingAmount: 60 };
   const input = state([grant, entry("b", 15, 3)], [reservation("r", "a", 40, 2, 2, "reserved")]);
-  assert.deepEqual(selectMemberCreditPassbook(input, member).entries.map((row) => row.balanceAfter), [75, 100]);
+  assert.deepEqual(selectMemberCreditPassbook(input, member).entries.filter((row) => !row.transaction).map((row) => row.balanceAfter), [75, 100]);
 });
 check("consumption remains deducted from its original reserve time", () => {
   const grant = { ...entry("a", 100, 1), remainingAmount: 60 };
@@ -56,7 +56,7 @@ check("release restores available credit before later reward issuance", () => {
 });
 check("source expiry removes prior credit before later issuance", () => {
   const input = state([{ ...entry("a", 100, 1), expiresAt: date(2), status: "expired" }, entry("b", 15, 3)]);
-  assert.deepEqual(selectMemberCreditPassbook(input, member).entries.map((row) => row.balanceAfter), [15, 100]);
+  assert.deepEqual(selectMemberCreditPassbook(input, member).entries.filter((row) => !row.transaction).map((row) => row.balanceAfter), [15, 100]);
 });
 check("release after expiry does not make expired credit available", () => {
   const input = state([{ ...entry("a", 100, 1), expiresAt: date(3), status: "expired" }, entry("b", 15, 5)], [reservation("r", "a", 40, 2, 4, "released")]);
@@ -66,14 +66,14 @@ check("Owner allocation is not a physical remainder rewrite or a second deductio
   const debit = { ...entry("debit", -40, 2), remainingAmount: 0, status: "consumed" as const,
     sourceReference: "admin_credit_adjustment:deduct:fixture", adjustmentAllocations: [{ creditEntryId: "a", amount: 40 }] };
   const input = state([entry("a", 100, 1), debit, entry("b", 15, 3)]);
-  assert.deepEqual(selectMemberCreditPassbook(input, member).entries.map((row) => row.balanceAfter), [75, 60, 100]);
+  assert.deepEqual(selectMemberCreditPassbook(input, member).entries.filter((row) => !row.transaction).map((row) => row.balanceAfter), [75, 60, 100]);
 });
 check("linked reversal respects already consumed credit and clamps its original source only", () => {
   const reverse = { ...entry("reverse", -100, 3), remainingAmount: 0, status: "consumed" as const,
     sourceReference: "referral_reward_reversal:fixture", metadata: { reversesCreditEntryId: "a" } };
   const input = state([{ ...entry("a", 100, 1), remainingAmount: 0, status: "consumed" }, reverse, entry("b", 15, 4)],
     [reservation("r", "a", 40, 2, 2, "consumed")]);
-  assert.deepEqual(selectMemberCreditPassbook(input, member).entries.map((row) => row.balanceAfter), [15, 0, 100]);
+  assert.deepEqual(selectMemberCreditPassbook(input, member).entries.filter((row) => !row.transaction).map((row) => row.balanceAfter), [15, 0, 100]);
 });
 check("unexplained old consumption does not produce invented historical balances", () => {
   const input = state([{ ...entry("a", 100, 1), remainingAmount: 40 }, entry("b", 15, 2)]);
@@ -85,7 +85,7 @@ check("unexplained consumed status is rejected even if the physical remainder is
 });
 check("stored after-only snapshot is retained; surrounding contradiction is not guessed", () => {
   const input = state([{ ...entry("a", 5, 1), metadata: { balanceAfter: 105 } }, entry("b", 15, 2)]);
-  assert.deepEqual(selectMemberCreditPassbook(input, member).entries.map((row) => row.balanceAfter), [null, 105]);
+  assert.deepEqual(selectMemberCreditPassbook(input, member).entries.filter((row) => !row.transaction).map((row) => row.balanceAfter), [null, 105]);
 });
 check("malformed snapshot falls back only to fully verified canonical replay", () => {
   const input = state([{ ...entry("a", 5, 1), metadata: { balanceBefore: 0, balanceAfter: 105 } }]);
@@ -94,7 +94,7 @@ check("malformed snapshot falls back only to fully verified canonical replay", (
 check("same-timestamp reservation ambiguity preserves later derivable entries", () => {
   const input = state([{ ...entry("a", 100, 1), remainingAmount: 60 }, entry("b", 15, 2), entry("c", 5, 3)],
     [reservation("r", "a", 40, 2, 2, "reserved")]);
-  assert.deepEqual(selectMemberCreditPassbook(input, member).entries.map((row) => row.balanceAfter), [80, null, 100]);
+  assert.deepEqual(selectMemberCreditPassbook(input, member).entries.filter((row) => !row.transaction).map((row) => row.balanceAfter), [80, null, 100]);
 });
 check("missing references and cross-member allocations fail closed", () => {
   const input = state([entry("a", 100, 1)], [reservation("r", "other", 40, 2, 2, "reserved")]);
@@ -152,14 +152,14 @@ try {
     idempotencyKey: "running-reward-2", now: new Date(date(3)) });
   let canonical = await commerce.readMembershipCommerceState();
   check("real canonical reserve plus new reward displays 75, not page-local 115", () => {
-    assert.deepEqual(selectMemberCreditPassbook(canonical, liveMember.memberId).entries.map((row) => row.balanceAfter), [75, 100]);
+    assert.deepEqual(selectMemberCreditPassbook(canonical, liveMember.memberId).entries.filter((row) => !row.transaction).map((row) => row.balanceAfter), [75, 100]);
   });
   await commerce.settleCreditReservation({ reservationId: held.reservationId, action: "release", reason: "isolated fixture", idempotencyKey: "running-release", now: new Date(date(4)) });
   await commerce.issueCredit({ memberId: liveMember.memberId, sourceType: "promotion", sourceReference: "retail_promotion_reward:running3", amount: 5,
     idempotencyKey: "running-reward-3", now: new Date(date(5)) });
   canonical = await commerce.readMembershipCommerceState();
   check("real canonical release then retail reward yields 120 while older after-balances remain", () => {
-    assert.deepEqual(selectMemberCreditPassbook(canonical, liveMember.memberId).entries.map((row) => row.balanceAfter), [120, 75, 100]);
+    assert.deepEqual(selectMemberCreditPassbook(canonical, liveMember.memberId).entries.filter((row) => !row.transaction).map((row) => row.balanceAfter), [120, 75, 100]);
   });
   const file = path.join(root, "membership-commerce", "commerce-state.json");
   const bytes = await readFile(file, "utf8");
