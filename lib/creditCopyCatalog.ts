@@ -1,6 +1,19 @@
 import type { MemberCopyDefinition } from "./memberCenterCopyCatalog";
 
 export const CREDIT_COPY_CATALOG: readonly MemberCopyDefinition[] = [
+  {"key": "credit.cancelPreview.title", "group": "storeCredit", "purpose": "取消訂單／抵用金到期提醒", "defaultText": "取消前的抵用金提醒", "tokens": {}, "multiline": false},
+  {"key": "credit.cancelPreview.original", "group": "storeCredit", "purpose": "取消訂單／抵用金到期提醒", "defaultText": "原使用額度", "tokens": {}, "multiline": false},
+  {"key": "credit.cancelPreview.restorable", "group": "storeCredit", "purpose": "取消訂單／抵用金到期提醒", "defaultText": "目前預計可恢復使用", "tokens": {}, "multiline": false},
+  {"key": "credit.cancelPreview.expired", "group": "storeCredit", "purpose": "取消訂單／抵用金到期提醒", "defaultText": "已過期，無法恢復使用", "tokens": {}, "multiline": false},
+  {"key": "credit.cancelPreview.otherUnavailable", "group": "storeCredit", "purpose": "取消訂單／抵用金到期提醒", "defaultText": "其他目前無法恢復使用的額度", "tokens": {}, "multiline": false},
+  {"key": "credit.cancelPreview.sources", "group": "storeCredit", "purpose": "取消訂單／抵用金到期提醒", "defaultText": "原始額度與到期時間（台北時間）", "tokens": {}, "multiline": false},
+  {"key": "credit.cancelPreview.source", "group": "storeCredit", "purpose": "取消訂單／抵用金到期提醒", "defaultText": "原額度 {amount}；預計可用 {restorable}；到期 {date}", "tokens": {"amount": "原始額度與單位", "restorable": "預計恢復額度與單位", "date": "台北到期日期時間"}, "multiline": false},
+  {"key": "credit.cancelPreview.warning", "group": "storeCredit", "purpose": "取消訂單／抵用金到期提醒", "defaultText": "以上依目前資料與時間預估，不保證實際可恢復額度。確認取消時由伺服器依當下期限與既有規則處理；已過期額度不會恢復使用。若需等待物流單作廢，以真正完成取消時為準。", "tokens": {}, "multiline": false},
+  {"key": "credit.cancelPreview.unknown", "group": "storeCredit", "purpose": "取消訂單／抵用金到期提醒", "defaultText": "目前無法安全確認原抵用金來源或可恢復額度，不能保證全部可用。您仍可送出取消，實際結果以伺服器依既有規則處理為準。", "tokens": {}, "multiline": false},
+  {"key": "credit.cancelPreview.blocked", "group": "storeCredit", "purpose": "取消訂單／抵用金到期提醒", "defaultText": "無法讀取這筆訂單的取消預覽，請重新整理並確認登入後再試。", "tokens": {}, "multiline": false},
+  {"key": "credit.cancelPreview.confirm", "group": "storeCredit", "purpose": "取消訂單／抵用金到期提醒", "defaultText": "已了解，繼續取消", "tokens": {}, "multiline": false},
+  {"key": "credit.cancelPreview.back", "group": "storeCredit", "purpose": "取消訂單／抵用金到期提醒", "defaultText": "返回，不取消", "tokens": {}, "multiline": false},
+  {"key": "credit.cancelPreview.loading", "group": "storeCredit", "purpose": "取消訂單／抵用金到期提醒", "defaultText": "正在確認原抵用金期限…", "tokens": {}, "multiline": false},
   { key: "credit.passbook.entryDetails", group: "storeCredit", purpose: "帳本／單筆來源明細按鈕（不開啟完整回饋頁）", defaultText: "查看詳情 →", tokens: {}, multiline: false },
   { key: "credit.passbook.entryDetailsAria", group: "storeCredit", purpose: "帳本／單筆來源明細無障礙名稱", defaultText: "查看「{description}」詳細資料（{date}，{amount}）", tokens: { description: "該筆帳本描述", date: "交易日期時間", amount: "帶正負號與共用單位的異動額" }, multiline: false },
   { key: "credit.passbook.detail.status", group: "storeCredit", purpose: "單筆回饋／狀態標籤", defaultText: "狀態", tokens: {}, multiline: false },

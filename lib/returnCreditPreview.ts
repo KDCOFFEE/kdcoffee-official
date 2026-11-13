@@ -1,3 +1,4 @@
+import { isOriginalCreditExpired } from "./creditSourceExpiry";
 import { approvedReturnCreditSelection } from "./returnCreditSelection";
 import { addTaipeiCalendarDays } from "./membershipPolicies";
 import { getDateOnlyInTimeZone } from "./checkoutRules";
@@ -52,7 +53,7 @@ export function allocateOriginalReturnCredit(entries: Array<{ creditEntryId: str
   const result: ReturnCreditEntry[] = [];
   for (const item of [...entries].sort((a, b) => Date.parse(b.expiresAt) - Date.parse(a.expiresAt) || compareId(a.creditEntryId, b.creditEntryId))) {
     const selected = Math.min(remaining, item.amount);
-    if (selected) result.push({ ...item, amount: selected, classification: Date.parse(item.expiresAt) <= now.getTime() ? "expired_not_restorable" : "restorable" });
+    if (selected) result.push({ ...item, amount: selected, classification: isOriginalCreditExpired(item.expiresAt, now) ? "expired_not_restorable" : "restorable" });
     remaining -= selected;
   }
   if (remaining) fail("insufficient_original_consumed_credit");

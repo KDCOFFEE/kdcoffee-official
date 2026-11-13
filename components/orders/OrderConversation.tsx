@@ -1,6 +1,7 @@
 "use client";
 
 import { MemberCopyText, useMemberCopyKey } from "@/components/member/MemberCenterCopyProvider";
+import { useCancelCreditConfirmation } from "@/components/member/CancelCreditConfirmation";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
@@ -127,6 +128,7 @@ function mergeMessage(messages: OrderMessage[], message: OrderMessage) {
 
 export default function OrderConversation({ orderNumber }: { orderNumber: string }) {
   const copy = useMemberCopyKey();
+  const cancelCredit = useCancelCreditConfirmation();
   const router = useRouter();
   const [order, setOrder] = useState<CustomerOrderSummary>();
   const [access, setAccess] = useState<"member" | "guest">();
@@ -259,6 +261,7 @@ export default function OrderConversation({ orderNumber }: { orderNumber: string
       return;
     }
 
+    if (!await cancelCredit.confirm(orderNumber)) return;
     if (!cancellationActionId.current) cancellationActionId.current = crypto.randomUUID();
     setCancelling(true);
 
@@ -344,6 +347,7 @@ export default function OrderConversation({ orderNumber }: { orderNumber: string
 
   return (
     <section className="order-conversation-card">
+      {cancelCredit.confirmation}
       <header className="customer-order-summary">
         <p className="eyebrow dark">ORDER DETAIL</p>
         <h1>{order.orderNumber}</h1>
@@ -708,7 +712,7 @@ export default function OrderConversation({ orderNumber }: { orderNumber: string
               {cancellationError ? <p className="form-error" role="alert">{cancellationError}</p> : null}
               {cancellationNotice ? <p className="form-success" role="status">{cancellationNotice}</p> : null}
 
-              <button className="order-cancellation-submit" type="submit" disabled={cancelling || !cancellationReason}>
+              <button className="order-cancellation-submit" type="submit" disabled={cancelling || cancelCredit.loading || !cancellationReason}>
                 {cancelling ? "處理中…" : order.status === "shipment_created" ? "送出取消申請" : "確認取消訂單"}
               </button>
             </form>
