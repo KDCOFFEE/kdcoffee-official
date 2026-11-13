@@ -58,3 +58,5 @@
   .balance { grid-column:1 / -1; justify-self:end; white-space:normal; overflow-wrap:anywhere; }
   .row:has(.entryAction) .balance { grid-column:1 / -1; grid-row:4; }
 }
+
+.shortfall { grid-column:1 / -1; margin:4px 0 0; color:#786656; font-size:13px; line-height:1.6; overflow-wrap:anywhere; }

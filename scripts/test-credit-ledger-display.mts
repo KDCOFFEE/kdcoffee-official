@@ -47,8 +47,8 @@ const page = selectMemberCreditPassbook(state, memberId);
 check("grant plus order debit reconciles to 7472", () => assert.equal(page.entries.reduce((sum, row) => sum + row.change, 0), 7472));
 // eslint-disable-next-line react/no-children-prop -- Provider requires typed children in this SSR fixture.
 const html = renderToStaticMarkup(createElement(Provider, { initialOverrides: {}, children: createElement(Ledger, { initialPage: page }) }));
-check("member sees order 546, consumed label, recorded-time caveat and valid order link", () => {
-  for (const value of ["KD20261111-5626", "546", "訂單正式結算使用", "狀態記錄時間", "/orders/KD20261111-5626", "不再次扣款"]) assert.ok(html.includes(value), value);
+check("member sees concise order debit and valid order link", () => {
+  for (const value of ["KD20261111-5626", "546", "訂單抵用", "/orders/KD20261111-5626"]) assert.ok(html.includes(value), value);
 });
 for (const status of ["reserved", "released"] as const) {
   const variant = structuredClone(state);

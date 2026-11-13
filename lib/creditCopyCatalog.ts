@@ -1,6 +1,16 @@
 import type { MemberCopyDefinition } from "./memberCenterCopyCatalog";
 
 export const CREDIT_COPY_CATALOG: readonly MemberCopyDefinition[] = [
+  {"key": "credit.passbook.orderRedemption", "group": "storeCredit", "purpose": "抵用金明細／精簡交易後呈現", "defaultText": "訂單抵用", "tokens": {}, "multiline": false},
+  {"key": "credit.passbook.releasedSafe", "group": "storeCredit", "purpose": "抵用金明細／精簡交易後呈現", "defaultText": "訂單抵用已解除", "tokens": {}, "multiline": false},
+  {"key": "credit.passbook.cancelRestored", "group": "storeCredit", "purpose": "抵用金明細／精簡交易後呈現", "defaultText": "訂單取消・{creditName}恢復", "tokens": {"creditName": "共用抵用金名稱"}, "multiline": false},
+  {"key": "credit.passbook.returnRestored", "group": "storeCredit", "purpose": "抵用金明細／精簡交易後呈現", "defaultText": "退貨{creditName}恢復", "tokens": {"creditName": "共用抵用金名稱"}, "multiline": false},
+  {"key": "credit.passbook.currentBalance", "group": "storeCredit", "purpose": "抵用金明細／精簡交易後呈現", "defaultText": "目前可用 {amount}", "tokens": {"amount": "權威帳務目前可用額度，含單位"}, "multiline": false},
+  {"key": "credit.passbook.currentUnavailable", "group": "storeCredit", "purpose": "抵用金明細／精簡交易後呈現", "defaultText": "目前可用額度暫時無法讀取", "tokens": {}, "multiline": false},
+  {"key": "credit.passbook.dateUnavailable", "group": "storeCredit", "purpose": "抵用金明細／精簡交易後呈現", "defaultText": "日期未記錄", "tokens": {}, "multiline": false},
+  {"key": "credit.passbook.viewOrder", "group": "storeCredit", "purpose": "抵用金明細／精簡交易後呈現", "defaultText": "查看訂單", "tokens": {}, "multiline": false},
+  {"key": "credit.passbook.expiredShortfall", "group": "storeCredit", "purpose": "抵用金明細／精簡交易後呈現", "defaultText": "原應返還 {original}，其中 {expired} 已超過有效期限，本次恢復 {restored}。", "tokens": {"original": "本次核准或取消範圍的原使用額度", "expired": "已證到期失效額度", "restored": "本次實際恢復額度"}, "multiline": false},
+  {"key": "credit.passbook.otherShortfall", "group": "storeCredit", "purpose": "抵用金明細／精簡交易後呈現", "defaultText": "原應返還 {original}，本次恢復 {restored}；其餘 {difference} 依原額度使用限制未恢復可用。", "tokens": {"original": "本次範圍的原使用額度", "restored": "本次實際恢復額度", "difference": "無法恢復可用的差額"}, "multiline": false},
   {"key": "credit.cancelPreview.title", "group": "storeCredit", "purpose": "取消訂單／抵用金到期提醒", "defaultText": "取消前的抵用金提醒", "tokens": {}, "multiline": false},
   {"key": "credit.cancelPreview.original", "group": "storeCredit", "purpose": "取消訂單／抵用金到期提醒", "defaultText": "原使用額度", "tokens": {}, "multiline": false},
   {"key": "credit.cancelPreview.restorable", "group": "storeCredit", "purpose": "取消訂單／抵用金到期提醒", "defaultText": "目前預計可恢復使用", "tokens": {}, "multiline": false},
@@ -36,7 +46,7 @@ export const CREDIT_COPY_CATALOG: readonly MemberCopyDefinition[] = [
   { key: "credit.passbook.details", group: "storeCredit", purpose: "簡明帳本／完整明細入口", defaultText: "查看詳情 →", tokens: {}, multiline: false },
   { key: "credit.passbook.close", group: "storeCredit", purpose: "簡明帳本／關閉", defaultText: "關閉{creditName}明細", tokens: { creditName: "共用顯示名稱" }, multiline: false },
   { key: "credit.passbook.available", group: "storeCredit", purpose: "簡明帳本／可用餘額標籤", defaultText: "目前可用", tokens: {}, multiline: false },
-  { key: "credit.passbook.balance", group: "storeCredit", purpose: "簡明帳本／異動後餘額", defaultText: "餘額 {amount}", tokens: { amount: "該筆異動後的已記錄餘額（含既有單位）" }, multiline: false },
+  { key: "credit.passbook.balance", group: "storeCredit", purpose: "簡明帳本／異動後餘額", defaultText: "交易後餘額 {amount}", tokens: { amount: "該筆異動後的已記錄餘額（含既有單位）" }, multiline: false },
   { key: "credit.passbook.unknownBalance", group: "storeCredit", purpose: "簡明帳本／舊資料缺少餘額快照", defaultText: "歷史餘額未記錄", tokens: {}, multiline: false },
   { key: "credit.passbook.empty", group: "storeCredit", purpose: "簡明帳本／空狀態", defaultText: "目前尚無{creditName}異動紀錄", tokens: { creditName: "共用顯示名稱" }, multiline: false },
   { key: "credit.passbook.more", group: "storeCredit", purpose: "簡明帳本／分頁按鈕", defaultText: "載入更多", tokens: {}, multiline: false },

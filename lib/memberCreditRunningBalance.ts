@@ -11,6 +11,8 @@ export function storedCreditBalance(entry: CreditEntry): number | null {
   return Number(after);
 }
 
+export type ReleasedCreditEvidence = { amount: number; expiredAmount: number; balanceAfter: number };
+
 type Source = { remaining: number; debit: number; expires: number; status: CreditEntry["status"] };
 type TimelineEvent = { at: number; priority: number; ordinal: number; entry?: CreditEntry; reservation?: CreditReservation; action?: "reserve" | "release" | "consume"; expires?: string };
 
@@ -21,7 +23,8 @@ type TimelineEvent = { at: number; priority: number; ordinal: number; entry?: Cr
  */
 export function deriveMemberCreditBalances(state: PassbookBalanceState, memberId: string) {
   const balances = new Map<string, number>();
-  const unknown = (reason: string) => ({ balances: new Map<string, number>(), reason });
+  const releases = new Map<string, ReleasedCreditEvidence>();
+  const unknown = (reason: string) => ({ balances: new Map<string, number>(), releases: new Map<string, ReleasedCreditEvidence>(), reason });
   if (!state.creditReservations) return unknown("missing_reservation_context");
   const entries = Object.values(state.creditEntries).filter((entry) => entry.memberId === memberId);
   const byId = new Map(entries.map((entry) => [entry.creditEntryId, entry]));
@@ -61,6 +64,8 @@ export function deriveMemberCreditBalances(state: PassbookBalanceState, memberId
       ambiguousTimes.add(updated);
     }
   }
+  const timestamps = events.filter(event => !event.expires).map(event => event.at);
+  const uniqueTimeline = new Set(timestamps).size === timestamps.length;
   const lastOperation = events.filter((event) => !event.expires).reduce((latest, event) => Math.max(latest, event.at), 0);
   const asOf = Math.max(lastOperation, Date.parse(state.updatedAt ?? "") || lastOperation);
   events.sort((a, b) => a.at - b.at || a.priority - b.priority || a.ordinal - b.ordinal);
@@ -112,6 +117,7 @@ export function deriveMemberCreditBalances(state: PassbookBalanceState, memberId
       const stored = storedCreditBalance(entry);
       if (stored !== null && !ambiguousTimes.has(event.at) && stored !== balance) return unknown("snapshot_sequence_mismatch");
     } else if (event.reservation) {
+      const before = balance;
       for (const allocation of event.reservation.allocations) changeSource(allocation.creditEntryId, event.at, (source) => {
         if (event.action === "reserve") {
           if (allocation.amount > available(source, event.at)) invalid = true;
@@ -122,6 +128,12 @@ export function deriveMemberCreditBalances(state: PassbookBalanceState, memberId
           source.status = source.expires <= event.at ? "expired" : "available";
         } else if (available(source, event.at) === 0) source.status = "consumed";
       });
+      if (event.action === "release" && uniqueTimeline && !invalid) {
+        releases.set(event.reservation.reservationId, {
+          amount: balance - before, balanceAfter: balance,
+          expiredAmount: event.reservation.allocations.filter(a => sources.get(a.creditEntryId)!.expires <= event.at).reduce((sum, a) => sum + a.amount, 0),
+        });
+      }
     }
     if (invalid) return unknown("inconsistent_event_sequence");
   }
@@ -132,5 +144,5 @@ export function deriveMemberCreditBalances(state: PassbookBalanceState, memberId
       ? Math.max(0, entry.remainingAmount - source.debit) : 0;
     if (available(source, asOf) !== actualAvailable) return unknown("unexplained_status_change");
   }
-  return { balances, reason: balances.size < entries.length ? "ambiguous_transaction_timestamp" : null };
+  return { balances, releases, reason: balances.size < entries.length ? "ambiguous_transaction_timestamp" : null };
 }

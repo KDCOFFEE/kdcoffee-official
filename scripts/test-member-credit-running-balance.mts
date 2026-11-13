@@ -83,9 +83,9 @@ check("unexplained old consumption does not produce invented historical balances
 check("unexplained consumed status is rejected even if the physical remainder is unchanged", () => {
   assert.equal(deriveMemberCreditBalances(state([{ ...entry("a", 100, 1), status: "consumed" }]), member).reason, "unexplained_status_change");
 });
-check("stored after-only snapshot is retained; surrounding contradiction is not guessed", () => {
+check("contradictory snapshot does not masquerade as a reliable historical balance", () => {
   const input = state([{ ...entry("a", 5, 1), metadata: { balanceAfter: 105 } }, entry("b", 15, 2)]);
-  assert.deepEqual(selectMemberCreditPassbook(input, member).entries.filter((row) => !row.transaction).map((row) => row.balanceAfter), [null, 105]);
+  assert.deepEqual(selectMemberCreditPassbook(input, member).entries.filter((row) => !row.transaction).map((row) => row.balanceAfter), [null, null]);
 });
 check("malformed snapshot falls back only to fully verified canonical replay", () => {
   const input = state([{ ...entry("a", 5, 1), metadata: { balanceBefore: 0, balanceAfter: 105 } }]);

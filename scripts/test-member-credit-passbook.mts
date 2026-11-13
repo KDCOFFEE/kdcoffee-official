@@ -141,13 +141,12 @@ try {
   });
   check("date sits above one logical description/delta/balance transaction row", () => {
     assert.equal((html.match(/class="transaction"/g) ?? []).length, 2);
-    assert.ok(html.includes('<div class="transaction"><strong class="description">後台調整抵用金</strong><strong class="delta debit">-5,000 元</strong><span class="balance">餘額 5,000 元</span>'));
+    assert.ok(html.includes('<div class="transaction"><strong class="description">後台調整抵用金</strong><strong class="delta debit">-5,000 元</strong><span class="balance">交易後餘額 5,000 元</span>'));
   });
-  check("genuinely unresolved balances have an editable label and one note", () => {
-    const output = render(createElement(Ledger, { initialPage: { entries: [{ ...reward.entries[0], balanceAfter: null }, { ...reward.entries[0], balanceAfter: null }], nextOffset: null } }));
-    assert.equal(output.split("餘額待確認").length - 1, 2);
-    assert.equal(output.split("部分早期紀錄缺少完整異動資料，當時餘額仍待確認。").length - 1, 1);
-    assert.ok(!html.includes("部分早期紀錄缺少完整異動資料，當時餘額仍待確認。"));
+  check("missing historical proof shows explicitly labelled authoritative current balance", () => {
+    const output = render(createElement(Ledger, { initialPage: { currentAvailableCredit: 5000, entries: [{ ...reward.entries[0], balanceAfter: null }, { ...reward.entries[0], balanceAfter: null }], nextOffset: null } }));
+    assert.equal((output.match(/目前可用 5,000 元/g) ?? []).length, 2);
+    assert.ok(!output.includes("餘額待確認") && !output.includes("部分早期"));
   });
   check("first page renders twenty rows and navigation remains bounded", () => {
     const first = selectMemberCreditPassbook({ creditEntries: many, creditReservations: {} }, member.memberId);
@@ -198,7 +197,7 @@ try {
   });
   check("persisted templates render names amounts and page values together without rebuilding", () => {
     const output = render(createElement(Ledger, { initialPage: page }), reread.overrides);
-    for (const text of ["編輯：後台調整測試咖啡金", "-5,000 枚", "編輯：餘額 5,000 枚", "編輯：第 1 頁", "編輯：上一頁", "編輯：下一頁"]) assert.ok(output.includes(text), text);
+    for (const text of ["編輯：後台調整測試咖啡金", "-5,000 枚", "編輯：交易後餘額 5,000 枚", "編輯：第 1 頁", "編輯：上一頁", "編輯：下一頁"]) assert.ok(output.includes(text), text);
     assert.equal(resolveMemberCopy(reread.overrides, "credit.passbook.pageLabel", { page: 2 }), "編輯：第 2 頁");
   });
   check("technical reward/source codes never escape into member labels", () => {

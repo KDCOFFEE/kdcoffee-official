@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { creditTransactionLabels } from "@/lib/memberCreditTransactions";
 import { useRef, useState } from "react";
 import { MemberCopyText, useMemberCopyKey } from "./MemberCenterCopyProvider";
 import { formatTaipeiDateTime } from "@/lib/memberRewardPresentation";
@@ -10,8 +9,9 @@ import { captureCreditPassbookReturn } from "@/lib/memberCreditDetailReturn";
 import MemberCreditEntryDetail from "./MemberCreditEntryDetail";
 import styles from "./MemberCreditPassbook.module.css";
 
-export default function MemberCreditLedger({ initialPage, onPageChange, scrollArea, pointDisplayName }: {
+export default function MemberCreditLedger({ initialPage, onPageChange, scrollArea, pointDisplayName, availableCredit }: {
   initialPage: MemberCreditPassbookPage;
+  availableCredit?: number;
   onPageChange?: () => void;
   scrollArea?: { current: HTMLDivElement | null };
   pointDisplayName?: string;
@@ -26,6 +26,7 @@ export default function MemberCreditLedger({ initialPage, onPageChange, scrollAr
   const [selectedEntry, setSelectedEntry] = useState<MemberCreditPassbookRow | null>(null);
   const returnToPassbook = useRef<(() => void) | null>(null);
   const page = pages[pageIndex];
+  const currentAvailable = page.currentAvailableCredit ?? availableCredit;
   const hasNext = page.nextCursor !== undefined ? page.nextCursor !== null : page.nextOffset !== null;
   const unit = copy("member.dashboard.label.622f3c5acb");
   const money = (amount: number) => amount.toLocaleString("zh-TW") + " " + unit;
@@ -54,24 +55,24 @@ export default function MemberCreditLedger({ initialPage, onPageChange, scrollAr
   return <div className={styles.ledger} aria-busy={loading}>
     {page.entries.length ? <ol className={styles.rows}>
       {page.entries.map((entry, index) => <li className={styles.row} key={entry.date + ":" + index}>
-        {entry.date ? <time className={styles.date} dateTime={entry.date}>{entry.transaction ? (entry.transaction.reservedAt ? "保留建立：" : "狀態記錄：") : ""}{formatTaipeiDateTime(entry.date)}</time>
-          : <span className={styles.date}>未記錄日期</span>}
+        {entry.date ? <time className={styles.date} dateTime={entry.date}>{formatTaipeiDateTime(entry.date)}</time>
+          : <span className={styles.date}><MemberCopyText copyKey="credit.passbook.dateUnavailable" /></span>}
         <div className={styles.transaction}>
-          <strong className={styles.description}>{entry.transaction ? creditTransactionLabels[entry.transaction.status] : copy(entry.descriptionKey) || copy("credit.passbook.creditIssued")}</strong>
+          <strong className={styles.description}>{copy(entry.descriptionKey) || copy("credit.passbook.creditIssued")}</strong>
           <strong className={styles.delta + " " + (entry.change < 0 ? styles.debit : styles.credit)}>{entry.change > 0 ? "+" : ""}{money(entry.change)}</strong>
           <span className={styles.balance}>{entry.balanceAfter === null
-            ? <MemberCopyText copyKey="credit.passbook.unresolvedBalance" />
+            ? currentAvailable !== undefined
+              ? <MemberCopyText copyKey="credit.passbook.currentBalance" values={{ amount: money(currentAvailable) }} />
+              : <MemberCopyText copyKey="credit.passbook.currentUnavailable" />
             : <MemberCopyText copyKey="credit.passbook.balance" values={{ amount: money(entry.balanceAfter) }} />}</span>
-          {entry.transaction && <details>
-            <summary>查看訂單與結算資訊</summary>
-            <p>{entry.transaction.orderNumber
-              ? <Link href={`/orders/${encodeURIComponent(entry.transaction.orderNumber)}`}>{entry.transaction.orderNumber}</Link>
-              : "未提供可確認訂單"}</p>
-            <p>抵用金額：{money(entry.transaction.amount)} · {creditTransactionLabels[entry.transaction.status]}</p>
-            <p>保留時間：{formatTaipeiDateTime(entry.transaction.reservedAt, "未記錄")}</p>
-            <p>狀態記錄時間：{formatTaipeiDateTime(entry.transaction.statusRecordedAt, "未記錄")}</p>
-            <p>同一筆保留與結算只列一次。保留時已減少可用額，正式結算不再次扣款；釋放列為淨變動 0。狀態記錄時間不代表另有可證實的精確結算時間。</p>
-          </details>}
+          {entry.orderNumber && <Link className={styles.entryAction} href={`/orders/${encodeURIComponent(entry.orderNumber)}`}>
+            <MemberCopyText copyKey="credit.passbook.viewOrder" /> {entry.orderNumber}
+          </Link>}
+          {entry.restoration && entry.restoration.restoredAmount < entry.restoration.expectedAmount && <p className={styles.shortfall}>
+            <MemberCopyText copyKey={entry.restoration.expiredAmount === entry.restoration.expectedAmount - entry.restoration.restoredAmount
+              ? "credit.passbook.expiredShortfall" : "credit.passbook.otherShortfall"}
+              values={{ original: money(entry.restoration.expectedAmount), expired: money(entry.restoration.expiredAmount), restored: money(entry.restoration.restoredAmount), difference: money(entry.restoration.expectedAmount - entry.restoration.restoredAmount) }} />
+          </p>}
           {entry.detail && <button type="button" className={styles.entryAction} aria-haspopup="dialog"
             aria-label={copy("credit.passbook.entryDetailsAria", { description: copy(entry.descriptionKey),
               date: formatTaipeiDateTime(entry.date, copy("member.rewards.label.99ff24be30")), amount: (entry.change > 0 ? "+" : "") + money(entry.change) })}
@@ -82,7 +83,6 @@ export default function MemberCreditLedger({ initialPage, onPageChange, scrollAr
         </div>
       </li>)}
     </ol> : <p className={styles.empty}><MemberCopyText copyKey="credit.passbook.empty" /></p>}
-    {page.entries.some((entry) => entry.balanceAfter === null) && <p className={styles.note}><MemberCopyText copyKey="credit.passbook.oldBalanceNote" /></p>}
     {failed && <p role="alert"><MemberCopyText copyKey="credit.passbook.loadError" /> <button type="button" onClick={() => void loadNext()} disabled={loading}><MemberCopyText copyKey="credit.passbook.retry" /></button></p>}
     {loading && <p role="status"><MemberCopyText copyKey="credit.passbook.loading" /></p>}
     <nav className={styles.pagination} aria-label={copy("credit.passbook.pagination")}>

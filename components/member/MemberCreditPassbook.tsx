@@ -40,7 +40,7 @@ export default function MemberCreditPassbook({ availableCredit, initialPage, poi
       </header>
       <div ref={scrollArea} className={styles.body}>
         <div className={styles.summary}><small><MemberCopyText copyKey="credit.passbook.available" /></small><strong>{availableCredit.toLocaleString("zh-TW")} <MemberCopyText copyKey="member.dashboard.label.622f3c5acb" /></strong></div>
-        <MemberCreditLedger initialPage={initialPage} scrollArea={scrollArea} pointDisplayName={pointDisplayName}
+        <MemberCreditLedger availableCredit={availableCredit} initialPage={initialPage} scrollArea={scrollArea} pointDisplayName={pointDisplayName}
           onPageChange={() => scrollArea.current?.scrollTo({ top: 0 })} />
       </div>
     </dialog>

@@ -1,3 +1,4 @@
+import { selectCancellationRestorations, selectReturnRestorations, type CreditRestoration, type RestorationState } from "./memberCreditRestorations";
 import { selectMemberCreditTransactions, type MemberCreditTransaction } from "./memberCreditTransactions";
 import type { CreditEntry } from "./membershipCommerce";
 import { deriveMemberCreditBalances, storedCreditBalance, type PassbookBalanceState } from "./memberCreditRunningBalance";
@@ -12,10 +13,13 @@ export type MemberCreditPassbookRow = {
   descriptionKey: string;
   detail?: MemberCreditEntryDetail;
   transaction?: MemberCreditTransaction;
+  orderNumber?: string | null;
+  restoration?: CreditRestoration;
 };
 
 export type MemberCreditPassbookPage = {
   entries: MemberCreditPassbookRow[];
+  currentAvailableCredit?: number;
   nextOffset: number | null;
   nextCursor?: string | null;
 };
@@ -46,32 +50,44 @@ function descriptionKey(entry: CreditEntry) {
  * remainingAmount alone is never mistaken for an account balance at issuance.
  */
 export function selectMemberCreditPassbook(
-  state: PassbookBalanceState & CreditEntrySourceState,
+  state: PassbookBalanceState & CreditEntrySourceState & RestorationState,
   memberId: string,
   offset = 0,
   cursor?: string,
+  context: { completedCancellationOrders?: ReadonlySet<string> } = {},
 ): MemberCreditPassbookPage {
   if (!Number.isSafeInteger(offset) || offset < 0) throw new Error("Invalid passbook offset");
   const derived = deriveMemberCreditBalances(state, memberId);
   const position = cursor ? parseMemberCreditPassbookCursor(cursor) : null;
-  const memberEntries = Object.values(state.creditEntries).filter((entry) => entry.memberId === memberId);
+  const cancellations = selectCancellationRestorations(state, memberId, derived.releases, context.completedCancellationOrders ?? new Set());
+  const returns = selectReturnRestorations(state, memberId);
+  const restoredEntryIds = new Set(returns.flatMap(row => row.creditEntryIds));
+  const restoredReservationIds = new Set(cancellations.map(row => row.id.slice("cancel:".length)));
+  const memberEntries = Object.values(state.creditEntries).filter((entry) => entry.memberId === memberId && !restoredEntryIds.has(entry.creditEntryId));
   // Keep existing entry append order; merge read-only reservation lifecycle rows
   // before pagination so history cannot hide settlement behind grant-only pages.
   const rows = memberEntries.map((entry) => {
     const detail = selectMemberCreditEntryDetail(state, memberId, entry.creditEntryId);
     return { id: entry.creditEntryId, row: {
       date: entry.createdAt, change: entry.amount,
-      balanceAfter: storedCreditBalance(entry) ?? derived.balances.get(entry.creditEntryId) ?? null,
+      balanceAfter: derived.reason === "snapshot_sequence_mismatch" ? null : storedCreditBalance(entry) ?? derived.balances.get(entry.creditEntryId) ?? null,
       descriptionKey: descriptionKey(entry), ...(detail ? { detail } : {}),
     } as MemberCreditPassbookRow };
   });
   for (const transaction of selectMemberCreditTransactions(state, memberId)) {
     rows.push({ id: "reservation:" + transaction.eventId, row: {
       date: transaction.reservedAt ?? transaction.statusRecordedAt ?? "",
-      change: transaction.status === "released" ? 0 : -transaction.amount,
-      balanceAfter: null, descriptionKey: "", transaction,
+      change: transaction.status === "released" && !restoredReservationIds.has(transaction.eventId) ? 0 : -transaction.amount,
+      balanceAfter: null,
+      descriptionKey: transaction.status === "released" && !restoredReservationIds.has(transaction.eventId) ? "credit.passbook.releasedSafe" : "credit.passbook.orderRedemption",
+      transaction, orderNumber: transaction.orderNumber,
     } });
   }
+  for (const restoration of [...cancellations, ...returns]) rows.push({ id: restoration.id, row: {
+    date: restoration.date, change: restoration.change, balanceAfter: restoration.balanceAfter,
+    descriptionKey: restoration.restoration.kind === "cancel" ? "credit.passbook.cancelRestored" : "credit.passbook.returnRestored",
+    orderNumber: restoration.orderNumber, restoration: restoration.restoration,
+  } });
   const time = (value: string) => Date.parse(value) || 0;
   const appendIndex = new Map(rows.map((item, index) => [item.id, index]));
   const anchor = position ? rows.find(item => item.id === position[1] && item.row.date === position[0]) : null;
