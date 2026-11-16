@@ -36,23 +36,36 @@ function MotionSection({ section, children, className = "" }: { section: PageBui
 }
 
 function BodyWithLinks({section,registry}:{section:PageBuilderSection;registry:CmsLinkRegistryInput}) {
-  const items = [...(section.bodyLinks || [])].sort((a,b)=>a.start-b.start);
-  if (section.type !== "text" || items.length === 0) return <>{section.body}</>;
-  const parts: ReactNode[] = []; let cursor = 0;
-  for (const item of items) {
-    if (!Number.isSafeInteger(item.start) || !Number.isSafeInteger(item.end) || item.start < cursor || item.end > section.body.length || item.start >= item.end || section.body.slice(item.start,item.end) !== item.text) continue;
-    if (item.start > cursor) parts.push(section.body.slice(cursor,item.start));
-    parts.push(<CmsLink key={item.id} value={item.link} registry={registry} className="pb-inline-text-link">{item.text}</CmsLink>);
-    cursor = item.end;
+  if (section.type !== "text") return <>{section.body}</>;
+  const body = section.body;
+  const links = [...(section.bodyLinks || [])].sort((a,b)=>a.start-b.start);
+  const media = [...(section.bodyMedia || [])].filter(item=>item.enabled !== false && Number.isSafeInteger(item.position) && item.position >= 0 && item.position <= body.length).sort((a,b)=>a.position-b.position);
+  const parts: ReactNode[] = [];
+  let cursor = 0;
+  // Split plain text around media anchors, rendering already-validated links within each segment.
+  const appendText = (end:number) => {
+    for (const item of links) {
+      if (item.start < cursor || item.end > end || item.start >= item.end || body.slice(item.start,item.end) !== item.text) continue;
+      if (cursor < item.start) parts.push(body.slice(cursor,item.start));
+      parts.push(<CmsLink key={item.id} value={item.link} registry={registry} className="pb-inline-text-link">{item.text}</CmsLink>);
+      cursor=item.end;
+    }
+    if (cursor < end) parts.push(body.slice(cursor,end));
+    cursor=end;
+  };
+  for (const item of media) {
+    if (links.some(link=>link.start<item.position && item.position<link.end)) continue;
+    appendText(item.position);
+    parts.push(<div className="pb-inline-media" key={item.id}><MediaFigure item={item} section={section} index={parts.length}/></div>);
   }
-  if (cursor < section.body.length) parts.push(section.body.slice(cursor));
+  appendText(body.length);
   return <>{parts}</>;
 }
 
 function Copy({ section, hero = false, registry }: { section: PageBuilderSection; hero?: boolean; registry?: CmsLinkRegistryInput }) {
   const Heading = hero ? "h1" : "h2";
-  if (!section.eyebrow.trim() && !section.title.trim() && !section.body.trim()) return null;
-  return <div className="page-builder-copy" data-home-motion-part style={{ "--home-motion-index": 0 } as CSSProperties}>{section.eyebrow.trim() ? <p className="page-builder-eyebrow">{section.eyebrow}</p> : null}{section.title.trim() ? <Heading>{section.title}{section.headlineLine2?.trim() ? <><br/><span>{section.headlineLine2}</span></> : null}</Heading> : null}{section.body.trim() ? <div className="page-builder-body">{registry ? <BodyWithLinks section={section} registry={registry}/> : section.body}</div> : null}</div>;
+  if (!section.eyebrow.trim() && !section.title.trim() && !section.body.trim() && !section.bodyMedia?.some(item=>item.enabled !== false)) return null;
+  return <div className="page-builder-copy" data-home-motion-part style={{ "--home-motion-index": 0 } as CSSProperties}>{section.eyebrow.trim() ? <p className="page-builder-eyebrow">{section.eyebrow}</p> : null}{section.title.trim() ? <Heading>{section.title}{section.headlineLine2?.trim() ? <><br/><span>{section.headlineLine2}</span></> : null}</Heading> : null}{(section.body.trim() || section.bodyMedia?.some(item=>item.enabled !== false)) ? <div className="page-builder-body">{registry ? <BodyWithLinks section={section} registry={registry}/> : section.body}</div> : null}</div>;
 }
 
 function Ctas({ section, registry }: { section: PageBuilderSection; registry: CmsLinkRegistryInput }) {
@@ -120,7 +133,7 @@ function Closing({ section, registry }: { section: PageBuilderSection; registry:
 }
 
 function EditorialText({ section, registry }: { section: PageBuilderSection; registry: CmsLinkRegistryInput }) {
-  const hasCopy = Boolean(section.eyebrow.trim() || section.title.trim() || section.body.trim());
+  const hasCopy = Boolean(section.eyebrow.trim() || section.title.trim() || section.body.trim() || section.bodyMedia?.some(item=>item.enabled !== false));
   if (!hasCopy) return null;
   return <MotionSection section={section} className="pb-editorial-text"><Copy section={section} registry={registry}/><Ctas section={section} registry={registry}/></MotionSection>;
 }

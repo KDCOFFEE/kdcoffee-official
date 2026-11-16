@@ -43,6 +43,8 @@ export type PageBuilderItem = { id: string; enabled: boolean; title: string; bod
 export type PageBuilderProduct = { id: string; enabled: boolean; productSlug: string };
 /** Inline links point to exact ranges in the original plain text, not HTML. */
 export type PageBodyLink = { id: string; start: number; end: number; text: string; link: CmsLinkValue };
+/** Reuses the canonical MediaAsset; position is an offset in the unchanged plain-text body. */
+export type PageBodyMedia = PageBuilderMedia & { position: number };
 
 export type PageBuilderSection = {
   id: string;
@@ -54,6 +56,8 @@ export type PageBuilderSection = {
   body: string;
   /** Optional rich links only for text blocks; old page drafts are unchanged. */
   bodyLinks?: PageBodyLink[];
+  /** Inline image/video references for text blocks; existing media library and SEO are retained. */
+  bodyMedia?: PageBodyMedia[];
   theme: "warm" | "dark" | "media";
   layout: "media-left" | "media-right" | "media-top" | "grid" | "filmstrip";
   /** Additive presentation choice. Older pages resolve through safe premium defaults. */
@@ -209,6 +213,17 @@ export function validatePageDraft(value: PageDraft, productSlugs?: Set<string>, 
         if (!Number.isSafeInteger(item.start) || !Number.isSafeInteger(item.end) || item.start < lastEnd || item.start < 0 || item.end > section.body.length || item.start >= item.end || section.body.slice(item.start,item.end) !== item.text || !item.text.trim()) throw new Error(`${label}內文連結位置與文字不一致。`);
         validateCmsLinkValue(item.link, `${label}內文連結`);
         lastEnd = item.end;
+      }
+    }
+    if (section.bodyMedia !== undefined) {
+      if (section.type !== "text" || !Array.isArray(section.bodyMedia) || section.bodyMedia.length > 12) throw new Error(`${label}文章媒體設定不正確。`);
+      assertUniqueIds(section.bodyMedia, `${label}文章媒體`);
+      for (const item of section.bodyMedia) {
+        if (!Number.isSafeInteger(item.position) || item.position < 0 || item.position > section.body.length || typeof item.enabled !== "boolean" || !isMediaAsset(item.media)) throw new Error(`${label}文章媒體位置或格式不正確。`);
+        assertString(item.alt, `${label}文章媒體替代文字`, 240);
+        if (item.decorative !== undefined && (typeof item.decorative !== "boolean" || (item.decorative && item.alt !== ""))) throw new Error(`${label}文章媒體裝飾設定不正確。`);
+        assertString(item.title || "", `${label}文章媒體標題`, 180);
+        if ((section.bodyLinks || []).some(link => link.start < item.position && item.position < link.end)) throw new Error(`${label}文章媒體不能放在超連結文字中間。`);
       }
     }
     if (!Array.isArray(section.ctas) || section.ctas.length > 4) throw new Error(`${label}最多 4 個按鈕。`);

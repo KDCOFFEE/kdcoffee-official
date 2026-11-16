@@ -8177,3 +8177,9 @@ button.member-lifecycle-action:disabled,
 .page-builder-v2 .pb-inline-text-link:hover { color:var(--pb-gold); }
 .page-inline-link-tools { display:flex;align-items:center;flex-wrap:wrap;gap:12px; }
 .page-inline-link-tools small { color:#756960; }
+/* Text-block embeds render using the existing KdMedia/MediaFigure presentation. */
+.page-builder-v2 .pb-inline-media { width:min(100%,760px); margin:24px auto; max-width:100%; }
+.page-builder-v2 .pb-inline-media .pb-media { max-width:100%; margin:0; }
+.page-builder-v2 .pb-inline-media img,.page-builder-v2 .pb-inline-media video { max-width:100%; }
+.page-inline-media-list { display:grid; gap:12px; }
+@media(max-width:800px){ .page-builder-v2 .pb-inline-media { width:100%; margin:18px auto; } }
