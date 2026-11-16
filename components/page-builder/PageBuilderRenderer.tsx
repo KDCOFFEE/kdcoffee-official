@@ -35,10 +35,24 @@ function MotionSection({ section, children, className = "" }: { section: PageBui
   return <section className={`page-builder-section page-builder-${section.type} theme-${section.theme} ${className}`.trim()} data-presentation={presentation} data-spacing={section.spacing || "normal"} data-home-motion={motion.activePreset} data-text-align={visualStyle?.alignment || "inherit"} data-heading-wrap={visualStyle?.headingWrap || "inherit"} style={{...homepageMotionCssVariables(motion),...blockVisualStyleVariables(visualStyle)} as CSSProperties}><div className="page-builder-section-inner">{children}</div></section>;
 }
 
-function Copy({ section, hero = false }: { section: PageBuilderSection; hero?: boolean }) {
+function BodyWithLinks({section,registry}:{section:PageBuilderSection;registry:CmsLinkRegistryInput}) {
+  const items = [...(section.bodyLinks || [])].sort((a,b)=>a.start-b.start);
+  if (section.type !== "text" || items.length === 0) return <>{section.body}</>;
+  const parts: ReactNode[] = []; let cursor = 0;
+  for (const item of items) {
+    if (!Number.isSafeInteger(item.start) || !Number.isSafeInteger(item.end) || item.start < cursor || item.end > section.body.length || item.start >= item.end || section.body.slice(item.start,item.end) !== item.text) continue;
+    if (item.start > cursor) parts.push(section.body.slice(cursor,item.start));
+    parts.push(<CmsLink key={item.id} value={item.link} registry={registry} className="pb-inline-text-link">{item.text}</CmsLink>);
+    cursor = item.end;
+  }
+  if (cursor < section.body.length) parts.push(section.body.slice(cursor));
+  return <>{parts}</>;
+}
+
+function Copy({ section, hero = false, registry }: { section: PageBuilderSection; hero?: boolean; registry?: CmsLinkRegistryInput }) {
   const Heading = hero ? "h1" : "h2";
   if (!section.eyebrow.trim() && !section.title.trim() && !section.body.trim()) return null;
-  return <div className="page-builder-copy" data-home-motion-part style={{ "--home-motion-index": 0 } as CSSProperties}>{section.eyebrow.trim() ? <p className="page-builder-eyebrow">{section.eyebrow}</p> : null}{section.title.trim() ? <Heading>{section.title}{section.headlineLine2?.trim() ? <><br/><span>{section.headlineLine2}</span></> : null}</Heading> : null}{section.body.trim() ? <div className="page-builder-body">{section.body}</div> : null}</div>;
+  return <div className="page-builder-copy" data-home-motion-part style={{ "--home-motion-index": 0 } as CSSProperties}>{section.eyebrow.trim() ? <p className="page-builder-eyebrow">{section.eyebrow}</p> : null}{section.title.trim() ? <Heading>{section.title}{section.headlineLine2?.trim() ? <><br/><span>{section.headlineLine2}</span></> : null}</Heading> : null}{section.body.trim() ? <div className="page-builder-body">{registry ? <BodyWithLinks section={section} registry={registry}/> : section.body}</div> : null}</div>;
 }
 
 function Ctas({ section, registry }: { section: PageBuilderSection; registry: CmsLinkRegistryInput }) {
@@ -108,7 +122,7 @@ function Closing({ section, registry }: { section: PageBuilderSection; registry:
 function EditorialText({ section, registry }: { section: PageBuilderSection; registry: CmsLinkRegistryInput }) {
   const hasCopy = Boolean(section.eyebrow.trim() || section.title.trim() || section.body.trim());
   if (!hasCopy) return null;
-  return <MotionSection section={section} className="pb-editorial-text"><Copy section={section}/><Ctas section={section} registry={registry}/></MotionSection>;
+  return <MotionSection section={section} className="pb-editorial-text"><Copy section={section} registry={registry}/><Ctas section={section} registry={registry}/></MotionSection>;
 }
 
 export default function PageBuilderRenderer({ page, products, registry, visualStyle }: { page: PageDraft; products: Product[]; registry: CmsLinkRegistryInput; visualStyle?: WebsiteVisualStyle; preview?: boolean }) {

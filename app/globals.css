@@ -8171,3 +8171,9 @@ button.member-lifecycle-action:disabled,
   .page-builder-v2 .page-builder-section[data-spacing="compact"] { padding-block: 24px; }
   .page-builder-v2 .page-builder-section[data-spacing="spacious"] { padding-block: 76px; }
 }
+
+/* CMS text-only inline link support; scoped to page builder article copy. */
+.page-builder-v2 .pb-inline-text-link { color:inherit;text-decoration:underline;text-underline-offset:.19em;text-decoration-color:var(--pb-gold);font-weight:600; }
+.page-builder-v2 .pb-inline-text-link:hover { color:var(--pb-gold); }
+.page-inline-link-tools { display:flex;align-items:center;flex-wrap:wrap;gap:12px; }
+.page-inline-link-tools small { color:#756960; }

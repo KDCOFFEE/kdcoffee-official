@@ -41,6 +41,8 @@ export type PageBuilderCta = { id: string; enabled: boolean; label: string; styl
 export type PageBuilderMedia = { id: string; enabled: boolean; media: MediaAsset; alt: string; decorative?: boolean; title?: string };
 export type PageBuilderItem = { id: string; enabled: boolean; title: string; body: string; media?: MediaAsset };
 export type PageBuilderProduct = { id: string; enabled: boolean; productSlug: string };
+/** Inline links point to exact ranges in the original plain text, not HTML. */
+export type PageBodyLink = { id: string; start: number; end: number; text: string; link: CmsLinkValue };
 
 export type PageBuilderSection = {
   id: string;
@@ -50,6 +52,8 @@ export type PageBuilderSection = {
   title: string;
   headlineLine2?: string;
   body: string;
+  /** Optional rich links only for text blocks; old page drafts are unchanged. */
+  bodyLinks?: PageBodyLink[];
   theme: "warm" | "dark" | "media";
   layout: "media-left" | "media-right" | "media-top" | "grid" | "filmstrip";
   /** Additive presentation choice. Older pages resolve through safe premium defaults. */
@@ -197,6 +201,16 @@ export function validatePageDraft(value: PageDraft, productSlugs?: Set<string>, 
     if (section.playbackMode !== undefined && !(HERO_PLAYBACK_MODES as readonly string[]).includes(section.playbackMode)) throw new Error(`${label}影片播放方式不正確。`);
     validateBlockVisualStyle(section.visualStyle);
     assertString(section.eyebrow, `${label}小標`, 100); assertString(section.title, `${label}標題`, 180); assertString(section.headlineLine2 || "", `${label}第二行標題`, 180); assertString(section.body, `${label}內容`, 5000);
+    if (section.bodyLinks !== undefined) {
+      if (section.type !== "text" || !Array.isArray(section.bodyLinks) || section.bodyLinks.length > 30) throw new Error(`${label}內文連結設定不正確。`);
+      assertUniqueIds(section.bodyLinks, `${label}內文連結`);
+      let lastEnd = 0;
+      for (const item of [...section.bodyLinks].sort((a,b)=>a.start-b.start)) {
+        if (!Number.isSafeInteger(item.start) || !Number.isSafeInteger(item.end) || item.start < lastEnd || item.start < 0 || item.end > section.body.length || item.start >= item.end || section.body.slice(item.start,item.end) !== item.text || !item.text.trim()) throw new Error(`${label}內文連結位置與文字不一致。`);
+        validateCmsLinkValue(item.link, `${label}內文連結`);
+        lastEnd = item.end;
+      }
+    }
     if (!Array.isArray(section.ctas) || section.ctas.length > 4) throw new Error(`${label}最多 4 個按鈕。`);
     assertUniqueIds(section.ctas, `${label}按鈕`);
     for (const [index, cta] of section.ctas.entries()) { if (typeof cta.enabled !== "boolean" || !CTA_STYLES.has(cta.stylePreset)) throw new Error(`${label}按鈕設定不正確。`); assertString(cta.label, `${label}第 ${index + 1} 個按鈕文字`, 80, true); validateCmsLinkValue(cta.link, `${label}第 ${index + 1} 個按鈕`); }
