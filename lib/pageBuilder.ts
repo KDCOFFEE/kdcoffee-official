@@ -106,6 +106,18 @@ export type PageStore = {
 const ID_PATTERN = /^[a-z0-9][a-z0-9-]{5,80}$/u;
 const SLUG_PATTERN = /^[a-z0-9](?:[a-z0-9-]{1,78}[a-z0-9])?$/u;
 const RESERVED_SLUGS = new Set(["admin", "api", "member", "cart", "works", "uploads", "images", "monthly-menu"]);
+
+/** Change only the URL segment of an unpublished page; preserve IDs and all page content. */
+export function validateCustomPageSlug(value: string, pages: PageRecord[], pageId: string): string {
+  const slug = value.trim().toLowerCase();
+  if (!SLUG_PATTERN.test(slug) || RESERVED_SLUGS.has(slug)) {
+    throw new Error("頁面網址僅能使用英文小寫、數字、連字號，長度 3–80 字元，且不得使用系統保留網址。");
+  }
+  if (pages.some(page => page.id !== pageId && page.slug === slug)) {
+    throw new Error("此頁面網址已被其他頁面使用，請換一個名稱。");
+  }
+  return slug;
+}
 const CTA_STYLES = new Set<CtaStylePreset>(["primary", "secondary", "text"]);
 
 export const DEFAULT_PAGE_MOTION: HomepageSectionMotion = { enabled: true, preset: "fade-up", delayMs: 0, durationMs: 800, distancePx: 18, staggerMs: 100 };

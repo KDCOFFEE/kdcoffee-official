@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { promises as fs } from "fs";
 import { isAdminAuthenticated } from "@/lib/adminAuth";
 import { atomicWriteJson, withFileLock } from "@/lib/jsonFileStore";
-import { pageReferenceCount, publishedPageRegistry, validatePageDraft, type PageDraft } from "@/lib/pageBuilder";
+import { pageReferenceCount, publishedPageRegistry, validatePageDraft, validateCustomPageSlug, type PageDraft } from "@/lib/pageBuilder";
 import { validateWebsiteVisualStyle, type WebsiteVisualStyle } from "@/lib/pageBuilderVisualStyle";
 import { readPageStore } from "@/lib/pageBuilderStore";
 import { getHomepageDataFile, getPagesDataFile, getWebsiteDataFile } from "@/lib/storagePaths";
@@ -21,7 +21,7 @@ export async function PUT(request: Request, context: Context) {
   if (!(await isAdminAuthenticated())) return NextResponse.json({ error: "尚未登入管理後台。" }, { status: 401 });
   const { id } = await context.params;
   try {
-    const body = await request.json() as { version?: number; operation?: "save" | "publish" | "unpublish" | "saveVisualStyle"; draft?: PageDraft; visualStyle?: WebsiteVisualStyle };
+    const body = await request.json() as { version?: number; operation?: "save" | "publish" | "unpublish" | "saveVisualStyle"; draft?: PageDraft; slug?: string; visualStyle?: WebsiteVisualStyle };
     const result = await withFileLock(getPagesDataFile(), async () => {
       const store = await readPageStore();
       if (Number(body.version) !== store.version) throw new VersionConflict();
@@ -37,6 +37,16 @@ export async function PUT(request: Request, context: Context) {
       const publishedVisualStyle = body.operation === "publish" && body.visualStyle !== undefined
         ? validateWebsiteVisualStyle(body.visualStyle)
         : undefined;
+      if (body.slug !== undefined) {
+        if (body.operation !== "save" && body.operation !== "publish") {
+          throw new Error("此操作不可修改頁面網址。");
+        }
+        const nextSlug = validateCustomPageSlug(body.slug, store.pages, page.id);
+        if ((page.status === "published" || Boolean(page.publishedAt) || Boolean(page.publishedSnapshot)) && nextSlug !== page.slug) {
+          throw new Error("已發布頁面的網址不可直接更改，以免既有 SEO 連結失效。");
+        }
+        page.slug = nextSlug;
+      }
       if (body.operation !== "unpublish" && body.draft) {
         validatePageDraft(body.draft, await productSlugs());
         if (body.draft.socialImage) await assertSocialImageAvailable(body.draft.socialImage);
