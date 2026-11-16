@@ -54,6 +54,8 @@ export type PageBuilderSection = {
   layout: "media-left" | "media-right" | "media-top" | "grid" | "filmstrip";
   /** Additive presentation choice. Older pages resolve through safe premium defaults. */
   presentation?: PagePresentationPreset;
+  /** Optional per-section vertical spacing. Missing means existing styling. */
+  spacing?: "compact" | "normal" | "spacious";
   /** Independent controlled mobile composition for Media + Text. */
   mobileMediaLayout?: PageMobileMediaLayout;
   /** Optional for backward compatibility. Existing Hero videos resolve to click-to-play. */
@@ -190,6 +192,7 @@ export function validatePageDraft(value: PageDraft, productSlugs?: Set<string>, 
     if (!(PAGE_SECTION_TYPES as readonly string[]).includes(section.type)) { if (allowUnknownSections) continue; throw new Error(`${label}類型不受支援。`); }
     if (typeof section.enabled !== "boolean") throw new Error(`${label}顯示狀態不正確。`);
     if (section.presentation !== undefined && !(PAGE_PRESENTATION_PRESETS as readonly string[]).includes(section.presentation)) throw new Error(`${label}版型設定不正確。`);
+    if (section.spacing !== undefined && !["compact", "normal", "spacious"].includes(section.spacing)) throw new Error(`${label}間距設定不正確。`);
     if (section.mobileMediaLayout !== undefined && !(PAGE_MOBILE_MEDIA_LAYOUTS as readonly string[]).includes(section.mobileMediaLayout)) throw new Error(`${label}手機圖文版型設定不正確。`);
     if (section.playbackMode !== undefined && !(HERO_PLAYBACK_MODES as readonly string[]).includes(section.playbackMode)) throw new Error(`${label}影片播放方式不正確。`);
     validateBlockVisualStyle(section.visualStyle);

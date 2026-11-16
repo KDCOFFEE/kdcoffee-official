@@ -32,7 +32,7 @@ function MotionSection({ section, children, className = "" }: { section: PageBui
   const motion = resolveHomepageMotion(section.motion, "home002");
   const presentation = resolveSectionPresentation(section);
   const visualStyle = resolveBlockVisualStyle(section.visualStyle);
-  return <section className={`page-builder-section page-builder-${section.type} theme-${section.theme} ${className}`.trim()} data-presentation={presentation} data-home-motion={motion.activePreset} data-text-align={visualStyle?.alignment || "inherit"} data-heading-wrap={visualStyle?.headingWrap || "inherit"} style={{...homepageMotionCssVariables(motion),...blockVisualStyleVariables(visualStyle)} as CSSProperties}><div className="page-builder-section-inner">{children}</div></section>;
+  return <section className={`page-builder-section page-builder-${section.type} theme-${section.theme} ${className}`.trim()} data-presentation={presentation} data-spacing={section.spacing || "normal"} data-home-motion={motion.activePreset} data-text-align={visualStyle?.alignment || "inherit"} data-heading-wrap={visualStyle?.headingWrap || "inherit"} style={{...homepageMotionCssVariables(motion),...blockVisualStyleVariables(visualStyle)} as CSSProperties}><div className="page-builder-section-inner">{children}</div></section>;
 }
 
 function Copy({ section, hero = false }: { section: PageBuilderSection; hero?: boolean }) {

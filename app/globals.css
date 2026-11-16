@@ -8163,3 +8163,11 @@ button.member-lifecycle-action:disabled,
     margin: 0;
   }
 }
+
+/* CMS optional per-section spacing; pages with no spacing setting keep prior appearance. */
+.page-builder-v2 .page-builder-section[data-spacing="compact"] { padding-block: clamp(28px, 3vw, 44px); }
+.page-builder-v2 .page-builder-section[data-spacing="spacious"] { padding-block: clamp(100px, 10vw, 144px); }
+@media (max-width: 800px) {
+  .page-builder-v2 .page-builder-section[data-spacing="compact"] { padding-block: 24px; }
+  .page-builder-v2 .page-builder-section[data-spacing="spacious"] { padding-block: 76px; }
+}
