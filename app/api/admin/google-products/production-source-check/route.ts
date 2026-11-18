@@ -18,10 +18,19 @@ export async function GET(request:Request){
     const internalUrl=['http:','https:'].includes(url.protocol)&&
       ['localhost','127.0.0.1','0.0.0.0','[::1]'].includes(url.hostname)&&host===publicHost&&
       (origin===publicOrigin||site==='same-origin');
-    if(url.search||(!canonicalUrl&&!internalUrl)||
-      (forwardedHost!==null&&forwardedHost!==publicHost)||
-      (origin!==null&&origin!==publicOrigin)||(site!==null&&!['same-origin','none'].includes(site)))
+    // Diagnostic-only reason codes after Owner authentication. Do not log raw URLs,
+    // headers, cookies, tokens, IPs, session identifiers, or request bodies.
+    const rejectedBy=[
+      ...(url.search?['QUERY_PRESENT']:[]),
+      ...(!canonicalUrl&&!internalUrl?['UNTRUSTED_URL_OR_HOST']:[]),
+      ...(forwardedHost!==null&&forwardedHost!==publicHost?['FORWARDED_HOST_MISMATCH']:[]),
+      ...(origin!==null&&origin!==publicOrigin?['ORIGIN_MISMATCH']:[]),
+      ...(site!==null&&!['same-origin','none'].includes(site)?['FETCH_SITE_MISMATCH']:[]),
+    ];
+    if(rejectedBy.length){
+      console.warn('[G5E1B_DIAGNOSTIC_GATE]',rejectedBy.join(','));
       return Response.json({error:'INVALID_DIAGNOSTIC_REQUEST',...PRODUCTION_DIAGNOSTIC_FLAGS},{status:400,headers});
+    }
     const result=await readProductionSourceCheck();
     return Response.json(result,{status:result.state==='diagnostic_complete'?200:503,headers});
   }catch(error){
