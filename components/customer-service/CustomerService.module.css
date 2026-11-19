@@ -250,4 +250,4 @@
   .showMore { gap:12px; }
 }
 @media(max-width:374px) { .heroContent { padding-left:18px; padding-right:18px; } .loginActions { padding-left:0; gap:16px; } .channel { padding-left:9px; padding-right:9px; } }
-@media(prefers-reduced-motion:reduce) { :global(html:has(#service-main)) { scroll-behavior:auto!important; } .serviceCard:hover .serviceSymbol { transform:none; } .main * { animation:none!important; transition:none!important; scroll-behavior:auto!important; } }
+@media(prefers-reduced-motion:reduce) { .serviceCard:hover .serviceSymbol { transform:none; } .main * { animation:none!important; transition:none!important; scroll-behavior:auto!important; } }

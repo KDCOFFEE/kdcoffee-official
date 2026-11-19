@@ -8183,3 +8183,7 @@ button.member-lifecycle-action:disabled,
 .page-builder-v2 .pb-inline-media img,.page-builder-v2 .pb-inline-media video { max-width:100%; }
 .page-inline-media-list { display:grid; gap:12px; }
 @media(max-width:800px){ .page-builder-v2 .pb-inline-media { width:100%; margin:18px auto; } }
+
+@media (prefers-reduced-motion: reduce) {
+  html:has(#service-main) { scroll-behavior: auto !important; }
+}

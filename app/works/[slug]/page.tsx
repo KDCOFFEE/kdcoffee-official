@@ -134,11 +134,18 @@ function EditorialIcon({ name }: { name: EditorialIconName }) {
   return <svg className="editorial-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.45" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>;
 }
 
-export default async function WorkPage({ params }: { params: Promise<{ slug: string }> }) {
+export default async function WorkPage({ params, searchParams }: { params: Promise<{ slug: string }>; searchParams?: Promise<{ sku?: string | string[]; variant?: string | string[] }> }) {
   const { slug } = await params;
+  const { sku: requestedSku, variant: requestedVariant } = (await searchParams) ?? {};
+  const initialVariantId = typeof requestedVariant === "string" ? requestedVariant : undefined;
   const [live, homepageData, membershipRules] = await Promise.all([getLiveWebsiteData(), getHomepageData(), getActiveMembershipRules()]);
   const product: any = live.menu.products.find((item: any) => item.slug === slug);
   if (!product || product.status === "hidden") notFound();
+  // Merchant deep links preselect an existing visible persisted SKU on the server.
+  const initialSkuId = typeof requestedSku === "string" && Array.isArray(product.skus) &&
+    product.skus.some((sku: any) => sku?.id === requestedSku && sku.enabled !== false)
+    ? requestedSku : undefined;
+  const purchaseSelectionKey = JSON.stringify([slug, initialSkuId, initialVariantId]);
   const pageContent = resolveWorksProductPageContent(product);
   const customSections = resolveProductCustomSections(product.productCustomSections);
   const heroContent = pageContent["product-hero"];
@@ -334,12 +341,12 @@ export default async function WorkPage({ params }: { params: Promise<{ slug: str
               <p className="giotto-purchase-heading">{purchaseContent.eyebrow}</p>
               {purchaseContent.heading ? <h2 className="product-purchase-title">{purchaseContent.heading}</h2> : null}
               {purchaseContent.description ? <p className="product-purchase-description">{purchaseContent.description}</p> : null}
-              <AddToCart product={product} showPv={membershipRules.rules.referral.showProductPV} pointDisplayName={membershipRules.rules.referral.pointDisplayName} />
+              <AddToCart key={purchaseSelectionKey} product={product} initialSkuId={initialSkuId} initialVariantId={initialVariantId} showPv={membershipRules.rules.referral.showProductPV} pointDisplayName={membershipRules.rules.referral.pointDisplayName} />
             </PurchaseChapterReveal>
           ) : (
             <div {...getProductAnimationAttributes(sectionAnimation("select-your-coffee"))} id="select-your-coffee" className="product-purchase-chapter">
               {pageContent.raw["select-your-coffee"] ? <div className="product-purchase-copy"><p className="giotto-purchase-heading">{purchaseContent.eyebrow}</p>{purchaseContent.heading ? <h2 className="product-purchase-title">{purchaseContent.heading}</h2> : null}{purchaseContent.description ? <span>{purchaseContent.description}</span> : null}</div> : null}
-              <AddToCart product={product} showPv={membershipRules.rules.referral.showProductPV} pointDisplayName={membershipRules.rules.referral.pointDisplayName} />
+              <AddToCart key={purchaseSelectionKey} product={product} initialSkuId={initialSkuId} initialVariantId={initialVariantId} showPv={membershipRules.rules.referral.showProductPV} pointDisplayName={membershipRules.rules.referral.pointDisplayName} />
             </div>
           )}
         </div>

@@ -7,7 +7,11 @@ import StoreWorkspace from "@/components/admin/StoreWorkspace";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "商店工作區", robots: { index: false, follow: false } };
-export default async function StorePage({ searchParams }: { searchParams?: Promise<{ product?: string }> } = {}) {
+type StorePageProps = { searchParams?: Promise<{ product?: string }> };
+
+function StorePage(): Promise<React.ReactElement>;
+function StorePage(props: StorePageProps): Promise<React.ReactElement>;
+async function StorePage({ searchParams }: StorePageProps = {}) {
   const session = await readAdminSession();
   if (!session) redirect("/admin/login");
   if (session.role !== "owner") forbidden();
@@ -15,3 +19,5 @@ export default async function StorePage({ searchParams }: { searchParams?: Promi
   const productId = (await searchParams)?.product;
   return <StoreWorkspace key={productId || "store"} initialCatalog={catalog} pointDisplayName={pointDisplayName} initialProductId={productId} />;
 }
+
+export default StorePage;

@@ -7,6 +7,8 @@ import { isSameOriginRequest } from "@/lib/requestSecurity";
 
 export const dynamic = "force-dynamic";
 
+export function GET(): Promise<NextResponse>;
+export function GET(request: Request): Promise<NextResponse>;
 export async function GET(request?: Request) {
   if (request && new URL(request.url).searchParams.get("purpose") === "social-share") {
     const session = await readAdminSession();

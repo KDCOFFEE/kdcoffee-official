@@ -13,6 +13,7 @@ import {
   isCustomRoastSku,
   isDripSku,
 } from "@/lib/checkoutRules";
+import { resolveCoffeeVariantLinkSelection } from "@/lib/googleProductVariantLink";
 
 const PREPARATIONS = [
   { value: ALLOWED_BEAN_PREPARATIONS[0], label: "咖啡豆", note: "保留完整風味，適合家中有磨豆機" },
@@ -33,11 +34,13 @@ function normalizeOptions(product: CoffeeArtwork): PurchaseOption[] {
     }));
 }
 
-export default function AddToCart({ product, showPv = false, pointDisplayName = "KD點" }: { product: CoffeeArtwork; showPv?: boolean; pointDisplayName?: string }) {
+export default function AddToCart({ product, initialSkuId, initialVariantId, showPv = false, pointDisplayName = "KD點" }: { product: CoffeeArtwork; initialSkuId?: string; initialVariantId?: string; showPv?: boolean; pointDisplayName?: string }) {
   const { addItem, items, ready, checkoutEligibility } = useCart();
   const router = useRouter();
   const options = useMemo(() => normalizeOptions(product), [product]);
-  const [selectedId, setSelectedId] = useState(options[0]?.id || "");
+  const [selectedId, setSelectedId] = useState(() =>
+    options.find(item => item.id === initialSkuId)?.id || resolveCoffeeVariantLinkSelection(options, initialVariantId)
+  );
   const [preparation, setPreparation] = useState("咖啡豆");
   const [quantity, setQuantity] = useState(1);
   const [customRoast, setCustomRoast] = useState(false);
