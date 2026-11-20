@@ -11,8 +11,8 @@ export function newStoreAdminDraft(kind: StoreAdminKind, sectionId = ""): StoreA
   return { ...common, sectionId, shortDescription: "", productType: "general", sku: "", price: 0, inventory: 0, pvValue: 0, gallery: [], specifications: [], published: false, featured: false, subscriptionEligible: false };
 }
 export function storeDraftPayload(kind: StoreAdminKind, draft: StoreAdminDraft) {
-  const { id, revision, createdAt, updatedAt, archivedAt, subscriptionEligible, ...values } = draft;
-  void id; void revision; void createdAt; void updatedAt; void archivedAt; void subscriptionEligible;
+  const { id, revision, createdAt, updatedAt, archivedAt, subscriptionEligible, googleMerchantSyncEnabled, ...values } = draft;
+  void id; void revision; void createdAt; void updatedAt; void archivedAt; void subscriptionEligible; void googleMerchantSyncEnabled;
   if (kind === "products" && draft.id) {
     return { ...values, categoryId: draft.categoryId || null, salePrice: draft.salePrice ?? null, heroMedia: draft.heroMedia ?? null, kdRedemption: draft.kdRedemption ?? null };
   }

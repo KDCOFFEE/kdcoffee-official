@@ -136,9 +136,10 @@ export function validateStoreProductSeo(value: Record<string, unknown>) {
 }
 
 export function validateStoreProduct(input: unknown): asserts input is StoreProduct {
-  const value = storeInputRecord(input, [...ENTITY_FIELDS, ...STORE_PRODUCT_FIELDS, "subscriptionEligible"], "product");
+  const value = storeInputRecord(input, [...ENTITY_FIELDS, ...STORE_PRODUCT_FIELDS, "subscriptionEligible", "googleMerchantSyncEnabled"], "product");
   entity(value, "product");
   bool(value.published, "product.published");
+  if ("googleMerchantSyncEnabled" in value) bool(value.googleMerchantSyncEnabled, "product.googleMerchantSyncEnabled");
   text(value.shortDescription, "product.shortDescription", 500);
   validateStoreProductSeo(value);
   id(value.sectionId, "product.sectionId");
