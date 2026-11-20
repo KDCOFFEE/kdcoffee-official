@@ -1,0 +1,85 @@
+name: G.5J.26 Rollback Isolated Linux Verification
+
+on:
+  push:
+    branches:
+      - ci/g5j26-rollback-linux-20261120
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    if: github.repository == 'KDCOFFEE/kdcoffee-official' && github.ref == 'refs/heads/ci/g5j26-rollback-linux-20261120'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+      GOOGLE_MERCHANT_PRODUCT_FEED_ENABLED: 'false'
+      GOOGLE_MERCHANT_COFFEE_FEED_ENABLED: 'false'
+    steps:
+      - name: Checkout with Git history
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify commits and open isolated upgrade checkout
+        shell: bash
+        run: |
+          base=9a0bca22901ffcaaecf014905c50c1225087bb05
+          rollback=c17183c88a1d7f6dcb3fdbb37a5c0923fe86a189
+          upgrade=9c213d1ec1df6f2bd117980935e33da93fe55634
+          test "$(git rev-parse --is-shallow-repository)" = false
+          test "$(git rev-list --parents -n 1 HEAD)" = "$(git rev-parse HEAD) $rollback"
+          test "$(git rev-list --parents -n 1 "$rollback")" = "$rollback $base"
+          test "$(git rev-parse "$rollback^{tree}")" = 425ee6b29e6f7370467acec75449be88780e0af2
+          test "$(git rev-parse "$upgrade^{tree}")" = afc7218387a95d86c3efa38a4a90b4a3271e4c7a
+          test -z "$(git status --porcelain)"
+          git diff --no-renames --name-status "$rollback" HEAD | diff -u <(printf 'A\t%s\n' '.github/ci/g5j26-rollback-rehearsal.mjs' '.github/workflows/g5j26-rollback-linux.yml') -
+          sha256sum --strict --check <<'HASHES'
+          9b0685735fb4e03d6f9bcf1b1479775953c25a5ab6b9e5a37819781b30d6a8ec  lib/storeAdminDraft.ts
+          63184ae6f489db6cc1cea338ca650a89c01b716b750b0d3901c3478ee42e0565  lib/storeTypes.ts
+          a8311fd69f07dff365c902186acfca068ba7d70aef8dd21a57e1ca510e334ef6  lib/storeValidation.ts
+          058a7e017396b1f806d3fa454cd82b2743794006bb1f62b3e4fadbe77d01c465  .github/ci/g5j26-rollback-rehearsal.mjs
+          HASHES
+          upgrade_checkout=$(mktemp -d "$RUNNER_TEMP/kdcoffee-upgrade.XXXXXXXX")
+          git worktree add --detach "$upgrade_checkout" "$upgrade"
+          test "$(git -C "$upgrade_checkout" rev-parse HEAD)" = "$upgrade"
+          fixture_root=$(mktemp -d "$RUNNER_TEMP/kdcoffee-rollback.XXXXXXXX")
+          printf 'KD_DATA_DIR=%s\nTMPDIR=%s\nUPGRADE_CHECKOUT=%s\n' "$fixture_root" "$fixture_root" "$upgrade_checkout" >> "$GITHUB_ENV"
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+
+      - name: Install locked dependencies
+        id: install
+        run: npm ci
+
+      - name: Build production
+        run: npm run build
+
+      - name: G.5J.25 Merchant Feed regression
+        if: "!cancelled() && steps.install.outcome == 'success'"
+        run: node --test tests/google-merchant-product-feed.test.mjs
+
+      - name: J.6B Store Domain and SEO
+        if: "!cancelled() && steps.install.outcome == 'success'"
+        run: node --experimental-strip-types --import ./scripts/member-auth-test-bootstrap.mjs scripts/test-phase-j6b-store-domain.mts
+
+      - name: J.6C Store Admin
+        if: "!cancelled() && steps.install.outcome == 'success'"
+        shell: bash
+        run: |
+          ADMIN_SESSION_SECRET="$(node -e 'process.stdout.write(require("node:crypto").randomBytes(32).toString("hex"))')" \
+            node --experimental-strip-types --import ./scripts/gift-frontend-test-bootstrap.mjs scripts/test-phase-j6c-store-admin.mjs
+
+      - name: J.6D.1 Store Public Read Model
+        if: "!cancelled() && steps.install.outcome == 'success'"
+        run: node --experimental-strip-types --import ./scripts/member-auth-test-bootstrap.mjs scripts/test-phase-j6d1-store-public-read-model.mts
+
+      - name: Rollback and re-upgrade rehearsal
+        if: "!cancelled() && steps.install.outcome == 'success'"
+        run: node .github/ci/g5j26-rollback-rehearsal.mjs "$GITHUB_WORKSPACE" "$UPGRADE_CHECKOUT"
