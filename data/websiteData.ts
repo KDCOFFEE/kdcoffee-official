@@ -33,6 +33,7 @@ export type PurchaseOption = {
  * 不負責修改商品、SKU、價格或庫存邏輯。
  */
 export type CoffeeArtwork = {
+  googleMerchantSyncEnabled?: boolean;
   galleryRevealAnimation?: import('@/lib/galleryRevealAnimation').GalleryRevealAnimation;
   galleryRevealTiming?: import('@/lib/galleryRevealTiming').GalleryRevealTiming;
   galleryEditorial?: import('@/lib/galleryEditorial').GalleryEditorial;

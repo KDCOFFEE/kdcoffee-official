@@ -1,0 +1,89 @@
+name: G.5J.26 Isolated Linux Verification
+
+on:
+  push:
+    branches:
+      - ci/g5j26-linux-build-20261120
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    if: github.repository == 'KDCOFFEE/kdcoffee-official' && github.ref == 'refs/heads/ci/g5j26-linux-build-20261120'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+      GOOGLE_MERCHANT_PRODUCT_FEED_ENABLED: 'false'
+      GOOGLE_MERCHANT_COFFEE_FEED_ENABLED: 'false'
+    steps:
+      - name: Checkout candidate with Git history
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Validate base commit, file scope, and SHA-256
+        shell: bash
+        run: |
+          base=9a0bca22901ffcaaecf014905c50c1225087bb05
+          test "$(git rev-parse --is-shallow-repository)" = false
+          test "$(git rev-list --parents -n 1 HEAD)" = "$(git rev-parse HEAD) $base"
+          test -z "$(git status --porcelain)"
+          expected=$(mktemp)
+          cat > "$expected" <<'FILES'
+          A	.github/workflows/g5j26-linux-build.yml
+          M	app/api/admin/products/route.ts
+          M	components/admin/ProductManager.tsx
+          M	components/admin/StoreWorkspace.tsx
+          M	data/websiteData.ts
+          M	lib/googleMerchantProductFeedSource.ts
+          M	lib/storeTypes.ts
+          M	lib/storeValidation.ts
+          M	tests/google-merchant-product-feed.test.mjs
+          FILES
+          git diff --no-renames --name-status "$base" HEAD | diff -u "$expected" -
+          sha256sum --strict --check <<'HASHES'
+          a002322a73be088c21b7eead01da1e96041f49a2ea99f73e5c9c211bb45759ca  app/api/admin/products/route.ts
+          ccadc5306d43904bb2bd514edf12c6fd03410fbe5785c66eaf6451100e6aeb09  components/admin/ProductManager.tsx
+          f689bee9543dea615d42ab7a6e5fe9893b5d2f5d42a4eac465bd08aed3ecd955  components/admin/StoreWorkspace.tsx
+          805aac2733ff9c0877781d728faf73a3f5f940ece1c1a5401a269eb7de7dbe51  data/websiteData.ts
+          7e09cbb07691fd778a88ff0ae2756d81849b982ba702866f685e9eebfa0e2873  lib/googleMerchantProductFeedSource.ts
+          55ff6f7da875e3310090dab6d620491c9e452c3d3ee6818c77ac7fd395e6373c  lib/storeTypes.ts
+          96faacf09f6242e37209759e6181a702e6dddda85bceae72a89425d2bbc61f1b  lib/storeValidation.ts
+          666e0c004716b7302e3129147270fad358f0d5b4199fa0c64e27c40273619e6e  tests/google-merchant-product-feed.test.mjs
+          HASHES
+          fixture_root=$(mktemp -d "$RUNNER_TEMP/kdcoffee-g5j26.XXXXXXXX")
+          printf 'KD_DATA_DIR=%s\nTMPDIR=%s\n' "$fixture_root" "$fixture_root" >> "$GITHUB_ENV"
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+
+      - name: Install locked dependencies
+        id: install
+        shell: bash
+        run: |
+          node --version
+          node -e 'if (typeof require("node:module").registerHooks !== "function") process.exit(1)'
+          npm ci
+
+      - name: Build production
+        run: npm run build
+
+      - name: Merchant Feed regression
+        if: "!cancelled() && steps.install.outcome == 'success'"
+        run: node --test tests/google-merchant-product-feed.test.mjs
+
+      - name: J.6B Store Domain and SEO
+        if: "!cancelled() && steps.install.outcome == 'success'"
+        run: node --experimental-strip-types --import ./scripts/member-auth-test-bootstrap.mjs scripts/test-phase-j6b-store-domain.mts
+
+      - name: J.6C Store Admin
+        if: "!cancelled() && steps.install.outcome == 'success'"
+        shell: bash
+        run: |
+          ADMIN_SESSION_SECRET="$(node -e 'process.stdout.write(require("node:crypto").randomBytes(32).toString("hex"))')" \
+            node --experimental-strip-types --import ./scripts/gift-frontend-test-bootstrap.mjs scripts/test-phase-j6c-store-admin.mjs

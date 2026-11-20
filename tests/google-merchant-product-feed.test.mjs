@@ -820,3 +820,79 @@ test("Merchant link preselects beans in the real buy panel and permits drip and 
   }]);
   assert.equal(priced.priced.items[0].unitPrice + " TWD", row[6]);
 }));
+
+test("Owner can pause and restore Coffee Merchant sync without changing the public offer", () => fixtures(async f => {
+  const item = coffee();
+  await f.writeCoffee([item]);
+  await f.writeStore([store("gear1", "dripper")]);
+  const original = await rows();
+  assert.equal(original.length, 2);
+
+  const client = merchantApprovalClient();
+  // An inspect action on the sync scope must still use the write lock.
+  const change = (expectedEnabled, enabled, headers) => client.request("inspect",
+    { scope: "merchantSync", expectedEnabled, enabled }, headers);
+  for (const [session, status] of [[null, 401], [{ role: "admin", legacy: false }, 403], [{ role: "owner", legacy: true }, 403]]) {
+    client.setSession(session);
+    assert.equal((await change(true, false)).status, status);
+  }
+  client.setSession({ role: "owner", legacy: false });
+  assert.equal((await change(true, false, { Origin: "https://other.example" })).status, 400);
+  assert.equal((await change(true, "false")).status, 400);
+  assert.equal(JSON.parse(readFileSync(f.coffeeFile, "utf8")).version, 1);
+
+  const disabled = await change(true, false);
+  assert.equal(disabled.status, 200);
+  assert.deepEqual(await disabled.json(), { ok: true, enabled: false });
+  const snapshot = JSON.parse(readFileSync(f.coffeeFile, "utf8"));
+  assert.deepEqual(snapshot.menu.products, [{ ...item, googleMerchantSyncEnabled: false }]);
+  assert.deepEqual(await rows(), original.filter(row => row[0] !== "kd-coffee-coffee1-sku1"));
+  assert.equal(priceOrderFromWebsiteData(snapshot, [{ slug: item.slug, optionId: "sku1",
+    optionLabel: "半磅咖啡豆", quotedUnitPrice: 500, quantity: 1 }]).priced.items[0].unitPrice, 500);
+
+  assert.equal((await change(true, false)).status, 200);
+  assert.equal(JSON.parse(readFileSync(f.coffeeFile, "utf8")).version, snapshot.version);
+  assert.equal((await change(true, true)).status, 409);
+  assert.equal((await change(false, true)).status, 200);
+  assert.deepEqual(await rows(), original);
+}));
+
+test("Owner Store updates preserve a per-product Merchant preference and reject invalid or stale changes", () => fixtures(async f => {
+  await f.writeCoffee([coffee()]);
+  await f.writeStore([store("gear1", "dripper")]);
+  const original = await rows();
+  assert.equal(original.length, 2);
+
+  let session = { role: "owner", legacy: false };
+  testModules.set("./adminAuth", { readAdminSession: async () => session });
+  modules.delete("lib/storeAdminApi");
+  const { storeAdminHandlers } = load("lib/storeAdminApi");
+  testModules.delete("./adminAuth");
+  const { PATCH } = storeAdminHandlers("products");
+  const update = (expectedRevision, changes, headers) => PATCH(new Request("https://www.kdcoffee1962.com/api/admin/store/products", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...headers },
+    body: JSON.stringify({ id: "gear1", expectedRevision, action: "update", changes }),
+  }));
+  try {
+    session = { role: "admin", legacy: false };
+    assert.equal((await update(1, { googleMerchantSyncEnabled: false })).status, 403);
+    session = { role: "owner", legacy: false };
+    assert.equal((await update(1, { googleMerchantSyncEnabled: false }, { Origin: "https://other.example" })).status, 403);
+    assert.equal((await update(1, { googleMerchantSyncEnabled: "false" })).status, 400);
+    const disabled = await update(1, { googleMerchantSyncEnabled: false });
+    assert.equal(disabled.status, 200);
+    assert.equal((await disabled.json()).googleMerchantSyncEnabled, false);
+    assert.deepEqual(await rows(), original.filter(row => !row[3].endsWith("/dripper")));
+    assert.equal((await resolveStoreCommerceOffer("dripper")).unitPrice, 1000);
+
+    const unrelated = await update(2, { featured: true });
+    assert.equal(unrelated.status, 200);
+    assert.equal((await unrelated.json()).googleMerchantSyncEnabled, false);
+    assert.equal((await update(2, { googleMerchantSyncEnabled: true })).status, 409);
+    assert.equal((await update(3, { googleMerchantSyncEnabled: true })).status, 200);
+    assert.deepEqual(await rows(), original);
+  } finally {
+    modules.delete("lib/storeAdminApi");
+  }
+}));

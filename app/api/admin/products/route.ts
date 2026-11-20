@@ -317,16 +317,22 @@ export async function PUT(request: Request) {
   try {
     const body = await request.json();
 
-    if (body?.scope === "merchantImageApproval") {
+    if (body?.scope === "merchantImageApproval" || body?.scope === "merchantSync") {
+      const isSyncUpdate = body.scope === "merchantSync";
       const headers = { "Cache-Control": "private, no-store" };
       if (session.legacy || session.role !== "owner") {
-        return NextResponse.json({ error: "Merchant 圖片核准僅限 Owner。" }, { status: 403, headers });
+        return NextResponse.json({ error: "Merchant 商品設定僅限 Owner。" }, { status: 403, headers });
       }
       const contentType = request.headers.get("content-type")?.split(";")[0].trim().toLowerCase();
       const site = request.headers.get("sec-fetch-site");
       if (contentType !== "application/json" || (site && site !== "same-origin") || !isSameOriginRequest(request)) {
-        return NextResponse.json({ error: "Merchant 圖片操作必須來自商品後台。" }, { status: 400, headers });
+        return NextResponse.json({ error: "Merchant 商品設定必須來自商品後台。" }, { status: 400, headers });
       }
+      if (isSyncUpdate && (typeof body.slug !== "string" || !body.slug.trim() ||
+          typeof body.enabled !== "boolean" || typeof body.expectedEnabled !== "boolean")) {
+        return NextResponse.json({ error: "請提供有效的商品與同步設定。" }, { status: 400, headers });
+      }
+
       const update = async () => {
         const data = JSON.parse(await fs.readFile(websiteFile, "utf8")) as ProductRecord;
         const menu = data.menu;
@@ -335,19 +341,42 @@ export async function PUT(request: Request) {
             !Number.isSafeInteger(data.version) || data.version >= Number.MAX_SAFE_INTEGER) {
           throw new MerchantImageApprovalError("商品來源無法驗證。", 409);
         }
-        const result = await changeMerchantCoffeeImageApproval(menu.products as CoffeeArtwork[], body, data.version);
-        if (result.inspection) return NextResponse.json(result.inspection, { headers });
+        let products: ProductRecord[] | CoffeeArtwork[];
+        if (isSyncUpdate) {
+          const matches = menu.products.filter(product => product.slug === body.slug);
+          if (matches.length !== 1) {
+            const status = matches.length ? 409 : 404;
+            return NextResponse.json({ error: "找不到唯一的商品，請重新載入。" }, { status, headers });
+          }
+
+          const product = matches[0];
+          const current = product.googleMerchantSyncEnabled;
+          const enabled = current === undefined || current === true;
+          if (enabled !== body.expectedEnabled && enabled !== body.enabled) {
+            return NextResponse.json({ error: "同步設定已變更，請重新載入。" }, { status: 409, headers });
+          }
+          if (enabled === body.enabled && (current === undefined || typeof current === "boolean")) {
+            return NextResponse.json({ ok: true, enabled }, { headers });
+          }
+          products = menu.products.map(row => row === product
+            ? { ...row, googleMerchantSyncEnabled: body.enabled }
+            : row);
+        } else {
+          const result = await changeMerchantCoffeeImageApproval(menu.products as CoffeeArtwork[], body, data.version);
+          if (result.inspection) return NextResponse.json(result.inspection, { headers });
+          products = result.products;
+        }
 
         await backup(data);
         await atomicWriteJson(websiteFile, {
           ...data,
-          menu: { ...menu, products: result.products },
+          menu: { ...menu, products },
           updatedAt: new Date().toISOString(),
           version: data.version + 1,
         });
-        return NextResponse.json({ ok: true }, { headers });
+        return NextResponse.json(isSyncUpdate ? { ok: true, enabled: body.enabled } : { ok: true }, { headers });
       };
-      return await (body.action === "inspect" ? update() : withFileLock(websiteFile, update));
+      return await (!isSyncUpdate && body.action === "inspect" ? update() : withFileLock(websiteFile, update));
     }
 
     /**
