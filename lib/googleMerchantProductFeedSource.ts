@@ -4,28 +4,29 @@ import { constants } from "node:fs";
 import { lstat, open, realpath } from "node:fs/promises";
 import path from "node:path";
 import { isDeepStrictEqual } from "node:util";
-import { getLiveWebsiteData, type WebsiteData } from "@/data/websiteData";
+import { getLiveWebsiteData, type CoffeeArtwork, type WebsiteData } from "@/data/websiteData";
 import { validateUnifiedCartItem } from "./commerceCart";
 import { commerceOrderMoney } from "./commerceOrderPricing";
 import {
   chargeMerchantImageBytes, checkDeadline, createMerchantImageBudget, matchesMerchantImage,
-  suggestPhoto, verifyLocalMerchantProductImage,
+  verifyLocalMerchantProductImage,
 } from "./googleMerchantCoffeeFeedSource";
 import { merchantProductImageUrl } from "./googleMerchantCoffeeLiveEvidence";
 import {
   buildMerchantProductFeed, MAX_MERCHANT_PRODUCTS, merchantProductId,
   type MerchantExclusion, type MerchantProduct,
 } from "./googleMerchantProductFeed";
-import { CUSTOM_SECTION_IMAGE_LIMITS } from "./media";
+import { CLOUDINARY_IMAGE_FOLDER, CUSTOM_SECTION_IMAGE_LIMITS } from "./media";
 import { priceOrderFromWebsiteData } from "./orderPricing";
 import { resolveWorksProductListing } from "./productListing";
+import { merchantCoffeeImageSlots, resolveMerchantCoffeeImage, selectMerchantHalfPoundSku } from "./merchantCoffeeImageSelection";
 import { getCanonicalPublicSiteOrigin } from "./publicSiteOrigin";
 import { getStorageRootContract, getWebsiteDataFile } from "./storagePaths";
 import { isStoreCommerceEnabled } from "./storeCommerceCapability";
 import { isStoreProductSlug } from "./storePublicMetadata";
 import { selectPublicStoreIndex } from "./storePublicSelectors";
 import { createStoreRepository } from "./storeRepository";
-import type { StoreCatalog } from "./storeTypes";
+import type { StoreCatalog, StoreMediaReference } from "./storeTypes";
 
 type ImageBudget = ReturnType<typeof createMerchantImageBudget>;
 const MAX_SOURCE_BYTES = 32 * 1024 * 1024;
@@ -82,13 +83,27 @@ function countKey(counts: Map<string, number>, key: unknown) {
   if (typeof key === "string") counts.set(key, (counts.get(key) ?? 0) + 1);
 }
 
+function approvedCoffeeImage(product: CoffeeArtwork, skuId: string) {
+  for (const key of merchantCoffeeImageSlots) {
+    const approval = product.assets?.[key]?.merchantApproval;
+    if (!approval || typeof approval.sha256 !== "string" || !/^[a-f0-9]{64}$/u.test(approval.sha256) ||
+        !Array.isArray(approval.skuIds) || !approval.skuIds.includes(skuId)) continue;
+    const url = resolveMerchantCoffeeImage(product, key);
+    if (!url || (approval.sourceUrl !== undefined && approval.sourceUrl !== url)) continue;
+    return { url, sha256: approval.sha256 };
+  }
+  return null;
+}
+
 function coffeeCandidates(website: WebsiteData, exclusions: MerchantExclusion[], budget: ImageBudget) {
   const skuCounts = new Map<string, number>();
   const slugCounts = new Map<string, number>();
+  const productCounts = new Map<string, number>();
   const products = website.menu.products;
   let sourceSkuCount = 0;
   for (const product of products) {
     countKey(slugCounts, product.slug);
+    countKey(productCounts, product.id);
     const options = Array.isArray(product.skus) && product.skus.length ? product.skus : product.purchase;
     if (!Array.isArray(options)) continue;
     sourceSkuCount += options.length;
@@ -105,38 +120,39 @@ function coffeeCandidates(website: WebsiteData, exclusions: MerchantExclusion[],
       exclusions.push({ item: product.slug, reason: "invalid_coffee_publication_state" });
       continue;
     }
-    if (!soldOut && (product.active === false || product.purchasable === false)) continue;
-    const items = Array.isArray(product.skus) ? product.skus.filter(sku => sku?.enabled !== false) : [];
-    if (!items.length) {
-      exclusions.push({ item: product.slug, reason: "missing_public_persisted_sku" });
+    if (product.active === false || (!soldOut && product.purchasable === false)) continue;
+    const selection = selectMerchantHalfPoundSku(product);
+    if (product.status === "coming_soon" && selection.reason !== "missing_public_persisted_sku") continue;
+    if (!selection.sku) {
+      exclusions.push({ item: selection.item ?? product.slug, reason: selection.reason });
       continue;
     }
-    const photo = suggestPhoto(product);
+    const { sku } = selection;
+
     const description = [product.shortCopy, product.subtitle].find(value => typeof value === "string" && value.trim()) ?? "";
-    for (const sku of items) {
-      checkDeadline(budget);
-      try {
-        if (typeof product.id !== "string" || !sku || typeof sku.id !== "string" ||
-            slugCounts.get(product.slug) !== 1 || skuCounts.get(sku.id) !== 1 ||
-            typeof sku.detail !== "string" || !["beans", "drip"].includes(sku.kind ?? "") ||
-            typeof sku.stock !== "number" || !Number.isSafeInteger(sku.stock) || sku.stock < 0) throw new Error("invalid_coffee_offer");
-        const unitPrice = commerceOrderMoney(sku.price);
-        const available = !soldOut && sku.stock > 0;
-        validateUnifiedCartItem({
-          domain: "coffee", productId: product.id, variantId: sku.id, slug: product.slug, name: product.name,
-          unitPrice, quantity: 1, optionLabel: sku.label, optionDetail: sku.detail, coffeeOptions: { customRoast: false },
-        });
-        if (available) priceOrderFromWebsiteData(website, [{
-          slug: product.slug, optionId: sku.id, optionLabel: sku.label, quotedUnitPrice: unitPrice, quantity: 1,
-        }]);
-        candidates.push({
-          id: merchantProductId("coffee", product.id, sku.id), title: `${product.name} - ${sku.label}`,
-          description, link: `${getCanonicalPublicSiteOrigin()}/works/${product.slug}?sku=${encodeURIComponent(sku.id)}`,
-          images: photo ? [photo.path] : [], priceTwd: unitPrice, availability: available ? "in_stock" : "out_of_stock",
-        });
-      } catch {
-        exclusions.push({ item: sku?.id ?? product.slug, reason: "invalid_coffee_offer" });
-      }
+    try {
+      if (typeof product.id !== "string" || typeof sku.id !== "string" ||
+          productCounts.get(product.id) !== 1 || slugCounts.get(product.slug) !== 1 ||
+          skuCounts.get(sku.id) !== 1 || (sku.enabled !== undefined && sku.enabled !== true) ||
+          typeof sku.stock !== "number" || !Number.isSafeInteger(sku.stock) || sku.stock < 0) throw new Error("invalid_coffee_offer");
+      const unitPrice = commerceOrderMoney(sku.price);
+      const available = !soldOut && sku.stock > 0;
+      validateUnifiedCartItem({
+        domain: "coffee", productId: product.id, variantId: sku.id, slug: product.slug, name: product.name,
+        unitPrice, quantity: 1, optionLabel: sku.label, optionDetail: sku.detail, coffeeOptions: { customRoast: false },
+      });
+      if (available) priceOrderFromWebsiteData(website, [{
+        slug: product.slug, optionId: sku.id, optionLabel: sku.label, quotedUnitPrice: unitPrice, quantity: 1,
+      }]);
+      const photo = approvedCoffeeImage(product, sku.id);
+      candidates.push({
+        id: merchantProductId("coffee", product.id, sku.id), title: `${product.name} - ${sku.label}`,
+        description, link: `${getCanonicalPublicSiteOrigin()}/works/${product.slug}?sku=${encodeURIComponent(sku.id)}`,
+        images: photo ? [photo.url] : [], approvedImageSha256: photo?.sha256,
+        priceTwd: unitPrice, availability: available ? "in_stock" : "out_of_stock",
+      });
+    } catch {
+      exclusions.push({ item: sku.id ?? product.slug, reason: "invalid_coffee_offer" });
     }
   }
   return candidates;
@@ -170,7 +186,7 @@ function storeCandidates(catalog: StoreCatalog, commerceEnabled: boolean, exclus
           domain: "store", productId: source.id, variantId: "default", slug: product.slug,
           name: product.name, sku: source.sku, unitPrice, quantity: 1,
         });
-        const images = [product.heroMedia, ...source.gallery].flatMap(media => media?.type === "image" ? [media.url] : []);
+        const images = [product.heroMedia, ...source.gallery].flatMap(media => media?.type === "image" ? [uploadedStoreImageUrl(media)] : []);
         candidates.push({
           id: merchantProductId("store", source.id, source.sku), title: product.name,
           description: product.shortDescription.trim() || source.description, images, priceTwd: unitPrice,
@@ -183,6 +199,22 @@ function storeCandidates(catalog: StoreCatalog, commerceEnabled: boolean, exclus
     }
   }
   return candidates;
+}
+
+function uploadedStoreImageUrl(media: StoreMediaReference): string {
+  const { url, provider, publicId, format } = media;
+  const account = process.env.CLOUDINARY_CLOUD_NAME?.trim();
+  if (provider !== "cloudinary" || !account || !/^[\w-]+$/u.test(account) ||
+      typeof publicId !== "string" || !publicId.startsWith(CLOUDINARY_IMAGE_FOLDER + "/") ||
+      typeof format !== "string" || !/^(?:jpe?g|png|webp|gif|avif)$/u.test(format)) return url;
+
+  // The CMS stores this SDK delivery preset without an extension. Bind the
+  // original URL to the same account, version and verified upload public ID.
+  const base = `https://res.cloudinary.com/${account}/image/upload/`;
+  if (!url.startsWith(base)) return url;
+  const match = /^c_limit,f_auto,q_auto,w_2400\/(v\d+)\/([\w/-]+)(?:\?_a=[A-Za-z0-9_-]+)?$/u.exec(url.slice(base.length));
+  if (!match || match[2] !== publicId) return url;
+  return `${base}${match[1]}/${publicId}.${format}`;
 }
 
 function cloudinaryImage(raw: string) {
@@ -245,31 +277,33 @@ async function generateFeed() {
 
   const exclusions: MerchantExclusion[] = [];
   const products = [...coffeeCandidates(website, exclusions, budget), ...storeCandidates(catalog, storeCommerce, exclusions, budget)];
-  const images = new Map<string, () => Promise<void>>();
+  const images = new Map<string, { sha256: string; recheck: () => Promise<void> }>();
   const checkedUrls = new Set<string>();
-  const result = await buildMerchantProductFeed(products, async raw => {
+  const result = await buildMerchantProductFeed(products, async (raw, approvedSha256) => {
     checkDeadline(budget);
     const local = merchantProductImageUrl(raw);
-    const url = local ?? cloudinaryImage(raw);
+    const url = local ?? (approvedSha256 === undefined ? cloudinaryImage(raw) : null);
     if (!url || checkedUrls.has(url) && !images.has(url)) return null;
-    if (images.has(url)) return url;
+    const cached = images.get(url);
+    if (cached) return approvedSha256 === undefined || cached.sha256 === approvedSha256 ? url : null;
     checkedUrls.add(url);
     if (checkedUrls.size > MAX_IMAGE_PROBES) throw new Error("merchant_image_probe_limit");
     if (local) {
       const image = await verifyLocalMerchantProductImage(url, budget);
       if (!image) return null;
-      images.set(url, image.recheck);
+      images.set(url, image);
+      if (approvedSha256 !== undefined && image.sha256 !== approvedSha256) return null;
     } else {
       const initialHash = await hashCloudinaryImage(url, budget);
       if (!initialHash) return null;
-      images.set(url, async () => {
+      images.set(url, { sha256: initialHash, async recheck() {
         if (await hashCloudinaryImage(url, budget) !== initialHash) throw new Error("merchant_image_changed");
-      });
+      } });
     }
     return url;
   }, exclusions);
 
-  for (const recheck of images.values()) await recheck();
+  for (const image of images.values()) await image.recheck();
   if ((await sourceEvidence(coffeeFile, budget)).version !== initialCoffee.version ||
       (await sourceEvidence(storeFile, budget)).version !== initialStore.version ||
       !isDeepStrictEqual(getStorageRootContract(), storage) || storeCommerce !== isStoreCommerceEnabled()) {

@@ -7,6 +7,7 @@ export type MerchantProduct = {
   description: string;
   link: string;
   images: readonly string[];
+  approvedImageSha256?: string;
   availability: "in_stock" | "out_of_stock";
   priceTwd: number;
 };
@@ -33,7 +34,7 @@ function field(value: string, limit: number): string {
 
 export async function buildMerchantProductFeed(
   candidates: readonly MerchantProduct[],
-  verifyImage: (url: string) => Promise<string | null>,
+  verifyImage: (url: string, approvedSha256?: string) => Promise<string | null>,
   exclusions: MerchantExclusion[],
 ): Promise<{ tsv: string; rows: number }> {
   if (candidates.length + exclusions.length > MAX_MERCHANT_PRODUCTS) throw new Error("merchant_product_limit");
@@ -56,8 +57,9 @@ export async function buildMerchantProductFeed(
     }
     let image: string | null = null;
     for (const url of product.images) {
-      if (!seenImages.has(url)) seenImages.set(url, await verifyImage(url));
-      image = seenImages.get(url) ?? null;
+      const key = JSON.stringify([url, product.approvedImageSha256]);
+      if (!seenImages.has(key)) seenImages.set(key, await verifyImage(url, product.approvedImageSha256));
+      image = seenImages.get(key) ?? null;
       if (image) break;
     }
     if (!image) {

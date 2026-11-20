@@ -73,6 +73,8 @@ export type CoffeeArtwork = {
       title?: string;
       caption?: string;
       fileName?: string;
+      /** Owner-approved original bytes and the persisted Coffee SKUs shown in them. */
+      merchantApproval?: { sha256: string; skuIds: string[]; sourceUrl?: string };
     } | undefined
   >;
 

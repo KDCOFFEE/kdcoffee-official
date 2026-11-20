@@ -2,15 +2,25 @@ import { promises as fs } from "fs";
 import path from "path";
 import { NextResponse } from "next/server";
 
-import { isAdminAuthenticated } from "@/lib/adminAuth";
+import { isAdminAuthenticated, readAdminSession } from "@/lib/adminAuth";
+import type { CoffeeArtwork } from "@/data/websiteData";
+import {
+  changeMerchantCoffeeImageApproval,
+  getMerchantCoffeeApprovalSku,
+  MerchantImageApprovalError,
+  verifyMerchantCoffeeImage,
+} from "@/lib/merchantCoffeeImageApproval";
+import { merchantCoffeeImageSlots, resolveMerchantCoffeeImage } from "@/lib/merchantCoffeeImageSelection";
 import { getCurrentMonthlyMenuPeriod } from "@/lib/monthlyMenuPeriod";
 import { atomicWriteJson, withFileLock } from "@/lib/jsonFileStore";
+import { isSameOriginRequest } from "@/lib/requestSecurity";
 import {
   applyProductChanges,
   ProductCommerceUpdateError,
 } from "@/lib/productCommerceUpdates";
 import {
   mergeProductAssetUpdates,
+  merchantImageApprovalChanged,
   ProductAssetUpdateError,
 } from "@/lib/productAssetUpdates";
 import {
@@ -296,7 +306,8 @@ export async function GET() {
  * 全部維持原本邏輯。
  */
 export async function PUT(request: Request) {
-  if (!(await isAdminAuthenticated())) {
+  const session = await readAdminSession();
+  if (!session) {
     return NextResponse.json(
       { error: "Unauthorized" },
       { status: 401 },
@@ -305,6 +316,39 @@ export async function PUT(request: Request) {
 
   try {
     const body = await request.json();
+
+    if (body?.scope === "merchantImageApproval") {
+      const headers = { "Cache-Control": "private, no-store" };
+      if (session.legacy || session.role !== "owner") {
+        return NextResponse.json({ error: "Merchant 圖片核准僅限 Owner。" }, { status: 403, headers });
+      }
+      const contentType = request.headers.get("content-type")?.split(";")[0].trim().toLowerCase();
+      const site = request.headers.get("sec-fetch-site");
+      if (contentType !== "application/json" || (site && site !== "same-origin") || !isSameOriginRequest(request)) {
+        return NextResponse.json({ error: "Merchant 圖片操作必須來自商品後台。" }, { status: 400, headers });
+      }
+      const update = async () => {
+        const data = JSON.parse(await fs.readFile(websiteFile, "utf8")) as ProductRecord;
+        const menu = data.menu;
+        if (!isRecord(menu) || !Array.isArray(menu.products) ||
+            !menu.products.every(isRecord) || typeof data.version !== "number" ||
+            !Number.isSafeInteger(data.version) || data.version >= Number.MAX_SAFE_INTEGER) {
+          throw new MerchantImageApprovalError("商品來源無法驗證。", 409);
+        }
+        const result = await changeMerchantCoffeeImageApproval(menu.products as CoffeeArtwork[], body, data.version);
+        if (result.inspection) return NextResponse.json(result.inspection, { headers });
+
+        await backup(data);
+        await atomicWriteJson(websiteFile, {
+          ...data,
+          menu: { ...menu, products: result.products },
+          updatedAt: new Date().toISOString(),
+          version: data.version + 1,
+        });
+        return NextResponse.json({ ok: true }, { headers });
+      };
+      return await (body.action === "inspect" ? update() : withFileLock(websiteFile, update));
+    }
 
     /**
      * ----------------------------------------------------------
@@ -360,7 +404,35 @@ export async function PUT(request: Request) {
               verifiedUpdates,
             );
 
-          // 寫入新資料以前先建立備份。
+          if ((session.legacy || session.role !== "owner") &&
+              products.some((product, index) => merchantImageApprovalChanged(current[index], product))) {
+            return NextResponse.json({ error: "Merchant 商品圖片須由 Owner 核准。" }, { status: 403 });
+          }
+
+          for (const [index, product] of products.entries()) {
+            if (!merchantImageApprovalChanged(current[index], product)) continue;
+            const before = current[index] as CoffeeArtwork;
+            const after = product as CoffeeArtwork;
+            for (const slot of merchantCoffeeImageSlots) {
+              const asset = after.assets?.[slot];
+              const approval = asset?.merchantApproval;
+              if (JSON.stringify(approval) === JSON.stringify(before.assets?.[slot]?.merchantApproval) ||
+                  approval === null || approval === undefined) continue;
+              const sku = getMerchantCoffeeApprovalSku(before, current as CoffeeArtwork[]);
+              const url = resolveMerchantCoffeeImage(before, slot);
+              if (!asset || !sku || !url || url !== resolveMerchantCoffeeImage(after, slot) ||
+                  !Array.isArray(approval.skuIds) || approval.skuIds.length !== 1 || approval.skuIds[0] !== sku.id ||
+                  (approval.sourceUrl !== undefined && approval.sourceUrl !== url)) {
+                throw new MerchantImageApprovalError("Merchant 核准須對應已儲存的半磅 SKU 與來源圖片。");
+              }
+              const sha256 = await verifyMerchantCoffeeImage(url);
+              if (!sha256 || approval.sha256 !== sha256) {
+                throw new MerchantImageApprovalError("Merchant 圖片 SHA-256 無法驗證。");
+              }
+              asset.merchantApproval = { skuIds: [sku.id], sha256, sourceUrl: url };
+            }
+          }
+
           await backup(data);
 
           data.menu = {
@@ -505,7 +577,7 @@ export async function PUT(request: Request) {
      * HTTP 500。
      */
     const status =
-      error instanceof ProductCommerceUpdateError
+      error instanceof ProductCommerceUpdateError || error instanceof MerchantImageApprovalError
         ? error.status
         : error instanceof ProductAssetUpdateError ||
             error instanceof ProductMediaValidationError ||

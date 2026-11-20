@@ -23,6 +23,18 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
+export function merchantImageApprovalChanged(before: ProductRecord, after: ProductRecord) {
+  const beforeAssets = isRecord(before.assets) ? before.assets : {};
+  const afterAssets = isRecord(after.assets) ? after.assets : {};
+  const approval = (assets: ProductRecord, key: string) => {
+    const asset = assets[key];
+    return isRecord(asset) ? asset.merchantApproval : undefined;
+  };
+  return ["productPhoto", "productVisual"].some(key =>
+    JSON.stringify(approval(beforeAssets, key)) !== JSON.stringify(approval(afterAssets, key)),
+  );
+}
+
 function normalizeAssets(value: unknown) {
   if (!isRecord(value)) throw new ProductAssetUpdateError("商品素材資料格式錯誤。");
   const assets: Record<string, Record<string, unknown>> = {};
