@@ -114,6 +114,10 @@ function coffeeCandidates(website: WebsiteData, exclusions: MerchantExclusion[],
   const candidates: MerchantProduct[] = [];
   for (const product of resolveWorksProductListing(products)) {
     checkDeadline(budget);
+    if (product.googleMerchantSyncEnabled !== undefined && product.googleMerchantSyncEnabled !== true) {
+      exclusions.push({ item: product.slug, reason: "coffee_merchant_sync_disabled" });
+      continue;
+    }
     const soldOut = product.status === "sold_out";
     if (typeof product.status !== "string" || !["active", "coming_soon", "sold_out"].includes(product.status) ||
         [product.active, product.purchasable].some(flag => flag !== undefined && typeof flag !== "boolean")) {
@@ -171,6 +175,10 @@ function storeCandidates(catalog: StoreCatalog, commerceEnabled: boolean, exclus
     for (const product of cards) {
       const source = sources.get(product.slug);
       if (!source) throw new Error("merchant_store_projection_mismatch");
+      if (source.googleMerchantSyncEnabled === false) {
+        exclusions.push({ item: source.sku, reason: "store_merchant_sync_disabled" });
+        continue;
+      }
       if (!commerceEnabled || source.sku === "GIFT-CUSTOM" ||
           (source.productType === "gift" && product.category?.slug === "custom-gift")) {
         exclusions.push({ item: source.sku, reason: !commerceEnabled ? "store_commerce_disabled" : "inquiry_only" });

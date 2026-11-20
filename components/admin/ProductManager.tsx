@@ -80,6 +80,27 @@ export default function ProductManager({ canManageMerchantImages = false }: { ca
  const patch=(change:any,scope:"product"|"assets"="product")=>{if(!selected)return;const identity=String(selected.id||selected.slug||"");if(scope==="assets"&&identity)setAssetDirtyIds(current=>current.includes(identity)?current:[...current,identity]);else setProductDirty(true);setArtworks(list=>list.map(a=>(a.id||a.slug)===(selected.id||selected.slug)?{...a,...change}:a))};
  const patchAsset=(key:string,change:any)=>patch({assets:{...(selected.assets||{}),[key]:{...(selected.assets?.[key]||{}),...change}}},"assets");
  const patchLayout=(change:any)=>patch({pageLayout:{...defaultPageLayout,...(selected.pageLayout||{}),...change}},"assets");
+ const updateMerchantSync = async (slug: string, expectedEnabled: boolean, enabled: boolean) => {
+  setSaving(true);
+  setMessage("");
+  try {
+    const response = await fetch("/api/admin/products", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ scope: "merchantSync", slug, expectedEnabled, enabled }),
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || "無法儲存 Merchant 同步設定。");
+    setArtworks(current => current.map(product => product.slug === slug
+      ? { ...product, googleMerchantSyncEnabled: result.enabled }
+      : product));
+    setMessage(enabled ? "已允許此商品同步至 Google Merchant。" : "已停止將此商品納入 Google Merchant Feed。");
+  } catch (error) {
+    setMessage(error instanceof Error ? error.message : "無法儲存 Merchant 同步設定。");
+  } finally {
+    setSaving(false);
+  }
+ };
  const assetSlug=(key:string)=>({artworkCover:'artwork-cover',mainVisual:'main-visual',hero:'hero-desktop',label:'label',productPhoto:'product-front',productVisual:'product-visual',roastedBeanPhoto:'roasted-beans',facebook:'facebook',google:'google-business',line:'line'} as Record<string,string>)[key]||key;
  const seoFor=(file:File,key:string):SeoPreview=>{const ext=(file.name.split('.').pop()||'jpg').toLowerCase().replace(/[^a-z0-9]/g,'')||'jpg';const artworkSlug=String(selected?.slug||selected?.nameEn||selected?.name||'artwork').normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'')||'artwork';const label=[...assetTypes,roastedBeanAsset].find(t=>t.key===key)?.label||'素材';const flavor=(selected?.flavors||[]).join('、');const isRoastedBeanPhoto=key==='roastedBeanPhoto';const legacyRoasted=selected?.assets?.roastedBeanPhoto||{};const rawGallery=Array.isArray(legacyRoasted.gallery)?legacyRoasted.gallery.filter(Boolean):[];const existingRoastedCount=rawGallery.length||((legacyRoasted.path||legacyRoasted.media)?1:0);const version=isRoastedBeanPhoto?String(existingRoastedCount+1).padStart(2,'0'):'01';return {originalName:file.name,suggestedName:`kdcoffee-${artworkSlug}-${assetSlug(key)}-v${version}.${ext}`,assetKey:key,alt:isRoastedBeanPhoto?`${selected?.name||''} 實際烘焙咖啡豆`:`KD Coffee ${selected?.name||''}${label}${key==='productPhoto'?'精品咖啡產品實拍':''}`,title:`${selected?.name||''}｜KD Coffee ${label}`,caption:isRoastedBeanPhoto?'實際烘焙完成後的咖啡豆外觀。':[selected?.origin,selected?.process,selected?.roast,flavor].filter(Boolean).join('・')}};
  const chooseUpload=(e:ChangeEvent<HTMLInputElement>,key:string)=>{const file=e.target.files?.[0];if(!file||!selected)return;setPendingFile(file);setSeoPreview(seoFor(file,key));e.target.value=''};
@@ -138,6 +159,20 @@ export default function ProductManager({ canManageMerchantImages = false }: { ca
   <div className="artwork-layout"><aside className="artwork-sidebar"><input value={q} onChange={e=>setQ(e.target.value)} placeholder="搜尋作品、藝術家、產區"/><div>{filtered.map(a=>{const thumbnail=resolveStaticProductAssetImage(a,"productVisual")||a.cover;return <button key={a.id||a.slug} className={(a.id||a.slug)===(selected?.id||selected?.slug)?'active':''} onClick={()=>setSelectedId(a.id||a.slug)}><span>{thumbnail?<img src={thumbnail} alt=""/>:<i>{String(a.sort||'').padStart(2,'0')}</i>}</span><b>{a.name}</b><small>{completion(a)}% · {assetCount(a)}/{assetTypes.length} 素材</small></button>})}</div></aside>
   <main className="artwork-main"><div className="artwork-heading"><div><p className="eyebrow dark">{selected.id||'NEW ARTWORK'} · {selected.sku||'SKU 待建立'}</p><h2>{selected.name}</h2><p>{selected.nameEn} · {selected.artist}</p></div><div className="artwork-progress"><b>{completion(selected)}%</b><span><i style={{width:`${completion(selected)}%`}}/></span></div></div>
    <nav className="detail-tabs v101-tabs">{([['overview','作品資料'],['commerce','販售設定'],['assets','圖片與影片'],['layout','頁面編排與動畫'],['relations','相關作品'],['history','歷程'],['publish','公開設定']] as any[]).map(([k,v])=><button key={k} className={detailTab===k?'active':''} onClick={()=>setDetailTab(k)}>{v}</button>)}</nav>
+  {detailTab === "assets" && canManageMerchantImages && selected.slug ? (
+    <section className="cms-panel">
+      <h3>Google Merchant 同步</h3>
+      <label>
+        <input type="checkbox"
+          checked={selected.googleMerchantSyncEnabled === undefined || selected.googleMerchantSyncEnabled === true}
+          disabled={dirty || saving || socialUploading}
+          onChange={event => void updateMerchantSync(selected.slug, !event.target.checked, event.target.checked)} />
+        允許此商品同步至 Google Merchant
+      </label>
+      <p>關閉後，此商品會從 Merchant Feed 排除。恢復同步時，商品仍須符合既有的同步條件。</p>
+      {dirty ? <p>請先儲存商品變更，再調整同步設定。</p> : null}
+    </section>
+  ) : null}
   {detailTab==='assets' && canManageMerchantImages && selected.slug ? (
     <MerchantCoffeeImageApproval key={selected.slug} slug={selected.slug} productName={selected.name}
       disabled={dirty || saving || socialUploading}/>

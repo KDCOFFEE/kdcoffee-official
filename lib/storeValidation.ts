@@ -14,7 +14,7 @@ function ensure(condition: unknown, message: string): asserts condition {
 
 export const STORE_SECTION_FIELDS = ["name", "slug", "shortDescription", "description", "active", "published", "sortOrder", "showOnHomepage", "homepageSortOrder", "showInNavigation", "navigationSortOrder", "seoTitle", "seoDescription"] as const;
 export const STORE_CATEGORY_FIELDS = ["sectionId", "name", "slug", "description", "sortOrder", "active"] as const;
-export const STORE_PRODUCT_FIELDS = ["slug", "name", "shortDescription", "description", "sectionId", "categoryId", "productType", "sku", "price", "salePrice", "inventory", "active", "published", "sortOrder", "featured", "heroMedia", "gallery", "specifications", "pvValue", "kdRedemption", "seoTitle", "seoDescription"] as const;
+export const STORE_PRODUCT_FIELDS = ["slug", "name", "shortDescription", "description", "sectionId", "categoryId", "productType", "sku", "price", "salePrice", "inventory", "active", "published", "sortOrder", "featured", "heroMedia", "gallery", "specifications", "pvValue", "kdRedemption", "seoTitle", "seoDescription", "googleMerchantSyncEnabled"] as const;
 const ENTITY_FIELDS = ["id", "revision", "createdAt", "updatedAt", "archivedAt"];
 
 /** Reject unknown/server-owned keys, accessors, and prototype-shaped payloads. */
@@ -139,6 +139,7 @@ export function validateStoreProduct(input: unknown): asserts input is StoreProd
   const value = storeInputRecord(input, [...ENTITY_FIELDS, ...STORE_PRODUCT_FIELDS, "subscriptionEligible"], "product");
   entity(value, "product");
   bool(value.published, "product.published");
+  if (value.googleMerchantSyncEnabled !== undefined) bool(value.googleMerchantSyncEnabled, "product.googleMerchantSyncEnabled");
   text(value.shortDescription, "product.shortDescription", 500);
   validateStoreProductSeo(value);
   id(value.sectionId, "product.sectionId");

@@ -52,6 +52,7 @@ export type StoreKdRedemption = {
 };
 
 export type StoreProduct = StoreEntity & {
+  googleMerchantSyncEnabled?: boolean;
   slug: string;
   name: string;
   shortDescription: string;
