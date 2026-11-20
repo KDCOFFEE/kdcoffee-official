@@ -60,7 +60,7 @@ export const PRODUCT_SENSITIVE_FIELDS = [
   "featured",
 ] as const;
 
-export const SKU_SENSITIVE_FIELDS = ["label", "detail", "price", "stock", "enabled", "pvEnabled", "pvValue"] as const;
+export const SKU_SENSITIVE_FIELDS = ["label", "detail", "price", "stock", "enabled", "pvEnabled", "pvValue", "kind"] as const;
 
 type ProductMetadataField = (typeof PRODUCT_METADATA_FIELDS)[number];
 type ProductSensitiveField = (typeof PRODUCT_SENSITIVE_FIELDS)[number];
@@ -163,7 +163,8 @@ export function buildProductChanges(baselineProducts: ProductRecord[], currentPr
       const skuFields: Array<{ field: SkuSensitiveField; expectedValue: unknown; nextValue: unknown }> = [];
       for (const field of SKU_SENSITIVE_FIELDS) {
         if (!equal(before[field], after[field])) {
-          skuFields.push({ field, expectedValue: clone(before[field]), nextValue: clone(after[field]) });
+          const expectedValue = field === "kind" ? before.kind ?? null : clone(before[field]);
+          skuFields.push({ field, expectedValue, nextValue: clone(after[field]) });
         }
       }
       if (skuFields.length) skuOperations.push({ operation: "updateSku", skuId, fields: skuFields });
@@ -360,6 +361,10 @@ function normalizeProductSensitiveField(field: ProductSensitiveField, value: unk
 }
 
 function normalizeSkuField(field: SkuSensitiveField, value: unknown) {
+  if (field === "kind") {
+    if (value === "beans" || value === "drip") return value;
+    throw new ProductCommerceUpdateError("SKU 類型必須選擇咖啡豆／粉或耳掛。");
+  }
   if (field === "label" || field === "detail") return normalizeString(value, `SKU ${field}`);
   if (field === "enabled") {
     if (typeof value !== "boolean") throw new ProductCommerceUpdateError("SKU enabled 必須是布林值。");
@@ -380,6 +385,7 @@ function normalizeAddedSku(value: unknown) {
   return {
     ...clone(value),
     id,
+    ...(value.kind !== undefined ? { kind: normalizeSkuField("kind", value.kind) } : {}),
     label: normalizeSkuField("label", value.label),
     detail: normalizeSkuField("detail", value.detail),
     price: normalizeSkuField("price", value.price),
@@ -569,12 +575,17 @@ export function applyProductChanges(serverProducts: ProductRecord[], requestedCh
           throw new ProductCommerceUpdateError(`SKU「${skuId}」欄位「${rawField.field}」缺少 expectedValue 或重複提交。`);
         }
         seenSkuFields.add(rawField.field);
-        const currentValue = rawField.field === "pvEnabled" ? sku.pvEnabled ?? false : rawField.field === "pvValue" ? sku.pvValue ?? 0 : sku[rawField.field];
+        const field = rawField.field as SkuSensitiveField;
+        const currentValue = field === "kind" ? sku.kind ?? null :
+          field === "pvEnabled" ? sku.pvEnabled ?? false : field === "pvValue" ? sku.pvValue ?? 0 : sku[field];
         if (!equal(currentValue, rawField.expectedValue)) conflict(product, String(sku.label || skuId));
-        sku[rawField.field] = normalizeSkuField(rawField.field as SkuSensitiveField, rawField.nextValue);
-        summary.push(`更新 ${sku.label || skuId} ${rawField.field}`);
+        if (field === "kind" && currentValue !== null) {
+          throw new ProductCommerceUpdateError("此操作只允許補填尚未設定的 SKU 類型。");
+        }
+        sku[field] = normalizeSkuField(field, rawField.nextValue);
+        summary.push(`更新 ${sku.label || skuId} ${field}`);
+        if (field !== "kind") skusChanged = true;
       }
-      skusChanged = true;
     }
     if (skusChanged) rebuildDerived(product);
     product.schemaVersion = "12.0";
